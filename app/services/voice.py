@@ -24,6 +24,7 @@ from moviepy.audio.io.AudioFileClip import AudioFileClip
 from openai import OpenAI
 
 from app.config import config
+from app.services.quality import tts_adapter
 from app.utils import utils
 
 _DEFAULT_EDGE_TTS_TIMEOUT_SECONDS = 30.0
@@ -361,6 +362,50 @@ def tts(
             logger.error(f"Invalid mimo voice name format: {voice_name}")
             return None
     return azure_tts_v1(text, voice_name, voice_rate, voice_file)
+
+
+def _provider_label(voice_name: str) -> str:
+    name = (voice_name or "").lower()
+    if name.startswith("siliconflow:"):
+        return "siliconflow"
+    if name.startswith("gemini:"):
+        return "gemini"
+    if name.startswith("mimo:"):
+        return "mimo"
+    if is_azure_v2_voice(voice_name):
+        return "azure-v2"
+    if is_no_voice(voice_name):
+        return "silent"
+    return "edge"
+
+
+def synthesize(text, voice_name, voice_rate, voice_file, voice_volume: float = 1.0):
+    """Adapter over :func:`tts`: return a uniform :class:`tts_adapter.TTSResult`.
+
+    Does not replace ``tts`` or remove any provider. It wraps the existing
+    output into a normalized shape (audio file, duration, best-effort word
+    timestamps, provider metadata) so callers and future local providers
+    (Piper/XTTS/Chatterbox/...) share one interface. Returns ``None`` when the
+    underlying TTS fails, matching ``tts``'s contract.
+    """
+    sub_maker = tts(
+        text=text,
+        voice_name=voice_name,
+        voice_rate=voice_rate,
+        voice_file=voice_file,
+        voice_volume=voice_volume,
+    )
+    if sub_maker is None:
+        return None
+    duration = get_audio_duration(sub_maker)
+    word_timestamps = tts_adapter.extract_word_timestamps_from_submaker(sub_maker)
+    return tts_adapter.build_tts_result(
+        audio_file=voice_file,
+        duration=duration,
+        provider=_provider_label(voice_name),
+        word_timestamps=word_timestamps or None,
+        metadata={"voice_name": voice_name, "rate": voice_rate},
+    )
 
 
 def convert_rate_to_percent(rate: float) -> str:
