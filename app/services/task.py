@@ -216,21 +216,22 @@ def generate_subtitle(task_id, params, video_script, sub_maker, audio_file):
     return subtitle_path
 
 
-def _select_local_library_materials(params, quality_settings_obj):
-    """Return prioritized local-library video paths for the current request.
+def _select_local_library_materials(params, quality_settings_obj, audio_duration=0.0):
+    """Return ``(paths, covers)`` of prioritized local-library video materials.
 
-    Returns ``[]`` unless the quality stack is enabled with
-    ``prefer_local_assets`` and a library database exists. Paths are ranked by
-    the deterministic material ranker and filtered to files that still exist
-    (the library may reference moved/deleted media). Any failure degrades to
-    ``[]`` so the stock pipeline keeps working.
+    ``paths`` are ranked local video paths filtered to files that still exist;
+    ``covers`` is True when their usable duration already meets ``audio_duration``
+    (so the caller can skip downloading stock entirely). Returns ``([], False)``
+    unless the quality stack is enabled with ``prefer_local_assets`` and a
+    library database exists. Any failure degrades to ``([], False)`` so the stock
+    pipeline keeps working.
     """
     if not (
         quality_settings_obj
         and getattr(quality_settings_obj, "enabled", False)
         and getattr(quality_settings_obj, "prefer_local_assets", False)
     ):
-        return []
+        return [], False
     try:
         from app.services.quality import local_library, material_ranker
 
@@ -238,7 +239,7 @@ def _select_local_library_materials(params, quality_settings_obj):
             utils.storage_dir("local_library", create=True), "library.db"
         )
         if not path.isfile(db_path):
-            return []
+            return [], False
 
         aspect = VideoAspect(params.video_aspect)
         target_width, target_height = aspect.to_resolution()
@@ -250,21 +251,26 @@ def _select_local_library_materials(params, quality_settings_obj):
         )
         conn = local_library.connect(db_path)
         try:
-            paths = local_library.select_pipeline_materials(
+            entries = local_library.select_pipeline_entries(
                 conn, quality_settings_obj, context, limit=0
             )
         finally:
             conn.close()
 
-        existing = [p for p in paths if path.isfile(p)]
-        if existing:
+        existing = [e for e in entries if path.isfile(e.path)]
+        paths = [e.path for e in existing]
+        covers = bool(existing) and local_library.useful_duration(
+            existing, params.video_clip_duration
+        ) >= float(audio_duration or 0.0)
+        if paths:
             logger.info(
-                f"local library contributed {len(existing)} prioritized materials"
+                f"local library contributed {len(paths)} prioritized materials"
+                f"{' (covers full duration)' if covers else ''}"
             )
-        return existing
+        return paths, covers
     except Exception as exc:  # pragma: no cover - defensive
         logger.warning(f"local library selection failed, skipping: {exc}")
-        return []
+        return [], False
 
 
 def get_video_materials(task_id, params, video_terms, audio_duration):
@@ -289,6 +295,18 @@ def get_video_materials(task_id, params, video_terms, audio_duration):
         except Exception as exc:  # pragma: no cover - defensive
             logger.debug(f"quality settings unavailable for material ranking: {exc}")
             qs = None
+        # Prioritize the user's local library (Fase 6). If the indexed clips
+        # already cover the required duration, skip the stock download entirely.
+        required_duration = audio_duration * params.video_count
+        local_videos, local_covers = _select_local_library_materials(
+            params, qs, required_duration
+        )
+        if local_covers and local_videos:
+            logger.info(
+                "local library covers the required duration; skipping stock download"
+            )
+            return local_videos
+
         # 顺序匹配模式只在用户显式开启时生效。这里强制素材下载按关键词顺序
         # 轮询，避免某个早期关键词下载太多素材，把后续脚本主题挤出最终时间线。
         downloaded_videos = material.download_videos(
@@ -301,16 +319,14 @@ def get_video_materials(task_id, params, video_terms, audio_duration):
                 if params.match_materials_to_script
                 else params.video_concat_mode
             ),
-            audio_duration=audio_duration * params.video_count,
+            audio_duration=required_duration,
             max_clip_duration=params.video_clip_duration,
             match_script_order=params.match_materials_to_script,
             quality_settings=qs,
         )
-        # Prioritize the user's local library (Fase 6) ahead of stock clips.
         # combine_videos consumes materials in order and stops once the audio
         # duration is covered, so local assets are used first and stock fills
-        # any remainder. Returns [] when the library feature is off/empty.
-        local_videos = _select_local_library_materials(params, qs)
+        # any remainder.
         downloaded_videos = downloaded_videos or []
         combined_videos = local_videos + [
             v for v in downloaded_videos if v not in local_videos
