@@ -204,6 +204,41 @@ class TestResolveSubtitleRender(unittest.TestCase):
         self.assertEqual(eff.font_size, 60)
 
 
+class TestKaraokeSegments(unittest.TestCase):
+    def test_one_to_one_when_word_counts_match(self):
+        wt = [("hola", 1.0, 1.3), ("mundo", 1.3, 1.8)]
+        segs = subtitle_styles.build_karaoke_segments("hola mundo", 1.0, 1.8, wt)
+        self.assertEqual(len(segs), 2)
+        self.assertEqual(segs[0]["word"], "hola")
+        self.assertAlmostEqual(segs[0]["start"], 1.0)
+        self.assertAlmostEqual(segs[1]["end"], 1.8)
+
+    def test_even_split_when_counts_mismatch(self):
+        # no per-word timing in window -> distribute evenly across the phrase
+        segs = subtitle_styles.build_karaoke_segments("uno dos tres", 0.0, 3.0, [])
+        self.assertEqual(len(segs), 3)
+        self.assertAlmostEqual(segs[0]["start"], 0.0)
+        self.assertAlmostEqual(segs[1]["start"], 1.0)
+        self.assertAlmostEqual(segs[2]["end"], 3.0)
+
+    def test_segments_cover_full_window_contiguously(self):
+        segs = subtitle_styles.build_karaoke_segments("a b c d", 5.0, 9.0, [])
+        self.assertAlmostEqual(segs[0]["start"], 5.0)
+        self.assertAlmostEqual(segs[-1]["end"], 9.0)
+        for prev, nxt in zip(segs, segs[1:]):
+            self.assertAlmostEqual(prev["end"], nxt["start"])
+
+    def test_empty_phrase_yields_no_segments(self):
+        self.assertEqual(subtitle_styles.build_karaoke_segments("", 0.0, 1.0, []), [])
+
+    def test_accepts_wordtimestamp_dataclass_from_tts_adapter(self):
+        from app.services.quality.tts_adapter import WordTimestamp
+
+        wt = [WordTimestamp("hola", 0.0, 0.5), WordTimestamp("ahi", 0.5, 1.0)]
+        segs = subtitle_styles.build_karaoke_segments("hola ahi", 0.0, 1.0, wt)
+        self.assertEqual([s["word"] for s in segs], ["hola", "ahi"])
+
+
 class TestWordHighlightSegments(unittest.TestCase):
     def test_builds_progressive_segments_from_word_timestamps(self):
         words = [("Hola", 0.0, 0.4), ("mundo", 0.4, 0.9), ("cruel", 0.9, 1.3)]
