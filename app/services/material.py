@@ -130,7 +130,9 @@ def search_videos_pixabay(
         "key": api_key,
     }
     query_url = f"https://pixabay.com/api/videos/?{urlencode(params)}"
-    logger.info(f"searching videos: {query_url}, with proxies: {config.proxy}")
+    # Pixabay passes the API key as a query param; redact it before logging.
+    _log_url = f"https://pixabay.com/api/videos/?{urlencode({**params, 'key': '***'})}"
+    logger.info(f"searching videos: {_log_url}, with proxies: {config.proxy}")
 
     try:
         r = requests.get(
