@@ -52,13 +52,29 @@ def get_application() -> FastAPI:
 
 app = get_application()
 
+
+def _resolve_cors_config(cors_allowed_origins_str: str):
+    """Return (origins, allow_credentials) for the CORS middleware.
+
+    With an explicit comma-separated allow-list, credentials are allowed.
+    With no allow-list we fall back to wildcard origins, but credentials MUST be
+    disabled: Starlette reflects the request Origin when allow_credentials is
+    True and "*" is in allow_origins, which would authorize any origin to send
+    credentials.
+    """
+    cleaned = [o.strip() for o in cors_allowed_origins_str.split(",") if o.strip()]
+    if cleaned:
+        return cleaned, True
+    return ["*"], False
+
+
 # Configures the CORS middleware for the FastAPI app
 cors_allowed_origins_str = os.getenv("CORS_ALLOWED_ORIGINS", "")
-origins = cors_allowed_origins_str.split(",") if cors_allowed_origins_str else ["*"]
+origins, allow_credentials = _resolve_cors_config(cors_allowed_origins_str)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
-    allow_credentials=True,
+    allow_credentials=allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
 )

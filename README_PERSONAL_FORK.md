@@ -241,6 +241,9 @@ This fork keeps upstream behaviour but documents and provides safer knobs.
 - **CORS.** The API defaults to `allow_origins = ["*"]`. Restrict it by setting
   the `CORS_ALLOWED_ORIGINS` environment variable (comma‑separated) to your real
   origin(s), e.g. `CORS_ALLOWED_ORIGINS="https://video.tu-dominio.org"`.
+  With an empty allow-list the API falls back to wildcard origins **without**
+  `allow_credentials`; to enable credentials you must supply an explicit
+  origin allow-list via `CORS_ALLOWED_ORIGINS`.
 - **Secrets.** `config.toml` is git‑ignored; keep your keys only there. The fork
   redacts the Pixabay key from logs and never logs full credentials.
 - **TLS verification** for stock/LLM requests stays **on** by default
