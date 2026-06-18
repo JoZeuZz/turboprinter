@@ -178,6 +178,9 @@
     "Prefer Local Material Library": "优先使用本地素材库",
     "Use your indexed local clips before downloading stock.": "在下载在线素材前先使用已索引的本地片段。",
     "Spanish Content Package": "西班牙语内容包",
-    "Also generate title, description, hashtags and a review checklist.": "同时生成标题、描述、话题标签和审核清单。"
+    "Also generate title, description, hashtags and a review checklist.": "同时生成标题、描述、话题标签和审核清单。",
+    "Render": "渲染",
+    "Subtitles": "字幕",
+    "Content & material": "内容与素材"
   }
 }

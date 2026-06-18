@@ -1455,8 +1455,11 @@ with st.expander(tr("Personal Quality"), expanded=False):
         def _q_index(options, value, fallback):
             return options.index(value) if value in options else fallback
 
+        # Three columns grouped by what they actually control, so the layout
+        # itself signposts the options (render / subtitles / content).
         q_cols = st.columns(3)
         with q_cols[0]:
+            st.markdown(f"**{tr('Render')}**")
             params.quality_profile = st.selectbox(
                 tr("Quality Profile"),
                 options=_q_profiles,
@@ -1469,11 +1472,12 @@ with st.expander(tr("Personal Quality"), expanded=False):
                 index=_q_index(_q_platforms, str(config.quality.get("target_platform", "shorts")), 0),
                 help=tr("Sets the subtitle safe-area for the destination format."),
             )
-            params.quality_language = st.text_input(
-                tr("Content Language"),
-                value=str(config.quality.get("language", "es")),
+            params.quality_normalize_audio = st.checkbox(
+                tr("Normalize Audio"),
+                value=bool(config.quality.get("normalize_audio", True)),
             )
         with q_cols[1]:
+            st.markdown(f"**{tr('Subtitles')}**")
             params.quality_subtitle_style = st.selectbox(
                 tr("Subtitle Style"),
                 options=_q_styles,
@@ -1484,11 +1488,12 @@ with st.expander(tr("Personal Quality"), expanded=False):
                 value=bool(config.quality.get("word_highlight", False)),
                 help=tr("Saves per-word timing; falls back to phrase subtitles if unavailable."),
             )
-            params.quality_normalize_audio = st.checkbox(
-                tr("Normalize Audio"),
-                value=bool(config.quality.get("normalize_audio", True)),
-            )
         with q_cols[2]:
+            st.markdown(f"**{tr('Content & material')}**")
+            params.quality_language = st.text_input(
+                tr("Content Language"),
+                value=str(config.quality.get("language", "es")),
+            )
             params.quality_prefer_local_assets = st.checkbox(
                 tr("Prefer Local Material Library"),
                 value=bool(config.quality.get("prefer_local_assets", True)),

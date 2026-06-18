@@ -176,6 +176,9 @@
     "Prefer Local Material Library": "Yerel Materyal Kütüphanesini Tercih Et",
     "Use your indexed local clips before downloading stock.": "Stok indirmeden önce dizine eklenmiş yerel kliplerini kullan.",
     "Spanish Content Package": "İspanyolca İçerik Paketi",
-    "Also generate title, description, hashtags and a review checklist.": "Ayrıca başlık, açıklama, hashtag ve bir inceleme listesi oluşturur."
+    "Also generate title, description, hashtags and a review checklist.": "Ayrıca başlık, açıklama, hashtag ve bir inceleme listesi oluşturur.",
+    "Render": "Render",
+    "Subtitles": "Altyazılar",
+    "Content & material": "İçerik ve materyal"
   }
 }
