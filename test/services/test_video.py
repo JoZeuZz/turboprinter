@@ -293,7 +293,7 @@ class TestVideoService(unittest.TestCase):
         """
         config.app["video_codec"] = "h264_nvenc"
 
-        def fake_run(command, capture_output, text, check):
+        def fake_run(command, capture_output, text, check, timeout=None):
             codec_index = command.index("-c:v") + 1
             codec = command[codec_index]
             if codec == "h264_nvenc":
@@ -332,7 +332,7 @@ class TestVideoService(unittest.TestCase):
         """
         config.app["video_codec"] = "h264_nvenc"
 
-        def fake_run(command, capture_output, text, check):
+        def fake_run(command, capture_output, text, check, timeout=None):
             codec_index = command.index("-c:v") + 1
             codec = command[codec_index]
             return types.SimpleNamespace(
