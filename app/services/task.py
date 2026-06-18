@@ -270,6 +270,10 @@ def generate_final_videos(
         video_concat_mode = VideoConcatMode.random
     video_transition_mode = params.video_transition_mode
 
+    # Resolve the optional quality render profile once per task. Returns None
+    # (upstream behaviour) when the quality stack is disabled.
+    render_profile = video.resolve_render_profile(params)
+
     _progress = 50
     for i in range(params.video_count):
         index = i + 1
@@ -286,6 +290,7 @@ def generate_final_videos(
             video_transition_mode=video_transition_mode,
             max_clip_duration=params.video_clip_duration,
             threads=params.n_threads,
+            render_profile=render_profile,
         )
 
         _progress += 50 / params.video_count / 2
