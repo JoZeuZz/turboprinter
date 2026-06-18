@@ -295,14 +295,13 @@ def index_directory(
     return stats
 
 
-def select_pipeline_materials(
+def select_pipeline_entries(
     conn: sqlite3.Connection,
     settings,
     context,
     limit: int,
-    search_terms: Optional[List[str]] = None,
-) -> List[str]:
-    """Return up to ``limit`` ranked local **video** paths for the pipeline.
+) -> List[LibraryEntry]:
+    """Return up to ``limit`` ranked local **video** :class:`LibraryEntry`.
 
     Builds :class:`material_ranker.MaterialCandidate` objects (``is_local=True``,
     carrying stored ``brightness``) and ranks them with the deterministic ranker,
@@ -313,6 +312,7 @@ def select_pipeline_materials(
     entries = query_entries(conn, media_type="video")
     if not entries:
         return []
+    by_path = {e.path: e for e in entries}
 
     candidates = []
     for entry in entries:
@@ -335,10 +335,31 @@ def select_pipeline_materials(
         )
 
     ranked = material_ranker.rank_candidates(candidates, settings, context)
-    paths = [c.key for c in ranked]
+    ordered = [by_path[c.key] for c in ranked if c.key in by_path]
     if limit and limit > 0:
-        paths = paths[:limit]
-    return paths
+        ordered = ordered[:limit]
+    return ordered
+
+
+def select_pipeline_materials(
+    conn: sqlite3.Connection,
+    settings,
+    context,
+    limit: int,
+    search_terms: Optional[List[str]] = None,
+) -> List[str]:
+    """Ranked local video paths for the pipeline (see :func:`select_pipeline_entries`)."""
+    return [e.path for e in select_pipeline_entries(conn, settings, context, limit)]
+
+
+def useful_duration(entries, max_clip_duration) -> float:
+    """Total usable seconds from entries, capping each clip at the clip length.
+
+    Mirrors how ``combine_videos`` consumes at most ``max_clip_duration`` of each
+    clip, so callers can tell whether the local library already covers the audio.
+    """
+    cap = float(max_clip_duration)
+    return float(sum(min(cap, float(e.duration or 0.0)) for e in entries))
 
 
 def probe_media_file(path: str) -> dict:

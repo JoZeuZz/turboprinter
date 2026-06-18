@@ -196,6 +196,31 @@ class TestSelectPipelineMaterials(unittest.TestCase):
             [],
         )
 
+    def test_select_pipeline_entries_returns_ranked_entries(self):
+        with tempfile.TemporaryDirectory() as d:
+            _write(os.path.join(d, "portrait.mp4"))
+            _write(os.path.join(d, "land_scene.mp4"))
+            lib.index_directory(self.conn, d, prober=_fake_prober)
+            settings = qsettings.load_quality_settings({"enabled": True})
+            entries = lib.select_pipeline_entries(
+                self.conn, settings, self._ctx(), limit=5
+            )
+            self.assertTrue(all(isinstance(e, lib.LibraryEntry) for e in entries))
+            self.assertTrue(entries[0].path.endswith("portrait.mp4"))
+
+
+class TestUsefulDuration(unittest.TestCase):
+    def test_caps_each_clip_at_max_clip_duration(self):
+        entries = [
+            lib.LibraryEntry(path="/a.mp4", hash="h", media_type="video", duration=8.0),
+            lib.LibraryEntry(path="/b.mp4", hash="h", media_type="video", duration=3.0),
+        ]
+        # 8 -> capped to 5, 3 -> 3  => 8.0
+        self.assertEqual(lib.useful_duration(entries, max_clip_duration=5), 8.0)
+
+    def test_empty_is_zero(self):
+        self.assertEqual(lib.useful_duration([], max_clip_duration=5), 0.0)
+
 
 if __name__ == "__main__":
     unittest.main()
