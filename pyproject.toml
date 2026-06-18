@@ -38,6 +38,13 @@ g4f = [
     "g4f==0.5.2.2",
 ]
 
+# Herramientas de desarrollo/CI (no se instalan en runtime de la app).
+# `uv sync` instala este grupo por defecto; `uv sync --no-dev` lo omite.
+[dependency-groups]
+dev = [
+    "pytest>=8,<9",
+]
+
 [tool.hatch.build.targets.wheel]
 packages = ["app"]
 
