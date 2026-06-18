@@ -162,6 +162,10 @@ whisper = _cfg.get("whisper", {})
 proxy = _cfg.get("proxy", {})
 azure = _cfg.get("azure", {})
 siliconflow = _cfg.get("siliconflow", {})
+# Optional Personal Quality Stack section. Tolerant by design: a missing
+# [quality] table yields {} and the quality layer stays disabled, so behaviour
+# is identical to upstream. See app/services/quality/.
+quality = _cfg.get("quality", {})
 ui = _cfg.get(
     "ui",
     {
