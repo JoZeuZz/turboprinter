@@ -28,15 +28,21 @@ venv/
 .venv
 
 # Debug and test files
-CLAUDE.md
 debug/
 debug_*.py
 test_*.py
 !test/services/test_*.py
 streamlit.log
-CLAUDE.md
 AGENTS.md
 config.toml
 storage/
 /models/
-.claude/
+
+# Claude Code: versionar CLAUDE.md y .claude/settings.json compartidos,
+# mantener overrides locales fuera de git.
+CLAUDE.local.md
+.claude/*
+!.claude/settings.json
+
+# Serena MCP: caché/índice local del proyecto.
+.serena/
