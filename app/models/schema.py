@@ -124,6 +124,7 @@ class VideoParams(BaseModel):
     quality_profile: Optional[str] = None  # fast | balanced | high | archival
     quality_target_platform: Optional[str] = None  # shorts | reels | tiktok | landscape
     quality_word_highlight: Optional[bool] = None
+    quality_content_package: Optional[bool] = None  # Spanish content package sidecar
 
 
 class SubtitleRequest(BaseModel):
