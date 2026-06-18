@@ -25,6 +25,7 @@ Optional layer under `app/services/quality/`, gated by the `[quality]` section i
 | Local library | index your own clips (SQLite) and prioritize them over stock | `library_cli` + `prefer_local_assets` |
 | TTS adapter | uniform TTS result + optional Whisper word alignment | `voice.synthesize`, `word_highlight` |
 | Spanish content package | title/description/hashtags/hook/keywords/thumbnail prompt/checklist (no LLM needed) | `[quality] content_package` |
+| Render manifest | per-task `manifest.json` with effective quality settings, render profile, codec and artifact paths | written automatically when `[quality] enabled = true` |
 
 See `config.example.toml` `[quality]` for all keys.
 
@@ -303,4 +304,5 @@ docker compose config                  # only if you use the compose files
 For a quick end‑to‑end check of the quality layer, run a short render with
 `[quality] enabled = true`, `profile = "high"`, `subtitle_style = "premium"`,
 `target_platform = "shorts"` and inspect the output plus
-`storage/tasks/<id>/content_package.{json,md}` and `word_timestamps.json`.
+`storage/tasks/<id>/content_package.{json,md}`, `word_timestamps.json` and
+`manifest.json` (effective render settings for the task).
