@@ -14,14 +14,12 @@ __pycache__
 logs/
 
 node_modules
-# VuePress 默认临时文件目录
+# VuePress 
 /sites/docs/.vuepress/.temp
 # VuePress 默认缓存目录
 /sites/docs/.vuepress/.cache
-# VuePress 默认构建生成的静态文件目录
+# VuePress
 /sites/docs/.vuepress/dist
-# 模型目录
-/models/
 ./models/*
 
 venv/
@@ -36,13 +34,14 @@ streamlit.log
 AGENTS.md
 config.toml
 storage/
-/models/
 
-# Claude Code: versionar CLAUDE.md y .claude/settings.json compartidos,
-# mantener overrides locales fuera de git.
+CLAUDE.md
 CLAUDE.local.md
 .claude/*
-!.claude/settings.json
+.claude/settings.json
 
 # Serena MCP: caché/índice local del proyecto.
 .serena/
+
+# Superpowers: artefactos locales de mi flujo personal.
+.superpowers/
