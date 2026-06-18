@@ -36,6 +36,8 @@ from app.models.schema import (
     VideoTransitionMode,
 )
 from app.services.utils import video_effects
+from app.services.quality import render_profiles
+from app.services.quality import settings as quality_settings
 from app.utils import file_security, utils
 
 class SubClippedVideoClip:
@@ -80,6 +82,28 @@ _SUPPORTED_VIDEO_CODECS = (
     "h264_videotoolbox",
 )
 _runtime_disabled_video_codecs = set()
+
+# Only applied when the optional quality stack is enabled, so the upstream
+# (disabled) path keeps running without any timeout, exactly as before.
+_CONCAT_TIMEOUT_SECONDS = 3600
+
+
+def resolve_render_profile(params=None):
+    """Return the active :class:`RenderProfile`, or ``None`` when the optional
+    quality stack is disabled.
+
+    Any failure resolving the (optional) quality settings is swallowed and
+    treated as "disabled", so a misconfigured quality section can never break a
+    render that would otherwise succeed upstream.
+    """
+    try:
+        s = quality_settings.current_quality_settings(params)
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.debug(f"quality settings unavailable, using upstream render: {exc}")
+        return None
+    if not s.enabled:
+        return None
+    return render_profiles.get_render_profile(s)
 
 
 def _prioritize_unique_source_clips(
@@ -299,7 +323,8 @@ def _format_ffmpeg_concat_path(file_path: str) -> str:
 
 
 def concat_video_clips_with_ffmpeg(
-    clip_files: List[str], output_file: str, threads: int, output_dir: str
+    clip_files: List[str], output_file: str, threads: int, output_dir: str,
+    render_profile=None,
 ):
     concat_list_file = os.path.join(output_dir, "ffmpeg-concat-list.txt")
     with open(concat_list_file, "w", encoding="utf-8") as fp:
@@ -307,7 +332,7 @@ def concat_video_clips_with_ffmpeg(
             fp.write(f"file '{_format_ffmpeg_concat_path(clip_file)}'\n")
 
     def build_command(codec: str) -> list[str]:
-        return [
+        command = [
             utils.get_ffmpeg_binary(),
             "-y",
             "-f",
@@ -320,13 +345,25 @@ def concat_video_clips_with_ffmpeg(
             codec,
             "-threads",
             str(threads or 2),
-            "-pix_fmt",
-            "yuv420p",
-            output_file,
         ]
+        if render_profile is not None:
+            # Quality stack on: apply profile crf/preset (libx264 only) and the
+            # profile pixel format via the shared builder.
+            command += render_profiles.build_ffmpeg_video_params(render_profile, codec)
+        else:
+            # Upstream default: only enforce the player-safe pixel format.
+            command += ["-pix_fmt", "yuv420p"]
+        command += [output_file]
+        return command
+
+    # Only enforce a timeout when the quality stack is active, to avoid changing
+    # the behaviour of the default upstream path.
+    concat_timeout = _CONCAT_TIMEOUT_SECONDS if render_profile is not None else None
 
     def run_concat(codec: str):
         command = build_command(codec)
+        if render_profile is not None:
+            logger.debug(f"ffmpeg concat command: {' '.join(command)}")
         # 使用 ffmpeg 只做一次串联与编码，避免 MoviePy 逐段合并时反复重编码，
         # 从而降低画质劣化与颜色偏移风险。
         result = subprocess.run(
@@ -334,6 +371,7 @@ def concat_video_clips_with_ffmpeg(
             capture_output=True,
             text=True,
             check=False,
+            timeout=concat_timeout,
         )
         if result.returncode != 0:
             error_message = (result.stderr or result.stdout or "").strip()
@@ -526,7 +564,13 @@ def combine_videos(
     video_transition_mode: VideoTransitionMode = None,
     max_clip_duration: int = 5,
     threads: int = 2,
+    render_profile=None,
 ) -> str:
+    if render_profile is not None:
+        logger.info(
+            "combine_videos using "
+            + render_profiles.describe(render_profile, _get_configured_video_codec())
+        )
     audio_clip = AudioFileClip(audio_file)
     try:
         # 这里只需要读取旁白音频时长来决定素材视频拼接长度；后续不会再使用
@@ -649,12 +693,21 @@ def combine_videos(
                 
             # wirte clip to temp file
             clip_file = f"{output_dir}/temp-clip-{i+1}.mp4"
+            clip_codec = _get_configured_video_codec()
+            clip_write_kwargs = dict(logger=None, fps=fps)
+            if render_profile is not None:
+                # Intermediate clips carry no audio; keep them high quality so the
+                # single ffmpeg concat re-encode does not compound generation loss.
+                clip_write_kwargs.update(
+                    render_profiles.build_moviepy_kwargs(
+                        render_profile, clip_codec, include_audio=False
+                    )
+                )
             _write_videofile_with_codec_fallback(
                 clip,
                 clip_file,
-                codec=_get_configured_video_codec(),
-                logger=None,
-                fps=fps,
+                codec=clip_codec,
+                **clip_write_kwargs,
             )
 
             # Store clip duration before closing
@@ -707,6 +760,7 @@ def combine_videos(
         output_file=combined_video_path,
         threads=threads,
         output_dir=output_dir,
+        render_profile=render_profile,
     )
     
     # clean temp files
@@ -1092,10 +1146,9 @@ def generate_video(
     # 显式沿用输入音频的采样率；如果取不到，再回退到 MoviePy 默认的 44100Hz。
     # 这样可以减少不同运行环境，尤其是 Docker 环境中再次重采样带来的音质波动。
     output_audio_fps = int(getattr(audio_clip, "fps", 0) or 44100)
-    _write_videofile_with_codec_fallback(
-        video_clip,
-        output_file=output_file,
-        codec=_get_configured_video_codec(),
+    final_codec = _get_configured_video_codec()
+    write_kwargs = dict(
+        codec=final_codec,
         audio_codec=audio_codec,
         audio_fps=output_audio_fps,
         audio_bitrate=audio_bitrate,
@@ -1103,6 +1156,24 @@ def generate_video(
         threads=params.n_threads or 2,
         logger=None,
         fps=fps,
+    )
+    render_profile = resolve_render_profile(params)
+    if render_profile is not None:
+        logger.info(
+            "generate_video using " + render_profiles.describe(render_profile, final_codec)
+        )
+        # Profile-driven crf/preset/pix_fmt/audio_bitrate/fps. build_moviepy_kwargs
+        # keeps -preset out of ffmpeg_params (MoviePy passes it natively) to avoid
+        # emitting the flag twice.
+        write_kwargs.update(
+            render_profiles.build_moviepy_kwargs(
+                render_profile, final_codec, include_audio=True
+            )
+        )
+    _write_videofile_with_codec_fallback(
+        video_clip,
+        output_file=output_file,
+        **write_kwargs,
     )
     video_clip.close()
     del video_clip
