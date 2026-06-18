@@ -178,6 +178,9 @@
     "Prefer Local Material Library": "Предпочитать локальную библиотеку материалов",
     "Use your indexed local clips before downloading stock.": "Использовать локальные клипы из индекса перед загрузкой стоковых.",
     "Spanish Content Package": "Испанский контент-пакет",
-    "Also generate title, description, hashtags and a review checklist.": "Также создаёт заголовок, описание, хештеги и чек-лист проверки."
+    "Also generate title, description, hashtags and a review checklist.": "Также создаёт заголовок, описание, хештеги и чек-лист проверки.",
+    "Render": "Рендер",
+    "Subtitles": "Субтитры",
+    "Content & material": "Контент и материалы"
   }
 }
