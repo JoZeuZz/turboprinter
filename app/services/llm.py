@@ -550,47 +550,46 @@ def _generate_response_single(prompt: str, provider_override: str | None = None)
                     raise Exception(f"[{llm_provider}] returned an empty response")
 
             if llm_provider == "gemini":
-                import google.generativeai as genai
+                from google import genai
+                from google.genai import types as genai_types
 
                 if not base_url:
-                    genai.configure(api_key=api_key, transport="rest")
+                    gemini_client = genai.Client(api_key=api_key)
                 else:
-                    genai.configure(api_key=api_key, transport="rest", client_options={'api_endpoint': base_url})
-
-                generation_config = {
-                    "temperature": 0.5,
-                    "top_p": 1,
-                    "top_k": 1,
-                    "max_output_tokens": 2048,
-                }
-
-                safety_settings = [
-                    {
-                        "category": "HARM_CATEGORY_HARASSMENT",
-                        "threshold": "BLOCK_ONLY_HIGH",
-                    },
-                    {
-                        "category": "HARM_CATEGORY_HATE_SPEECH",
-                        "threshold": "BLOCK_ONLY_HIGH",
-                    },
-                    {
-                        "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-                        "threshold": "BLOCK_ONLY_HIGH",
-                    },
-                    {
-                        "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
-                        "threshold": "BLOCK_ONLY_HIGH",
-                    },
-                ]
-
-                model = genai.GenerativeModel(
-                    model_name=model_name,
-                    generation_config=generation_config,
-                    safety_settings=safety_settings,
-                )
+                    gemini_client = genai.Client(
+                        api_key=api_key,
+                        http_options={"base_url": base_url},
+                    )
 
                 try:
-                    response = model.generate_content(prompt)
+                    response = gemini_client.models.generate_content(
+                        model=model_name,
+                        contents=prompt,
+                        config=genai_types.GenerateContentConfig(
+                            temperature=0.5,
+                            top_p=1,
+                            top_k=1,
+                            max_output_tokens=2048,
+                            safety_settings=[
+                                genai_types.SafetySetting(
+                                    category="HARM_CATEGORY_HARASSMENT",
+                                    threshold="BLOCK_ONLY_HIGH",
+                                ),
+                                genai_types.SafetySetting(
+                                    category="HARM_CATEGORY_HATE_SPEECH",
+                                    threshold="BLOCK_ONLY_HIGH",
+                                ),
+                                genai_types.SafetySetting(
+                                    category="HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                                    threshold="BLOCK_ONLY_HIGH",
+                                ),
+                                genai_types.SafetySetting(
+                                    category="HARM_CATEGORY_DANGEROUS_CONTENT",
+                                    threshold="BLOCK_ONLY_HIGH",
+                                ),
+                            ],
+                        ),
+                    )
                 except Exception as e:
                     logger.warning(f"gemini request failed: {str(e)}")
                     raise ValueError(
