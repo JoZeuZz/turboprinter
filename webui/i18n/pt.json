@@ -161,6 +161,26 @@
     "Also generate title, description, hashtags and a review checklist.": "Também gera título, descrição, hashtags e uma checklist de revisão.",
     "Render": "Renderização",
     "Subtitles": "Legendas",
-    "Content & material": "Conteúdo e material"
+    "Content & material": "Conteúdo e material",
+    "Advanced Script Settings": "Configurações avançadas do roteiro",
+    "Script Paragraph Number": "Número de parágrafos do roteiro",
+    "Custom Script Requirements": "Requisitos personalizados do roteiro",
+    "Custom Script Requirements Placeholder": "Exemplo: usar um tom mais leve, adequar ao estilo TikTok, focar em público jovem, deixar a abertura mais suspense",
+    "Use Custom System Prompt": "Usar prompt de sistema personalizado",
+    "Use Custom System Prompt Help": "Quando ativado, substitui as regras padrão de geração do roteiro. Destinado a usuários avançados de prompts.",
+    "Custom System Prompt": "Prompt de sistema personalizado",
+    "Match Materials to Script Order": "Combinar materiais com a ordem do roteiro",
+    "Match Materials to Script Order Help": "Desativado por padrão. Aplica-se principalmente a fontes de materiais online. Quando ativado, as palavras-chave são geradas na ordem do roteiro e os materiais são baixados/combinados nessa ordem para reduzir a incompatibilidade visual com a narração atual.",
+    "Custom Audio File": "Arquivo de áudio personalizado",
+    "Custom audio will be used directly. TTS synthesis will be skipped for this task.": "O áudio personalizado será usado diretamente. A síntese de TTS será ignorada nesta tarefa.",
+    "Rounded Subtitle Background": "Ativar fundo de legenda arredondado e translúcido",
+    "Rounded Subtitle Background Help": "Desativado por padrão. Quando ativado, os fundos das legendas usam um estilo arredondado e translúcido que se ajusta melhor à largura do texto.",
+    "MiMo API Key": "Chave da API Xiaomi MiMo [Clique para obter](https://platform.xiaomimimo.com/docs/zh-CN/quick-start/first-api-call)",
+    "MiMo TTS Settings": "Configurações de TTS do Xiaomi MiMo",
+    "Uses Xiaomi MiMo V2.5 TTS preset voices": "Usa as vozes predefinidas do TTS Xiaomi MiMo V2.5",
+    "Speed and volume are currently handled by the provider defaults": "Velocidade e volume são atualmente definidos pelos padrões do provedor",
+    "Advanced Video Settings": "Configurações avançadas de vídeo",
+    "Video Encoder": "Codificador de vídeo",
+    "Video Encoder Help": "Opção avançada. libx264 é o padrão mais seguro. Quando um codificador de hardware é selecionado, o aplicativo volta para libx264 se o FFmpeg, GPU ou driver atuais não puderem usá-lo."
   }
 }
