@@ -179,6 +179,8 @@
     "Also generate title, description, hashtags and a review checklist.": "Đồng thời tạo tiêu đề, mô tả, hashtag và danh sách kiểm tra.",
     "Render": "Kết xuất",
     "Subtitles": "Phụ đề",
-    "Content & material": "Nội dung & tư liệu"
+    "Content & material": "Nội dung & tư liệu",
+    "Match Materials to Script Order": "Khớp tư liệu theo thứ tự kịch bản",
+    "Match Materials to Script Order Help": "Mặc định tắt. Chủ yếu áp dụng cho nguồn tư liệu trực tuyến. Khi bật, từ khóa được tạo theo thứ tự kịch bản và tư liệu được tải/ghép theo thứ tự đó để giảm sai lệch hình ảnh so với lời thuyết minh hiện tại."
   }
 }

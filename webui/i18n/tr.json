@@ -179,6 +179,8 @@
     "Also generate title, description, hashtags and a review checklist.": "Ayrıca başlık, açıklama, hashtag ve bir inceleme listesi oluşturur.",
     "Render": "Render",
     "Subtitles": "Altyazılar",
-    "Content & material": "İçerik ve materyal"
+    "Content & material": "İçerik ve materyal",
+    "Match Materials to Script Order": "Materyalleri senaryo sırasına göre eşle",
+    "Match Materials to Script Order Help": "Varsayılan olarak kapalı. Esas olarak çevrimiçi materyal kaynakları için geçerlidir. Etkinleştirildiğinde anahtar kelimeler senaryo sırasına göre üretilir ve materyaller bu sırayla indirilip birleştirilir; böylece geçerli seslendirmeyle görsel uyumsuzluk azalır."
   }
 }

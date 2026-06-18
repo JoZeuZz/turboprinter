@@ -179,6 +179,8 @@
     "Also generate title, description, hashtags and a review checklist.": "Erzeugt außerdem Titel, Beschreibung, Hashtags und eine Prüf-Checkliste.",
     "Render": "Rendering",
     "Subtitles": "Untertitel",
-    "Content & material": "Inhalt & Material"
+    "Content & material": "Inhalt & Material",
+    "Match Materials to Script Order": "Material an die Skriptreihenfolge anpassen",
+    "Match Materials to Script Order Help": "Standardmäßig deaktiviert. Gilt vor allem für Online-Materialquellen. Wenn aktiviert, werden Schlüsselwörter in Skriptreihenfolge erzeugt und Materialien in dieser Reihenfolge heruntergeladen/zusammengefügt, um visuelle Abweichungen vom aktuellen Voiceover zu verringern."
   }
 }
