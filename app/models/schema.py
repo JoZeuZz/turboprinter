@@ -53,6 +53,11 @@ class MaterialInfo:
     provider: str = "pexels"
     url: str = ""
     duration: int = 0
+    # Optional intrinsic dimensions, populated by stock search where available.
+    # Used by the optional quality material ranker; default 0 keeps upstream
+    # behaviour and is treated as "unknown" by the ranker.
+    width: int = 0
+    height: int = 0
 
 
 class VideoParams(BaseModel):
