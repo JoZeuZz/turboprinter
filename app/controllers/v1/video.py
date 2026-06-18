@@ -73,6 +73,38 @@ def _sanitize_upload_filename(filename: str, request_id: str) -> str:
     return normalized_name
 
 
+_max_upload_size_mb = config.app.get("max_upload_size_mb", 0)
+
+
+def _reject_if_upload_too_large(request: Request, request_id: str) -> None:
+    """Reject oversized uploads early via the Content-Length header.
+
+    Disabled by default (``max_upload_size_mb = 0``) to preserve upstream
+    behaviour. Set a positive limit in config.toml to cap uploads; for hard
+    enforcement also set a limit at the reverse proxy (nginx
+    ``client_max_body_size``). See README_PERSONAL_FORK.md.
+    """
+    try:
+        limit_mb = int(_max_upload_size_mb or 0)
+    except (TypeError, ValueError):
+        limit_mb = 0
+    if limit_mb <= 0:
+        return
+    content_length = request.headers.get("content-length")
+    if content_length is None:
+        return
+    try:
+        size_bytes = int(content_length)
+    except (TypeError, ValueError):
+        return
+    if size_bytes > limit_mb * 1024 * 1024:
+        raise HttpException(
+            task_id=request_id,
+            status_code=413,
+            message=f"{request_id}: upload exceeds the {limit_mb} MB limit",
+        )
+
+
 def _resolve_path_within_directory(base_dir: str, unsafe_path: str, request_id: str) -> str:
     try:
         return file_security.resolve_path_within_directory(base_dir, unsafe_path)
@@ -262,6 +294,7 @@ def get_bgm_list(request: Request):
 )
 def upload_bgm_file(request: Request, file: UploadFile = File(...)):
     request_id = base.get_task_id(request)
+    _reject_if_upload_too_large(request, request_id)
     safe_filename = _sanitize_upload_filename(file.filename, request_id)
     # check file ext
     if safe_filename.lower().endswith("mp3"):
@@ -314,6 +347,7 @@ def get_video_materials_list(request: Request):
 )
 def upload_video_material_file(request: Request, file: UploadFile = File(...)):
     request_id = base.get_task_id(request)
+    _reject_if_upload_too_large(request, request_id)
     safe_filename = _sanitize_upload_filename(file.filename, request_id)
     # check file ext
     allowed_suffixes = ("mp4", "mov", "avi", "flv", "mkv", "jpg", "jpeg", "png")
