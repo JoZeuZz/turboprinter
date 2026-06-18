@@ -10,6 +10,7 @@ from moviepy.video.io.VideoFileClip import VideoFileClip
 
 from app.config import config
 from app.models.schema import MaterialInfo, VideoAspect, VideoConcatMode
+from app.services.quality import material_ranker
 from app.utils import utils
 
 # Thread-safe counter for API key rotation
@@ -100,6 +101,8 @@ def search_videos_pexels(
                     item.provider = "pexels"
                     item.url = video["link"]
                     item.duration = duration
+                    item.width = w
+                    item.height = h
                     video_items.append(item)
                     break
         return video_items
@@ -150,12 +153,14 @@ def search_videos_pixabay(
             for video_type in video_files:
                 video = video_files[video_type]
                 w = int(video["width"])
-                # h = int(video["height"])
+                h = int(video.get("height", 0) or 0)
                 if w >= video_width:
                     item = MaterialInfo()
                     item.provider = "pixabay"
                     item.url = video["url"]
                     item.duration = duration
+                    item.width = w
+                    item.height = h
                     video_items.append(item)
                     break
         return video_items
@@ -301,6 +306,51 @@ def save_video(video_url: str, save_dir: str = "") -> str:
     return ""
 
 
+def _rank_material_items(
+    items, item_terms, quality_settings, video_aspect, max_clip_duration, source
+):
+    """Reorder downloaded-material candidates with the deterministic ranker.
+
+    Thin bridge from MaterialInfo to the pure ranker. Returns the same items in
+    ranked order (no item dropped). Logs the ranking reasons at debug level.
+    """
+    aspect = VideoAspect(video_aspect)
+    target_width, target_height = aspect.to_resolution()
+    context = material_ranker.RankContext(
+        target_width=target_width,
+        target_height=target_height,
+        target_orientation=aspect.name,  # portrait | landscape | square
+        min_useful_duration=max(1.0, float(max_clip_duration) / 2.0),
+    )
+
+    by_key = {}
+    candidates = []
+    for item in items:
+        by_key[item.url] = item
+        provider = getattr(item, "provider", "") or source
+        candidates.append(
+            material_ranker.MaterialCandidate(
+                key=item.url,
+                provider=provider,
+                query=item_terms.get(item.url, ""),
+                duration=float(getattr(item, "duration", 0) or 0),
+                width=int(getattr(item, "width", 0) or 0),
+                height=int(getattr(item, "height", 0) or 0),
+                is_local=(provider == "local"),
+            )
+        )
+
+    ranked = material_ranker.rank_candidates(candidates, quality_settings, context)
+    logger.info(
+        f"material ranker ordered {len(ranked)} candidates "
+        f"(target {target_width}x{target_height}/{aspect.name})"
+    )
+    for candidate in ranked:
+        logger.debug(material_ranker.explain(candidate, quality_settings, context))
+
+    return [by_key[c.key] for c in ranked if c.key in by_key]
+
+
 def download_videos(
     task_id: str,
     search_terms: List[str],
@@ -310,6 +360,7 @@ def download_videos(
     audio_duration: float = 0.0,
     max_clip_duration: int = 5,
     match_script_order: bool = False,
+    quality_settings=None,
 ) -> List[str]:
     search_videos = search_videos_pexels
     if source == "pixabay":
@@ -336,6 +387,7 @@ def download_videos(
 
     valid_video_items = []
     valid_video_urls = []
+    item_terms = {}
     found_duration = 0.0
     for search_term in search_terms:
         video_items = search_videos(
@@ -349,6 +401,9 @@ def download_videos(
             if item.url not in valid_video_urls:
                 valid_video_items.append(item)
                 valid_video_urls.append(item.url)
+                # Remember the search term that first surfaced this clip so the
+                # optional ranker can keep the timeline diverse across terms.
+                item_terms.setdefault(item.url, search_term)
                 found_duration += item.duration
 
     logger.info(
@@ -357,7 +412,13 @@ def download_videos(
     video_paths = []
 
     concat_mode_value = getattr(video_concat_mode, "value", video_concat_mode)
-    if concat_mode_value == VideoConcatMode.random.value:
+    if quality_settings is not None and getattr(quality_settings, "enabled", False):
+        # Quality stack on: deterministic ranking replaces the random shuffle.
+        valid_video_items = _rank_material_items(
+            valid_video_items, item_terms, quality_settings, video_aspect,
+            max_clip_duration, source,
+        )
+    elif concat_mode_value == VideoConcatMode.random.value:
         random.shuffle(valid_video_items)
 
     total_duration = 0.0

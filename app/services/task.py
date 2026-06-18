@@ -10,6 +10,7 @@ from app.models import const
 from app.models.schema import VideoConcatMode, VideoParams
 from app.services import llm, material, subtitle, video, voice, upload_post
 from app.services import state as sm
+from app.services.quality import settings as quality_settings
 from app.utils import file_security, utils
 
 
@@ -230,6 +231,13 @@ def get_video_materials(task_id, params, video_terms, audio_duration):
         return [material_info.url for material_info in materials]
     else:
         logger.info(f"\n\n## downloading videos from {params.video_source}")
+        # Optional quality material ranking. Returns disabled settings (or None
+        # on error) when the quality stack is off, leaving upstream selection.
+        try:
+            qs = quality_settings.current_quality_settings(params)
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.debug(f"quality settings unavailable for material ranking: {exc}")
+            qs = None
         # 顺序匹配模式只在用户显式开启时生效。这里强制素材下载按关键词顺序
         # 轮询，避免某个早期关键词下载太多素材，把后续脚本主题挤出最终时间线。
         downloaded_videos = material.download_videos(
@@ -245,6 +253,7 @@ def get_video_materials(task_id, params, video_terms, audio_duration):
             audio_duration=audio_duration * params.video_count,
             max_clip_duration=params.video_clip_duration,
             match_script_order=params.match_materials_to_script,
+            quality_settings=qs,
         )
         if not downloaded_videos:
             sm.state.update_task(task_id, state=const.TASK_STATE_FAILED)
