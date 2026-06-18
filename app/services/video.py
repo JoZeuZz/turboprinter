@@ -38,6 +38,7 @@ from app.models.schema import (
 from app.services.utils import video_effects
 from app.services.quality import render_profiles
 from app.services.quality import settings as quality_settings
+from app.services.quality import subtitle_styles, subtitle_text
 from app.utils import file_security, utils
 
 class SubClippedVideoClip:
@@ -86,6 +87,31 @@ _runtime_disabled_video_codecs = set()
 # Only applied when the optional quality stack is enabled, so the upstream
 # (disabled) path keeps running without any timeout, exactly as before.
 _CONCAT_TIMEOUT_SECONDS = 3600
+
+
+def _resolve_effective_subtitle(params, video_width, video_height):
+    """Resolve effective subtitle render settings.
+
+    Mirrors ``params`` exactly when the optional quality stack is disabled or
+    unavailable, so upstream subtitle rendering is unchanged. When enabled,
+    applies the configured premium style (presets, safe-area, Spanish text
+    normalization).
+    """
+    try:
+        s = quality_settings.current_quality_settings(params)
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.debug(f"quality subtitle settings unavailable, using upstream: {exc}")
+        s = quality_settings.load_quality_settings({})
+    effective = subtitle_styles.resolve_subtitle_render(
+        params, s, video_width, video_height
+    )
+    if getattr(s, "enabled", False):
+        logger.info(
+            f"premium subtitles: style='{getattr(s, 'subtitle_style', '')}', "
+            f"platform='{getattr(s, 'target_platform', '')}', "
+            f"position='{effective.position}', normalize={effective.normalize}"
+        )
+    return effective
 
 
 def resolve_render_profile(params=None):
@@ -951,25 +977,33 @@ def generate_video(
 
         logger.info(f"  ⑤ font: {font_path}")
 
+    # Effective subtitle settings. When the quality stack is off this mirrors
+    # `params`, so rendering below is byte-for-byte the upstream behaviour.
+    subtitle_render = _resolve_effective_subtitle(params, video_width, video_height)
+
     def resolve_subtitle_background_color():
         # 兼容历史参数：API 里 `text_background_color` 既可能是布尔值，
         # 也可能是实际颜色字符串。统一在这里归一化，避免把 True/False
         # 直接传给 TextClip 后出现不可预期的渲染结果。
-        if isinstance(params.text_background_color, bool):
-            return "#000000" if params.text_background_color else None
-        return params.text_background_color
+        if isinstance(subtitle_render.background_color, bool):
+            return "#000000" if subtitle_render.background_color else None
+        return subtitle_render.background_color
 
     def create_text_clip(subtitle_item):
-        params.font_size = int(params.font_size)
-        params.stroke_width = int(params.stroke_width)
+        font_size = int(subtitle_render.font_size)
+        stroke_width = int(subtitle_render.stroke_width)
         phrase = subtitle_item[1]
+        if subtitle_render.normalize:
+            # Limpia puntuación/espaciado en español (¿¡, tildes, ñ) antes de
+            # medir y envolver; no toca el wrap por píxeles de wrap_text().
+            phrase = subtitle_text.normalize_spanish_subtitle(phrase)
         max_width = video_width * 0.9
         bg_color = resolve_subtitle_background_color()
         rounded_bg_enabled = bool(
-            getattr(params, "rounded_subtitle_background", False) and bg_color
+            subtitle_render.rounded_background and bg_color
         )
         has_subtitle_background = bool(bg_color)
-        pad_x = int(params.font_size * 0.6) if has_subtitle_background else 0
+        pad_x = int(font_size * 0.6) if has_subtitle_background else 0
         # 字幕背景需要给文字左右留出明确内边距。先从可用宽度中扣除
         # padding 再换行，避免长英文或大字号刚好撑满 90% 视频宽度后，
         # 文字贴到背景框边缘，看起来像被裁切。普通矩形背景和圆角背景
@@ -979,13 +1013,13 @@ def generate_video(
             phrase,
             max_width=text_max_width,
             font=font_path,
-            fontsize=params.font_size,
+            fontsize=font_size,
         )
-        interline = int(params.font_size * 0.25)
+        interline = int(font_size * 0.25)
         line_count = wrapped_txt.count("\n") + 1
-        vertical_padding = int(params.font_size * 0.35)
+        vertical_padding = int(font_size * 0.35)
         text_clip_margin_y = max(
-            int(params.font_size * 0.3), int(params.stroke_width * 2)
+            int(font_size * 0.3), int(stroke_width * 2)
         )
         # MoviePy 在 `method=label` 下会自动收缩文本框高度，遇到多行字幕、
         # 描边或背景色时，容易把最后一行的下半部分裁掉。这里显式传入
@@ -997,7 +1031,7 @@ def generate_video(
             # 圆角背景需要贴合文字宽度，而不是沿用 90% 视频宽度。这里先用
             # PIL 测量最长一行文字，再加水平内边距，避免短字幕出现过宽底板。
             try:
-                font = ImageFont.truetype(font_path, params.font_size)
+                font = ImageFont.truetype(font_path, font_size)
                 text_w = max(
                     int(font.getbbox(line)[2] - font.getbbox(line)[0])
                     for line in wrapped_txt.split("\n")
@@ -1009,15 +1043,15 @@ def generate_video(
                 text_w = int(max_width)
 
             box_w = max(1, min(int(max_width), text_w + 2 * pad_x))
-            radius = max(8, int(params.font_size * 0.4))
+            radius = max(8, int(font_size * 0.4))
             text_clip = TextClip(
                 text=wrapped_txt,
                 font=font_path,
-                font_size=params.font_size,
-                color=params.text_fore_color,
+                font_size=font_size,
+                color=subtitle_render.fore_color,
                 bg_color=None,
-                stroke_color=params.stroke_color,
-                stroke_width=params.stroke_width,
+                stroke_color=subtitle_render.stroke_color,
+                stroke_width=stroke_width,
                 interline=interline,
                 size=(box_w, None),
                 text_align="center",
@@ -1044,11 +1078,11 @@ def generate_video(
             text_clip = TextClip(
                 text=wrapped_txt,
                 font=font_path,
-                font_size=params.font_size,
-                color=params.text_fore_color,
+                font_size=font_size,
+                color=subtitle_render.fore_color,
                 bg_color=None,
-                stroke_color=params.stroke_color,
-                stroke_width=params.stroke_width,
+                stroke_color=subtitle_render.stroke_color,
+                stroke_width=stroke_width,
                 interline=interline,
                 size=(int(max_width), None),
                 text_align="center",
@@ -1075,11 +1109,11 @@ def generate_video(
             _clip = TextClip(
                 text=wrapped_txt,
                 font=font_path,
-                font_size=params.font_size,
-                color=params.text_fore_color,
+                font_size=font_size,
+                color=subtitle_render.fore_color,
                 bg_color=None,
-                stroke_color=params.stroke_color,
-                stroke_width=params.stroke_width,
+                stroke_color=subtitle_render.stroke_color,
+                stroke_width=stroke_width,
                 interline=interline,
                 size=size,
                 text_align="center",
@@ -1088,16 +1122,16 @@ def generate_video(
         _clip = _clip.with_start(subtitle_item[0][0])
         _clip = _clip.with_end(subtitle_item[0][1])
         _clip = _clip.with_duration(duration)
-        if params.subtitle_position == "bottom":
+        if subtitle_render.position == "bottom":
             _clip = _clip.with_position(("center", video_height * 0.95 - _clip.h))
-        elif params.subtitle_position == "top":
+        elif subtitle_render.position == "top":
             _clip = _clip.with_position(("center", video_height * 0.05))
-        elif params.subtitle_position == "custom":
+        elif subtitle_render.position == "custom":
             # Ensure the subtitle is fully within the screen bounds
             margin = 10  # Additional margin, in pixels
             max_y = video_height - _clip.h - margin
             min_y = margin
-            custom_y = (video_height - _clip.h) * (params.custom_position / 100)
+            custom_y = (video_height - _clip.h) * (subtitle_render.custom_position / 100)
             custom_y = max(
                 min_y, min(custom_y, max_y)
             )  # Constrain the y value within the valid range
