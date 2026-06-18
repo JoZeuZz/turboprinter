@@ -29,7 +29,13 @@ _CRF_MAX = 51
 # Keys that VideoParams may expose as per-request overrides. Only these are
 # honoured from the ``overrides`` mapping so a request cannot, for example,
 # silently change global asset-licensing preferences.
-OVERRIDE_KEYS = ("enabled", "profile", "target_platform", "word_highlight")
+OVERRIDE_KEYS = (
+    "enabled",
+    "profile",
+    "target_platform",
+    "word_highlight",
+    "content_package",
+)
 
 
 @dataclass(frozen=True)
@@ -46,6 +52,10 @@ class QualitySettings:
     word_highlight: bool
     safe_area_enabled: bool
     use_two_pass: bool
+    # Generate the Spanish Content Package sidecar (title/description/hashtags/
+    # hook/scene keywords/thumbnail prompt/review checklist). Deterministic, no
+    # LLM required.
+    content_package: bool
     # Explicit render overrides. ``None`` means "use the selected profile's
     # value"; a concrete value overrides the profile.
     render_crf: Optional[int]
@@ -134,6 +144,7 @@ def load_quality_settings(global_cfg, overrides=None) -> QualitySettings:
         word_highlight=_coerce_bool(section.get("word_highlight"), False),
         safe_area_enabled=_coerce_bool(section.get("safe_area_enabled"), True),
         use_two_pass=_coerce_bool(section.get("use_two_pass"), False),
+        content_package=_coerce_bool(section.get("content_package"), False),
         render_crf=_coerce_optional_crf(section.get("render_crf")),
         render_preset=_coerce_optional_str(section.get("render_preset")),
         audio_bitrate=_coerce_optional_str(section.get("audio_bitrate")),

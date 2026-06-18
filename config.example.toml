@@ -430,6 +430,13 @@ word_highlight = false
 # Safe area para formato vertical. / Safe area for vertical formats.
 safe_area_enabled = true
 
+# Generar el "Spanish Content Package" junto al vídeo (título, descripción,
+# hashtags, hook, keywords por escena, prompt de miniatura y checklist de
+# revisión). Determinista, NO requiere API key; funciona con guion pegado a mano.
+# Generate the Spanish Content Package sidecar alongside the video. Deterministic,
+# needs no API key; works with a manually pasted script.
+content_package = false
+
 # Two-pass de FFmpeg. No es igual de portable en todos los entornos, por eso
 # queda desactivado por defecto. / FFmpeg two-pass; off by default for
 # portability.

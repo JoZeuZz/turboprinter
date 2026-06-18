@@ -385,6 +385,53 @@ def generate_final_videos(
     return final_video_paths, combined_video_paths
 
 
+def generate_content_package(task_id, params, video_script, video_terms):
+    """Generate and save the Spanish Content Package sidecar when enabled.
+
+    Deterministic and LLM-free: works with a manually pasted script. Writes
+    ``content_package.json`` and ``content_package.md`` into the task dir and
+    returns the JSON path (or "" when disabled / on failure). Never aborts the
+    main pipeline.
+    """
+    try:
+        qs = quality_settings.current_quality_settings(params)
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.debug(f"quality settings unavailable for content package: {exc}")
+        return ""
+    if not (getattr(qs, "enabled", False) and getattr(qs, "content_package", False)):
+        return ""
+
+    try:
+        from app.services.quality import content_package as cp
+
+        terms = video_terms
+        if isinstance(terms, str):
+            terms = [t.strip() for t in re.split(r"[,，]", terms) if t.strip()]
+        elif not isinstance(terms, list):
+            terms = None
+
+        package = cp.build_content_package(
+            subject=params.video_subject or "",
+            script=video_script or "",
+            keywords=terms or None,
+            language=getattr(qs, "language", "es"),
+            platform=getattr(qs, "target_platform", "shorts"),
+        )
+
+        task_path = utils.task_dir(task_id)
+        json_path = path.join(task_path, "content_package.json")
+        md_path = path.join(task_path, "content_package.md")
+        with open(json_path, "w", encoding="utf-8") as fp:
+            fp.write(utils.to_json(cp.package_to_dict(package)))
+        with open(md_path, "w", encoding="utf-8") as fp:
+            fp.write(cp.package_to_markdown(package))
+        logger.success(f"spanish content package saved: {json_path}")
+        return json_path
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning(f"failed to generate content package: {exc}")
+        return ""
+
+
 def start(task_id, params: VideoParams, stop_at: str = "video"):
     logger.info(f"start task: {task_id}, stop_at: {stop_at}")
     sm.state.update_task(task_id, state=const.TASK_STATE_PROCESSING, progress=5)
@@ -412,6 +459,11 @@ def start(task_id, params: VideoParams, stop_at: str = "video"):
             return
 
     save_script_data(task_id, video_script, video_terms, params)
+
+    # Optional Spanish Content Package sidecar (deterministic, no LLM required).
+    content_package_path = generate_content_package(
+        task_id, params, video_script, video_terms
+    )
 
     if stop_at == "terms":
         sm.state.update_task(
@@ -518,6 +570,7 @@ def start(task_id, params: VideoParams, stop_at: str = "video"):
         "subtitle_path": subtitle_path,
         "materials": downloaded_videos,
         "cross_post_results": cross_post_results if cross_post_results else None,
+        "content_package": content_package_path or None,
     }
     sm.state.update_task(
         task_id, state=const.TASK_STATE_COMPLETE, progress=100, **kwargs
