@@ -368,6 +368,53 @@ def upload_video_material_file(request: Request, file: UploadFile = File(...)):
         "", status_code=400, message=f"{request_id}: Only files with extensions {', '.join(allowed_suffixes)} can be uploaded"
     )
 
+def _parse_range_header(range_header: str | None, video_size: int):
+    """Return (start, end) byte offsets for a Range header, clamped to the file.
+
+    Returns None when there is no Range header (caller serves the whole file).
+    Raises ValueError on a malformed or unsatisfiable range so the caller can
+    respond 416 instead of 500.
+    """
+    if range_header is None:
+        return None
+
+    if not range_header.startswith("bytes="):
+        raise ValueError(f"unsupported range unit: {range_header!r}")
+
+    range_spec = range_header[len("bytes="):]
+    parts = range_spec.split("-", 1)
+    if len(parts) != 2:
+        raise ValueError(f"malformed Range header: {range_header!r}")
+
+    raw_start, raw_end = parts[0], parts[1]
+
+    if raw_start == "" and raw_end == "":
+        raise ValueError(f"malformed Range header: {range_header!r}")
+
+    try:
+        if raw_start == "":
+            # suffix form: bytes=-N  (last N bytes)
+            suffix = int(raw_end)
+            if suffix <= 0:
+                raise ValueError(f"non-positive suffix length: {range_header!r}")
+            start = video_size - suffix
+            end = video_size - 1
+        else:
+            start = int(raw_start)
+            end = int(raw_end) if raw_end != "" else video_size - 1
+    except (TypeError, ValueError):
+        raise ValueError(f"non-numeric range parts: {range_header!r}")
+
+    # clamp end to last valid byte
+    if end >= video_size:
+        end = video_size - 1
+
+    if video_size == 0 or start < 0 or start > end:
+        raise ValueError(f"unsatisfiable range: {range_header!r} for size {video_size}")
+
+    return start, end
+
+
 @router.get("/stream/{file_path:path}")
 async def stream_video(request: Request, file_path: str):
     request_id = base.get_task_id(request)
@@ -378,14 +425,16 @@ async def stream_video(request: Request, file_path: str):
     start, end = 0, video_size - 1
 
     length = video_size
-    if range_header:
-        range_ = range_header.split("bytes=")[1]
-        start, end = [int(part) if part else None for part in range_.split("-")]
-        if start is None:
-            start = video_size - end
-            end = video_size - 1
-        if end is None:
-            end = video_size - 1
+    try:
+        parsed = _parse_range_header(range_header, video_size)
+    except ValueError:
+        raise HttpException(
+            task_id=request_id,
+            status_code=416,
+            message=f"{request_id}: invalid range",
+        )
+    if parsed is not None:
+        start, end = parsed
         length = end - start + 1
 
     def file_iterator(file_path, offset=0, bytes_to_read=None):
