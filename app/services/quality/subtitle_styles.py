@@ -218,6 +218,59 @@ def resolve_subtitle_render(
     )
 
 
+def _wt_span(word_timestamp):
+    """Normalize a WordTimestamp dataclass / tuple / dict to (start, end)."""
+    if isinstance(word_timestamp, dict):
+        return float(word_timestamp.get("start", 0)), float(word_timestamp.get("end", 0))
+    if isinstance(word_timestamp, (tuple, list)) and len(word_timestamp) >= 3:
+        return float(word_timestamp[1]), float(word_timestamp[2])
+    return float(getattr(word_timestamp, "start", 0)), float(getattr(word_timestamp, "end", 0))
+
+
+def build_karaoke_segments(phrase, phrase_start, phrase_end, word_timestamps):
+    """Map a subtitle phrase + its time window to per-word highlight segments.
+
+    Returns a list of ``{word, index, start, end}`` covering
+    ``[phrase_start, phrase_end]`` contiguously. When the per-word timestamps
+    overlapping the window match the phrase's word count, they are used 1:1;
+    otherwise the window is split evenly across the phrase words. Pure and
+    deterministic so the karaoke timing is unit testable without rendering.
+    """
+    words = phrase.split()
+    if not words:
+        return []
+
+    phrase_start = float(phrase_start)
+    phrase_end = float(phrase_end)
+    duration = max(0.0, phrase_end - phrase_start)
+    n = len(words)
+
+    within = []
+    for wt in word_timestamps or []:
+        start, end = _wt_span(wt)
+        if end > phrase_start and start < phrase_end:
+            within.append((max(start, phrase_start), min(end, phrase_end)))
+
+    if len(within) == n:
+        bounds = within
+    else:
+        step = duration / n if n else duration
+        bounds = [
+            (phrase_start + i * step, phrase_start + (i + 1) * step) for i in range(n)
+        ]
+
+    segments = []
+    for index, word in enumerate(words):
+        start, end = bounds[index]
+        segments.append(
+            {"word": word, "index": index, "start": float(start), "end": float(end)}
+        )
+    # Guarantee the segments span the whole phrase window.
+    segments[0]["start"] = phrase_start
+    segments[-1]["end"] = phrase_end
+    return segments
+
+
 def build_word_highlight_segments(words):
     """Build progressive word-highlight segments from per-word timestamps.
 

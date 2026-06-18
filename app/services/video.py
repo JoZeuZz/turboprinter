@@ -1,6 +1,7 @@
 import glob
 import itertools
 import io
+import json
 import os
 import random
 import gc
@@ -946,6 +947,105 @@ def _get_visible_center_position(
     return x, y
 
 
+# Highlight colour for the active word in karaoke subtitles.
+_KARAOKE_HIGHLIGHT_COLOR = "#FFD400"
+
+
+def _position_subtitle_clip(_clip, subtitle_item, subtitle_render, video_height):
+    """Apply timing and on-screen position to a subtitle clip (shared by the
+    normal and karaoke render paths)."""
+    duration = subtitle_item[0][1] - subtitle_item[0][0]
+    _clip = _clip.with_start(subtitle_item[0][0])
+    _clip = _clip.with_end(subtitle_item[0][1])
+    _clip = _clip.with_duration(duration)
+    if subtitle_render.position == "bottom":
+        _clip = _clip.with_position(("center", video_height * 0.95 - _clip.h))
+    elif subtitle_render.position == "top":
+        _clip = _clip.with_position(("center", video_height * 0.05))
+    elif subtitle_render.position == "custom":
+        # Ensure the subtitle is fully within the screen bounds
+        margin = 10  # Additional margin, in pixels
+        max_y = video_height - _clip.h - margin
+        min_y = margin
+        custom_y = (video_height - _clip.h) * (subtitle_render.custom_position / 100)
+        custom_y = max(min_y, min(custom_y, max_y))
+        _clip = _clip.with_position(("center", custom_y))
+    else:  # center
+        _clip = _clip.with_position(("center", "center"))
+    return _clip
+
+
+def _build_karaoke_clip(
+    subtitle_item, phrase, font_path, font_size, subtitle_render,
+    karaoke_words, video_width, video_height,
+):
+    """Experimental single-line word-by-word (karaoke) subtitle clip.
+
+    Lays the phrase out as a centered row of per-word clips and overlays a
+    highlight-coloured copy of each word during its spoken window. Returns the
+    composite, or ``None`` to fall back to the normal subtitle render when the
+    phrase would not fit on one line (multi-line karaoke is intentionally not
+    attempted). Any exception in the caller also falls back, so karaoke can
+    never break the render.
+    """
+    words = phrase.split()
+    if not words:
+        return None
+    start_t = subtitle_item[0][0]
+    end_t = subtitle_item[0][1]
+    segments = subtitle_styles.build_karaoke_segments(
+        phrase, start_t, end_t, karaoke_words
+    )
+
+    pil_font = ImageFont.truetype(font_path, font_size)
+    space_bb = pil_font.getbbox(" ")
+    space_w = max(1, space_bb[2] - space_bb[0])
+    widths = [max(1, (pil_font.getbbox(w)[2] - pil_font.getbbox(w)[0])) for w in words]
+    total_w = sum(widths) + space_w * (len(words) - 1)
+    max_w = int(video_width * 0.9)
+    if total_w > max_w:
+        return None  # would need multiple lines; fall back to normal subtitle
+
+    clip_h = int(font_size * 1.8)
+    y = int((clip_h - font_size) / 2)
+    base_color = subtitle_render.fore_color
+    stroke_color = subtitle_render.stroke_color
+    stroke_width = int(subtitle_render.stroke_width)
+    duration = max(0.05, end_t - start_t)
+
+    layers = []
+    cursor = int((max_w - total_w) / 2)
+    for index, word in enumerate(words):
+        seg = segments[index]
+        base = (
+            TextClip(
+                text=word, font=font_path, font_size=font_size, color=base_color,
+                stroke_color=stroke_color, stroke_width=stroke_width,
+            )
+            .with_start(start_t)
+            .with_end(end_t)
+            .with_duration(duration)
+            .with_position((cursor, y))
+        )
+        seg_dur = max(0.05, seg["end"] - seg["start"])
+        highlight = (
+            TextClip(
+                text=word, font=font_path, font_size=font_size,
+                color=_KARAOKE_HIGHLIGHT_COLOR,
+                stroke_color=stroke_color, stroke_width=stroke_width,
+            )
+            .with_start(seg["start"])
+            .with_end(seg["end"])
+            .with_duration(seg_dur)
+            .with_position((cursor, y))
+        )
+        layers.append(base)
+        layers.append(highlight)
+        cursor += widths[index] + space_w
+
+    return CompositeVideoClip(layers, size=(max_w, clip_h))
+
+
 def generate_video(
     video_path: str,
     audio_path: str,
@@ -980,6 +1080,23 @@ def generate_video(
     # Effective subtitle settings. When the quality stack is off this mirrors
     # `params`, so rendering below is byte-for-byte the upstream behaviour.
     subtitle_render = _resolve_effective_subtitle(params, video_width, video_height)
+
+    # Karaoke (word-highlight) data, if prepared by the task step. Optional and
+    # gated; absence simply means normal phrase subtitles.
+    karaoke_words = None
+    if subtitle_render.word_highlight:
+        _wt_path = os.path.join(output_dir, "word_timestamps.json")
+        if os.path.exists(_wt_path):
+            try:
+                with open(_wt_path, encoding="utf-8") as _wt_fp:
+                    karaoke_words = json.load(_wt_fp)
+                logger.info(
+                    f"karaoke: loaded {len(karaoke_words)} word timestamps"
+                )
+            except Exception as exc:
+                logger.warning(
+                    f"failed to load word_timestamps.json for karaoke: {exc}"
+                )
 
     def resolve_subtitle_background_color():
         # 兼容历史参数：API 里 `text_background_color` 既可能是布尔值，
@@ -1026,6 +1143,22 @@ def generate_video(
         # 一个更保守的高度，把行间距和额外上下留白一并算进去，保证字幕
         # 背景框与文字本身都能完整渲染出来。
         clip_h = int(txt_height + vertical_padding + (interline * line_count))
+
+        # Experimental karaoke: word-by-word highlight on a single line. Falls
+        # back to the normal render below if unavailable or multi-line.
+        if subtitle_render.word_highlight and karaoke_words:
+            try:
+                karaoke_clip = _build_karaoke_clip(
+                    subtitle_item, phrase, font_path, font_size,
+                    subtitle_render, karaoke_words, video_width, video_height,
+                )
+            except Exception as exc:
+                logger.debug(f"karaoke render failed, using normal subtitle: {exc}")
+                karaoke_clip = None
+            if karaoke_clip is not None:
+                return _position_subtitle_clip(
+                    karaoke_clip, subtitle_item, subtitle_render, video_height
+                )
 
         if rounded_bg_enabled:
             # 圆角背景需要贴合文字宽度，而不是沿用 90% 视频宽度。这里先用
@@ -1118,27 +1251,9 @@ def generate_video(
                 size=size,
                 text_align="center",
             )
-        duration = subtitle_item[0][1] - subtitle_item[0][0]
-        _clip = _clip.with_start(subtitle_item[0][0])
-        _clip = _clip.with_end(subtitle_item[0][1])
-        _clip = _clip.with_duration(duration)
-        if subtitle_render.position == "bottom":
-            _clip = _clip.with_position(("center", video_height * 0.95 - _clip.h))
-        elif subtitle_render.position == "top":
-            _clip = _clip.with_position(("center", video_height * 0.05))
-        elif subtitle_render.position == "custom":
-            # Ensure the subtitle is fully within the screen bounds
-            margin = 10  # Additional margin, in pixels
-            max_y = video_height - _clip.h - margin
-            min_y = margin
-            custom_y = (video_height - _clip.h) * (subtitle_render.custom_position / 100)
-            custom_y = max(
-                min_y, min(custom_y, max_y)
-            )  # Constrain the y value within the valid range
-            _clip = _clip.with_position(("center", custom_y))
-        else:  # center
-            _clip = _clip.with_position(("center", "center"))
-        return _clip
+        return _position_subtitle_clip(
+            _clip, subtitle_item, subtitle_render, video_height
+        )
 
     video_clip = _open_video_clip_quietly(video_path)
     audio_clip = AudioFileClip(audio_path).with_effects(
