@@ -82,6 +82,24 @@ class TestLoadQualitySettings(unittest.TestCase):
         self.assertTrue(s.enabled)
         self.assertEqual(s.profile, "high")
 
+    def test_webui_cli_override_keys_flow_through(self):
+        # Fase 8 exposes these per-request from WebUI/CLI.
+        s = settings.load_quality_settings(
+            {"enabled": True},
+            overrides={
+                "subtitle_style": "karaoke",
+                "prefer_local_assets": False,
+                "normalize_audio": False,
+                "language": "en",
+                "content_package": True,
+            },
+        )
+        self.assertEqual(s.subtitle_style, "karaoke")
+        self.assertFalse(s.prefer_local_assets)
+        self.assertFalse(s.normalize_audio)
+        self.assertEqual(s.language, "en")
+        self.assertTrue(s.content_package)
+
 
 class TestRenderProfiles(unittest.TestCase):
     def _settings(self, **overrides):

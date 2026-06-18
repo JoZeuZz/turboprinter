@@ -238,6 +238,64 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         action=argparse.BooleanOptionalAction,
         help="enable rounded translucent subtitle background",
     )
+    quality = parser.add_argument_group(
+        "Personal Quality Stack (optional)",
+        "Per-request overrides of the [quality] config. Unset flags fall back "
+        "to config.toml; when the stack is disabled the pipeline is unchanged.",
+    )
+    quality.add_argument(
+        "--quality-enabled",
+        default=None,
+        action=argparse.BooleanOptionalAction,
+        help="enable the personal quality stack for this run",
+    )
+    quality.add_argument(
+        "--quality-profile",
+        default=None,
+        choices=["fast", "balanced", "high", "archival"],
+        help="render quality profile",
+    )
+    quality.add_argument(
+        "--quality-target-platform",
+        default=None,
+        choices=["shorts", "reels", "tiktok", "landscape"],
+        help="target platform (affects subtitle safe-area)",
+    )
+    quality.add_argument(
+        "--quality-subtitle-style",
+        default=None,
+        choices=["classic", "clean", "premium", "karaoke", "documentary"],
+        help="premium subtitle preset",
+    )
+    quality.add_argument(
+        "--quality-word-highlight",
+        default=None,
+        action=argparse.BooleanOptionalAction,
+        help="compute per-word timestamps for karaoke/word-highlight",
+    )
+    quality.add_argument(
+        "--quality-content-package",
+        default=None,
+        action=argparse.BooleanOptionalAction,
+        help="generate the Spanish content package sidecar",
+    )
+    quality.add_argument(
+        "--quality-prefer-local-assets",
+        default=None,
+        action=argparse.BooleanOptionalAction,
+        help="prioritize the local material library over stock",
+    )
+    quality.add_argument(
+        "--quality-normalize-audio",
+        default=None,
+        action=argparse.BooleanOptionalAction,
+        help="enable optional audio normalization",
+    )
+    quality.add_argument(
+        "--quality-language",
+        default=None,
+        help="content language for the quality stack (e.g. es)",
+    )
     parser.add_argument("--task-id", default="", help="custom task id")
     args = parser.parse_args(argv)
 
@@ -302,6 +360,15 @@ def build_video_params(args: argparse.Namespace) -> VideoParams:
         "stroke_color",
         "stroke_width",
         "rounded_subtitle_background",
+        "quality_enabled",
+        "quality_profile",
+        "quality_target_platform",
+        "quality_subtitle_style",
+        "quality_word_highlight",
+        "quality_content_package",
+        "quality_prefer_local_assets",
+        "quality_normalize_audio",
+        "quality_language",
     ]
     for name in optional_arg_names:
         value = getattr(args, name)

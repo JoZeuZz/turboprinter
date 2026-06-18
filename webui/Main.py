@@ -1438,6 +1438,68 @@ with right_panel:
                     config.save_config()
                     st.success(tr("Coverr API Key deleted successfully"))
 
+with st.expander(tr("Personal Quality"), expanded=False):
+    # Optional Personal Quality Stack overrides. Defaults read from the
+    # [quality] config; when disabled the pipeline behaves like upstream.
+    quality_enabled = st.checkbox(
+        tr("Enable quality enhancements"),
+        value=bool(config.quality.get("enabled", False)),
+        help=tr("Optional. When off, the video is generated exactly as before."),
+    )
+    params.quality_enabled = quality_enabled
+    if quality_enabled:
+        _q_profiles = ["fast", "balanced", "high", "archival"]
+        _q_platforms = ["shorts", "reels", "tiktok", "landscape"]
+        _q_styles = ["classic", "clean", "premium", "karaoke", "documentary"]
+
+        def _q_index(options, value, fallback):
+            return options.index(value) if value in options else fallback
+
+        q_cols = st.columns(3)
+        with q_cols[0]:
+            params.quality_profile = st.selectbox(
+                tr("Quality Profile"),
+                options=_q_profiles,
+                index=_q_index(_q_profiles, str(config.quality.get("profile", "balanced")), 1),
+                help=tr("Higher quality renders slower (high/archival use a lower CRF)."),
+            )
+            params.quality_target_platform = st.selectbox(
+                tr("Target Platform"),
+                options=_q_platforms,
+                index=_q_index(_q_platforms, str(config.quality.get("target_platform", "shorts")), 0),
+                help=tr("Sets the subtitle safe-area for the destination format."),
+            )
+            params.quality_language = st.text_input(
+                tr("Content Language"),
+                value=str(config.quality.get("language", "es")),
+            )
+        with q_cols[1]:
+            params.quality_subtitle_style = st.selectbox(
+                tr("Subtitle Style"),
+                options=_q_styles,
+                index=_q_index(_q_styles, str(config.quality.get("subtitle_style", "premium")), 2),
+            )
+            params.quality_word_highlight = st.checkbox(
+                tr("Word Highlight (karaoke)"),
+                value=bool(config.quality.get("word_highlight", False)),
+                help=tr("Saves per-word timing; falls back to phrase subtitles if unavailable."),
+            )
+            params.quality_normalize_audio = st.checkbox(
+                tr("Normalize Audio"),
+                value=bool(config.quality.get("normalize_audio", True)),
+            )
+        with q_cols[2]:
+            params.quality_prefer_local_assets = st.checkbox(
+                tr("Prefer Local Material Library"),
+                value=bool(config.quality.get("prefer_local_assets", True)),
+                help=tr("Use your indexed local clips before downloading stock."),
+            )
+            params.quality_content_package = st.checkbox(
+                tr("Spanish Content Package"),
+                value=bool(config.quality.get("content_package", False)),
+                help=tr("Also generate title, description, hashtags and a review checklist."),
+            )
+
 start_button = st.button(tr("Generate Video"), use_container_width=True, type="primary")
 if start_button:
     config.save_config()
