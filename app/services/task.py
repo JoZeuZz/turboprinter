@@ -7,7 +7,7 @@ from loguru import logger
 
 from app.config import config
 from app.models import const
-from app.models.schema import VideoConcatMode, VideoParams
+from app.models.schema import VideoAspect, VideoConcatMode, VideoParams
 from app.services import llm, material, subtitle, video, voice, upload_post
 from app.services import state as sm
 from app.services.quality import settings as quality_settings
@@ -216,6 +216,57 @@ def generate_subtitle(task_id, params, video_script, sub_maker, audio_file):
     return subtitle_path
 
 
+def _select_local_library_materials(params, quality_settings_obj):
+    """Return prioritized local-library video paths for the current request.
+
+    Returns ``[]`` unless the quality stack is enabled with
+    ``prefer_local_assets`` and a library database exists. Paths are ranked by
+    the deterministic material ranker and filtered to files that still exist
+    (the library may reference moved/deleted media). Any failure degrades to
+    ``[]`` so the stock pipeline keeps working.
+    """
+    if not (
+        quality_settings_obj
+        and getattr(quality_settings_obj, "enabled", False)
+        and getattr(quality_settings_obj, "prefer_local_assets", False)
+    ):
+        return []
+    try:
+        from app.services.quality import local_library, material_ranker
+
+        db_path = path.join(
+            utils.storage_dir("local_library", create=True), "library.db"
+        )
+        if not path.isfile(db_path):
+            return []
+
+        aspect = VideoAspect(params.video_aspect)
+        target_width, target_height = aspect.to_resolution()
+        context = material_ranker.RankContext(
+            target_width=target_width,
+            target_height=target_height,
+            target_orientation=aspect.name,
+            min_useful_duration=max(1.0, float(params.video_clip_duration) / 2.0),
+        )
+        conn = local_library.connect(db_path)
+        try:
+            paths = local_library.select_pipeline_materials(
+                conn, quality_settings_obj, context, limit=0
+            )
+        finally:
+            conn.close()
+
+        existing = [p for p in paths if path.isfile(p)]
+        if existing:
+            logger.info(
+                f"local library contributed {len(existing)} prioritized materials"
+            )
+        return existing
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning(f"local library selection failed, skipping: {exc}")
+        return []
+
+
 def get_video_materials(task_id, params, video_terms, audio_duration):
     if params.video_source == "local":
         logger.info("\n\n## preprocess local materials")
@@ -255,13 +306,22 @@ def get_video_materials(task_id, params, video_terms, audio_duration):
             match_script_order=params.match_materials_to_script,
             quality_settings=qs,
         )
-        if not downloaded_videos:
+        # Prioritize the user's local library (Fase 6) ahead of stock clips.
+        # combine_videos consumes materials in order and stops once the audio
+        # duration is covered, so local assets are used first and stock fills
+        # any remainder. Returns [] when the library feature is off/empty.
+        local_videos = _select_local_library_materials(params, qs)
+        downloaded_videos = downloaded_videos or []
+        combined_videos = local_videos + [
+            v for v in downloaded_videos if v not in local_videos
+        ]
+        if not combined_videos:
             sm.state.update_task(task_id, state=const.TASK_STATE_FAILED)
             logger.error(
                 "failed to download videos, maybe the network is not available. if you are in China, please use a VPN."
             )
             return None
-        return downloaded_videos
+        return combined_videos
 
 
 def generate_final_videos(
