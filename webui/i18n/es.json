@@ -162,6 +162,22 @@
     "Coverr API Key deleted successfully": "API Key de Coverr eliminada correctamente",
     "Advanced Video Settings": "Configuración avanzada de vídeo",
     "Video Encoder": "Codificador de vídeo",
-    "Video Encoder Help": "Opción avanzada. libx264 es el predeterminado más seguro. Cuando se selecciona un codificador de hardware, la aplicación vuelve a libx264 si el FFmpeg, GPU o controlador actuales no pueden usarlo."
+    "Video Encoder Help": "Opción avanzada. libx264 es el predeterminado más seguro. Cuando se selecciona un codificador de hardware, la aplicación vuelve a libx264 si el FFmpeg, GPU o controlador actuales no pueden usarlo.",
+    "Personal Quality": "Calidad / Personal",
+    "Enable quality enhancements": "Activar mejoras de calidad",
+    "Optional. When off, the video is generated exactly as before.": "Opcional. Si está desactivado, el vídeo se genera exactamente igual que antes.",
+    "Quality Profile": "Perfil de calidad",
+    "Higher quality renders slower (high/archival use a lower CRF).": "Más calidad renderiza más lento (high/archival usan un CRF más bajo).",
+    "Target Platform": "Plataforma objetivo",
+    "Sets the subtitle safe-area for the destination format.": "Ajusta el área segura de subtítulos para el formato de destino.",
+    "Content Language": "Idioma del contenido",
+    "Subtitle Style": "Estilo de subtítulos",
+    "Word Highlight (karaoke)": "Resaltado por palabra (karaoke)",
+    "Saves per-word timing; falls back to phrase subtitles if unavailable.": "Guarda el tiempo por palabra; recurre a subtítulos por frase si no está disponible.",
+    "Normalize Audio": "Normalizar audio",
+    "Prefer Local Material Library": "Preferir biblioteca de material local",
+    "Use your indexed local clips before downloading stock.": "Usa tus clips locales indexados antes de descargar material de stock.",
+    "Spanish Content Package": "Paquete de contenido en español",
+    "Also generate title, description, hashtags and a review checklist.": "Genera también título, descripción, hashtags y una checklist de revisión."
   }
 }

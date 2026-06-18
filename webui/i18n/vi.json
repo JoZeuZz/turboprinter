@@ -160,6 +160,22 @@
     "Coverr API Key deleted successfully": "Xóa API Key Coverr thành công",
     "Advanced Video Settings": "Cài Đặt Video Nâng Cao",
     "Video Encoder": "Bộ Mã Hóa Video",
-    "Video Encoder Help": "Tùy chọn nâng cao. libx264 là lựa chọn mặc định an toàn nhất. Khi chọn bộ mã hóa phần cứng, ứng dụng sẽ tự chuyển về libx264 nếu FFmpeg, GPU hoặc driver hiện tại không hỗ trợ."
+    "Video Encoder Help": "Tùy chọn nâng cao. libx264 là lựa chọn mặc định an toàn nhất. Khi chọn bộ mã hóa phần cứng, ứng dụng sẽ tự chuyển về libx264 nếu FFmpeg, GPU hoặc driver hiện tại không hỗ trợ.",
+    "Personal Quality": "Chất lượng cá nhân",
+    "Enable quality enhancements": "Bật các cải tiến chất lượng",
+    "Optional. When off, the video is generated exactly as before.": "Tùy chọn. Khi tắt, video được tạo y như trước.",
+    "Quality Profile": "Hồ sơ chất lượng",
+    "Higher quality renders slower (high/archival use a lower CRF).": "Chất lượng cao hơn kết xuất chậm hơn (high/archival dùng CRF thấp hơn).",
+    "Target Platform": "Nền tảng mục tiêu",
+    "Sets the subtitle safe-area for the destination format.": "Đặt vùng an toàn phụ đề cho định dạng đích.",
+    "Content Language": "Ngôn ngữ nội dung",
+    "Subtitle Style": "Kiểu phụ đề",
+    "Word Highlight (karaoke)": "Tô sáng theo từ (karaoke)",
+    "Saves per-word timing; falls back to phrase subtitles if unavailable.": "Lưu thời gian theo từng từ; quay lại phụ đề theo câu nếu không có.",
+    "Normalize Audio": "Chuẩn hóa âm thanh",
+    "Prefer Local Material Library": "Ưu tiên thư viện tư liệu cục bộ",
+    "Use your indexed local clips before downloading stock.": "Dùng các clip cục bộ đã lập chỉ mục trước khi tải tư liệu kho.",
+    "Spanish Content Package": "Gói nội dung tiếng Tây Ban Nha",
+    "Also generate title, description, hashtags and a review checklist.": "Đồng thời tạo tiêu đề, mô tả, hashtag và danh sách kiểm tra."
   }
 }

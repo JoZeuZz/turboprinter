@@ -142,6 +142,22 @@
     "Coverr API Key added successfully": "Chave de API do Coverr adicionada com sucesso",
     "Select Coverr API Key to delete": "Selecione a chave de API do Coverr para excluir",
     "Delete Selected Coverr API Key": "Excluir chave de API do Coverr selecionada",
-    "Coverr API Key deleted successfully": "Chave de API do Coverr excluída com sucesso"
+    "Coverr API Key deleted successfully": "Chave de API do Coverr excluída com sucesso",
+    "Personal Quality": "Qualidade Pessoal",
+    "Enable quality enhancements": "Ativar melhorias de qualidade",
+    "Optional. When off, the video is generated exactly as before.": "Opcional. Quando desativado, o vídeo é gerado exatamente como antes.",
+    "Quality Profile": "Perfil de qualidade",
+    "Higher quality renders slower (high/archival use a lower CRF).": "Mais qualidade renderiza mais devagar (high/archival usam um CRF mais baixo).",
+    "Target Platform": "Plataforma de destino",
+    "Sets the subtitle safe-area for the destination format.": "Define a área segura das legendas para o formato de destino.",
+    "Content Language": "Idioma do conteúdo",
+    "Subtitle Style": "Estilo de legenda",
+    "Word Highlight (karaoke)": "Destaque por palavra (karaokê)",
+    "Saves per-word timing; falls back to phrase subtitles if unavailable.": "Guarda o tempo por palavra; recorre a legendas por frase se indisponível.",
+    "Normalize Audio": "Normalizar áudio",
+    "Prefer Local Material Library": "Preferir biblioteca de material local",
+    "Use your indexed local clips before downloading stock.": "Use seus clipes locais indexados antes de baixar material de stock.",
+    "Spanish Content Package": "Pacote de conteúdo em espanhol",
+    "Also generate title, description, hashtags and a review checklist.": "Também gera título, descrição, hashtags e uma checklist de revisão."
   }
 }
