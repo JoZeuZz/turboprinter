@@ -162,6 +162,22 @@
     "Custom Position (% from top)": "Пользовательское положение (% от верхнего края)",
     "Please enter a value between 0 and 100": "Введите значение от 0 до 100",
     "Please enter a valid number": "Введите корректное число",
-    "Please Select a Valid Video Source": "Выберите поддерживаемый источник материалов"
+    "Please Select a Valid Video Source": "Выберите поддерживаемый источник материалов",
+    "Personal Quality": "Личное качество",
+    "Enable quality enhancements": "Включить улучшения качества",
+    "Optional. When off, the video is generated exactly as before.": "Необязательно. Если выключено, видео создаётся точно так же, как раньше.",
+    "Quality Profile": "Профиль качества",
+    "Higher quality renders slower (high/archival use a lower CRF).": "Более высокое качество рендерится медленнее (high/archival используют более низкий CRF).",
+    "Target Platform": "Целевая платформа",
+    "Sets the subtitle safe-area for the destination format.": "Задаёт безопасную зону субтитров для целевого формата.",
+    "Content Language": "Язык контента",
+    "Subtitle Style": "Стиль субтитров",
+    "Word Highlight (karaoke)": "Подсветка по словам (караоке)",
+    "Saves per-word timing; falls back to phrase subtitles if unavailable.": "Сохраняет тайминг по словам; при отсутствии — субтитры по фразам.",
+    "Normalize Audio": "Нормализовать звук",
+    "Prefer Local Material Library": "Предпочитать локальную библиотеку материалов",
+    "Use your indexed local clips before downloading stock.": "Использовать локальные клипы из индекса перед загрузкой стоковых.",
+    "Spanish Content Package": "Испанский контент-пакет",
+    "Also generate title, description, hashtags and a review checklist.": "Также создаёт заголовок, описание, хештеги и чек-лист проверки."
   }
 }

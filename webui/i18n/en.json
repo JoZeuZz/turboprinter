@@ -162,6 +162,22 @@
     "Coverr API Key deleted successfully": "Coverr API Key deleted successfully",
     "Advanced Video Settings": "Advanced Video Settings",
     "Video Encoder": "Video Encoder",
-    "Video Encoder Help": "Advanced option. libx264 is the safest default. When a hardware encoder is selected, the app falls back to libx264 if the current FFmpeg, GPU, or driver cannot use it."
+    "Video Encoder Help": "Advanced option. libx264 is the safest default. When a hardware encoder is selected, the app falls back to libx264 if the current FFmpeg, GPU, or driver cannot use it.",
+    "Personal Quality": "Personal Quality",
+    "Enable quality enhancements": "Enable quality enhancements",
+    "Optional. When off, the video is generated exactly as before.": "Optional. When off, the video is generated exactly as before.",
+    "Quality Profile": "Quality Profile",
+    "Higher quality renders slower (high/archival use a lower CRF).": "Higher quality renders slower (high/archival use a lower CRF).",
+    "Target Platform": "Target Platform",
+    "Sets the subtitle safe-area for the destination format.": "Sets the subtitle safe-area for the destination format.",
+    "Content Language": "Content Language",
+    "Subtitle Style": "Subtitle Style",
+    "Word Highlight (karaoke)": "Word Highlight (karaoke)",
+    "Saves per-word timing; falls back to phrase subtitles if unavailable.": "Saves per-word timing; falls back to phrase subtitles if unavailable.",
+    "Normalize Audio": "Normalize Audio",
+    "Prefer Local Material Library": "Prefer Local Material Library",
+    "Use your indexed local clips before downloading stock.": "Use your indexed local clips before downloading stock.",
+    "Spanish Content Package": "Spanish Content Package",
+    "Also generate title, description, hashtags and a review checklist.": "Also generate title, description, hashtags and a review checklist."
   }
 }

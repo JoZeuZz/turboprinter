@@ -160,6 +160,22 @@
     "Coverr API Key deleted successfully": "Coverr API Anahtarı başarıyla silindi",
     "Advanced Video Settings": "Gelişmiş Video Ayarları",
     "Video Encoder": "Video Kodlayıcı",
-    "Video Encoder Help": "Gelişmiş seçenek. libx264 en güvenli varsayılandır. Donanım kodlayıcı seçildiğinde mevcut FFmpeg, GPU veya sürücü bunu kullanamıyorsa uygulama libx264'ye geri döner."
+    "Video Encoder Help": "Gelişmiş seçenek. libx264 en güvenli varsayılandır. Donanım kodlayıcı seçildiğinde mevcut FFmpeg, GPU veya sürücü bunu kullanamıyorsa uygulama libx264'ye geri döner.",
+    "Personal Quality": "Kişisel Kalite",
+    "Enable quality enhancements": "Kalite iyileştirmelerini etkinleştir",
+    "Optional. When off, the video is generated exactly as before.": "İsteğe bağlı. Kapalıyken video tıpkı önceki gibi oluşturulur.",
+    "Quality Profile": "Kalite Profili",
+    "Higher quality renders slower (high/archival use a lower CRF).": "Daha yüksek kalite daha yavaş işlenir (high/archival daha düşük CRF kullanır).",
+    "Target Platform": "Hedef Platform",
+    "Sets the subtitle safe-area for the destination format.": "Altyazı güvenli alanını hedef format için ayarlar.",
+    "Content Language": "İçerik Dili",
+    "Subtitle Style": "Altyazı Stili",
+    "Word Highlight (karaoke)": "Kelime Vurgusu (karaoke)",
+    "Saves per-word timing; falls back to phrase subtitles if unavailable.": "Kelime başına zamanlamayı kaydeder; yoksa cümle altyazısına döner.",
+    "Normalize Audio": "Sesi normalleştir",
+    "Prefer Local Material Library": "Yerel Materyal Kütüphanesini Tercih Et",
+    "Use your indexed local clips before downloading stock.": "Stok indirmeden önce dizine eklenmiş yerel kliplerini kullan.",
+    "Spanish Content Package": "İspanyolca İçerik Paketi",
+    "Also generate title, description, hashtags and a review checklist.": "Ayrıca başlık, açıklama, hashtag ve bir inceleme listesi oluşturur."
   }
 }
