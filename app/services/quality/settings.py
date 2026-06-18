@@ -35,6 +35,10 @@ OVERRIDE_KEYS = (
     "target_platform",
     "word_highlight",
     "content_package",
+    "subtitle_style",
+    "prefer_local_assets",
+    "normalize_audio",
+    "language",
 )
 
 

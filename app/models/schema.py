@@ -125,6 +125,10 @@ class VideoParams(BaseModel):
     quality_target_platform: Optional[str] = None  # shorts | reels | tiktok | landscape
     quality_word_highlight: Optional[bool] = None
     quality_content_package: Optional[bool] = None  # Spanish content package sidecar
+    quality_subtitle_style: Optional[str] = None  # classic|clean|premium|karaoke|documentary
+    quality_prefer_local_assets: Optional[bool] = None
+    quality_normalize_audio: Optional[bool] = None
+    quality_language: Optional[str] = None
 
 
 class SubtitleRequest(BaseModel):
