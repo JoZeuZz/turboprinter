@@ -68,6 +68,28 @@ coverr_api_keys = []
 #   litellm     (100+ providers via LiteLLM gateway)
 llm_provider = "openai"
 
+########## LLM fallback and timeouts
+# Optional provider fallback chain. Empty list disables fallback (default,
+# identical to upstream behaviour). When set, the primary llm_provider is tried
+# first, then each provider in this list, skipping any that is misconfigured or
+# fails. Duplicates and the primary provider are de-duplicated automatically.
+# Example for this personal fork: ["gemini"] to fall back from DeepSeek to Gemini.
+llm_fallback_providers = []
+# Optional request/connect timeouts (seconds) applied to the DeepSeek client.
+# Leave unset (or 0) to keep the SDK default timeout.
+llm_request_timeout_seconds = 120
+llm_connect_timeout_seconds = 30
+
+########## Optional LLM intent profiles (advanced, opt-in)
+# Per-intent sampling defaults live in app/services/llm.py (LLM_PROFILES) and are
+# used as a building block. You may override any field per profile here; missing
+# keys fall back to the built-in defaults. These tables are tolerant to absence.
+# Example:
+#   [llm_profiles.script]
+#   temperature = 0.7
+#   [llm_profiles.keywords]
+#   temperature = 0.2
+
 ########## Pollinations AI Settings
 # Visit https://pollinations.ai/ to learn more
 # API Key is optional - leave empty for public access
@@ -145,8 +167,13 @@ azure_model_name = "gpt-35-turbo"        # replace with your model deployment na
 azure_api_version = "2024-02-15-preview"
 
 ########## Gemini API Key
+# Gemini is recommended as a secondary/fallback provider for quality comparison,
+# not necessarily as the primary low-cost option.
 gemini_api_key = ""
 gemini_model_name = "gemini-2.5-flash"
+# Optional. Leave empty to use the default Google endpoint; set it only if you
+# route Gemini through a compatible custom endpoint.
+gemini_base_url = ""
 
 ########## Grok API Key
 grok_api_key = ""
@@ -191,10 +218,22 @@ mimo_tts_model_name = "mimo-v2.5-tts"
 mimo_tts_style_prompt = "请用自然、清晰、适合短视频旁白的语气朗读。"
 
 ########## DeepSeek API Key
-# Visit https://platform.deepseek.com/api_keys to get your API key
+# Visit https://platform.deepseek.com/api_keys to get your API key.
+# DeepSeek is recommended as the primary low-cost provider for Spanish scripts,
+# keywords, titles, descriptions and content packages.
+# To use it as the main provider for this personal fork, set:
+#   llm_provider = "deepseek"
 deepseek_api_key = ""
 deepseek_base_url = "https://api.deepseek.com"
-deepseek_model_name = "deepseek-chat"
+# Recommended model. deepseek-chat / deepseek-reasoner still work (V3.2
+# non-thinking / thinking modes); verify model availability in the official docs
+# before intensive use: https://api-docs.deepseek.com
+deepseek_model_name = "deepseek-v4-flash"
+# Disable thinking by default for video script generation. This avoids extra
+# reasoning text/cost and keeps the generated voiceover clean.
+deepseek_thinking_enabled = false
+# Only used when deepseek_thinking_enabled = true.
+deepseek_reasoning_effort = "high"
 
 
 ########## ModelScope API Key
