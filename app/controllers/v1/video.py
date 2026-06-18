@@ -251,8 +251,19 @@ def delete_video(request: Request, task_id: str = Path(..., description="Task ID
     task = sm.state.get_task(task_id)
     if task:
         tasks_dir = utils.task_dir()
-        current_task_dir = os.path.join(tasks_dir, task_id)
-        if os.path.exists(current_task_dir):
+        try:
+            current_task_dir = file_security.resolve_path_within_directory(
+                tasks_dir, task_id, require_file=False
+            )
+        except ValueError as exc:
+            logger.warning(
+                f"reject unsafe task_id for deletion, request_id: {request_id}, "
+                f"task_id: {task_id}, error: {str(exc)}"
+            )
+            raise HttpException(
+                task_id=task_id, status_code=403, message=f"{request_id}: invalid task id"
+            )
+        if os.path.isdir(current_task_dir):
             shutil.rmtree(current_task_dir)
 
         sm.state.delete_task(task_id)
