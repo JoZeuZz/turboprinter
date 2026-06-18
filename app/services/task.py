@@ -385,6 +385,70 @@ def generate_final_videos(
     return final_video_paths, combined_video_paths
 
 
+def maybe_save_word_timestamps(task_id, params, audio_file, sub_maker):
+    """Save per-word timestamps when word-highlight (karaoke) is enabled.
+
+    Uses the TTS adapter: first tries the provider's own word boundaries from
+    ``sub_maker``; if absent, falls back to Whisper alignment (reusing the
+    already-shipped faster-whisper dependency). Writes ``word_timestamps.json``
+    to the task dir and returns its path, or "" when disabled/unavailable.
+    Never aborts the pipeline; karaoke cleanly falls back to phrase subtitles.
+    """
+    try:
+        qs = quality_settings.current_quality_settings(params)
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.debug(f"quality settings unavailable for word timestamps: {exc}")
+        return ""
+    if not (getattr(qs, "enabled", False) and getattr(qs, "word_highlight", False)):
+        return ""
+    if not audio_file:
+        return ""
+
+    try:
+        from app.services.quality import tts_adapter
+
+        result = tts_adapter.build_tts_result(
+            audio_file=audio_file,
+            duration=0.0,
+            provider="pipeline",
+            word_timestamps=tts_adapter.extract_word_timestamps_from_submaker(sub_maker)
+            or None,
+        )
+        if not tts_adapter.has_word_timestamps(result):
+            aligner = tts_adapter.make_faster_whisper_aligner(
+                model_size=config.whisper.get("model_size", "large-v3"),
+                device=config.whisper.get("device", "cpu"),
+                compute_type=config.whisper.get("compute_type", "int8"),
+                language=(params.video_language or None),
+            )
+            result = tts_adapter.ensure_word_timestamps(
+                result, audio_file, aligner=aligner
+            )
+        if not tts_adapter.has_word_timestamps(result):
+            logger.info(
+                "no word timestamps available; karaoke falls back to phrase subtitles"
+            )
+            return ""
+
+        out_path = path.join(utils.task_dir(task_id), "word_timestamps.json")
+        with open(out_path, "w", encoding="utf-8") as fp:
+            fp.write(
+                utils.to_json(
+                    [
+                        {"word": w.word, "start": w.start, "end": w.end}
+                        for w in result.word_timestamps
+                    ]
+                )
+            )
+        logger.success(
+            f"word timestamps saved: {out_path} ({len(result.word_timestamps)} words)"
+        )
+        return out_path
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning(f"failed to compute word timestamps: {exc}")
+        return ""
+
+
 def generate_content_package(task_id, params, video_script, video_terms):
     """Generate and save the Spanish Content Package sidecar when enabled.
 
@@ -492,6 +556,12 @@ def start(task_id, params: VideoParams, stop_at: str = "video"):
         )
         return {"audio_file": audio_file, "audio_duration": audio_duration}
 
+    # 3.5 Optional per-word timestamps for karaoke/word-highlight (additive
+    # artifact; falls back cleanly when unavailable).
+    word_timestamps_path = maybe_save_word_timestamps(
+        task_id, params, audio_file, sub_maker
+    )
+
     # 4. Generate subtitle
     subtitle_path = generate_subtitle(
         task_id, params, video_script, sub_maker, audio_file
@@ -571,6 +641,7 @@ def start(task_id, params: VideoParams, stop_at: str = "video"):
         "materials": downloaded_videos,
         "cross_post_results": cross_post_results if cross_post_results else None,
         "content_package": content_package_path or None,
+        "word_timestamps": word_timestamps_path or None,
     }
     sm.state.update_task(
         task_id, state=const.TASK_STATE_COMPLETE, progress=100, **kwargs
