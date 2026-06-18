@@ -327,6 +327,45 @@ if not config.app.get("hide_config", False):
             llm_provider = llm_provider_values[llm_provider_label]
             config.app["llm_provider"] = llm_provider
 
+            # Panel avanzado de proveedores LLM. Se mantiene en un expander para no
+            # sobrecargar la interfaz principal. Usa literales (sin tr()) a propósito
+            # para no afectar la paridad de claves i18n de este fork personal.
+            with st.expander("AI Provider (avanzado)", expanded=False):
+                st.markdown(
+                    "**Recomendaciones de proveedor**\n"
+                    "- **DeepSeek**: bajo costo / proveedor principal sugerido\n"
+                    "- **Gemini**: comparación de calidad / fallback\n"
+                    "- **Ollama**: local / offline\n"
+                    "- **LiteLLM**: gateway avanzado (100+ proveedores)\n\n"
+                    "Precios y disponibilidad de modelos deben verificarse en la "
+                    "documentación oficial antes de uso intensivo."
+                )
+                st.warning(
+                    "No pegues API keys reales en el repositorio ni en `config.toml` "
+                    "versionado. Las claves no se muestran completas en logs ni UI."
+                )
+
+                fallback_candidates = [
+                    pid for _, pid in llm_provider_options if pid != llm_provider
+                ]
+                saved_fallback = config.app.get("llm_fallback_providers", []) or []
+                if isinstance(saved_fallback, str):
+                    saved_fallback = [
+                        item.strip()
+                        for item in saved_fallback.split(",")
+                        if item.strip()
+                    ]
+                default_fallback = [
+                    pid for pid in saved_fallback if pid in fallback_candidates
+                ]
+                selected_fallback = st.multiselect(
+                    "Fallback providers (orden de intento si el principal falla)",
+                    options=fallback_candidates,
+                    default=default_fallback,
+                    help="Vacío = sin fallback (comportamiento idéntico al actual).",
+                )
+                config.app["llm_fallback_providers"] = selected_fallback
+
             llm_api_key = config.app.get(f"{llm_provider}_api_key", "")
             llm_secret_key = config.app.get(
                 f"{llm_provider}_secret_key", ""
@@ -456,7 +495,7 @@ if not config.app.get("hide_config", False):
 
             if llm_provider == "gemini":
                 if not llm_model_name:
-                    llm_model_name = "gemini-1.0-pro"
+                    llm_model_name = "gemini-2.5-flash"
 
                 with llm_helper:
                     tips = """
@@ -464,7 +503,8 @@ if not config.app.get("hide_config", False):
                             > 需要VPN开启全局流量模式
                             - **API Key**: [点击到官网申请](https://ai.google.dev/)
                             - **Base Url**: 留空
-                            - **Model Name**: 比如 gemini-1.0-pro
+                            - **Model Name**: 比如 gemini-2.5-flash（gemini-1.0-pro 已下线）
+                            - 推荐作为对比/兜底（fallback）provider，而不是首选低成本 provider
                             """
 
             if llm_provider == "grok":
@@ -497,7 +537,7 @@ if not config.app.get("hide_config", False):
 
             if llm_provider == "deepseek":
                 if not llm_model_name:
-                    llm_model_name = "deepseek-chat"
+                    llm_model_name = "deepseek-v4-flash"
                 if not llm_base_url:
                     llm_base_url = "https://api.deepseek.com"
                 with llm_helper:
@@ -505,7 +545,8 @@ if not config.app.get("hide_config", False):
                             ##### DeepSeek 配置说明
                             - **API Key**: [点击到官网申请](https://platform.deepseek.com/api_keys)
                             - **Base Url**: 固定为 https://api.deepseek.com
-                            - **Model Name**: 固定为 deepseek-chat
+                            - **Model Name**: 推荐 deepseek-v4-flash（deepseek-chat / deepseek-reasoner 仍可用，请到官方文档确认时效）
+                            - 推荐作为低成本首选 provider；视频旁白默认关闭 thinking
                             """
 
             if llm_provider == "mimo":

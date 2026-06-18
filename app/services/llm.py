@@ -4,6 +4,7 @@ import re
 import requests
 from typing import List
 
+import httpx
 from loguru import logger
 from openai import AzureOpenAI, OpenAI
 from openai.types.chat import ChatCompletion
@@ -13,6 +14,16 @@ from app.config import config
 _max_retries = 5
 _DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
 _DEPRECATED_GEMINI_MODELS = {"gemini-pro", "gemini-1.0-pro"}
+
+# DeepSeek 是本 fork 推荐的低成本主力 provider。官方文档（api-docs.deepseek.com）
+# 的示例当前使用 deepseek-v4 系列，因此这里把推荐默认模型设为 deepseek-v4-flash。
+# deepseek-chat / deepseek-reasoner 仍然可用（对应 V3.2 的非思考/思考模式），
+# 但为了避免用户长期沿用旧别名，命中时会提示去官方文档确认时效并建议迁移。
+_DEFAULT_DEEPSEEK_MODEL = "deepseek-v4-flash"
+_DEEPSEEK_LEGACY_MODELS = {"deepseek-chat", "deepseek-reasoner"}
+# 默认全局 LLM provider，保持与 upstream 一致；个人 fork 想用 DeepSeek 时，
+# 需要在 config.toml 里显式设置 llm_provider = "deepseek"。
+_DEFAULT_LLM_PROVIDER = "openai"
 MIN_SCRIPT_PARAGRAPH_NUMBER = 1
 MAX_SCRIPT_PARAGRAPH_NUMBER = 10
 MAX_SCRIPT_PROMPT_LENGTH = 2000
@@ -99,6 +110,101 @@ def _extract_chat_completion_text(response, llm_provider: str) -> str:
     return _normalize_text_response(content, llm_provider)
 
 
+def _get_llm_timeout():
+    """
+    返回可选的 LLM 请求超时配置。
+
+    没有配置任何超时时返回 None，保持与现有行为完全一致；配置了连接或
+    请求超时时返回 httpx.Timeout，避免某个 provider 卡死整条生成链路。
+    config 缺键时全部走默认，符合“配置容错”的要求。
+    """
+    request_timeout = config.app.get("llm_request_timeout_seconds")
+    connect_timeout = config.app.get("llm_connect_timeout_seconds")
+    if not request_timeout and not connect_timeout:
+        return None
+
+    try:
+        total = float(request_timeout) if request_timeout else 120.0
+        connect = float(connect_timeout) if connect_timeout else min(total, 30.0)
+    except (TypeError, ValueError):
+        logger.warning(
+            "invalid llm timeout config, falling back to default SDK timeout"
+        )
+        return None
+
+    return httpx.Timeout(total, connect=connect)
+
+
+def _create_openai_compatible_client(api_key: str, base_url: str, timeout=None):
+    """
+    创建 OpenAI 兼容客户端。
+
+    单独封装是为了让 DeepSeek 等 OpenAI 兼容 provider 复用同一套构造逻辑
+    （含可选超时），避免在巨大的分支里重复 `OpenAI(...)` 初始化，也方便单测
+    通过 patch `OpenAI` 注入 fake client。
+    """
+    kwargs = {"api_key": api_key, "base_url": base_url}
+    if timeout is not None:
+        kwargs["timeout"] = timeout
+    return OpenAI(**kwargs)
+
+
+def _warn_if_deprecated_deepseek_model(model_name: str) -> None:
+    """命中 DeepSeek 旧模型别名时提示用户确认时效并建议迁移到推荐模型。"""
+    if model_name in _DEEPSEEK_LEGACY_MODELS:
+        logger.warning(
+            f"deepseek model '{model_name}' is a legacy alias; verify it is still "
+            "current in the official docs (https://api-docs.deepseek.com) and "
+            f"consider migrating to '{_DEFAULT_DEEPSEEK_MODEL}'."
+        )
+
+
+def _build_deepseek_extra_body(thinking_enabled: bool) -> dict:
+    """
+    构造 DeepSeek chat completions 的 extra_body。
+
+    生成视频旁白时默认关闭 thinking，避免把推理过程（reasoning_content）
+    计费进来，也保证旁白文本干净。参数形态参考官方文档：
+    `extra_body={"thinking": {"type": "enabled" | "disabled"}}`。
+    """
+    return {"thinking": {"type": "enabled" if thinking_enabled else "disabled"}}
+
+
+def _extract_gemini_text(response, llm_provider: str) -> str:
+    """
+    从 Gemini SDK 响应中稳健地提取文本。
+
+    Gemini 在被安全策略拦截、返回空 candidate 或结构异常时，直接访问
+    `candidates[0].content.parts[0].text` 会抛出难以诊断的 AttributeError/
+    IndexError。这里集中处理拦截原因和空响应，返回可读错误，便于 fallback
+    或 WebUI 给出明确提示，同时不改变现有 safety_settings。
+    """
+    feedback = getattr(response, "prompt_feedback", None)
+    block_reason = getattr(feedback, "block_reason", None) if feedback else None
+    if block_reason:
+        raise ValueError(
+            f"[{llm_provider}] prompt was blocked by safety filters: {block_reason}"
+        )
+
+    candidates = getattr(response, "candidates", None)
+    if not candidates:
+        raise ValueError(
+            f"[{llm_provider}] returned no candidates (possibly blocked or empty)"
+        )
+
+    first = candidates[0]
+    content = getattr(first, "content", None)
+    parts = getattr(content, "parts", None) if content is not None else None
+    if not parts:
+        finish_reason = getattr(first, "finish_reason", None)
+        raise ValueError(
+            f"[{llm_provider}] returned empty content (finish_reason={finish_reason})"
+        )
+
+    text = getattr(parts[0], "text", None)
+    return _normalize_text_response(text, llm_provider)
+
+
 def _get_response_field(value, key: str):
     """兼容 dict 和 SDK 响应对象的字段读取。"""
     if isinstance(value, dict):
@@ -136,10 +242,73 @@ def _extract_qwen_generation_text(response) -> str:
     return _normalize_text_response(text, "qwen")
 
 
+def _resolve_fallback_chain(primary_provider: str) -> list:
+    """
+    构造 provider 尝试顺序：主 provider 在前，随后是配置的 fallback。
+
+    去重并保持顺序，避免主 provider 同时出现在 fallback 列表里时被重复尝试，
+    也避免 fallback 内部重复项造成多余请求。fallback 关闭（空列表）时只返回
+    主 provider，行为与现状完全一致。
+    """
+    chain = [primary_provider]
+    raw = config.app.get("llm_fallback_providers", []) or []
+    if isinstance(raw, str):
+        # 容错：用户可能把 TOML 列表写成逗号分隔字符串。
+        raw = [item.strip() for item in raw.split(",") if item.strip()]
+    for provider in raw:
+        provider = str(provider).strip()
+        if provider and provider not in chain:
+            chain.append(provider)
+    return chain
+
+
 def _generate_response(prompt: str) -> str:
+    """
+    生成文本入口（带可选 fallback）。
+
+    默认 fallback 为空时，等价于直接调用主 provider，保持向后兼容。配置了
+    `llm_fallback_providers` 时，按顺序尝试主 provider 和各 fallback：某个
+    provider 配置不全或调用失败（返回 `Error:` 或抛异常）就记录并尝试下一个，
+    全部失败时返回最后一个 provider 的可诊断错误。永远不会打印 API key。
+    """
+    primary_provider = config.app.get("llm_provider", _DEFAULT_LLM_PROVIDER)
+    chain = _resolve_fallback_chain(primary_provider)
+    if len(chain) == 1:
+        return _generate_response_single(prompt, provider_override=primary_provider)
+
+    last_result = ""
+    for index, provider in enumerate(chain):
+        logger.info(
+            f"llm attempt {index + 1}/{len(chain)} using provider: {provider}"
+        )
+        try:
+            result = _generate_response_single(prompt, provider_override=provider)
+        except Exception as e:  # 兜底：single 内部已捕获，这里防御未预期异常
+            last_result = f"Error: {_sanitize_error_message(e)}"
+            logger.warning(f"provider '{provider}' raised, trying next if available")
+            continue
+
+        if isinstance(result, str) and result.startswith("Error:"):
+            last_result = result
+            logger.warning(
+                f"provider '{provider}' failed, trying next if available"
+            )
+            continue
+
+        if index > 0:
+            logger.info(f"fallback provider '{provider}' produced a response")
+        return result
+
+    logger.error("all llm providers failed (primary + fallback)")
+    return last_result or "Error: all llm providers failed"
+
+
+def _generate_response_single(prompt: str, provider_override: str | None = None) -> str:
     try:
         content = ""
-        llm_provider = config.app.get("llm_provider", "openai")
+        llm_provider = provider_override or config.app.get(
+            "llm_provider", _DEFAULT_LLM_PROVIDER
+        )
         logger.info(f"llm provider: {llm_provider}")
         if llm_provider == "g4f":
             if not config.app.get("enable_g4f", False):
@@ -278,6 +447,8 @@ def _generate_response(prompt: str) -> str:
                 base_url = config.app.get("deepseek_base_url")
                 if not base_url:
                     base_url = "https://api.deepseek.com"
+                if not model_name:
+                    model_name = _DEFAULT_DEEPSEEK_MODEL
             elif llm_provider == "modelscope":
                 api_key = config.app.get("modelscope_api_key")
                 model_name = config.app.get("modelscope_model_name")
@@ -420,17 +591,53 @@ def _generate_response(prompt: str) -> str:
 
                 try:
                     response = model.generate_content(prompt)
-                    candidates = response.candidates
-                    generated_text = candidates[0].content.parts[0].text
-                except (AttributeError, IndexError) as e:
-                    logger.warning(
-                        f"gemini returned invalid response content: {str(e)}"
-                    )
+                except Exception as e:
+                    logger.warning(f"gemini request failed: {str(e)}")
                     raise ValueError(
-                        f"[{llm_provider}] returned invalid response content"
+                        f"[{llm_provider}] request failed: {_sanitize_error_message(e)}"
                     )
 
-                return _normalize_text_response(generated_text, llm_provider)
+                return _extract_gemini_text(response, llm_provider)
+
+            if llm_provider == "deepseek":
+                # DeepSeek 兼容 OpenAI Chat Completions 协议，但额外支持 thinking
+                # 开关和 reasoning_effort。这里用独立分支隔离这些参数，避免污染
+                # 其它 OpenAI 兼容 provider 的通用调用路径。
+                _warn_if_deprecated_deepseek_model(model_name)
+                thinking_enabled = bool(
+                    config.app.get("deepseek_thinking_enabled", False)
+                )
+                client = _create_openai_compatible_client(
+                    api_key=api_key,
+                    base_url=base_url,
+                    timeout=_get_llm_timeout(),
+                )
+                create_kwargs = {
+                    "model": model_name,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "extra_body": _build_deepseek_extra_body(thinking_enabled),
+                }
+                if thinking_enabled:
+                    reasoning_effort = config.app.get(
+                        "deepseek_reasoning_effort", "high"
+                    )
+                    if reasoning_effort:
+                        create_kwargs["reasoning_effort"] = reasoning_effort
+
+                try:
+                    response = client.chat.completions.create(**create_kwargs)
+                except Exception as e:
+                    # 某些 DeepSeek 模型/网关可能不接受 thinking 或 reasoning_effort
+                    # 参数。这里给出明确的可操作提示，而不是把底层 400 直接抛回。
+                    message = _sanitize_error_message(e)
+                    if "thinking" in message.lower() or "reasoning" in message.lower():
+                        raise ValueError(
+                            f"[{llm_provider}] request rejected thinking/reasoning "
+                            "options. Set deepseek_thinking_enabled = false or verify "
+                            f"the model name in config.toml. Original error: {message}"
+                        )
+                    raise
+                return _extract_chat_completion_text(response, llm_provider)
 
             if llm_provider == "cloudflare":
                 response = requests.post(
@@ -614,6 +821,47 @@ def _normalize_script_paragraph_number(paragraph_number: int | None) -> int:
         return max(MIN_SCRIPT_PARAGRAPH_NUMBER, min(value, MAX_SCRIPT_PARAGRAPH_NUMBER))
 
     return value
+
+
+# =============================================================================
+# LLM intent profiles (Fase 5)
+#
+# 轻量级意图配置层：为不同生成场景（脚本/关键词/元数据/内容包/改写）提供推荐
+# 的采样参数。这里只暴露默认值和合并 helper，作为后续按 provider 细化的扩展点，
+# 默认不改变现有生成链路的行为（generate_* 仍走稳定默认）。用户可在 config.toml
+# 的 [llm_profiles.<name>] 表里覆盖任意字段，缺键时回落到这里的默认值。
+# =============================================================================
+LLM_PROFILES = {
+    # 叙事旁白：中等温度，关闭 thinking，保证朗读文本干净。
+    "script": {"temperature": 0.7, "max_tokens": 2048, "top_p": 1.0, "thinking": False},
+    # 视觉检索词：低温度，输出稳定、干净。
+    "keywords": {"temperature": 0.2, "max_tokens": 512, "top_p": 1.0, "thinking": False},
+    # 标题/描述/标签：中等温度，兼顾吸引力与稳定结构。
+    "metadata": {"temperature": 0.6, "max_tokens": 1024, "top_p": 1.0, "thinking": False},
+    # 完整内容包（供人工复核）：中等温度。
+    "content_package": {"temperature": 0.6, "max_tokens": 3072, "top_p": 1.0, "thinking": False},
+    # 改写手动粘贴的脚本：中低温度，保持原意。
+    "rewrite": {"temperature": 0.4, "max_tokens": 2048, "top_p": 1.0, "thinking": False},
+}
+DEFAULT_LLM_PROFILE = "script"
+
+
+def get_llm_profile(profile: str = DEFAULT_LLM_PROFILE) -> dict:
+    """
+    返回某个意图 profile 的生成参数（默认值 + config 覆盖）。
+
+    未知 profile 名回落到 script。config 中 `[llm_profiles.<name>]` 表里的字段
+    会覆盖默认值，缺失时使用内置默认，符合“配置容错”。返回的是新 dict，
+    调用方可安全修改。这是一个供未来按 provider 细化调用参数的扩展点。
+    """
+    name = profile if profile in LLM_PROFILES else DEFAULT_LLM_PROFILE
+    merged = dict(LLM_PROFILES[name])
+    overrides = getattr(config, "llm_profiles", {})
+    if isinstance(overrides, dict):
+        profile_overrides = overrides.get(name, {})
+        if isinstance(profile_overrides, dict):
+            merged.update(profile_overrides)
+    return merged
 
 
 def build_script_prompt(

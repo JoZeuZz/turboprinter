@@ -88,6 +88,87 @@ points for a personal, keyless‑at‑runtime setup:
 
 ---
 
+## 3b. LLM providers: DeepSeek (primary) & Gemini (fallback)
+
+This fork optimizes two cloud LLM providers for Spanish content while keeping
+Ollama, LiteLLM and all upstream providers intact. No OpenAI/Anthropic API key
+is required at runtime, and ChatGPT/Claude web are never automated.
+
+### Recommended `config.toml` (no real keys committed)
+
+```toml
+[app]
+# Set DeepSeek as the main provider for this personal fork.
+llm_provider = "deepseek"
+
+# ----- DeepSeek (primary, low cost) -----
+deepseek_api_key = ""                 # paste locally, never commit
+deepseek_base_url = "https://api.deepseek.com"
+deepseek_model_name = "deepseek-v4-flash"
+deepseek_thinking_enabled = false     # keep voiceover clean, avoid reasoning cost
+deepseek_reasoning_effort = "high"    # only used when thinking is enabled
+
+# ----- Gemini (fallback / quality comparison) -----
+gemini_api_key = ""
+gemini_model_name = "gemini-2.5-flash"
+gemini_base_url = ""                  # optional custom endpoint
+
+# ----- Optional fallback chain + timeouts -----
+llm_fallback_providers = ["gemini"]   # [] disables fallback (default)
+llm_request_timeout_seconds = 120
+llm_connect_timeout_seconds = 30
+```
+
+Notes:
+
+- `deepseek_model_name` defaults to `deepseek-v4-flash` if left empty.
+  `deepseek-chat` / `deepseek-reasoner` still work (V3.2 non‑thinking / thinking
+  modes) but trigger a warning recommending you verify model availability in the
+  [official docs](https://api-docs.deepseek.com).
+- With `deepseek_thinking_enabled = false`, the client sends
+  `extra_body={"thinking": {"type": "disabled"}}`. Set it to `true` to enable
+  step‑by‑step reasoning plus `deepseek_reasoning_effort`. If a model/gateway
+  rejects those params, the error message tells you to disable thinking or fix
+  the model name.
+- `<think>…</think>` blocks are always stripped before scripts, keywords,
+  subtitles or TTS, regardless of provider.
+
+### Fallback behaviour
+
+- Empty `llm_fallback_providers` → identical to upstream (single provider).
+- When set, the primary `llm_provider` is tried first, then each fallback in
+  order. A misconfigured or failing provider is skipped (with a log line, never
+  the API key) and the next one is tried. The primary and duplicates are
+  de‑duplicated, so there is no infinite loop.
+
+### Recommended workflow
+
+1. **Script:** generate with DeepSeek, *or* paste a manual script from
+   ChatGPT/Claude into the WebUI script field / CLI `--video-script`.
+2. **Keywords & metadata:** generate with DeepSeek (cheap, clean output).
+3. **Fallback:** enable Gemini in `llm_fallback_providers` (or the WebUI
+   *AI Provider (avanzado)* expander) to compare quality when DeepSeek output
+   isn't convincing.
+4. **Render:** run the Personal Quality Stack as usual.
+
+Per‑run overrides without editing `config.toml`:
+
+```bash
+uv run python cli.py --video-subject "..." --llm-provider gemini --llm-model gemini-2.5-flash
+```
+
+### Costs & security
+
+- DeepSeek is usually the economical option, but **verify current pricing in the
+  official docs before intensive use** — model names and prices change.
+- Never commit `config.toml` or paste real API keys into the repository. The
+  WebUI masks keys and the service layer redacts credentials from error messages
+  and logs.
+- Do not expose the WebUI publicly without authentication / a reverse proxy
+  (see section 7).
+
+---
+
 ## 4. Persistent storage (Proxmox)
 
 The app writes only under the project's `storage/` (tasks, cache, local videos,

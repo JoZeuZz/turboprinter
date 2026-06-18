@@ -297,6 +297,16 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         help="content language for the quality stack (e.g. es)",
     )
     parser.add_argument("--task-id", default="", help="custom task id")
+    parser.add_argument(
+        "--llm-provider",
+        default=None,
+        help="override llm_provider for this run (e.g. deepseek, gemini)",
+    )
+    parser.add_argument(
+        "--llm-model",
+        default=None,
+        help="override the model name of the selected llm provider for this run",
+    )
     args = parser.parse_args(argv)
 
     if args.video_source == "local" and not (args.video_materials or "").strip():
@@ -386,8 +396,26 @@ def build_video_params(args: argparse.Namespace) -> VideoParams:
     return VideoParams(**params_kwargs)
 
 
+def _apply_llm_overrides(args: argparse.Namespace) -> None:
+    """Aplica overrides de proveedor/modelo LLM solo para esta ejecución.
+
+    No persiste en config.toml; si los flags no se pasan, el comportamiento es
+    idéntico al actual (usa lo configurado en config.toml).
+    """
+    from app.config import config
+
+    if args.llm_provider:
+        config.app["llm_provider"] = args.llm_provider
+        logger.info(f"cli override llm_provider={args.llm_provider}")
+    if args.llm_model:
+        provider = config.app.get("llm_provider", "openai")
+        config.app[f"{provider}_model_name"] = args.llm_model
+        logger.info(f"cli override {provider}_model_name={args.llm_model}")
+
+
 def run_cli(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
+    _apply_llm_overrides(args)
     params = build_video_params(args)
     task_id = args.task_id or utils.get_uuid()
     logger.info(f"start cli task: {task_id}, stop_at: {args.stop_at}")

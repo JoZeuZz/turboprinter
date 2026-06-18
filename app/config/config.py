@@ -166,6 +166,10 @@ siliconflow = _cfg.get("siliconflow", {})
 # [quality] table yields {} and the quality layer stays disabled, so behaviour
 # is identical to upstream. See app/services/quality/.
 quality = _cfg.get("quality", {})
+# Optional per-intent LLM profiles. Tolerant by design: a missing [llm_profiles]
+# table yields {} and llm.get_llm_profile() falls back to built-in defaults, so
+# behaviour is identical to upstream. See app/services/llm.py LLM_PROFILES.
+llm_profiles = _cfg.get("llm_profiles", {})
 ui = _cfg.get(
     "ui",
     {

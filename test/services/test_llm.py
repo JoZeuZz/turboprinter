@@ -952,6 +952,285 @@ class TestSocialMetadata(unittest.TestCase):
         )
 
 
+class _ConfigIsolatedTestCase(unittest.TestCase):
+    """Restaura config.app tras cada test para no filtrar estado entre casos."""
+
+    def setUp(self):
+        self.original_app_config = dict(config.app)
+
+    def tearDown(self):
+        config.app.clear()
+        config.app.update(self.original_app_config)
+
+
+class TestDeepSeekProvider(_ConfigIsolatedTestCase):
+    def _use_deepseek(self, **overrides):
+        config.app["llm_provider"] = "deepseek"
+        config.app["deepseek_api_key"] = "deepseek-key"
+        config.app["deepseek_base_url"] = ""
+        config.app["deepseek_model_name"] = ""
+        config.app.pop("deepseek_thinking_enabled", None)
+        config.app.pop("deepseek_reasoning_effort", None)
+        config.app.pop("llm_fallback_providers", None)
+        config.app.update(overrides)
+
+    def _fake_deepseek_client(self, content="hola\nmundo"):
+        class FakeCompletions:
+            def create(self, **kwargs):
+                self.kwargs = kwargs
+                message = types.SimpleNamespace(content=content)
+                choice = types.SimpleNamespace(message=message)
+                return types.SimpleNamespace(choices=[choice])
+
+        fake_completions = FakeCompletions()
+        fake_client = types.SimpleNamespace(
+            chat=types.SimpleNamespace(completions=fake_completions)
+        )
+        return fake_client, fake_completions
+
+    def test_deepseek_uses_default_base_url_and_recommended_model(self):
+        self._use_deepseek()
+        fake_client, fake_completions = self._fake_deepseek_client()
+
+        with patch.object(llm, "OpenAI", return_value=fake_client) as openai_client:
+            result = llm._generate_response("Say hello")
+
+        # base_url default y modelo recomendado deepseek-v4-flash cuando faltan.
+        _, kwargs = openai_client.call_args
+        self.assertEqual(kwargs["api_key"], "deepseek-key")
+        self.assertEqual(kwargs["base_url"], "https://api.deepseek.com")
+        self.assertEqual(fake_completions.kwargs["model"], "deepseek-v4-flash")
+        self.assertEqual(result, "holamundo")
+
+    def test_deepseek_thinking_disabled_builds_expected_extra_body(self):
+        self._use_deepseek(deepseek_thinking_enabled=False)
+        fake_client, fake_completions = self._fake_deepseek_client()
+
+        with patch.object(llm, "OpenAI", return_value=fake_client):
+            llm._generate_response("Say hello")
+
+        self.assertEqual(
+            fake_completions.kwargs["extra_body"],
+            {"thinking": {"type": "disabled"}},
+        )
+        self.assertNotIn("reasoning_effort", fake_completions.kwargs)
+
+    def test_deepseek_thinking_enabled_sends_reasoning_effort(self):
+        self._use_deepseek(
+            deepseek_thinking_enabled=True, deepseek_reasoning_effort="high"
+        )
+        fake_client, fake_completions = self._fake_deepseek_client()
+
+        with patch.object(llm, "OpenAI", return_value=fake_client):
+            llm._generate_response("Say hello")
+
+        self.assertEqual(
+            fake_completions.kwargs["extra_body"],
+            {"thinking": {"type": "enabled"}},
+        )
+        self.assertEqual(fake_completions.kwargs["reasoning_effort"], "high")
+
+    def test_deepseek_strips_think_blocks_from_output(self):
+        self._use_deepseek()
+        fake_client, _ = self._fake_deepseek_client(
+            content="<think>razonando</think>guion limpio"
+        )
+
+        with patch.object(llm, "OpenAI", return_value=fake_client):
+            result = llm._generate_response("Say hello")
+
+        self.assertEqual(result, "guion limpio")
+
+    def test_deepseek_warns_on_legacy_model_but_still_runs(self):
+        self._use_deepseek(deepseek_model_name="deepseek-chat")
+        fake_client, fake_completions = self._fake_deepseek_client()
+
+        with patch.object(llm, "OpenAI", return_value=fake_client):
+            result = llm._generate_response("Say hello")
+
+        self.assertEqual(fake_completions.kwargs["model"], "deepseek-chat")
+        self.assertEqual(result, "holamundo")
+
+    def test_deepseek_rejected_thinking_param_returns_actionable_error(self):
+        self._use_deepseek(deepseek_thinking_enabled=True)
+
+        class FakeCompletions:
+            def create(self, **kwargs):
+                raise RuntimeError("400 unknown parameter: thinking")
+
+        fake_client = types.SimpleNamespace(
+            chat=types.SimpleNamespace(completions=FakeCompletions())
+        )
+
+        with patch.object(llm, "OpenAI", return_value=fake_client):
+            result = llm._generate_response("Say hello")
+
+        self.assertIn("Error:", result)
+        self.assertIn("deepseek_thinking_enabled = false", result)
+
+    def test_deepseek_error_redacts_base_url_credentials(self):
+        self._use_deepseek(
+            deepseek_base_url="https://user:secretpass@proxy.example.com"
+        )
+
+        class FakeCompletions:
+            def create(self, **kwargs):
+                raise RuntimeError(
+                    "connection failed: https://user:secretpass@proxy.example.com"
+                )
+
+        fake_client = types.SimpleNamespace(
+            chat=types.SimpleNamespace(completions=FakeCompletions())
+        )
+
+        with patch.object(llm, "OpenAI", return_value=fake_client):
+            result = llm._generate_response("Say hello")
+
+        self.assertIn("Error:", result)
+        self.assertNotIn("secretpass", result)
+        self.assertIn("***:***@proxy.example.com", result)
+
+
+class TestGeminiRobustness(unittest.TestCase):
+    def test_extract_gemini_text_reports_blocked_prompt(self):
+        feedback = types.SimpleNamespace(block_reason="SAFETY")
+        response = types.SimpleNamespace(prompt_feedback=feedback, candidates=[])
+
+        with self.assertRaises(ValueError) as ctx:
+            llm._extract_gemini_text(response, "gemini")
+
+        self.assertIn("blocked", str(ctx.exception).lower())
+
+    def test_extract_gemini_text_reports_empty_candidates(self):
+        response = types.SimpleNamespace(prompt_feedback=None, candidates=[])
+
+        with self.assertRaises(ValueError) as ctx:
+            llm._extract_gemini_text(response, "gemini")
+
+        self.assertIn("no candidates", str(ctx.exception))
+
+    def test_extract_gemini_text_reports_empty_parts(self):
+        candidate = types.SimpleNamespace(
+            content=types.SimpleNamespace(parts=[]), finish_reason="MAX_TOKENS"
+        )
+        response = types.SimpleNamespace(prompt_feedback=None, candidates=[candidate])
+
+        with self.assertRaises(ValueError) as ctx:
+            llm._extract_gemini_text(response, "gemini")
+
+        self.assertIn("empty content", str(ctx.exception))
+
+    def test_extract_gemini_text_returns_clean_text(self):
+        part = types.SimpleNamespace(text="hola\nmundo")
+        candidate = types.SimpleNamespace(
+            content=types.SimpleNamespace(parts=[part]), finish_reason="STOP"
+        )
+        response = types.SimpleNamespace(prompt_feedback=None, candidates=[candidate])
+
+        self.assertEqual(llm._extract_gemini_text(response, "gemini"), "holamundo")
+
+
+class TestLLMFallback(_ConfigIsolatedTestCase):
+    def test_fallback_chain_dedupes_primary_and_duplicates(self):
+        config.app["llm_provider"] = "deepseek"
+        config.app["llm_fallback_providers"] = ["deepseek", "gemini", "gemini"]
+
+        chain = llm._resolve_fallback_chain("deepseek")
+
+        self.assertEqual(chain, ["deepseek", "gemini"])
+
+    def test_fallback_chain_accepts_comma_string(self):
+        config.app["llm_fallback_providers"] = "gemini, ollama"
+
+        chain = llm._resolve_fallback_chain("deepseek")
+
+        self.assertEqual(chain, ["deepseek", "gemini", "ollama"])
+
+    def test_empty_fallback_calls_single_once(self):
+        config.app["llm_provider"] = "deepseek"
+        config.app["llm_fallback_providers"] = []
+
+        calls = []
+
+        def fake_single(prompt, provider_override=None):
+            calls.append(provider_override)
+            return "ok"
+
+        with patch.object(llm, "_generate_response_single", side_effect=fake_single):
+            result = llm._generate_response("hi")
+
+        self.assertEqual(result, "ok")
+        self.assertEqual(calls, ["deepseek"])
+
+    def test_fallback_tries_second_provider_when_first_fails(self):
+        config.app["llm_provider"] = "deepseek"
+        config.app["llm_fallback_providers"] = ["gemini"]
+
+        def fake_single(prompt, provider_override=None):
+            if provider_override == "deepseek":
+                return "Error: api_key is not set"
+            return "from gemini"
+
+        with patch.object(llm, "_generate_response_single", side_effect=fake_single):
+            result = llm._generate_response("hi")
+
+        self.assertEqual(result, "from gemini")
+
+    def test_fallback_returns_last_error_when_all_fail(self):
+        config.app["llm_provider"] = "deepseek"
+        config.app["llm_fallback_providers"] = ["gemini"]
+
+        def fake_single(prompt, provider_override=None):
+            return f"Error: {provider_override} failed"
+
+        with patch.object(llm, "_generate_response_single", side_effect=fake_single):
+            result = llm._generate_response("hi")
+
+        self.assertEqual(result, "Error: gemini failed")
+
+
+class TestLLMProfiles(_ConfigIsolatedTestCase):
+    def test_get_llm_profile_returns_builtin_defaults(self):
+        profile = llm.get_llm_profile("keywords")
+
+        self.assertEqual(profile["temperature"], 0.2)
+        self.assertFalse(profile["thinking"])
+
+    def test_unknown_profile_falls_back_to_script(self):
+        self.assertEqual(
+            llm.get_llm_profile("does-not-exist"),
+            llm.get_llm_profile("script"),
+        )
+
+    def test_config_override_merges_over_defaults(self):
+        with patch.object(
+            config, "llm_profiles", {"script": {"temperature": 0.9}}, create=True
+        ):
+            profile = llm.get_llm_profile("script")
+
+        self.assertEqual(profile["temperature"], 0.9)
+        # Campos no sobreescritos conservan el default.
+        self.assertEqual(profile["max_tokens"], 2048)
+
+
+class TestTimeoutConfig(_ConfigIsolatedTestCase):
+    def test_no_timeout_config_returns_none(self):
+        config.app.pop("llm_request_timeout_seconds", None)
+        config.app.pop("llm_connect_timeout_seconds", None)
+
+        self.assertIsNone(llm._get_llm_timeout())
+
+    def test_timeout_config_builds_httpx_timeout(self):
+        config.app["llm_request_timeout_seconds"] = 60
+        config.app["llm_connect_timeout_seconds"] = 10
+
+        timeout = llm._get_llm_timeout()
+
+        self.assertIsNotNone(timeout)
+        self.assertEqual(timeout.read, 60)
+        self.assertEqual(timeout.connect, 10)
+
+
 FOUNDRY_KEY = os.environ.get("ANTHROPIC_FOUNDRY_API_KEY", "")
 FOUNDRY_BASE = "https://amanrai-test-resource.services.ai.azure.com/anthropic"
 FOUNDRY_MODEL = "azure_ai/claude-sonnet-4-6"
