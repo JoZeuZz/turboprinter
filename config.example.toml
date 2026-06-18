@@ -376,3 +376,71 @@ upload_post_platforms = ["tiktok", "instagram"]
 
 # Automatically cross-post videos after generation (if false, you'll need to call the API manually)
 upload_post_auto_upload = false
+
+
+##############################################################################
+# Personal Quality Stack (optional)
+##############################################################################
+# Capa opcional de calidad para este fork. Está DESACTIVADA por defecto:
+# mientras `enabled = false`, la aplicación se comporta exactamente igual que
+# upstream. La sección es tolerante: si falta por completo, no cambia nada.
+#
+# Personal, optional quality layer for this fork. Disabled by default: while
+# `enabled = false`, the app behaves exactly like upstream. The reader tolerates
+# a missing section, so removing it is safe.
+[quality]
+# Activa toda la capa de calidad. / Master switch for the quality stack.
+enabled = false
+
+# Perfil de render. / Render profile.
+#   fast     -> cercano a upstream, rápido / close to upstream, quickest
+#   balanced -> buen equilibrio / good default (crf 20, preset medium)
+#   high     -> mejor calidad, más lento / better quality (crf 18, preset slow)
+#   archival -> calidad máxima razonable / max reasonable quality (slow)
+profile = "balanced"
+
+# Plataforma objetivo (afecta a subtítulos/safe-area en fases posteriores).
+# Target platform (affects subtitles/safe-area in later phases).
+#   "shorts", "reels", "tiktok", "landscape"
+target_platform = "shorts"
+
+# Idioma principal del contenido. / Primary content language.
+language = "es"
+
+# Preferencias de selección de material (fases posteriores).
+# Material selection preferences (used by later phases).
+prefer_local_assets = true
+prefer_licensed_assets = true
+
+# Evitar recomprimir clips intermedios cuando sea posible.
+# Avoid recompressing intermediate clips when possible.
+avoid_reencode_intermediates = true
+
+# Normalización de audio (fase de audio). / Audio normalization (audio phase).
+normalize_audio = true
+
+# Estilo de subtítulos (fase de subtítulos).
+# Subtitle style (subtitle phase): classic, clean, premium, karaoke, documentary
+subtitle_style = "premium"
+
+# Resaltado por palabra si hay timestamps por palabra.
+# Word-level highlight when per-word timestamps are available.
+word_highlight = false
+
+# Safe area para formato vertical. / Safe area for vertical formats.
+safe_area_enabled = true
+
+# Two-pass de FFmpeg. No es igual de portable en todos los entornos, por eso
+# queda desactivado por defecto. / FFmpeg two-pass; off by default for
+# portability.
+use_two_pass = false
+
+# Overrides explícitos del perfil (OPCIONALES). Si los descomentas, tienen
+# prioridad sobre el `profile` seleccionado arriba; si los dejas comentados,
+# se usa el valor propio de cada perfil.
+# Explicit per-profile overrides (OPTIONAL). When uncommented they take
+# precedence over the selected `profile`; leave them commented to use each
+# profile's own values.
+# render_crf = 18         # 0 (sin pérdida/lossless) .. 51 (peor/worst)
+# render_preset = "slow"  # ultrafast..placebo (libx264)
+# audio_bitrate = "192k"  # p.ej. 128k, 192k, 256k, 320k

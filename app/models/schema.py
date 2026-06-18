@@ -111,6 +111,15 @@ class VideoParams(BaseModel):
     video_script_prompt: str = Field(default="", max_length=2000)
     custom_system_prompt: str = Field(default="", max_length=8000)
 
+    # --- Personal Quality Stack per-request overrides (optional) ---
+    # All default to None, meaning "use the global [quality] config". When the
+    # quality stack is disabled (the default), these have no effect and the
+    # pipeline behaves exactly like upstream.
+    quality_enabled: Optional[bool] = None
+    quality_profile: Optional[str] = None  # fast | balanced | high | archival
+    quality_target_platform: Optional[str] = None  # shorts | reels | tiktok | landscape
+    quality_word_highlight: Optional[bool] = None
+
 
 class SubtitleRequest(BaseModel):
     video_script: str
