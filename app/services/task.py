@@ -512,6 +512,44 @@ def generate_content_package(task_id, params, video_script, video_terms):
         return ""
 
 
+def save_render_manifest(task_id, params, artifacts):
+    """Persist a ``manifest.json`` describing the effective render for a task.
+
+    Opt-in observability artifact: only written when the quality stack is
+    enabled. Records the effective quality settings, the resolved render profile
+    and codec, plus the produced artifact paths. Never aborts the pipeline; on
+    any failure it logs at debug level and returns "".
+    """
+    try:
+        qs = quality_settings.current_quality_settings(params)
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.debug(f"quality settings unavailable for manifest: {exc}")
+        return ""
+    if not getattr(qs, "enabled", False):
+        return ""
+
+    try:
+        from app.services.quality import manifest as mf
+
+        render_profile = video.resolve_render_profile(params)
+        codec = config.app.get("video_codec", "libx264")
+        data = mf.build_render_manifest(
+            task_id=task_id,
+            quality_settings=qs,
+            render_profile=render_profile,
+            codec=codec,
+            artifacts=artifacts,
+        )
+        out_path = path.join(utils.task_dir(task_id), "manifest.json")
+        with open(out_path, "w", encoding="utf-8") as fp:
+            fp.write(utils.to_json(data))
+        logger.success(f"render manifest saved: {out_path}")
+        return out_path
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning(f"failed to save render manifest: {exc}")
+        return ""
+
+
 def start(task_id, params: VideoParams, stop_at: str = "video"):
     logger.info(f"start task: {task_id}, stop_at: {stop_at}")
     sm.state.update_task(task_id, state=const.TASK_STATE_PROCESSING, progress=5)
@@ -646,6 +684,21 @@ def start(task_id, params: VideoParams, stop_at: str = "video"):
             else:
                 logger.warning(f"⚠️ Failed to cross-post: {video_path} - {result.get('error', 'Unknown error')}")
 
+    # Optional observability artifact: a per-task manifest of the effective
+    # render. No-op when the quality stack is disabled.
+    manifest_path = save_render_manifest(
+        task_id,
+        params,
+        artifacts={
+            "videos": final_video_paths,
+            "combined_videos": combined_video_paths,
+            "audio_file": audio_file,
+            "subtitle_path": subtitle_path,
+            "content_package": content_package_path or None,
+            "word_timestamps": word_timestamps_path or None,
+        },
+    )
+
     kwargs = {
         "videos": final_video_paths,
         "combined_videos": combined_video_paths,
@@ -658,6 +711,7 @@ def start(task_id, params: VideoParams, stop_at: str = "video"):
         "cross_post_results": cross_post_results if cross_post_results else None,
         "content_package": content_package_path or None,
         "word_timestamps": word_timestamps_path or None,
+        "manifest": manifest_path or None,
     }
     sm.state.update_task(
         task_id, state=const.TASK_STATE_COMPLETE, progress=100, **kwargs
