@@ -39,8 +39,8 @@ def get_api_key(cfg_key: str):
     api_keys = config.app.get(cfg_key)
     if not api_keys:
         raise ValueError(
-            f"\n\n##### {cfg_key} is not set #####\n\nPlease set it in the config.toml file: {config.config_file}\n\n"
-            f"{utils.to_json(config.app)}"
+            f"\n\n##### {cfg_key} is not set #####\n\n"
+            f"Please set it in the config.toml file: {config.config_file}\n\n"
         )
 
     # if only one key is provided, return it
