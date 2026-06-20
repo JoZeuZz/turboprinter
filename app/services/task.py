@@ -42,13 +42,20 @@ def generate_terms(task_id, params, video_script):
     if not video_terms:
         # 开启素材按文案顺序匹配后，关键词本身也必须按脚本叙事顺序生成；
         # 否则后续即使顺序下载和顺序拼接，也只能复用一组全局主题词，
-        # 无法改善“后面内容的画面提前出现”的问题。
+        # 无法改善"后面内容的画面提前出现"的问题。
         video_terms = llm.generate_terms(
             video_subject=params.video_subject,
             video_script=video_script,
             amount=8 if params.match_materials_to_script else 5,
             match_script_order=params.match_materials_to_script,
         )
+        # If the LLM returned an error string, treat it as a generation failure.
+        if isinstance(video_terms, str):
+            logger.error(
+                f"failed to generate video terms (LLM error): {video_terms[:200]}"
+            )
+            sm.state.update_task(task_id, state=const.TASK_STATE_FAILED)
+            return None
     else:
         if isinstance(video_terms, str):
             video_terms = [term.strip() for term in re.split(r"[,，]", video_terms)]

@@ -74,6 +74,18 @@ class TestTaskService(unittest.TestCase):
             amount=8,
             match_script_order=True,
         )
+
+    def test_generate_terms_returns_none_when_llm_returns_error_string(self):
+        """generate_terms must fail cleanly when LLM returns 'Error: ...' string."""
+        from unittest.mock import MagicMock
+        params = VideoParams(video_subject="test", video_script="")
+
+        with patch.object(tm.llm, "generate_terms", return_value="Error: api_key is not set"), \
+             patch.object(tm.sm.state, "update_task") as update_task:
+            result = tm.generate_terms("task-err", params, "script text")
+
+        self.assertIsNone(result)
+        update_task.assert_called_with("task-err", state=tm.const.TASK_STATE_FAILED)
     
     def test_generate_audio_uses_custom_file_inside_task_directory(self):
         task_id = "test-custom-audio-safe"
