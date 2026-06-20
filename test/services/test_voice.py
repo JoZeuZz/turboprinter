@@ -8,7 +8,7 @@ import time
 from datetime import timedelta
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 # add project root to python path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -733,6 +733,38 @@ class TestVoiceService(unittest.TestCase):
         self.assertEqual(vs.convert_rate_to_percent(0.997), "+0%")
         self.assertEqual(vs.convert_rate_to_percent(1.5), "+50%")
         self.assertEqual(vs.convert_rate_to_percent(0.8), "-20%")
+
+    # ---- get_audio_duration: non-MP3 extension support (Plan 023) ----
+
+    def _mock_audioclip(self, duration):
+        mock = MagicMock()
+        mock.__enter__ = lambda s: mock
+        mock.__exit__ = MagicMock(return_value=False)
+        mock.duration = duration
+        return mock
+
+    def test_get_audio_duration_mp3(self):
+        with tempfile.NamedTemporaryFile(suffix=".mp3") as f:
+            f.write(b"fake")
+            f.flush()
+            with patch("app.services.voice.AudioFileClip", return_value=self._mock_audioclip(5.0)):
+                result = vs.get_audio_duration(f.name)
+        self.assertAlmostEqual(result, 5.0)
+
+    def test_get_audio_duration_wav(self):
+        with tempfile.NamedTemporaryFile(suffix=".wav") as f:
+            f.write(b"fake")
+            f.flush()
+            with patch("app.services.voice.AudioFileClip", return_value=self._mock_audioclip(3.5)):
+                result = vs.get_audio_duration(f.name)
+        self.assertAlmostEqual(result, 3.5)
+
+    def test_get_audio_duration_unsupported_extension_returns_zero(self):
+        with tempfile.NamedTemporaryFile(suffix=".xyz") as f:
+            f.write(b"fake")
+            f.flush()
+            result = vs.get_audio_duration(f.name)
+        self.assertEqual(result, 0.0)
 
 
 if __name__ == "__main__":
