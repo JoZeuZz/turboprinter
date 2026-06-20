@@ -252,6 +252,15 @@ This fork keeps upstream behaviour but documents and provides safer knobs.
   cross‑post) so a hung provider cannot stall a task indefinitely.
 - **Upload limits.** Set `max_upload_size_mb` in `config.toml` (0 = unlimited)
   and/or enforce `client_max_body_size` at the reverse proxy.
+- **Task `_meta/` is listing-private, not access-controlled.** Private task
+  artifacts (`script.json`, `params`, `manifest.json`, `word_timestamps.json`,
+  `subtitle.srt`) live under `storage/tasks/<id>/_meta/` so they no longer appear
+  in the `/tasks/<id>/` directory listing. However, the `/tasks` static mount
+  still serves the whole task tree, so `/tasks/<id>/_meta/<file>` remains
+  fetchable by anyone who can reach the mount (the WebUI sidecar links point
+  there by design). These files may contain your pasted script and effective
+  render config — do **not** expose the API/WebUI publicly without the reverse
+  proxy + auth boundary described below.
 - **Redis** (optional, `enable_redis`) is for task state only — keep it private,
   bound to localhost, with a password; do not expose it.
 - **No `chmod 777`.** Run as a non‑root user inside the LXC; keep `storage/`

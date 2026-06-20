@@ -34,7 +34,7 @@ class RedisTaskManager(TaskManager):
         ):
             task_with_serializable_params["kwargs"]["params"] = task["kwargs"][
                 "params"
-            ].dict()
+            ].model_dump()
 
         # 将函数对象转换为其名称
         task_with_serializable_params["func"] = task["func"].__name__
