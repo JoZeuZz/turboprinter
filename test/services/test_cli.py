@@ -226,6 +226,34 @@ class TestCli(unittest.TestCase):
             ])
         self.assertNotEqual(cm.exception.code, 0)
 
+    def test_valid_uuid_task_id_accepted(self):
+        import cli as c
+        result = c._validate_task_id("6c85c8cc-a77a-42b9-bc30-947815aa0558")
+        self.assertEqual(result, "6c85c8cc-a77a-42b9-bc30-947815aa0558")
+
+    def test_valid_slug_task_id_accepted(self):
+        import cli as c
+        result = c._validate_task_id("my-task-001")
+        self.assertEqual(result, "my-task-001")
+
+    def test_path_traversal_task_id_rejected(self):
+        import cli as c
+        with self.assertRaises(ValueError):
+            c._validate_task_id("../../etc/passwd")
+
+    def test_absolute_path_task_id_rejected(self):
+        import cli as c
+        with self.assertRaises(ValueError):
+            c._validate_task_id("/tmp/evil")
+
+    def test_empty_task_id_from_default_generates_uuid(self):
+        from unittest.mock import patch
+        with patch.object(cli.tm, "start", return_value={"script": "ok"}), \
+             patch.object(cli.utils, "get_uuid", return_value="auto-uuid-123"), \
+             patch("builtins.print"):
+            code = cli.run_cli(["--video-subject", "test", "--stop-at", "script"])
+        self.assertEqual(code, 0)
+
 
 if __name__ == "__main__":
     unittest.main()
