@@ -269,17 +269,30 @@ def save_video(video_url: str, save_dir: str = "") -> str:
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
     }
 
-    # if video does not exist, download it
-    with open(video_path, "wb") as f:
-        f.write(
-            requests.get(
-                video_url,
-                headers=headers,
-                proxies=config.proxy,
-                verify=_get_tls_verify(),
-                timeout=(60, 240),
-            ).content
+    # if video does not exist, download it (streaming to avoid loading full body in RAM)
+    try:
+        response = requests.get(
+            video_url,
+            headers=headers,
+            proxies=config.proxy,
+            verify=_get_tls_verify(),
+            timeout=(60, 240),
+            stream=True,
         )
+        response.raise_for_status()
+        with open(video_path, "wb") as f:
+            for chunk in response.iter_content(chunk_size=1024 * 1024):  # 1 MB chunks
+                if chunk:
+                    f.write(chunk)
+    except Exception as exc:
+        logger.warning(f"failed to download video {video_url}: {str(exc)}")
+        # Remove partial file if it was created
+        try:
+            if os.path.exists(video_path):
+                os.remove(video_path)
+        except OSError:
+            pass
+        return ""
 
     if os.path.exists(video_path) and os.path.getsize(video_path) > 0:
         clip = None
