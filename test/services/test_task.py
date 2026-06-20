@@ -242,7 +242,6 @@ class TestTaskService(unittest.TestCase):
 
     def test_generate_final_videos_exception_marks_task_failed(self):
         """Exception in generate_final_videos must set task state to FAILED."""
-        from unittest.mock import MagicMock
         task_id = "task-render-fail"
         task_dir = utils.task_dir(task_id)
         params = VideoParams(video_subject="test", video_script="my script")
@@ -260,11 +259,7 @@ class TestTaskService(unittest.TestCase):
             shutil.rmtree(task_dir, ignore_errors=True)
 
         self.assertIsNone(result)
-        # At least one call must set FAILED
-        failed_calls = [c for c in update_task.call_args_list
-                        if c.kwargs.get("state") == tm.const.TASK_STATE_FAILED
-                        or (len(c.args) > 1 and c.args[1] == tm.const.TASK_STATE_FAILED)]
-        self.assertTrue(len(failed_calls) > 0, "task was not marked FAILED")
+        update_task.assert_any_call("task-render-fail", state=tm.const.TASK_STATE_FAILED)
 
     def test_save_script_data_writes_to_meta_subdir(self):
         task_id = "test-script-meta"
