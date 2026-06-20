@@ -715,11 +715,15 @@ def _generate_response_single(prompt: str, provider_override: str | None = None)
                 # 这里在 Azure 分支内完成请求并立即返回，避免客户端被后续 fallback
                 # 覆盖，导致用户配置的 Azure 凭证通过校验但实际请求没有被使用。
                 logger.info(f"requesting azure chat completion, model: {model_name}")
-                client = AzureOpenAI(
-                    api_key=api_key,
-                    api_version=api_version,
-                    azure_endpoint=base_url,
-                )
+                _timeout = _get_llm_timeout()
+                azure_kwargs = {
+                    "api_key": api_key,
+                    "api_version": api_version,
+                    "azure_endpoint": base_url,
+                }
+                if _timeout is not None:
+                    azure_kwargs["timeout"] = _timeout
+                client = AzureOpenAI(**azure_kwargs)
                 response = client.chat.completions.create(
                     model=model_name, messages=[{"role": "user", "content": prompt}]
                 )
@@ -738,9 +742,10 @@ def _generate_response_single(prompt: str, provider_override: str | None = None)
 
             if llm_provider == "modelscope":
                 content = ''
-                client = OpenAI(
+                client = _create_openai_compatible_client(
                     api_key=api_key,
                     base_url=base_url,
+                    timeout=_get_llm_timeout(),
                 )
                 response = client.chat.completions.create(
                     model=model_name,
@@ -764,9 +769,10 @@ def _generate_response_single(prompt: str, provider_override: str | None = None)
                     raise Exception(f"[{llm_provider}] returned an empty response")
 
             else:
-                client = OpenAI(
+                client = _create_openai_compatible_client(
                     api_key=api_key,
                     base_url=base_url,
+                    timeout=_get_llm_timeout(),
                 )
 
             response = client.chat.completions.create(
