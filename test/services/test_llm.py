@@ -675,6 +675,39 @@ class TestLiteLLMProvider(unittest.TestCase):
         )
         self.assertEqual(result, "helloazure")
 
+    def test_azure_client_receives_timeout_when_configured(self):
+        """
+        AzureOpenAI debe recibir el kwarg timeout cuando llm_request_timeout_seconds
+        está configurado. Cubre la corrección del bloque azure que antes ignoraba
+        _get_llm_timeout().
+        """
+        config.app["llm_provider"] = "azure"
+        config.app["azure_api_key"] = "azure-key"
+        config.app["azure_base_url"] = "https://example.openai.azure.com"
+        config.app["azure_model_name"] = "gpt-4o-mini"
+        config.app["azure_api_version"] = "2024-02-15-preview"
+        config.app["llm_request_timeout_seconds"] = 60
+        config.app["llm_connect_timeout_seconds"] = 10
+
+        class FakeCompletions:
+            def create(self, **kwargs):
+                message = types.SimpleNamespace(content="ok")
+                choice = types.SimpleNamespace(message=message)
+                return types.SimpleNamespace(choices=[choice])
+
+        fake_client = types.SimpleNamespace(
+            chat=types.SimpleNamespace(completions=FakeCompletions())
+        )
+
+        with (
+            patch.object(llm, "AzureOpenAI", return_value=fake_client) as mock_azure,
+            patch.object(llm, "ChatCompletion", types.SimpleNamespace),
+        ):
+            llm._generate_response("prompt")
+
+        call_kwargs = mock_azure.call_args.kwargs
+        self.assertIn("timeout", call_kwargs)
+
     def test_g4f_provider_requires_explicit_opt_in(self):
         """
         g4f 存在供应链和稳定性风险，不能因为用户把 provider 写成 g4f
