@@ -224,7 +224,7 @@ def create_task(
             "params": body.model_dump(),
         }
         sm.state.update_task(task_id)
-        task_manager.add_task(tm.start, task_id=task_id, params=body, stop_at=stop_at)
+        task_manager.add_task(tm.start, task_id=task_id, params=body, stop_at=stop_at, restrict_custom_audio=True)
         logger.success(f"Task created: {utils.to_json(task)}")
         return utils.get_response(200, task)
     except TaskQueueFullError as e:
