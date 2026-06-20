@@ -175,6 +175,16 @@ class TestTaskService(unittest.TestCase):
         tts.assert_not_called()
         update_task.assert_called_with(task_id, state=tm.const.TASK_STATE_FAILED)
 
+    def test_save_script_data_writes_to_meta_subdir(self):
+        task_id = "test-script-meta"
+        task_dir = utils.task_dir(task_id)
+        try:
+            tm.save_script_data(task_id, "test script", ["term1"], {})
+            expected = os.path.join(task_dir, "_meta", "script.json")
+            self.assertTrue(os.path.exists(expected), f"script.json not found at {expected}")
+        finally:
+            shutil.rmtree(task_dir, ignore_errors=True)
+
     @unittest.skipUnless(
         RUN_INTEGRATION_TESTS,
         "MPT_RUN_INTEGRATION_TESTS not set",

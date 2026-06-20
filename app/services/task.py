@@ -75,7 +75,9 @@ def generate_terms(task_id, params, video_script):
 
 
 def save_script_data(task_id, video_script, video_terms, params):
-    script_file = path.join(utils.task_dir(task_id), "script.json")
+    meta_dir = path.join(utils.task_dir(task_id), "_meta")
+    os.makedirs(meta_dir, exist_ok=True)
+    script_file = path.join(meta_dir, "script.json")
     script_data = {
         "script": video_script,
         "search_terms": video_terms,
@@ -197,7 +199,8 @@ def generate_subtitle(task_id, params, video_script, sub_maker, audio_file):
     if not params.subtitle_enabled or sub_maker is None:
         return ""
 
-    subtitle_path = path.join(utils.task_dir(task_id), "subtitle.srt")
+    subtitle_path = path.join(utils.task_dir(task_id), "_meta", "subtitle.srt")
+    os.makedirs(path.dirname(subtitle_path), exist_ok=True)
     subtitle_provider = config.app.get("subtitle_provider", "edge").strip().lower()
     logger.info(f"\n\n## generating subtitle, provider: {subtitle_provider}")
 
@@ -453,7 +456,8 @@ def maybe_save_word_timestamps(task_id, params, audio_file, sub_maker):
             )
             return ""
 
-        out_path = path.join(utils.task_dir(task_id), "word_timestamps.json")
+        out_path = path.join(utils.task_dir(task_id), "_meta", "word_timestamps.json")
+        os.makedirs(path.dirname(out_path), exist_ok=True)
         with open(out_path, "w", encoding="utf-8") as fp:
             fp.write(
                 utils.to_json(
@@ -505,7 +509,8 @@ def generate_content_package(task_id, params, video_script, video_terms):
             platform=getattr(qs, "target_platform", "shorts"),
         )
 
-        task_path = utils.task_dir(task_id)
+        task_path = path.join(utils.task_dir(task_id), "_meta")
+        os.makedirs(task_path, exist_ok=True)
         json_path = path.join(task_path, "content_package.json")
         md_path = path.join(task_path, "content_package.md")
         with open(json_path, "w", encoding="utf-8") as fp:
@@ -547,7 +552,8 @@ def save_render_manifest(task_id, params, artifacts):
             codec=codec,
             artifacts=artifacts,
         )
-        out_path = path.join(utils.task_dir(task_id), "manifest.json")
+        out_path = path.join(utils.task_dir(task_id), "_meta", "manifest.json")
+        os.makedirs(path.dirname(out_path), exist_ok=True)
         with open(out_path, "w", encoding="utf-8") as fp:
             fp.write(utils.to_json(data))
         logger.success(f"render manifest saved: {out_path}")
