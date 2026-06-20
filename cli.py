@@ -10,6 +10,29 @@ from app.services import task as tm
 from app.utils import utils
 
 
+_SAFE_TASK_ID_RE = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"  # UUID v4
+    r"|^[a-zA-Z0-9_-]{1,64}$"                                             # safe slug
+)
+
+
+def _validate_task_id(task_id: str) -> str:
+    """Validate a custom task ID.
+
+    Accepts UUID v4 or alphanumeric slugs (hyphens and underscores allowed,
+    max 64 chars). Rejects anything with path separators or other special chars
+    that could escape storage/tasks/.
+
+    Returns the task_id if valid; raises ValueError otherwise.
+    """
+    if not _SAFE_TASK_ID_RE.match(task_id):
+        raise ValueError(
+            f"invalid task id {task_id!r}: must be a UUID or alphanumeric slug "
+            "(letters, digits, hyphens, underscores; max 64 chars)"
+        )
+    return task_id
+
+
 def _positive_int(value: str) -> int:
     parsed = int(value)
     if parsed < 1:
@@ -418,6 +441,12 @@ def run_cli(argv: Sequence[str] | None = None) -> int:
     _apply_llm_overrides(args)
     params = build_video_params(args)
     task_id = args.task_id or utils.get_uuid()
+    if args.task_id:
+        try:
+            task_id = _validate_task_id(args.task_id)
+        except ValueError as exc:
+            logger.error(str(exc))
+            return 1
     logger.info(f"start cli task: {task_id}, stop_at: {args.stop_at}")
     result = tm.start(task_id=task_id, params=params, stop_at=args.stop_at)
     if not result:
