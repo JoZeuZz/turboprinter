@@ -254,6 +254,19 @@ class TestCli(unittest.TestCase):
             code = cli.run_cli(["--video-subject", "test", "--stop-at", "script"])
         self.assertEqual(code, 0)
 
+    def test_custom_audio_file_flag_maps_to_params(self):
+        args = cli.parse_args([
+            "--video-subject", "test",
+            "--custom-audio-file", "/tmp/narration.mp3",
+        ])
+        params = cli.build_video_params(args)
+        self.assertEqual(params.custom_audio_file, "/tmp/narration.mp3")
+
+    def test_custom_audio_file_defaults_to_none(self):
+        args = cli.parse_args(["--video-subject", "test"])
+        params = cli.build_video_params(args)
+        self.assertIsNone(params.custom_audio_file)
+
 
 if __name__ == "__main__":
     unittest.main()
