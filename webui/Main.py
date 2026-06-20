@@ -1374,6 +1374,13 @@ with right_panel:
             config.ui["rounded_subtitle_background"] = (
                 params.rounded_subtitle_background
             )
+    def _mask_api_key(key: str) -> str:
+        """Return a masked key showing only the last 4 characters."""
+        if not key:
+            return ""
+        suffix = key[-4:] if len(key) >= 4 else key
+        return f"****{suffix}"
+
     with st.expander(tr("Click to show API Key management"), expanded=False):
         st.subheader(tr("Manage Pexels, Pixabay and Coverr API Keys"))
 
@@ -1388,7 +1395,7 @@ with right_panel:
             if config.app["pexels_api_keys"]:
                 st.write(tr("Current Keys:"))
                 for key in config.app["pexels_api_keys"]:
-                    st.code(key)
+                    st.code(_mask_api_key(key))
             else:
                 st.info(tr("No Pexels API Keys currently"))
 
@@ -1404,11 +1411,18 @@ with right_panel:
                     st.error(tr("Please enter a valid API Key"))
 
             if config.app["pexels_api_keys"]:
-                delete_key = st.selectbox(
-                    tr("Select Pexels API Key to delete"), config.app["pexels_api_keys"], key="pexels_delete_key"
+                pexels_key_labels = [
+                    f"{_mask_api_key(k)} (#{i+1})"
+                    for i, k in enumerate(config.app["pexels_api_keys"])
+                ]
+                delete_index = st.selectbox(
+                    tr("Select Pexels API Key to delete"),
+                    options=range(len(pexels_key_labels)),
+                    format_func=lambda i: pexels_key_labels[i],
+                    key="pexels_delete_key",
                 )
                 if st.button(tr("Delete Selected Pexels API Key")):
-                    config.app["pexels_api_keys"].remove(delete_key)
+                    config.app["pexels_api_keys"].pop(delete_index)
                     config.save_config()
                     st.success(tr("Pexels API Key deleted successfully"))
 
@@ -1418,7 +1432,7 @@ with right_panel:
             if config.app["pixabay_api_keys"]:
                 st.write(tr("Current Keys:"))
                 for key in config.app["pixabay_api_keys"]:
-                    st.code(key)
+                    st.code(_mask_api_key(key))
             else:
                 st.info(tr("No Pixabay API Keys currently"))
 
@@ -1434,11 +1448,18 @@ with right_panel:
                     st.error(tr("Please enter a valid API Key"))
 
             if config.app["pixabay_api_keys"]:
-                delete_key = st.selectbox(
-                    tr("Select Pixabay API Key to delete"), config.app["pixabay_api_keys"], key="pixabay_delete_key"
+                pixabay_key_labels = [
+                    f"{_mask_api_key(k)} (#{i+1})"
+                    for i, k in enumerate(config.app["pixabay_api_keys"])
+                ]
+                delete_index = st.selectbox(
+                    tr("Select Pixabay API Key to delete"),
+                    options=range(len(pixabay_key_labels)),
+                    format_func=lambda i: pixabay_key_labels[i],
+                    key="pixabay_delete_key",
                 )
                 if st.button(tr("Delete Selected Pixabay API Key")):
-                    config.app["pixabay_api_keys"].remove(delete_key)
+                    config.app["pixabay_api_keys"].pop(delete_index)
                     config.save_config()
                     st.success(tr("Pixabay API Key deleted successfully"))
 
@@ -1454,7 +1475,7 @@ with right_panel:
             if config.app["coverr_api_keys"]:
                 st.write(tr("Current Keys:"))
                 for key in config.app["coverr_api_keys"]:
-                    st.code(key)
+                    st.code(_mask_api_key(key))
             else:
                 st.info(tr("No Coverr API Keys currently"))
 
@@ -1470,11 +1491,18 @@ with right_panel:
                     st.error(tr("Please enter a valid API Key"))
 
             if config.app["coverr_api_keys"]:
-                delete_key = st.selectbox(
-                    tr("Select Coverr API Key to delete"), config.app["coverr_api_keys"], key="coverr_delete_key"
+                coverr_key_labels = [
+                    f"{_mask_api_key(k)} (#{i+1})"
+                    for i, k in enumerate(config.app["coverr_api_keys"])
+                ]
+                delete_index = st.selectbox(
+                    tr("Select Coverr API Key to delete"),
+                    options=range(len(coverr_key_labels)),
+                    format_func=lambda i: coverr_key_labels[i],
+                    key="coverr_delete_key",
                 )
                 if st.button(tr("Delete Selected Coverr API Key")):
-                    config.app["coverr_api_keys"].remove(delete_key)
+                    config.app["coverr_api_keys"].pop(delete_index)
                     config.save_config()
                     st.success(tr("Coverr API Key deleted successfully"))
 
