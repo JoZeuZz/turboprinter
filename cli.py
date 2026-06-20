@@ -178,6 +178,11 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--voice-name", default="", help="tts voice name")
     parser.add_argument(
+        "--custom-audio-file",
+        default=None,
+        help="path to a pre-recorded audio file (.mp3); skips TTS and disables subtitles",
+    )
+    parser.add_argument(
         "--voice-volume",
         type=_non_negative_float,
         default=None,
@@ -402,6 +407,7 @@ def build_video_params(args: argparse.Namespace) -> VideoParams:
         "quality_prefer_local_assets",
         "quality_normalize_audio",
         "quality_language",
+        "custom_audio_file",
     ]
     for name in optional_arg_names:
         value = getattr(args, name)
