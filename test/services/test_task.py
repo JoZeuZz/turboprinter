@@ -117,35 +117,35 @@ class TestTaskService(unittest.TestCase):
         self.assertIsNone(sub_maker)
         tts.assert_not_called()
 
-    def test_generate_audio_accepts_server_side_custom_file(self):
+    def test_resolve_custom_audio_accepts_server_side_for_cli(self):
+        """Server-side paths are allowed when restrict_to_task_dir=False (CLI mode)."""
         task_id = "test-custom-audio-server-side"
         task_dir = utils.task_dir(task_id)
-
         with tempfile.NamedTemporaryFile(suffix=".mp3") as server_audio:
             server_audio.write(b"fake audio")
             server_audio.flush()
-            params = VideoParams(
-                video_subject="custom audio",
-                video_script="",
-                custom_audio_file=server_audio.name,
-                voice_name="test-voice",
+            result = tm.resolve_custom_audio_file(
+                task_id,
+                server_audio.name,
+                restrict_to_task_dir=False,
             )
+        shutil.rmtree(task_dir, ignore_errors=True)
+        self.assertEqual(result, os.path.realpath(server_audio.name))
 
-            try:
-                with (
-                    patch.object(tm.voice, "tts") as tts,
-                    patch.object(tm.voice, "get_audio_duration", return_value=6),
-                ):
-                    audio_file, audio_duration, result_sub_maker = tm.generate_audio(
-                        task_id, params, "script"
-                    )
-            finally:
-                shutil.rmtree(task_dir, ignore_errors=True)
-
-        self.assertEqual(audio_file, os.path.realpath(server_audio.name))
-        self.assertEqual(audio_duration, 6)
-        self.assertIsNone(result_sub_maker)
-        tts.assert_not_called()
+    def test_resolve_custom_audio_rejects_server_side_for_api(self):
+        """Server-side paths are rejected when restrict_to_task_dir=True (API mode)."""
+        task_id = "test-custom-audio-api-restrict"
+        task_dir = utils.task_dir(task_id)
+        with tempfile.NamedTemporaryFile(suffix=".mp3") as server_audio:
+            server_audio.write(b"fake audio")
+            server_audio.flush()
+            with self.assertRaises(ValueError):
+                tm.resolve_custom_audio_file(
+                    task_id,
+                    server_audio.name,
+                    restrict_to_task_dir=True,
+                )
+        shutil.rmtree(task_dir, ignore_errors=True)
 
     def test_generate_audio_rejects_missing_custom_file_without_tts(self):
         task_id = "test-custom-audio-missing"

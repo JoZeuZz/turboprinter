@@ -88,7 +88,12 @@ def save_script_data(task_id, video_script, video_terms, params):
         f.write(utils.to_json(script_data))
 
 
-def resolve_custom_audio_file(task_id: str, custom_audio_file: str | None) -> str:
+def resolve_custom_audio_file(
+    task_id: str,
+    custom_audio_file: str | None,
+    *,
+    restrict_to_task_dir: bool = False,
+) -> str:
     requested_file = (custom_audio_file or "").strip()
     if not requested_file:
         return ""
@@ -101,6 +106,12 @@ def resolve_custom_audio_file(task_id: str, custom_audio_file: str | None) -> st
         )
     except ValueError as exc:
         task_dir_error = exc
+
+    if restrict_to_task_dir:
+        raise ValueError(
+            "custom audio file must be within the task directory "
+            "when processed via API (use an uploaded file)"
+        ) from task_dir_error
 
     server_audio_file = path.realpath(
         requested_file
@@ -144,7 +155,9 @@ def generate_audio(task_id, params, video_script):
     requested_custom_audio_file = getattr(params, "custom_audio_file", None)
     try:
         custom_audio_file = resolve_custom_audio_file(
-            task_id, requested_custom_audio_file
+            task_id,
+            requested_custom_audio_file,
+            restrict_to_task_dir=True,
         )
     except ValueError as exc:
         logger.error(
