@@ -460,9 +460,11 @@ prefer_licensed_assets = true
 
 # Evitar recomprimir clips intermedios cuando sea posible.
 # Avoid recompressing intermediate clips when possible.
+# NOT YET IMPLEMENTED — currently clips are always re-encoded.
 avoid_reencode_intermediates = true
 
 # Normalización de audio (fase de audio). / Audio normalization (audio phase).
+# NOT YET IMPLEMENTED — currently audio is not normalized.
 normalize_audio = true
 
 # Estilo de subtítulos (fase de subtítulos).
@@ -486,6 +488,7 @@ content_package = false
 # Two-pass de FFmpeg. No es igual de portable en todos los entornos, por eso
 # queda desactivado por defecto. / FFmpeg two-pass; off by default for
 # portability.
+# NOT YET IMPLEMENTED — two-pass encoding is not yet applied.
 use_two_pass = false
 
 # Overrides explícitos del perfil (OPCIONALES). Si los descomentas, tienen
