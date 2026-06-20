@@ -116,6 +116,8 @@ support_locales = [
     "zh-TW",
     "de-DE",
     "en-US",
+    "es-ES",   # <— añadido: español de España (foco del fork)
+    "es-MX",   # <— añadido: español de México
     "fr-FR",
     "ru-RU",
     "vi-VN",

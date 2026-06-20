@@ -71,3 +71,21 @@ class TestWebuiI18n(unittest.TestCase):
 
         self.assertIsNotNone(support_locales)
         self.assertIn("ru-RU", support_locales)
+
+    def test_script_language_options_include_spanish(self):
+        tree = ast.parse(WEBUI_MAIN.read_text(encoding="utf-8"))
+        support_locales = None
+
+        for node in tree.body:
+            if not isinstance(node, ast.Assign):
+                continue
+            if any(
+                isinstance(target, ast.Name) and target.id == "support_locales"
+                for target in node.targets
+            ):
+                support_locales = ast.literal_eval(node.value)
+                break
+
+        self.assertIsNotNone(support_locales)
+        self.assertIn("es-ES", support_locales,
+                      "es-ES must be in support_locales (fork is Spanish-focused)")
