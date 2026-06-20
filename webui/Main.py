@@ -1641,8 +1641,7 @@ with st.expander(tr("Personal Quality"), expanded=False):
             if st.button("Index directory", key="lib_index_btn"):
                 if _index_dir and os.path.isdir(_index_dir):
                     try:
-                        _idx_tags_raw = ""
-                        _idx_tags = [t.strip() for t in _idx_tags_raw.split(",") if t.strip()]
+                        _idx_tags = []
                         _idx_stats = _local_lib.index_directory(
                             _lib_conn,
                             _index_dir,
@@ -1775,7 +1774,7 @@ if start_button:
     # Show quality stack sidecar download links if present
     sidecar_items = []
     for key, label in [
-        ("content_package", "Content Package (.md)"),
+        ("content_package", "Content Package (JSON)"),
         ("manifest", "Render Manifest"),
         ("word_timestamps", "Word Timestamps"),
     ]:

@@ -301,7 +301,7 @@ if __name__ == "__main__":
     subtitles = file_to_subtitles(subtitle_file)
     print(subtitles)
 
-    script_file = f"{task_dir}/script.json"
+    script_file = f"{task_dir}/_meta/script.json"
     with open(script_file, "r") as f:
         script_content = f.read()
     s = json.loads(script_content)
