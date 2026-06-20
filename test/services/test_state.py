@@ -1,5 +1,6 @@
 import sys
 import threading
+import time
 import unittest
 from pathlib import Path
 
@@ -7,6 +8,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from app.models import const
 from app.services.state import MemoryState, RedisState
+from app.controllers.manager.base_manager import TaskQueueFullError
+from app.controllers.manager.memory_manager import InMemoryTaskManager
 
 
 class _FakeRedis:
@@ -116,6 +119,43 @@ class TestRedisState(unittest.TestCase):
         self.assertEqual(
             [task["task_id"] for task in second_page],
             [f"task:{i}" for i in range(10, 18)],
+        )
+
+
+
+class TestTaskManagerSlotSafety(unittest.TestCase):
+    def test_concurrent_adds_do_not_exceed_max(self):
+        """Burst of concurrent add_task calls must not exceed max_concurrent_tasks."""
+        max_tasks = 3
+        manager = InMemoryTaskManager(max_concurrent_tasks=max_tasks, max_queued_tasks=0)
+        peak_concurrent = [0]
+        lock = threading.Lock()
+
+        def slow_task():
+            with lock:
+                peak_concurrent[0] = max(peak_concurrent[0], manager.current_tasks)
+            time.sleep(0.05)
+
+        threads = []
+        for _ in range(max_tasks * 2):
+            def _add():
+                try:
+                    manager.add_task(slow_task)
+                except TaskQueueFullError:
+                    pass  # expected when queue is full (max_queued_tasks=0)
+            t = threading.Thread(target=_add)
+            threads.append(t)
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        # Wait for running tasks to complete
+        time.sleep(0.3)
+
+        self.assertLessEqual(
+            peak_concurrent[0],
+            max_tasks,
+            f"peak concurrent tasks {peak_concurrent[0]} exceeded max {max_tasks}",
         )
 
 

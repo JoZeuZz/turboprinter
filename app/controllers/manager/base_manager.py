@@ -44,15 +44,22 @@ class TaskManager:
                 self.enqueue({"func": func, "args": args, "kwargs": kwargs})
 
     def execute_task(self, func: Callable, *args: Any, **kwargs: Any):
-        thread = threading.Thread(
-            target=self.run_task, args=(func, *args), kwargs=kwargs
-        )
-        thread.start()
+        # Increment counter *before* starting the thread, while we still hold
+        # the caller's lock. This prevents concurrent add_task calls from
+        # seeing a stale count and exceeding max_concurrent_tasks.
+        self.current_tasks += 1
+        try:
+            thread = threading.Thread(
+                target=self.run_task, args=(func, *args), kwargs=kwargs
+            )
+            thread.start()
+        except Exception:
+            # If thread creation fails, release the reserved slot immediately.
+            self.current_tasks -= 1
+            raise
 
     def run_task(self, func: Callable, *args: Any, **kwargs: Any):
         try:
-            with self.lock:
-                self.current_tasks += 1
             func(*args, **kwargs)  # call the function here, passing *args and **kwargs.
         finally:
             self.task_done()
