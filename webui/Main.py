@@ -27,6 +27,16 @@ from app.services import llm, voice
 from app.services import task as tm
 from app.utils import utils
 
+try:
+    from app.services.quality import local_library as _local_lib
+    _LOCAL_LIB_AVAILABLE = True
+except Exception:
+    _LOCAL_LIB_AVAILABLE = False
+
+
+def _local_lib_db_path() -> str:
+    return os.path.join(utils.storage_dir("local_library", create=True), "library.db")
+
 st.set_page_config(
     page_title="MoneyPrinterTurbo",
     page_icon="🤖",
@@ -1574,6 +1584,86 @@ with st.expander(tr("Personal Quality"), expanded=False):
                 value=bool(config.quality.get("content_package", False)),
                 help=tr("Also generate title, description, hashtags and a review checklist."),
             )
+
+    # ── Local Material Library panel ─────────────────────────────────────────
+    # Shown whenever the Personal Quality section is expanded, regardless of
+    # whether quality enhancements are toggled on. No nested expander — Streamlit
+    # forbids nesting expanders.
+    if _LOCAL_LIB_AVAILABLE:
+        st.markdown("---")
+        st.markdown("**Local Material Library**")
+        _lib_conn = None
+        try:
+            _lib_conn = _local_lib.connect(_local_lib_db_path())
+            _lib_entries = _local_lib.all_entries(_lib_conn)
+            _lib_total = len(_lib_entries)
+            _lib_videos = sum(1 for e in _lib_entries if e.media_type == "video")
+            _lib_images = sum(1 for e in _lib_entries if e.media_type == "image")
+            _lib_duration = sum(e.duration for e in _lib_entries)
+            if _lib_total == 0:
+                st.info(
+                    "Library is empty. Index a directory using the CLI: "
+                    "`python -m app.services.quality.library_cli index <dir>` "
+                    "or use the Index form below."
+                )
+            else:
+                st.markdown(
+                    f"**{_lib_total} entries** — "
+                    f"{_lib_videos} video(s), {_lib_images} image(s) — "
+                    f"{_lib_duration:.0f}s total duration"
+                )
+                _lib_rows = [
+                    {
+                        "path": e.path,
+                        "type": e.media_type,
+                        "duration": f"{e.duration:.1f}s",
+                        "source": e.source or "",
+                        "tags": ",".join(e.tags),
+                    }
+                    for e in _lib_entries[:50]
+                ]
+                st.dataframe(_lib_rows, use_container_width=True)
+
+            st.markdown("**Index a directory:**")
+            _idx_col1, _idx_col2 = st.columns([3, 1])
+            with _idx_col1:
+                _index_dir = st.text_input(
+                    "Directory path",
+                    key="lib_index_dir",
+                    placeholder="/path/to/your/videos",
+                )
+            with _idx_col2:
+                _index_source = st.text_input(
+                    "Source label",
+                    value="user",
+                    key="lib_index_source",
+                )
+            if st.button("Index directory", key="lib_index_btn"):
+                if _index_dir and os.path.isdir(_index_dir):
+                    try:
+                        _idx_tags_raw = ""
+                        _idx_tags = [t.strip() for t in _idx_tags_raw.split(",") if t.strip()]
+                        _idx_stats = _local_lib.index_directory(
+                            _lib_conn,
+                            _index_dir,
+                            source=_index_source,
+                            tags=_idx_tags,
+                        )
+                        st.success(
+                            f"scanned={_idx_stats['scanned']} "
+                            f"added={_idx_stats['added']} "
+                            f"updated={_idx_stats['updated']} "
+                            f"skipped={_idx_stats['skipped']}"
+                        )
+                    except Exception as _idx_exc:
+                        st.error(str(_idx_exc))
+                else:
+                    st.error("Directory not found or invalid path.")
+        except Exception as _lib_exc:
+            st.error(f"Local library error: {_lib_exc}")
+        finally:
+            if _lib_conn is not None:
+                _lib_conn.close()
 
 start_button = st.button(tr("Generate Video"), use_container_width=True, type="primary")
 if start_button:
