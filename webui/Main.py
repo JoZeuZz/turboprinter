@@ -1682,6 +1682,32 @@ if start_button:
     except Exception:
         pass
 
+    # Show quality stack sidecar download links if present
+    sidecar_items = []
+    for key, label in [
+        ("content_package", "Content Package (.md)"),
+        ("manifest", "Render Manifest"),
+        ("word_timestamps", "Word Timestamps"),
+    ]:
+        path_val = result.get(key)
+        if path_val and isinstance(path_val, str) and os.path.isfile(path_val):
+            try:
+                task_root = utils.task_dir()
+                rel = os.path.relpath(path_val, task_root).replace("\\", "/")
+                url = f"/tasks/{rel}"
+            except Exception:
+                url = None
+            sidecar_items.append((label, url, path_val))
+
+    if sidecar_items:
+        st.markdown("---")
+        st.markdown("**Generated files (Quality Stack):**")
+        for label, url, local_path in sidecar_items:
+            if url:
+                st.markdown(f"- [{label}]({url})")
+            else:
+                st.markdown(f"- {label}: `{local_path}`")
+
     open_task_folder(task_id)
     logger.info(tr("Video Generation Completed"))
     scroll_to_bottom()
