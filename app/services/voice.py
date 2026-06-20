@@ -1452,34 +1452,44 @@ def _get_audio_duration_from_submaker(sub_maker: SubMaker):
         return 0.0
     return legacy_offsets[-1][1] / 10000000
 
-def _get_audio_duration_from_mp3(mp3_file: str) -> float:
-    """
-    获取MP3音频时长
-    """
-    if not os.path.exists(mp3_file):
-        logger.error(f"MP3 file does not exist: {mp3_file}")
+_SUPPORTED_AUDIO_EXTENSIONS = (".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg")
+
+
+def _get_audio_duration_from_file(audio_file: str) -> float:
+    """Get audio duration from any supported audio file using MoviePy."""
+    if not os.path.exists(audio_file):
+        logger.error(f"audio file does not exist: {audio_file}")
         return 0.0
 
     try:
-        # Use moviepy to get the duration of the MP3 file
-        with AudioFileClip(mp3_file) as audio:
-            return audio.duration  # Duration in seconds
+        with AudioFileClip(audio_file) as audio:
+            return audio.duration
     except Exception as e:
-        logger.error(f"Failed to get audio duration from MP3: {str(e)}")
+        logger.error(f"failed to get audio duration from file {audio_file!r}: {str(e)}")
         return 0.0
 
+
 def get_audio_duration(target: Union[str, SubMaker]) -> float:
-    """
-    获取音频时长
-    如果是SubMaker对象，则从SubMaker中获取时长
-    如果是MP3文件，则从MP3文件中获取时长
+    """Get audio duration.
+
+    Accepts a SubMaker (from edge_tts) or a path to any supported audio file
+    ('.mp3', '.wav', '.m4a', '.aac', '.flac', '.ogg').
+    Returns 0.0 and logs an error for unsupported types.
     """
     if isinstance(target, SubMaker):
         return _get_audio_duration_from_submaker(target)
-    elif isinstance(target, str) and target.endswith(".mp3"):
-        return _get_audio_duration_from_mp3(target)
+    elif isinstance(target, str):
+        lower = target.lower()
+        if lower.endswith(_SUPPORTED_AUDIO_EXTENSIONS):
+            return _get_audio_duration_from_file(target)
+        else:
+            logger.error(
+                f"unsupported audio extension for duration: {target!r}. "
+                f"Supported: {_SUPPORTED_AUDIO_EXTENSIONS}"
+            )
+            return 0.0
     else:
-        logger.error(f"Invalid target type: {type(target)}")
+        logger.error(f"invalid target type for get_audio_duration: {type(target)}")
         return 0.0
 
 if __name__ == "__main__":
