@@ -782,17 +782,18 @@ def combine_videos(
 
     clip_files = [clip.file_path for clip in processed_clips]
     logger.info(f"concatenating {len(clip_files)} clips with ffmpeg")
-    concat_video_clips_with_ffmpeg(
-        clip_files=clip_files,
-        output_file=combined_video_path,
-        threads=threads,
-        output_dir=output_dir,
-        render_profile=render_profile,
-    )
-    
-    # clean temp files
-    delete_files(clip_files)
-            
+    try:
+        concat_video_clips_with_ffmpeg(
+            clip_files=clip_files,
+            output_file=combined_video_path,
+            threads=threads,
+            output_dir=output_dir,
+            render_profile=render_profile,
+        )
+    finally:
+        # Clean temp clips whether concat succeeded or failed
+        delete_files(clip_files)
+
     logger.info("video combining completed")
     return combined_video_path
 

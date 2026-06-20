@@ -240,6 +240,32 @@ class TestTaskService(unittest.TestCase):
             shutil.rmtree(task_dir_allow, ignore_errors=True)
             shutil.rmtree(task_dir_deny, ignore_errors=True)
 
+    def test_generate_final_videos_exception_marks_task_failed(self):
+        """Exception in generate_final_videos must set task state to FAILED."""
+        from unittest.mock import MagicMock
+        task_id = "task-render-fail"
+        task_dir = utils.task_dir(task_id)
+        params = VideoParams(video_subject="test", video_script="my script")
+
+        try:
+            with patch.object(tm, "generate_final_videos", side_effect=RuntimeError("ffmpeg error")), \
+                 patch.object(tm.sm.state, "update_task") as update_task, \
+                 patch.object(tm, "generate_script", return_value="my script"), \
+                 patch.object(tm, "generate_terms", return_value=["test"]), \
+                 patch.object(tm, "generate_audio", return_value=("audio.mp3", 10, None)), \
+                 patch.object(tm, "generate_subtitle", return_value=""), \
+                 patch.object(tm, "get_video_materials", return_value=["video.mp4"]):
+                result = tm.start(task_id=task_id, params=params)
+        finally:
+            shutil.rmtree(task_dir, ignore_errors=True)
+
+        self.assertIsNone(result)
+        # At least one call must set FAILED
+        failed_calls = [c for c in update_task.call_args_list
+                        if c.kwargs.get("state") == tm.const.TASK_STATE_FAILED
+                        or (len(c.args) > 1 and c.args[1] == tm.const.TASK_STATE_FAILED)]
+        self.assertTrue(len(failed_calls) > 0, "task was not marked FAILED")
+
     def test_save_script_data_writes_to_meta_subdir(self):
         task_id = "test-script-meta"
         task_dir = utils.task_dir(task_id)

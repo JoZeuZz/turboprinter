@@ -683,9 +683,14 @@ def start(task_id, params: VideoParams, stop_at: str = "video", *, restrict_cust
         params.video_concat_mode = VideoConcatMode(params.video_concat_mode)
 
     # 6. Generate final videos
-    final_video_paths, combined_video_paths = generate_final_videos(
-        task_id, params, downloaded_videos, audio_file, subtitle_path
-    )
+    try:
+        final_video_paths, combined_video_paths = generate_final_videos(
+            task_id, params, downloaded_videos, audio_file, subtitle_path
+        )
+    except Exception as exc:
+        logger.error(f"render failed for task {task_id}: {str(exc)}")
+        sm.state.update_task(task_id, state=const.TASK_STATE_FAILED)
+        return
 
     if not final_video_paths:
         sm.state.update_task(task_id, state=const.TASK_STATE_FAILED)
