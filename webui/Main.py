@@ -1540,10 +1540,12 @@ with st.expander(tr("Personal Quality"), expanded=False):
                 index=_q_index(_q_platforms, str(config.quality.get("target_platform", "shorts")), 0),
                 help=tr("Sets the subtitle safe-area for the destination format."),
             )
-            params.quality_normalize_audio = st.checkbox(
-                tr("Normalize Audio"),
-                value=bool(config.quality.get("normalize_audio", True)),
-            )
+            # TODO(plan-027): normalize_audio is not yet implemented in the render pipeline.
+            # Hiding the control until the feature is ready to avoid false confidence.
+            # params.quality_normalize_audio = st.checkbox(
+            #     tr("Normalize Audio"),
+            #     value=bool(config.quality.get("normalize_audio", True)),
+            # )
         with q_cols[1]:
             st.markdown(f"**{tr('Subtitles')}**")
             params.quality_subtitle_style = st.selectbox(
