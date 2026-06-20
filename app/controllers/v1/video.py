@@ -76,6 +76,15 @@ def _sanitize_upload_filename(filename: str, request_id: str) -> str:
 _max_upload_size_mb = config.app.get("max_upload_size_mb", 0)
 
 
+def _get_upload_limit_bytes() -> int:
+    """Returns the upload limit in bytes; 0 means unlimited."""
+    try:
+        mb = int(_max_upload_size_mb or 0)
+    except (TypeError, ValueError):
+        mb = 0
+    return mb * 1024 * 1024 if mb > 0 else 0
+
+
 def _reject_if_upload_too_large(request: Request, request_id: str) -> None:
     """Reject oversized uploads early via the Content-Length header.
 
@@ -103,6 +112,42 @@ def _reject_if_upload_too_large(request: Request, request_id: str) -> None:
             status_code=413,
             message=f"{request_id}: upload exceeds the {limit_mb} MB limit",
         )
+
+
+_UPLOAD_CHUNK_SIZE = 1024 * 1024  # 1 MB
+
+
+def _write_upload_file(
+    upload: UploadFile,
+    dest_path: str,
+    request_id: str,
+    limit_bytes: int = 0,
+) -> None:
+    """Copy *upload* to *dest_path* in chunks, enforcing *limit_bytes* if > 0.
+
+    Raises HttpException 413 when the file exceeds the limit.
+    Written this way so uploads without Content-Length are still bounded.
+    """
+    written = 0
+    upload.file.seek(0)
+    with open(dest_path, "wb") as out:
+        while True:
+            chunk = upload.file.read(_UPLOAD_CHUNK_SIZE)
+            if not chunk:
+                break
+            written += len(chunk)
+            if limit_bytes > 0 and written > limit_bytes:
+                out.close()
+                try:
+                    os.remove(dest_path)
+                except OSError:
+                    pass
+                raise HttpException(
+                    task_id=request_id,
+                    status_code=413,
+                    message=f"{request_id}: upload exceeds the configured size limit",
+                )
+            out.write(chunk)
 
 
 def _resolve_path_within_directory(base_dir: str, unsafe_path: str, request_id: str) -> str:
@@ -311,11 +356,10 @@ def upload_bgm_file(request: Request, file: UploadFile = File(...)):
     if safe_filename.lower().endswith("mp3"):
         song_dir = utils.song_dir()
         save_path = os.path.join(song_dir, safe_filename)
-        # save file
-        with open(save_path, "wb+") as buffer:
-            # If the file already exists, it will be overwritten
-            file.file.seek(0)
-            buffer.write(file.file.read())
+        # save file (streaming copy so large uploads don't buffer fully in RAM)
+        _write_upload_file(
+            file, save_path, request_id, limit_bytes=_get_upload_limit_bytes()
+        )
         response = {"file": safe_filename}
         return utils.get_response(200, response)
 
@@ -367,11 +411,10 @@ def upload_video_material_file(request: Request, file: UploadFile = File(...)):
     if normalized_filename.endswith(allowed_suffixes):
         local_videos_dir = utils.storage_dir("local_videos", create=True)
         save_path = os.path.join(local_videos_dir, safe_filename)
-        # save file
-        with open(save_path, "wb+") as buffer:
-            # If the file already exists, it will be overwritten
-            file.file.seek(0)
-            buffer.write(file.file.read())
+        # save file (streaming copy so large uploads don't buffer fully in RAM)
+        _write_upload_file(
+            file, save_path, request_id, limit_bytes=_get_upload_limit_bytes()
+        )
         response = {"file": safe_filename}
         return utils.get_response(200, response)
 
