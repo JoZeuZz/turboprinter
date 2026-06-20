@@ -175,6 +175,71 @@ class TestTaskService(unittest.TestCase):
         tts.assert_not_called()
         update_task.assert_called_with(task_id, state=tm.const.TASK_STATE_FAILED)
 
+    def test_generate_audio_threads_restrict_custom_audio_flag(self):
+        """
+        generate_audio must forward restrict_custom_audio to resolve_custom_audio_file.
+
+        - restrict_custom_audio=False (CLI/WebUI default): server-side .mp3 outside
+          the task dir is resolved and returned directly (no TTS, no FAILED state).
+        - restrict_custom_audio=True (API default): same path is rejected, task is
+          marked FAILED, and (None, None, None) is returned.
+        """
+        task_id_allow = "test-thread-restrict-allow"
+        task_id_deny = "test-thread-restrict-deny"
+        task_dir_allow = utils.task_dir(task_id_allow)
+        task_dir_deny = utils.task_dir(task_id_deny)
+
+        with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as server_audio:
+            server_audio.write(b"fake server audio")
+            server_audio_path = server_audio.name
+
+        try:
+            # --- permissive path (CLI) ---
+            params_allow = VideoParams(
+                video_subject="test",
+                video_script="",
+                custom_audio_file=server_audio_path,
+                voice_name="test-voice",
+            )
+            with (
+                patch.object(tm.voice, "tts") as tts_allow,
+                patch.object(tm.voice, "get_audio_duration", return_value=5),
+            ):
+                audio_file, audio_duration, sub_maker = tm.generate_audio(
+                    task_id_allow, params_allow, "script", restrict_custom_audio=False
+                )
+
+            self.assertEqual(audio_file, os.path.realpath(server_audio_path))
+            self.assertEqual(audio_duration, 5)
+            self.assertIsNone(sub_maker)
+            tts_allow.assert_not_called()
+
+            # --- restrictive path (API) ---
+            params_deny = VideoParams(
+                video_subject="test",
+                video_script="",
+                custom_audio_file=server_audio_path,
+                voice_name="test-voice",
+            )
+            with (
+                patch.object(tm.voice, "tts") as tts_deny,
+                patch.object(tm.sm.state, "update_task") as update_task,
+            ):
+                audio_file2, audio_duration2, sub_maker2 = tm.generate_audio(
+                    task_id_deny, params_deny, "script", restrict_custom_audio=True
+                )
+
+            self.assertIsNone(audio_file2)
+            self.assertIsNone(audio_duration2)
+            self.assertIsNone(sub_maker2)
+            tts_deny.assert_not_called()
+            update_task.assert_called_with(task_id_deny, state=tm.const.TASK_STATE_FAILED)
+
+        finally:
+            os.unlink(server_audio_path)
+            shutil.rmtree(task_dir_allow, ignore_errors=True)
+            shutil.rmtree(task_dir_deny, ignore_errors=True)
+
     def test_save_script_data_writes_to_meta_subdir(self):
         task_id = "test-script-meta"
         task_dir = utils.task_dir(task_id)

@@ -138,7 +138,7 @@ def resolve_custom_audio_file(
     return server_audio_file
 
 
-def generate_audio(task_id, params, video_script):
+def generate_audio(task_id, params, video_script, *, restrict_custom_audio: bool = False):
     '''
     Generate audio for the video script.
     If a custom audio file is provided, it will be used directly.
@@ -157,7 +157,7 @@ def generate_audio(task_id, params, video_script):
         custom_audio_file = resolve_custom_audio_file(
             task_id,
             requested_custom_audio_file,
-            restrict_to_task_dir=True,
+            restrict_to_task_dir=restrict_custom_audio,
         )
     except ValueError as exc:
         logger.error(
@@ -576,7 +576,7 @@ def save_render_manifest(task_id, params, artifacts):
         return ""
 
 
-def start(task_id, params: VideoParams, stop_at: str = "video"):
+def start(task_id, params: VideoParams, stop_at: str = "video", *, restrict_custom_audio: bool = False):
     logger.info(f"start task: {task_id}, stop_at: {stop_at}")
     sm.state.update_task(task_id, state=const.TASK_STATE_PROCESSING, progress=5)
 
@@ -619,7 +619,7 @@ def start(task_id, params: VideoParams, stop_at: str = "video"):
 
     # 3. Generate audio
     audio_file, audio_duration, sub_maker = generate_audio(
-        task_id, params, video_script
+        task_id, params, video_script, restrict_custom_audio=restrict_custom_audio
     )
     if not audio_file:
         sm.state.update_task(task_id, state=const.TASK_STATE_FAILED)
