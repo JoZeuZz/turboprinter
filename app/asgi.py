@@ -65,14 +65,14 @@ app = get_application()
 def _resolve_cors_config(cors_allowed_origins_str: str):
     """Return (origins, allow_credentials) for the CORS middleware.
 
-    With an explicit comma-separated allow-list, credentials are allowed.
-    With no allow-list we fall back to wildcard origins, but credentials MUST be
-    disabled: Starlette reflects the request Origin when allow_credentials is
-    True and "*" is in allow_origins, which would authorize any origin to send
-    credentials.
+    With an explicit comma-separated allow-list of real origins, credentials are
+    allowed. With no allow-list, or if any entry is "*", we fall back to wildcard
+    origins with credentials DISABLED: Starlette reflects the request Origin when
+    allow_credentials is True and "*" is in allow_origins, which would authorize
+    any origin to send credentials — a known security misconfiguration.
     """
     cleaned = [o.strip() for o in cors_allowed_origins_str.split(",") if o.strip()]
-    if cleaned:
+    if cleaned and "*" not in cleaned:
         return cleaned, True
     return ["*"], False
 

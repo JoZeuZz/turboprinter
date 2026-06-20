@@ -28,6 +28,18 @@ class TestResolveCorsConfig(unittest.TestCase):
         self.assertEqual(origins, ["*"])
         self.assertFalse(allow_credentials)
 
+    def test_explicit_wildcard_string_returns_wildcard_no_credentials(self):
+        """CORS_ALLOWED_ORIGINS="*" must NOT enable credentials."""
+        origins, allow_credentials = _resolve_cors_config("*")
+        self.assertEqual(origins, ["*"])
+        self.assertFalse(allow_credentials)
+
+    def test_wildcard_mixed_with_real_origins_disables_credentials(self):
+        """A list containing '*' is treated as wildcard (safety first)."""
+        origins, allow_credentials = _resolve_cors_config("https://a.org,*")
+        self.assertEqual(origins, ["*"])
+        self.assertFalse(allow_credentials)
+
 
 if __name__ == "__main__":
     unittest.main()
