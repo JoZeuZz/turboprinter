@@ -37,9 +37,10 @@ The fork includes an **optional domain layer** (`app/domain/`) and **filesystem 
 
 | Component | Purpose | Scope |
 |-----------|---------|-------|
-| `app/domain/models.py` | Pydantic v2 models: ShotPlan, MediaCandidate, TimelineProject, RenderSpec | domain entities, immutable design |
-| `app/domain/editing/` | 5 edit commands (clips, music, text, FX, settings) and immutable `apply()` dispatch | safe multi-edit workflows |
+| `app/domain/` | Pydantic v2 models: ShotPlan, MediaCandidate, TimelineProject, RenderSpec | domain entities for project-mode workflows |
+| `app/domain/projects/commands.py` | 5 edit commands (move, trim, replace, timing, volume) and `TimelineProject.apply()` dispatch | safe minimal timeline edits |
 | `app/infrastructure/storage/` | FilesystemProjectStore: JSON persistence under `storage/tasks/{task_id}/` | shot_plan.json, media_candidates.json, timeline_project.json, render_spec.json |
+| `app/application/services/timeline_builder.py` | Builds a deterministic `TimelineProject` from `ShotPlan + selected_media`; writes `timeline_project.json` when a store/task id are provided | Fase 4 standalone, no legacy render wiring yet |
 | `TURBOPRINTER_PROJECT_MODE_ENABLED` | Environment flag (default: off) | enables project-mode wiring (in future plans) |
 | `TURBOPRINTER_STRUCTURED_SHOT_PLANNER` | Environment flag (default: off) | enables the structured Shot Planner (Fase 2) |
 
@@ -52,6 +53,11 @@ The fork includes an **optional domain layer** (`app/domain/`) and **filesystem 
 | `TURBOPRINTER_PROJECT_MODE_ENABLED` | `false` | Activates project-mode wiring. When unset or `false`, behaviour is identical to upstream. |
 | `TURBOPRINTER_STRUCTURED_SHOT_PLANNER` | `false` | Activates the structured Shot Planner (Fase 2). Requires `litellm_model_name` set in `config.toml`. On LLM failure or missing model, degrades automatically to a local deterministic heuristic (split by sentences + uniform duration + keyword queries) — no external service required. |
 | `TURBOPRINTER_MULTI_PROVIDER_MEDIA` | `false` | Activates multi-provider media search (Pexels, Pixabay, Coverr + local library). Auto-detects providers with API keys configured in `config.toml`; if a provider fails the others continue. Without keys or a local library database the aggregator is inert. Set `TURBOPRINTER_PROJECT_MODE_ENABLED=true` to persist candidates and selection. |
+
+`TimelineBuilder` is available as a standalone service for project-mode workflows:
+it converts `shot_plan.json` plus `selected_media.json` into
+`timeline_project.json`. It is not wired into the legacy render path yet; Fase 5
+will add the render adapter.
 
 To enable the structured Shot Planner:
 
