@@ -41,8 +41,27 @@ The fork includes an **optional domain layer** (`app/domain/`) and **filesystem 
 | `app/domain/editing/` | 5 edit commands (clips, music, text, FX, settings) and immutable `apply()` dispatch | safe multi-edit workflows |
 | `app/infrastructure/storage/` | FilesystemProjectStore: JSON persistence under `storage/tasks/{task_id}/` | shot_plan.json, media_candidates.json, timeline_project.json, render_spec.json |
 | `TURBOPRINTER_PROJECT_MODE_ENABLED` | Environment flag (default: off) | enables project-mode wiring (in future plans) |
+| `TURBOPRINTER_STRUCTURED_SHOT_PLANNER` | Environment flag (default: off) | enables the structured Shot Planner (Fase 2) |
 
 **Important:** When `TURBOPRINTER_PROJECT_MODE_ENABLED` is unset or `false`, the entire video pipeline behaves identically to upstream. This layer is purely additive — no changes to existing render, script, subtitle or media selection logic.
+
+### Feature flags
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `TURBOPRINTER_PROJECT_MODE_ENABLED` | `false` | Activates project-mode wiring. When unset or `false`, behaviour is identical to upstream. |
+| `TURBOPRINTER_STRUCTURED_SHOT_PLANNER` | `false` | Activates the structured Shot Planner (Fase 2). Requires `litellm_model_name` set in `config.toml`. On LLM failure or missing model, degrades automatically to a local deterministic heuristic (split by sentences + uniform duration + keyword queries) — no external service required. |
+
+To enable the structured Shot Planner:
+
+```bash
+export TURBOPRINTER_STRUCTURED_SHOT_PLANNER=true
+# config.toml must include:
+# [app]
+# litellm_model_name = "ollama/mistral"   # or any litellm-compatible model string
+```
+
+When the flag is off (the default), `get_shot_planner()` returns `None` and no planner instance is created.
 
 ---
 
