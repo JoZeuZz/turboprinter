@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from app.domain.media.models import LicenseInfo, MediaCandidate
-from app.infrastructure.media_providers.base import material_info_to_candidate
+from app.infrastructure.media_providers.base import MediaProvider, material_info_to_candidate
 from app.models.schema import VideoAspect
 from app.services import material
 
@@ -13,7 +13,7 @@ def _aspect(orientation: str | None) -> VideoAspect:
         return VideoAspect.portrait
 
 
-class _StockProvider:
+class _StockProvider(MediaProvider):
     name = ""
     _api_key_cfg = ""
     _search_fn_name = ""

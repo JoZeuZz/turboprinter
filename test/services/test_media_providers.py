@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from app.models.schema import MaterialInfo
+from app.infrastructure.media_providers import stock_providers as sp
 from app.infrastructure.media_providers.base import material_info_to_candidate
+from app.models.schema import MaterialInfo, VideoAspect
 from app.utils import utils
 
 
@@ -39,8 +40,6 @@ def test_material_info_to_candidate_treats_zero_as_unknown():
 # ---------------------------------------------------------------------------
 # Task 3: stock provider adapters
 # ---------------------------------------------------------------------------
-from app.models.schema import VideoAspect
-from app.infrastructure.media_providers import stock_providers as sp
 
 
 def _mi(url, dur=10, w=1080, h=1920):
