@@ -191,6 +191,12 @@ project_description = _cfg.get(
 project_version = _cfg.get("project_version", "1.3.0")
 reload_debug = False
 
+# Personal fork feature flag (opt-in, tolerant to absence). When false or
+# unset, behaviour is identical to upstream: no project-mode wiring is active.
+project_mode_enabled = (
+    os.getenv("TURBOPRINTER_PROJECT_MODE_ENABLED", "false").strip().lower() == "true"
+)
+
 app["redis_host"] = os.getenv(
     "MPT_APP_REDIS_HOST",
     os.getenv("REDIS_HOST", app.get("redis_host", "localhost")),
