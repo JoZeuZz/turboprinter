@@ -4,7 +4,7 @@ import tempfile
 import types
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import ANY, patch
 
 from pydantic import ValidationError
 
@@ -147,6 +147,9 @@ class TestScriptPromptOptions(unittest.TestCase):
 class TestLiteLLMProvider(unittest.TestCase):
     def setUp(self):
         self.original_app_config = dict(config.app)
+        # Unit tests for one provider must not inherit a developer's local
+        # fallback chain or make an external request after the mocked failure.
+        config.app["llm_fallback_providers"] = []
 
     def tearDown(self):
         config.app.clear()
@@ -402,6 +405,7 @@ class TestLiteLLMProvider(unittest.TestCase):
         openai_client.assert_called_once_with(
             api_key="aihubmix-key",
             base_url="https://aihubmix.com/v1",
+            timeout=ANY,
         )
         self.assertEqual(
             fake_completions.kwargs,
@@ -439,6 +443,7 @@ class TestLiteLLMProvider(unittest.TestCase):
         openai_client.assert_called_once_with(
             api_key="aimlapi-key",
             base_url="https://api.aimlapi.com/v1",
+            timeout=ANY,
         )
         self.assertEqual(
             fake_completions.kwargs,
@@ -501,6 +506,7 @@ class TestLiteLLMProvider(unittest.TestCase):
         openai_client.assert_called_once_with(
             api_key="groq-test-key",
             base_url="https://api.groq.com/openai/v1",
+            timeout=ANY,
         )
         self.assertEqual(result, "hellogroq")
 
@@ -532,6 +538,7 @@ class TestLiteLLMProvider(unittest.TestCase):
         openai_client.assert_called_once_with(
             api_key="ollama",
             base_url=expected_base_url,
+            timeout=ANY,
         )
         self.assertEqual(
             fake_completions.kwargs,
@@ -619,6 +626,7 @@ class TestLiteLLMProvider(unittest.TestCase):
         openai_client.assert_called_once_with(
             api_key="mimo-key",
             base_url="https://api.xiaomimimo.com/v1",
+            timeout=ANY,
         )
         self.assertEqual(
             fake_completions.kwargs,
@@ -664,6 +672,7 @@ class TestLiteLLMProvider(unittest.TestCase):
             api_key="azure-key",
             api_version="2024-02-15-preview",
             azure_endpoint="https://example.openai.azure.com",
+            timeout=ANY,
         )
         openai_client.assert_not_called()
         self.assertEqual(

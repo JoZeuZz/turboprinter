@@ -31,6 +31,55 @@ def _load_translation(locale):
 
 
 class TestWebuiI18n(unittest.TestCase):
+    def test_font_gallery_applies_persisted_selection_to_render_params(self):
+        tree = ast.parse(WEBUI_MAIN.read_text(encoding="utf-8"))
+        render_font_gallery = next(
+            node
+            for node in tree.body
+            if isinstance(node, ast.FunctionDef) and node.name == "render_font_gallery"
+        )
+
+        assignments = [
+            node
+            for node in ast.walk(render_font_gallery)
+            if isinstance(node, ast.Assign)
+            and any(
+                isinstance(target, ast.Attribute)
+                and isinstance(target.value, ast.Name)
+                and target.value.id == "params"
+                and target.attr == "font_name"
+                for target in node.targets
+            )
+            and isinstance(node.value, ast.Name)
+            and node.value.id == "selected"
+        ]
+
+        self.assertEqual(len(assignments), 1)
+
+    def test_spanish_locale_covers_static_webui_labels(self):
+        tree = ast.parse(WEBUI_MAIN.read_text(encoding="utf-8"))
+        visitor = _TrKeyVisitor()
+        visitor.visit(tree)
+
+        es_keys = set(_load_translation("es"))
+
+        self.assertEqual(sorted(visitor.keys - es_keys), [])
+
+    def test_spanish_navigation_and_publish_labels_are_translated(self):
+        translations = _load_translation("es")
+        expected = {
+            "Script": "Guion",
+            "Publish": "Publicar",
+            "Upload / Post": "Publicación",
+            "Enable Upload-Post": "Activar publicación",
+            "Auto upload after generation": (
+                "Publicar automáticamente después de generar"
+            ),
+        }
+
+        for key, value in expected.items():
+            self.assertEqual(translations.get(key), value)
+
     def test_english_locale_covers_static_webui_labels(self):
         tree = ast.parse(WEBUI_MAIN.read_text(encoding="utf-8"))
         visitor = _TrKeyVisitor()

@@ -47,3 +47,22 @@ CLAUDE.local.md
 .superpowers/
 
 plans/
+
+# Local agent and dependency tooling.
+/.agents/
+/.codex/
+/skills-lock.json
+/.uv-cache*/
+
+# Test and coverage output.
+/.pytest_cache/
+/.coverage
+/htmlcov/
+*.py[cod]
+
+# Local environment files and private credentials.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
