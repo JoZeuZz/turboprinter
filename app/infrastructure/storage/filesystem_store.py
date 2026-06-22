@@ -2,13 +2,15 @@ from __future__ import annotations
 
 import os
 
-from pydantic import ValidationError
+from pydantic import TypeAdapter, ValidationError
 
 from app.domain.media.models import MediaCandidate
 from app.domain.planning.models import ShotPlan
 from app.domain.projects.models import TimelineProject
 from app.domain.rendering.models import RenderSpec
 from app.infrastructure.storage.base import ProjectStoreError
+
+_MEDIA_ADAPTER: TypeAdapter[list[MediaCandidate]] = TypeAdapter(list[MediaCandidate])
 
 _SHOT_PLAN = "shot_plan.json"
 _TIMELINE = "timeline_project.json"
@@ -20,20 +22,21 @@ class FilesystemProjectStore:
     def __init__(self, base_tasks_dir: str | None = None) -> None:
         self._base = base_tasks_dir
 
-    def _task_dir(self, task_id: str) -> str:
+    def _task_dir(self, task_id: str, *, make: bool = False) -> str:
         if self._base is not None:
             path = os.path.join(self._base, task_id)
-            os.makedirs(path, exist_ok=True)
+            if make:
+                os.makedirs(path, exist_ok=True)
             return path
         from app.utils import utils
 
         return utils.task_dir(task_id)
 
-    def _path(self, task_id: str, filename: str) -> str:
-        return os.path.join(self._task_dir(task_id), filename)
+    def _path(self, task_id: str, filename: str, *, make: bool = False) -> str:
+        return os.path.join(self._task_dir(task_id, make=make), filename)
 
     def _write(self, task_id: str, filename: str, payload: str) -> None:
-        path = self._path(task_id, filename)
+        path = self._path(task_id, filename, make=True)
         try:
             with open(path, "w", encoding="utf-8") as fh:
                 fh.write(payload)
@@ -89,20 +92,14 @@ class FilesystemProjectStore:
     def save_media_candidates(
         self, task_id: str, candidates: list[MediaCandidate]
     ) -> None:
-        from pydantic import TypeAdapter
-
-        adapter = TypeAdapter(list[MediaCandidate])
-        payload = adapter.dump_json(candidates, indent=2).decode("utf-8")
+        payload = _MEDIA_ADAPTER.dump_json(candidates, indent=2).decode("utf-8")
         self._write(task_id, _MEDIA, payload)
 
     def load_media_candidates(self, task_id: str) -> list[MediaCandidate]:
         raw = self._read(task_id, _MEDIA)
         if raw is None:
             return []
-        from pydantic import TypeAdapter
-
-        adapter = TypeAdapter(list[MediaCandidate])
         try:
-            return adapter.validate_json(raw)
+            return _MEDIA_ADAPTER.validate_json(raw)
         except ValidationError as exc:
             raise ProjectStoreError(self._path(task_id, _MEDIA), exc) from exc
