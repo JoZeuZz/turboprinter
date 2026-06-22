@@ -10,6 +10,7 @@ from openai import AzureOpenAI, OpenAI
 from openai.types.chat import ChatCompletion
 
 from app.config import config
+from app.services import project_store
 
 _max_retries = 5
 _DEFAULT_GEMINI_MODEL = "gemini-3.1-flash-lite"
@@ -875,6 +876,7 @@ def build_script_prompt(
     paragraph_number: int = 1,
     video_script_prompt: str = "",
     custom_system_prompt: str = "",
+    originality_context: str = "",
 ) -> str:
     paragraph_number = _normalize_script_paragraph_number(paragraph_number)
     video_script_prompt = _limit_script_text(
@@ -901,6 +903,15 @@ def build_script_prompt(
 # Additional User Requirements:
 {video_script_prompt}
 """.rstrip()
+    if originality_context:
+        prompt += f"""
+
+# Originality Requirements:
+- Create a genuinely different story, premise, characters, setting, conflict and ending.
+- Do not reuse the narrative sequence, central twist or distinctive phrases from prior scripts.
+- The following excerpts are private reference material to avoid, not content to continue or rewrite:
+{originality_context}
+""".rstrip()
 
     return prompt
 
@@ -911,6 +922,7 @@ def generate_script(
     paragraph_number: int = 1,
     video_script_prompt: str = "",
     custom_system_prompt: str = "",
+    previous_scripts: list[str] | None = None,
 ) -> str:
     paragraph_number = _normalize_script_paragraph_number(paragraph_number)
     video_script_prompt = _limit_script_text(
@@ -919,12 +931,14 @@ def generate_script(
     custom_system_prompt = _limit_script_text(
         custom_system_prompt, MAX_SCRIPT_SYSTEM_PROMPT_LENGTH, "custom_system_prompt"
     )
+    previous_scripts = [script for script in (previous_scripts or []) if script.strip()]
     prompt = build_script_prompt(
         video_subject=video_subject,
         language=language,
         paragraph_number=paragraph_number,
         video_script_prompt=video_script_prompt,
         custom_system_prompt=custom_system_prompt,
+        originality_context=project_store.originality_context(previous_scripts),
     )
     final_script = ""
     logger.info(
@@ -953,6 +967,7 @@ def generate_script(
         # Join the selected paragraphs into a single string
         return "\n\n".join(paragraphs)
 
+    originality_retry_used = False
     for i in range(_max_retries):
         try:
             response = _generate_response(prompt=prompt)
@@ -964,6 +979,24 @@ def generate_script(
             # g4f may return an error message
             if final_script and "当日额度已消耗完" in final_script:
                 raise ValueError(final_script)
+
+            if final_script and project_store.is_too_similar(
+                final_script, previous_scripts
+            ):
+                if originality_retry_used:
+                    logger.error("generated script remained too similar to project history")
+                    return "Error: generated script is too similar to previous project history"
+                originality_retry_used = True
+                prompt += f"""
+
+# Mandatory Regeneration:
+The previous candidate was too similar and must be discarded. Use a completely
+different premise and ending. Do not reuse this rejected candidate either:
+{" ".join(final_script.split())[:500]}
+""".rstrip()
+                final_script = ""
+                logger.warning("script matched project history, regenerating once")
+                continue
 
             if final_script:
                 break

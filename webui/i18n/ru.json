@@ -236,6 +236,18 @@
     "Render Manifest": "Манифест рендеринга",
     "Word Timestamps": "Время слов",
     "Unavailable providers": "Недоступные провайдеры",
-    "Disabled": "Отключено"
+    "Disabled": "Отключено",
+    "Projects": "Проекты",
+    "Saved projects": "Сохранённые проекты",
+    "No saved projects": "Нет сохранённых проектов",
+    "Untitled project": "Проект без названия",
+    "New project": "Новый проект",
+    "Load project": "Загрузить",
+    "Save draft": "Сохранить черновик",
+    "Draft saved": "Черновик сохранён",
+    "Draft": "Черновик",
+    "Generating": "Создание",
+    "Completed": "Завершено",
+    "Failed": "Ошибка"
   }
 }

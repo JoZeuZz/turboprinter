@@ -72,6 +72,7 @@ class VideoParams(BaseModel):
     """
 
     video_subject: str
+    project_id: Optional[str] = None
     video_script: str = ""  # Script used to generate the video
     video_terms: Optional[str | list] = None  # Keywords used to generate the video
     video_aspect: Optional[VideoAspect] = VideoAspect.portrait.value

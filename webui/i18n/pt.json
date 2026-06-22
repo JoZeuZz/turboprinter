@@ -182,6 +182,18 @@
     "Video Encoder": "Codificador de vídeo",
     "Video Encoder Help": "Opção avançada. libx264 é o padrão mais seguro. Quando um codificador de hardware é selecionado, o aplicativo volta para libx264 se o FFmpeg, GPU ou driver atuais não puderem usá-lo.",
     "Unavailable providers": "Provedores indisponíveis",
-    "Disabled": "Desativado"
+    "Disabled": "Desativado",
+    "Projects": "Projetos",
+    "Saved projects": "Projetos salvos",
+    "No saved projects": "Não há projetos salvos",
+    "Untitled project": "Projeto sem título",
+    "New project": "Novo projeto",
+    "Load project": "Carregar",
+    "Save draft": "Salvar rascunho",
+    "Draft saved": "Rascunho salvo",
+    "Draft": "Rascunho",
+    "Generating": "Gerando",
+    "Completed": "Concluído",
+    "Failed": "Falhou"
   }
 }

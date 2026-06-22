@@ -8,7 +8,7 @@ from loguru import logger
 from app.config import config
 from app.models import const
 from app.models.schema import VideoAspect, VideoConcatMode, VideoParams
-from app.services import llm, material, subtitle, video, voice, upload_post
+from app.services import llm, material, project_store, subtitle, video, voice, upload_post
 from app.services import state as sm
 from app.services.quality import settings as quality_settings
 from app.utils import file_security, utils
@@ -16,6 +16,13 @@ from app.utils import file_security, utils
 
 def generate_script(task_id, params):
     logger.info("\n\n## generating video script")
+    project_id = getattr(params, "project_id", None) or task_id
+    project_conn = project_store.connect()
+    prior_scripts = project_store.previous_scripts(
+        project_conn,
+        params.video_subject,
+        exclude_project_id=project_id,
+    )
     video_script = params.video_script.strip()
     if not video_script:
         video_script = llm.generate_script(
@@ -24,15 +31,37 @@ def generate_script(task_id, params):
             paragraph_number=params.paragraph_number,
             video_script_prompt=params.video_script_prompt,
             custom_system_prompt=params.custom_system_prompt,
+            previous_scripts=prior_scripts,
         )
     else:
         logger.debug(f"video script: \n{video_script}")
 
-    if not video_script:
+    if not video_script or "Error: " in video_script:
+        project_store.save_project(
+            project_conn,
+            project_id,
+            subject=params.video_subject,
+            status="failed",
+            script="",
+            params=params,
+            task_id=task_id,
+        )
+        project_conn.close()
         sm.state.update_task(task_id, state=const.TASK_STATE_FAILED)
         logger.error("failed to generate video script.")
         return None
 
+    project_store.save_project(
+        project_conn,
+        project_id,
+        subject=params.video_subject,
+        status="generating",
+        script=video_script,
+        terms=params.video_terms,
+        params=params,
+        task_id=task_id,
+    )
+    project_conn.close()
     return video_script
 
 
@@ -744,6 +773,20 @@ def start(task_id, params: VideoParams, stop_at: str = "video", *, restrict_cust
         "word_timestamps": word_timestamps_path or None,
         "manifest": manifest_path or None,
     }
+    project_id = getattr(params, "project_id", None) or task_id
+    project_conn = project_store.connect()
+    project_store.save_project(
+        project_conn,
+        project_id,
+        subject=params.video_subject,
+        status="completed",
+        script=video_script,
+        terms=video_terms,
+        params=params,
+        artifacts=kwargs,
+        task_id=task_id,
+    )
+    project_conn.close()
     sm.state.update_task(
         task_id, state=const.TASK_STATE_COMPLETE, progress=100, **kwargs
     )

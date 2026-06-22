@@ -236,6 +236,18 @@
     "Render Manifest": "Manifiesto de renderizado",
     "Word Timestamps": "Tiempos por palabra",
     "Unavailable providers": "Proveedores no disponibles",
-    "Disabled": "Desactivado"
+    "Disabled": "Desactivado",
+    "Projects": "Proyectos",
+    "Saved projects": "Proyectos guardados",
+    "No saved projects": "No hay proyectos guardados",
+    "Untitled project": "Proyecto sin título",
+    "New project": "Nuevo proyecto",
+    "Load project": "Cargar",
+    "Save draft": "Guardar borrador",
+    "Draft saved": "Borrador guardado",
+    "Draft": "Borrador",
+    "Generating": "Generando",
+    "Completed": "Completado",
+    "Failed": "Fallido"
   }
 }

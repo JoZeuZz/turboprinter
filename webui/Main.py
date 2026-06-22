@@ -1,5 +1,6 @@
 import base64
 import html
+import inspect
 import io
 import os
 import sys
@@ -28,7 +29,7 @@ from app.models.schema import (
     VideoParams,
     VideoTransitionMode,
 )
-from app.services import llm, voice
+from app.services import llm, project_store, voice
 from app.services import task as tm
 from app.utils import file_security, utils
 
@@ -208,6 +209,8 @@ if "font_page" not in st.session_state:
 if "local_video_materials" not in st.session_state:
     # 记住用户最近一次已经落盘的本地素材，避免仅修改文案后二次生成时丢失素材列表。
     st.session_state["local_video_materials"] = []
+if "active_project_id" not in st.session_state:
+    st.session_state["active_project_id"] = config.app.get("active_project_id", "")
 
 # 加载语言文件
 locales = utils.load_locales(i18n_dir)
@@ -917,6 +920,173 @@ def _is_llm_provider_enabled(provider_id: str) -> bool:
     return True
 
 
+def _project_status_label(status: str) -> str:
+    labels = {
+        "draft": tr("Draft"),
+        "generating": tr("Generating"),
+        "completed": tr("Completed"),
+        "failed": tr("Failed"),
+    }
+    return labels.get(status, status)
+
+
+def _ensure_active_project_id() -> str:
+    project_id = st.session_state.get("active_project_id", "")
+    if not project_id:
+        project_id = str(uuid4())
+        st.session_state["active_project_id"] = project_id
+        config.app["active_project_id"] = project_id
+    return project_id
+
+
+def _set_project_id(params, project_id: str | None) -> None:
+    # Streamlit can hot-reload Main.py while retaining an older imported
+    # VideoParams class. Bypass that stale model only until the process restarts.
+    if "project_id" in getattr(type(params), "model_fields", {}):
+        params.project_id = project_id
+    else:
+        object.__setattr__(params, "project_id", project_id)
+
+
+def _generate_script_with_history(*, previous_scripts=None, **kwargs) -> str:
+    # During Streamlit hot reload, the imported llm module may still expose the
+    # pre-project signature. Keep the page usable until the process restarts.
+    parameters = inspect.signature(llm.generate_script).parameters
+    if "previous_scripts" in parameters:
+        kwargs["previous_scripts"] = previous_scripts or []
+    return llm.generate_script(**kwargs)
+
+
+def _save_project_snapshot(params=None, *, status="draft", artifacts=None, task_id=""):
+    project_id = _ensure_active_project_id()
+    subject = st.session_state.get("video_subject", "").strip()
+    script = st.session_state.get("video_script", "").strip()
+    terms = st.session_state.get("video_terms", "")
+    conn = project_store.connect()
+    try:
+        return project_store.save_project(
+            conn,
+            project_id,
+            subject=subject,
+            status=status,
+            script=script,
+            terms=terms,
+            params=params,
+            artifacts=artifacts,
+            task_id=task_id,
+        )
+    finally:
+        conn.close()
+
+
+def _load_project(project_id: str) -> None:
+    conn = project_store.connect()
+    try:
+        project = project_store.get_project(conn, project_id)
+    finally:
+        conn.close()
+    if not project:
+        return
+    st.session_state["active_project_id"] = project.id
+    st.session_state["video_subject"] = project.subject
+    st.session_state["video_script"] = project.script
+    st.session_state["video_terms"] = ", ".join(project.terms)
+    st.session_state["video_script_prompt"] = project.params.get(
+        "video_script_prompt", ""
+    )
+    for key, value in project.params.items():
+        if key not in {"project_id", "video_materials", "custom_audio_file"}:
+            config.app[key] = value
+    ui_param_keys = {
+        "font_name",
+        "subtitle_position",
+        "custom_position",
+        "font_size",
+        "text_fore_color",
+        "text_background_color",
+        "stroke_color",
+        "stroke_width",
+        "rounded_subtitle_background",
+    }
+    for key in ui_param_keys:
+        if key in project.params:
+            config.ui[key] = project.params[key]
+    if project.params.get("font_name"):
+        st.session_state["selected_font"] = project.params["font_name"]
+    if project.params.get("voice_name"):
+        st.session_state["voice_gallery_selected"] = project.params["voice_name"]
+        st.session_state["voice_gallery_page_initialized"] = False
+    if "paragraph_number" in project.params:
+        st.session_state["paragraph_number_input"] = project.params[
+            "paragraph_number"
+        ]
+    if "match_materials_to_script" in project.params:
+        st.session_state["match_materials_to_script"] = project.params[
+            "match_materials_to_script"
+        ]
+    config.app["active_project_id"] = project.id
+
+
+def render_project_control() -> None:
+    conn = project_store.connect()
+    try:
+        projects = project_store.list_projects(conn)
+    finally:
+        conn.close()
+    project_by_id = {project.id: project for project in projects}
+    options = [project.id for project in projects]
+    active_id = st.session_state.get("active_project_id", "")
+    default_index = options.index(active_id) if active_id in options else 0
+
+    with st.container(border=True):
+        st.write(tr("Projects"))
+        picker_col, new_col, load_col, save_col = st.columns([4, 1, 1, 1])
+        with picker_col:
+            if options:
+                selected_id = st.selectbox(
+                    tr("Saved projects"),
+                    options=options,
+                    index=default_index,
+                    format_func=lambda project_id: (
+                        f"{project_by_id[project_id].subject or tr('Untitled project')} · "
+                        f"{_project_status_label(project_by_id[project_id].status)} · "
+                        f"{project_by_id[project_id].updated_at[5:16].replace('T', ' ')}"
+                    ),
+                    label_visibility="collapsed",
+                    key="project_picker",
+                )
+            else:
+                st.text_input(
+                    tr("Saved projects"),
+                    value=tr("No saved projects"),
+                    disabled=True,
+                    label_visibility="collapsed",
+                )
+                selected_id = ""
+        with new_col:
+            if st.button(tr("New project"), use_container_width=True):
+                st.session_state["active_project_id"] = str(uuid4())
+                st.session_state["video_subject"] = ""
+                st.session_state["video_script"] = ""
+                st.session_state["video_terms"] = ""
+                st.session_state["video_script_prompt"] = ""
+                config.app["active_project_id"] = st.session_state[
+                    "active_project_id"
+                ]
+                st.rerun()
+        with load_col:
+            if st.button(
+                tr("Load project"),
+                disabled=not selected_id,
+                use_container_width=True,
+            ):
+                _load_project(selected_id)
+                st.rerun()
+        with save_col:
+            if st.button(tr("Save draft"), use_container_width=True):
+                st.session_state["save_project_requested"] = True
+
+
 @st.cache_data(ttl=300, show_spinner=False)
 def get_groq_model_ids(api_key: str, base_url: str) -> list[str]:
     if not api_key:
@@ -1446,6 +1616,8 @@ params.match_materials_to_script = bool(
 )
 uploaded_files = []
 uploaded_audio_file = None
+render_project_control()
+_set_project_id(params, st.session_state.get("active_project_id") or None)
 
 
 def render_script_section(params):
@@ -1507,12 +1679,26 @@ def render_script_section(params):
             tr("Generate Video Script and Keywords"), key="auto_generate_script"
         ):
             with st.spinner(tr("Generating Video Script and Keywords")):
-                script = llm.generate_script(
+                project_id = _ensure_active_project_id()
+                conn = project_store.connect()
+                try:
+                    prior_scripts = project_store.previous_scripts(
+                        conn,
+                        params.video_subject,
+                        exclude_project_id=project_id,
+                    )
+                    current_script = st.session_state.get("video_script", "").strip()
+                    if current_script and current_script not in prior_scripts:
+                        prior_scripts.insert(0, current_script)
+                finally:
+                    conn.close()
+                script = _generate_script_with_history(
                     video_subject=params.video_subject,
                     language=params.video_language,
                     paragraph_number=params.paragraph_number,
                     video_script_prompt=params.video_script_prompt,
                     custom_system_prompt=params.custom_system_prompt,
+                    previous_scripts=prior_scripts,
                 )
                 terms = llm.generate_terms(
                     params.video_subject,
@@ -1527,8 +1713,12 @@ def render_script_section(params):
                 else:
                     st.session_state["video_script"] = script
                     st.session_state["video_terms"] = ", ".join(terms)
+                    _set_project_id(params, project_id)
+                    params.video_script = script
+                    params.video_terms = terms
+                    _save_project_snapshot(params, status="draft")
         params.video_script = st.text_area(
-            tr("Video Script"), value=st.session_state["video_script"], height=280
+            tr("Video Script"), key="video_script", height=280
         )
         if st.button(tr("Generate Video Keywords"), key="auto_generate_terms"):
             if not params.video_script:
@@ -1548,7 +1738,7 @@ def render_script_section(params):
                     st.session_state["video_terms"] = ", ".join(terms)
 
         params.video_terms = st.text_area(
-            tr("Video Keywords"), value=st.session_state["video_terms"]
+            tr("Video Keywords"), key="video_terms"
         )
 
 
@@ -2512,10 +2702,16 @@ config.app["bgm_volume"] = params.bgm_volume
 config.app["video_clip_duration"] = params.video_clip_duration
 config.app["video_count"] = params.video_count
 
+if st.session_state.pop("save_project_requested", False):
+    _save_project_snapshot(params, status="draft")
+    st.success(tr("Draft saved"))
+
 start_button = st.button(tr("Generate Video"), use_container_width=True, type="primary")
 if start_button:
-    config.save_config()
     task_id = str(uuid4())
+    _set_project_id(params, _ensure_active_project_id())
+    _save_project_snapshot(params, status="generating", task_id=task_id)
+    config.save_config()
     if not params.video_subject and not params.video_script:
         st.error(tr("Video Script and Subject Cannot Both Be Empty"))
         scroll_to_bottom()
@@ -2626,12 +2822,19 @@ if start_button:
 
     result = tm.start(task_id=task_id, params=params)
     if not result or "videos" not in result:
+        _save_project_snapshot(params, status="failed", task_id=task_id)
         st.error(tr("Video Generation Failed"))
         logger.error(tr("Video Generation Failed"))
         scroll_to_bottom()
         st.stop()
 
     video_files = result.get("videos", [])
+    _save_project_snapshot(
+        params,
+        status="completed",
+        artifacts=result,
+        task_id=task_id,
+    )
     st.success(tr("Video Generation Completed"))
     try:
         if video_files:

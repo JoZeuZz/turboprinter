@@ -86,6 +86,36 @@ class TestScriptPromptOptions(unittest.TestCase):
         self.assertIn("- number of paragraphs: 2", prompt)
         self.assertIn("- language: en", prompt)
 
+    def test_build_script_prompt_includes_originality_history(self):
+        prompt = llm.build_script_prompt(
+            video_subject="Historia de terror",
+            originality_context="1. Una casa con un espejo embrujado.",
+        )
+
+        self.assertIn("# Originality Requirements:", prompt)
+        self.assertIn("Una casa con un espejo embrujado", prompt)
+
+    def test_generate_script_retries_candidate_that_matches_history(self):
+        previous = (
+            "Una mujer entra en una casa abandonada y descubre que el espejo "
+            "repite sus movimientos con varios segundos de retraso."
+        )
+        duplicate = previous.replace("varios", "unos")
+        original = (
+            "Un pescador recibe llamadas desde un faro que lleva cincuenta años apagado."
+        )
+
+        with patch.object(
+            llm, "_generate_response", side_effect=[duplicate, original]
+        ) as generate_response:
+            result = llm.generate_script(
+                video_subject="Historia de terror",
+                previous_scripts=[previous],
+            )
+
+        self.assertEqual(result, original)
+        self.assertEqual(generate_response.call_count, 2)
+
     def test_generate_script_sends_custom_prompt_to_llm(self):
         captured = {}
 
