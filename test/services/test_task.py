@@ -22,10 +22,17 @@ RUN_INTEGRATION_TESTS = os.environ.get("MPT_RUN_INTEGRATION_TESTS", "").lower() 
 
 class TestTaskService(unittest.TestCase):
     def setUp(self):
-        pass
+        self._project_tmpdir = tempfile.TemporaryDirectory()
+        self._project_db_patcher = patch.object(
+            tm.project_store,
+            "default_db_path",
+            return_value=os.path.join(self._project_tmpdir.name, "projects.db"),
+        )
+        self._project_db_patcher.start()
     
     def tearDown(self):
-        pass
+        self._project_db_patcher.stop()
+        self._project_tmpdir.cleanup()
 
     def test_generate_script_forwards_advanced_prompt_options(self):
         """
@@ -51,6 +58,27 @@ class TestTaskService(unittest.TestCase):
             paragraph_number=2,
             video_script_prompt="语气轻松",
             custom_system_prompt="Only write short narration.",
+            previous_scripts=[],
+        )
+
+    def test_generate_script_uses_prior_projects_for_same_subject(self):
+        conn = tm.project_store.connect()
+        tm.project_store.save_project(
+            conn,
+            "older-project",
+            subject="Historia de terror",
+            script="Una sombra esperaba detrás del espejo.",
+        )
+        conn.close()
+        params = VideoParams(video_subject="Historia de terror", project_id="new-project")
+
+        with patch.object(tm.llm, "generate_script", return_value="Una historia nueva") as generate:
+            result = tm.generate_script("task-id", params)
+
+        self.assertEqual(result, "Una historia nueva")
+        self.assertEqual(
+            generate.call_args.kwargs["previous_scripts"],
+            ["Una sombra esperaba detrás del espejo."],
         )
 
     def test_generate_terms_uses_script_order_mode_when_enabled(self):

@@ -236,6 +236,18 @@
     "Render Manifest": "Render Manifest",
     "Word Timestamps": "Word Timestamps",
     "Unavailable providers": "Unavailable providers",
-    "Disabled": "Disabled"
+    "Disabled": "Disabled",
+    "Projects": "Projects",
+    "Saved projects": "Saved projects",
+    "No saved projects": "No saved projects",
+    "Untitled project": "Untitled project",
+    "New project": "New project",
+    "Load project": "Load project",
+    "Save draft": "Save draft",
+    "Draft saved": "Draft saved",
+    "Draft": "Draft",
+    "Generating": "Generating",
+    "Completed": "Completed",
+    "Failed": "Failed"
   }
 }
