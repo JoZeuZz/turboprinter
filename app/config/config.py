@@ -203,6 +203,11 @@ structured_shot_planner_enabled = (
     os.getenv("TURBOPRINTER_STRUCTURED_SHOT_PLANNER", "false").strip().lower() == "true"
 )
 
+# Multi-provider media aggregation (Fase 3). Opt-in, default off.
+multi_provider_media_enabled = (
+    os.getenv("TURBOPRINTER_MULTI_PROVIDER_MEDIA", "false").strip().lower() == "true"
+)
+
 app["redis_host"] = os.getenv(
     "MPT_APP_REDIS_HOST",
     os.getenv("REDIS_HOST", app.get("redis_host", "localhost")),
