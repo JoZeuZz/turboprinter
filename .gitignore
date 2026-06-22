@@ -34,7 +34,7 @@ test_*.py
 streamlit.log
 AGENTS.md
 config.toml
-storage/
+/storage/
 
 CLAUDE.md
 CLAUDE.local.md
