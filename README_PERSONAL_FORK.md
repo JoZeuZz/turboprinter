@@ -51,7 +51,7 @@ The fork includes an **optional domain layer** (`app/domain/`) and **filesystem 
 |----------|---------|-------------|
 | `TURBOPRINTER_PROJECT_MODE_ENABLED` | `false` | Activates project-mode wiring. When unset or `false`, behaviour is identical to upstream. |
 | `TURBOPRINTER_STRUCTURED_SHOT_PLANNER` | `false` | Activates the structured Shot Planner (Fase 2). Requires `litellm_model_name` set in `config.toml`. On LLM failure or missing model, degrades automatically to a local deterministic heuristic (split by sentences + uniform duration + keyword queries) — no external service required. |
-| `TURBOPRINTER_MULTI_PROVIDER_MEDIA` | `false` | Activa la búsqueda multi-proveedor de medios (Pexels, Pixabay, Coverr + biblioteca local). Autodetecta los proveedores con API key configurada en `config.toml`; si un proveedor falla los demás continúan. Sin keys ni base de datos local el agregador queda inerte. Requiere `TURBOPRINTER_PROJECT_MODE_ENABLED=true` para persistir candidatos y selección. |
+| `TURBOPRINTER_MULTI_PROVIDER_MEDIA` | `false` | Activates multi-provider media search (Pexels, Pixabay, Coverr + local library). Auto-detects providers with API keys configured in `config.toml`; if a provider fails the others continue. Without keys or a local library database the aggregator is inert. Set `TURBOPRINTER_PROJECT_MODE_ENABLED=true` to persist candidates and selection. |
 
 To enable the structured Shot Planner:
 
