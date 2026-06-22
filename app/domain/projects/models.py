@@ -67,9 +67,9 @@ class TimelineProject(BaseModel):
     updated_at: datetime = Field(default_factory=_utcnow)
     script: str | None = None
     shot_plan: ShotPlan | None = None
-    tracks: list[TimelineTrack] = []
+    tracks: list[TimelineTrack] = Field(default_factory=list)
     export: ExportSettings = Field(default_factory=ExportSettings)
-    metadata: dict[str, Any] = {}
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
     def _find_item(self, track_id: str, item_id: str) -> TimelineItem:
         for track in self.tracks:
