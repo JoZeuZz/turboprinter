@@ -4,8 +4,12 @@ import re
 
 from loguru import logger
 
+from app.config import config
 from app.domain.planning.models import ShotPlan, ShotSegment
-from app.infrastructure.llm.structured_output import StructuredLLMProvider
+from app.infrastructure.llm.structured_output import (
+    LiteLLMStructuredProvider,
+    StructuredLLMProvider,
+)
 from app.infrastructure.storage.base import ProjectStore
 
 _DEFAULT_SEGMENT_SEC = 5.0
@@ -149,6 +153,7 @@ class ShotPlanner:
                 )
 
         # propagar task_id al plan resultante
+        assert result is not None
         if task_id and result.task_id != task_id:
             result = result.model_copy(update={"task_id": task_id})
 
@@ -157,3 +162,10 @@ class ShotPlanner:
             self._store.save_shot_plan(task_id, result)
 
         return result
+
+
+def get_shot_planner(store: ProjectStore | None = None) -> "ShotPlanner | None":
+    """Factory: returns None when the flag is off (default), else a ShotPlanner."""
+    if not getattr(config, "structured_shot_planner_enabled", False):
+        return None
+    return ShotPlanner(LiteLLMStructuredProvider(), store=store)

@@ -197,6 +197,12 @@ project_mode_enabled = (
     os.getenv("TURBOPRINTER_PROJECT_MODE_ENABLED", "false").strip().lower() == "true"
 )
 
+# Structured Shot Planner (Fase 2). Opt-in, default off: cuando está apagado
+# no se instancia el planner y el comportamiento es idéntico a upstream.
+structured_shot_planner_enabled = (
+    os.getenv("TURBOPRINTER_STRUCTURED_SHOT_PLANNER", "false").strip().lower() == "true"
+)
+
 app["redis_host"] = os.getenv(
     "MPT_APP_REDIS_HOST",
     os.getenv("REDIS_HOST", app.get("redis_host", "localhost")),
