@@ -55,8 +55,7 @@ def test_timeline_roundtrip(tmp_path):
     )
     store.save_timeline("task1", project)
     loaded = store.load_timeline("task1")
-    assert loaded.project_id == project.project_id
-    assert loaded.tracks[0].items[0].id == "i1"
+    assert loaded == project
 
 
 def test_media_candidates_roundtrip(tmp_path):
@@ -75,6 +74,7 @@ def test_load_missing_returns_none(tmp_path):
     assert store.load_shot_plan("ghost") is None
     assert store.load_timeline("ghost") is None
     assert store.load_render_spec("ghost") is None
+    assert not (tmp_path / "ghost").exists()
 
 
 def test_load_missing_media_returns_empty_list(tmp_path):
