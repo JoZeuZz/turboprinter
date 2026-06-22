@@ -111,3 +111,17 @@ def test_heuristic_plan_empty_segment_uses_topic_fallback():
     # script sin keywords útiles (palabras cortas) cae al topic para queries
     plan = heuristic_shot_plan("a, b, c.", language="es", topic="gatos")
     assert all(seg.search_queries for seg in plan.segments)
+
+
+import app.application.services.shot_planner as sp
+
+
+def test_get_shot_planner_returns_none_when_flag_off(monkeypatch):
+    monkeypatch.setattr(sp.config, "structured_shot_planner_enabled", False, raising=False)
+    assert sp.get_shot_planner() is None
+
+
+def test_get_shot_planner_returns_planner_when_flag_on(monkeypatch):
+    monkeypatch.setattr(sp.config, "structured_shot_planner_enabled", True, raising=False)
+    planner = sp.get_shot_planner()
+    assert isinstance(planner, sp.ShotPlanner)
