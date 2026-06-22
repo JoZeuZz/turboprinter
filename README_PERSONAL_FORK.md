@@ -31,6 +31,21 @@ See `config.example.toml` `[quality]` for all keys.
 
 ---
 
+## 1b. Domain layer & project persistence (opt-in foundation)
+
+The fork includes an **optional domain layer** (`app/domain/`) and **filesystem persistence** (`app/infrastructure/storage/`) to enable future project-mode features (multi-shot planning, timeline editing, advanced rendering). These are **off by default** and add **zero overhead** when disabled.
+
+| Component | Purpose | Scope |
+|-----------|---------|-------|
+| `app/domain/models.py` | Pydantic v2 models: ShotPlan, MediaCandidate, TimelineProject, RenderSpec | domain entities, immutable design |
+| `app/domain/editing/` | 5 edit commands (clips, music, text, FX, settings) and immutable `apply()` dispatch | safe multi-edit workflows |
+| `app/infrastructure/storage/` | FilesystemProjectStore: JSON persistence under `storage/tasks/{task_id}/` | shot_plan.json, media_candidates.json, timeline_project.json, render_spec.json |
+| `TURBOPRINTER_PROJECT_MODE_ENABLED` | Environment flag (default: off) | enables project-mode wiring (in future plans) |
+
+**Important:** When `TURBOPRINTER_PROJECT_MODE_ENABLED` is unset or `false`, the entire video pipeline behaves identically to upstream. This layer is purely additive — no changes to existing render, script, subtitle or media selection logic.
+
+---
+
 ## 2. Install on an LXC (Debian/Ubuntu)
 
 > Use an **unprivileged** LXC. CPU‑only works; GPU is optional and not required.
