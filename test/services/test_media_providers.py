@@ -34,3 +34,63 @@ def test_material_info_to_candidate_treats_zero_as_unknown():
     assert cand.width is None
     assert cand.height is None
     assert cand.duration_sec is None
+
+
+# ---------------------------------------------------------------------------
+# Task 3: stock provider adapters
+# ---------------------------------------------------------------------------
+from app.models.schema import VideoAspect
+from app.infrastructure.media_providers import stock_providers as sp
+
+
+def _mi(url, dur=10, w=1080, h=1920):
+    info = MaterialInfo()
+    info.url = url
+    info.duration = dur
+    info.width = w
+    info.height = h
+    return info
+
+
+def test_pexels_provider_search_normalises(monkeypatch):
+    captured = {}
+
+    def fake_search(search_term, minimum_duration, video_aspect=VideoAspect.portrait):
+        captured["term"] = search_term
+        captured["min"] = minimum_duration
+        captured["aspect"] = video_aspect
+        return [_mi("https://p/1.mp4"), _mi("https://p/2.mp4")]
+
+    monkeypatch.setattr(sp.material, "search_videos_pexels", fake_search)
+    provider = sp.PexelsProvider()
+    cands = provider.search_videos("sunrise", orientation="portrait", min_duration_sec=3.0, max_results=1)
+    assert captured["term"] == "sunrise"
+    assert captured["min"] == 3
+    assert captured["aspect"] == VideoAspect.portrait
+    assert len(cands) == 1  # truncated to max_results
+    assert cands[0].provider == "pexels"
+    assert cands[0].license is not None and cands[0].license.commercial_use is True
+
+
+def test_pexels_is_configured(monkeypatch):
+    monkeypatch.setattr(sp.material, "get_api_key", lambda key: "KEY" if key == "pexels_api_keys" else None)
+    assert sp.PexelsProvider().is_configured() is True
+    monkeypatch.setattr(sp.material, "get_api_key", lambda key: None)
+    assert sp.PexelsProvider().is_configured() is False
+
+
+def test_pexels_download_sets_local_path(monkeypatch):
+    monkeypatch.setattr(sp.material, "save_video", lambda url, save_dir="": "/tmp/out/vid.mp4")
+    provider = sp.PexelsProvider()
+    cand = material_info_to_candidate(_mi("https://p/1.mp4"), "q", "pexels")
+    out = provider.download(cand, "/tmp/out")
+    assert out.local_path == "/tmp/out/vid.mp4"
+    assert cand.local_path is None  # original not mutated
+
+
+def test_coverr_aspect_defaults_to_portrait_on_bad_orientation(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(sp.material, "search_videos_coverr",
+                        lambda search_term, minimum_duration, video_aspect=VideoAspect.portrait: (captured.__setitem__("aspect", video_aspect), [])[1])
+    sp.CoverrProvider().search_videos("q", orientation="weird")
+    assert captured["aspect"] == VideoAspect.portrait
