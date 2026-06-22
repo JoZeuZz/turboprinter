@@ -12,7 +12,7 @@ from openai.types.chat import ChatCompletion
 from app.config import config
 
 _max_retries = 5
-_DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
+_DEFAULT_GEMINI_MODEL = "gemini-3.1-flash-lite"
 _DEPRECATED_GEMINI_MODELS = {"gemini-pro", "gemini-1.0-pro"}
 
 # DeepSeek 是本 fork 推荐的低成本主力 provider。官方文档（api-docs.deepseek.com）

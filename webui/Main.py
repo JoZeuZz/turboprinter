@@ -1,7 +1,12 @@
+import base64
+import html
+import io
 import os
 import sys
 import webbrowser
 from uuid import UUID, uuid4
+
+from PIL import Image, ImageDraw, ImageFont
 
 import requests
 import streamlit as st
@@ -25,7 +30,7 @@ from app.models.schema import (
 )
 from app.services import llm, voice
 from app.services import task as tm
-from app.utils import utils
+from app.utils import file_security, utils
 
 try:
     from app.services.quality import local_library as _local_lib
@@ -57,6 +62,105 @@ streamlit_style = """
 h1 {
     padding-top: 0 !important;
 }
+
+/* Font gallery: flechas centradas en el stVerticalBlock de la columna */
+div[data-testid="stVerticalBlock"]:has(.font-gallery-arrow-col) {
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+    align-items: center !important;
+    min-height: 220px !important;
+    height: 100% !important;
+}
+
+div[data-testid="stVerticalBlock"]:has(.voice-gallery-arrow-col) {
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+    align-items: center !important;
+    min-height: 205px !important;
+    height: 100% !important;
+}
+
+/* Font gallery: keyed containers expose stable st-key-* classes in Streamlit. */
+[class*="st-key-font_card_"] {
+    transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+}
+
+[class*="st-key-font_card_selected_"] {
+    border: 2px solid #39FF14 !important;
+    box-shadow: 0 0 0 1px #39FF14, 0 0 18px rgba(57, 255, 20, 0.38) !important;
+    background: rgba(57, 255, 20, 0.045) !important;
+}
+
+[class*="st-key-font_card_selected_"] button {
+
+    box-shadow: 0 0 10px rgba(57, 255, 20, 0.18) !important;
+}
+
+.font-card-preview img {
+    background: transparent !important;
+}
+
+[class*="st-key-voice_card_"] {
+    min-height: 205px;
+    transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+}
+
+[class*="st-key-voice_card_selected_"] {
+    border: 2px solid #39FF14 !important;
+    box-shadow: 0 0 0 1px #39FF14, 0 0 18px rgba(57, 255, 20, 0.3) !important;
+    background: rgba(57, 255, 20, 0.035) !important;
+}
+
+.voice-card-name {
+    margin-bottom: 0.4rem;
+    font-size: 1rem;
+    font-weight: 650;
+}
+
+.voice-card-copy {
+    min-height: 3.5rem;
+    color: rgba(250, 250, 250, 0.72);
+    font-size: 0.82rem;
+    line-height: 1.35rem;
+}
+
+.voice-card-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin: 0.5rem 0 0.8rem;
+}
+
+.voice-card-badge {
+    padding: 0.15rem 0.45rem;
+    border: 1px solid rgba(250, 250, 250, 0.16);
+    border-radius: 999px;
+    background: rgba(250, 250, 250, 0.055);
+    font-size: 0.72rem;
+    line-height: 1rem;
+}
+
+.voice-gallery-page {
+    margin-top: 0.6rem;
+    color: rgba(250, 250, 250, 0.55);
+    font-size: 0.78rem;
+    text-align: center;
+}
+
+[class*="st-key-voice_preview_player"] {
+    display: none !important;
+}
+
+.subtitle-control-label {
+    margin-bottom: 0.35rem;
+    font-family: inherit;
+    font-size: 0.875rem;
+    font-weight: 400;
+    line-height: 1.25rem;
+    text-align: center;
+}
 </style>
 """
 st.markdown(streamlit_style, unsafe_allow_html=True)
@@ -70,13 +174,13 @@ system_locale = utils.get_system_locale()
 
 
 if "video_subject" not in st.session_state:
-    st.session_state["video_subject"] = ""
+    st.session_state["video_subject"] = config.app.get("video_subject", "")
 if "video_script" not in st.session_state:
-    st.session_state["video_script"] = ""
+    st.session_state["video_script"] = config.app.get("video_script", "")
 if "video_terms" not in st.session_state:
-    st.session_state["video_terms"] = ""
+    st.session_state["video_terms"] = config.app.get("video_terms", "")
 if "video_script_prompt" not in st.session_state:
-    st.session_state["video_script_prompt"] = ""
+    st.session_state["video_script_prompt"] = config.app.get("video_script_prompt", "")
 if "custom_system_prompt" not in st.session_state:
     st.session_state["custom_system_prompt"] = llm.DEFAULT_SCRIPT_SYSTEM_PROMPT
 if "use_custom_system_prompt" not in st.session_state:
@@ -87,6 +191,20 @@ if "match_materials_to_script" not in st.session_state:
     )
 if "ui_language" not in st.session_state:
     st.session_state["ui_language"] = config.ui.get("language", system_locale)
+if "layout_mode" not in st.session_state:
+    st.session_state["layout_mode"] = config.ui.get("layout_mode", "vertical")
+if "slices_tab" not in st.session_state:
+    st.session_state["slices_tab"] = 0
+if "paragraph_number_input" not in st.session_state:
+    st.session_state["paragraph_number_input"] = config.app.get("paragraph_number", 1)
+if "font_preview_text" not in st.session_state:
+    st.session_state["font_preview_text"] = "Hello World 123"
+if "selected_folder_files" not in st.session_state:
+    st.session_state["selected_folder_files"] = []
+if "selected_song" not in st.session_state:
+    st.session_state["selected_song"] = "random"
+if "font_page" not in st.session_state:
+    st.session_state["font_page"] = 0
 if "local_video_materials" not in st.session_state:
     # 记住用户最近一次已经落盘的本地素材，避免仅修改文案后二次生成时丢失素材列表。
     st.session_state["local_video_materials"] = []
@@ -120,6 +238,22 @@ with lang_col:
         st.session_state["ui_language"] = code
         config.ui["language"] = code
 
+mode_col = st.columns([1, 1])
+with mode_col[0]:
+    layout_mode = st.radio(
+        "Modo",
+        options=["vertical", "slices"],
+        format_func=lambda x: "📋 Vertical" if x == "vertical" else "📑 Slices",
+        index=0 if st.session_state["layout_mode"] == "vertical" else 1,
+        horizontal=True,
+        label_visibility="collapsed",
+        key="layout_mode_radio",
+    )
+    if layout_mode != st.session_state["layout_mode"]:
+        st.session_state["layout_mode"] = layout_mode
+        config.ui["layout_mode"] = layout_mode
+        st.rerun()
+
 support_locales = [
     "zh-CN",
     "zh-HK",
@@ -152,8 +286,550 @@ def get_all_songs():
         for file in files:
             if file.endswith(".mp3"):
                 songs.append(file)
+    songs.sort()
     return songs
 
+
+def get_all_songs_with_path():
+    songs = []
+    for root, dirs, files in os.walk(song_dir):
+        for file in files:
+            if file.endswith(".mp3"):
+                songs.append({"name": file, "path": os.path.join(root, file)})
+    songs.sort(key=lambda x: x["name"])
+    return songs
+
+
+def _render_font_preview_img(font_name, preview_text):
+    font_path = os.path.join(font_dir, font_name)
+    if not os.path.isfile(font_path):
+        return None
+    try:
+        img_w, img_h = 260, 90
+        font_size = 48
+        # Reducir el tamaño de la fuente si el texto es demasiado largo para el lienzo
+        font = ImageFont.truetype(font_path, font_size)
+        dummy_img = Image.new("RGB", (1, 1))
+        draw = ImageDraw.Draw(dummy_img)
+        bbox = draw.textbbox((0, 0), preview_text, font=font)
+        text_w = bbox[2] - bbox[0]
+
+        while text_w > (img_w - 20) and font_size > 18:
+            font_size -= 4
+            font = ImageFont.truetype(font_path, font_size)
+            bbox = draw.textbbox((0, 0), preview_text, font=font)
+            text_w = bbox[2] - bbox[0]
+
+        # Transparent canvas lets the preview inherit the current Streamlit theme.
+        img = Image.new("RGBA", (img_w, img_h), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(img)
+        bbox = draw.textbbox((0, 0), preview_text, font=font)
+        text_w = bbox[2] - bbox[0]
+        text_h = bbox[3] - bbox[1]
+        x = (img_w - text_w) // 2
+        y = (img_h - text_h) // 2
+        draw.text((x, y), preview_text, font=font, fill=(235, 238, 242, 255))
+        return img
+    except Exception:
+        return None
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _get_font_preview_images_v2(cache_version: str):
+    # The explicit version invalidates previews when their visual format changes.
+    del cache_version
+    fonts = [f for f in get_all_fonts() if f.endswith(".ttf")]
+    result = {}
+    for f in fonts:
+        family = os.path.splitext(f)[0]
+        img = _render_font_preview_img(f, family)
+        if img:
+            buf = io.BytesIO()
+            img.save(buf, format="PNG")
+            result[f] = buf.getvalue()
+    return result
+
+
+def _font_card_html(font_name, img_bytes, selected=False):
+    img_b64 = base64.b64encode(img_bytes).decode()
+    display = font_name.replace(".ttf", "")
+    return (
+        f'<div class="font-card-preview" style="width: 100%; text-align: center;">'
+        f'<img src="data:image/png;base64,{img_b64}" style="width:100%; height:80px; object-fit:contain; border-radius:8px; display:block; margin:0 auto;">'
+        f'<div class="font-label" style="font-size:11px; color:#aaa; margin-top:8px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; width:100%; text-align:center; font-weight:500;">{display}</div>'
+        f'</div>'
+    )
+
+
+def _subtitle_control_label(label):
+    st.markdown(
+        f'<div class="subtitle-control-label">{html.escape(label)}</div>',
+        unsafe_allow_html=True,
+    )
+
+
+def _centered_color_picker(label, value, *, key, disabled=False):
+    _subtitle_control_label(label)
+    with st.container(horizontal=True, horizontal_alignment="center"):
+        with st.container(width=48, horizontal_alignment="center"):
+            return st.color_picker(
+                label,
+                value,
+                key=key,
+                label_visibility="collapsed",
+                disabled=disabled,
+            )
+
+
+def _centered_slider(label, min_value, max_value, value, *, key):
+    _subtitle_control_label(label)
+    return st.slider(
+        label,
+        min_value,
+        max_value,
+        value,
+        key=key,
+        label_visibility="collapsed",
+    )
+
+
+def _voice_metadata(voice_id):
+    raw_voice = str(voice_id or "")
+    gender = "unknown"
+    if raw_voice.endswith("-Female"):
+        gender = "female"
+    elif raw_voice.endswith("-Male"):
+        gender = "male"
+
+    clean_voice = raw_voice.removesuffix("-Female").removesuffix("-Male")
+    locale = ""
+    language_code = "multilingual"
+
+    if clean_voice.startswith("siliconflow:"):
+        display_name = clean_voice.rsplit(":", 1)[-1].replace("_", " ").title()
+    elif clean_voice.startswith(("gemini:", "mimo:")):
+        display_name = clean_voice.split(":", 1)[1].replace("_", " ").title()
+    elif clean_voice == voice.NO_VOICE_NAME:
+        display_name = tr("No Voice")
+        language_code = "none"
+    else:
+        parts = clean_voice.split("-")
+        if len(parts) >= 3 and len(parts[0]) == 2:
+            locale = "-".join(parts[:2])
+            language_code = parts[0].lower()
+            display_name = " ".join(parts[2:])
+        else:
+            display_name = clean_voice
+        display_name = (
+            display_name.replace("MultilingualNeural", "")
+            .replace("Neural", "")
+            .replace("-V2", "")
+            .strip()
+        )
+
+    language_labels = {
+        "ar": tr("Arabic"),
+        "de": tr("German"),
+        "en": tr("English"),
+        "es": tr("Spanish"),
+        "fr": tr("French"),
+        "hi": tr("Hindi"),
+        "it": tr("Italian"),
+        "ja": tr("Japanese"),
+        "ko": tr("Korean"),
+        "pt": tr("Portuguese"),
+        "ru": tr("Russian"),
+        "tr": tr("Turkish"),
+        "vi": tr("Vietnamese"),
+        "zh": tr("Chinese"),
+        "multilingual": tr("Multilingual"),
+        "none": tr("Not applicable"),
+    }
+    language_label = language_labels.get(language_code, locale or tr("Unknown"))
+    if locale:
+        language_label = f"{language_label} · {locale}"
+
+    return {
+        "id": raw_voice,
+        "name": display_name or raw_voice,
+        "gender": gender,
+        "language_code": language_code,
+        "language": language_label,
+    }
+
+
+def _voice_preview_example(language_code):
+    examples = {
+        "ar": "هذا نص تجريبي لاختبار تحويل النص إلى كلام.",
+        "de": "Dies ist ein Beispieltext zum Testen der Sprachsynthese.",
+        "en": "This is an example text for testing speech synthesis.",
+        "es": "Este es un texto de ejemplo para probar la síntesis de voz.",
+        "fr": "Ceci est un exemple de texte pour tester la synthèse vocale.",
+        "hi": "यह वाक् संश्लेषण का परीक्षण करने के लिए एक उदाहरण पाठ है।",
+        "it": "Questo è un testo di esempio per provare la sintesi vocale.",
+        "ja": "これは音声合成をテストするためのサンプルテキストです。",
+        "ko": "음성 합성을 테스트하기 위한 예시 문장입니다.",
+        "pt": "Este é um texto de exemplo para testar a síntese de voz.",
+        "ru": "Это пример текста для проверки синтеза речи.",
+        "tr": "Bu, konuşma sentezini test etmek için örnek bir metindir.",
+        "vi": "Đây là văn bản mẫu để kiểm tra tính năng tổng hợp giọng nói.",
+        "zh": "这是一段用于测试语音合成的示例文本。",
+    }
+    return examples.get(language_code, examples["en"])
+
+
+def _sync_voice_preview_language():
+    language_code = st.session_state.get("voice_language_filter", "all")
+    if language_code == "all":
+        language_code = st.session_state.get(
+            "voice_gallery_selected_language", "en"
+        )
+    next_default = _voice_preview_example(language_code)
+    current_text = st.session_state.get("voice_preview_text", "")
+    previous_default = st.session_state.get("voice_preview_default_text", "")
+    if not current_text or current_text == previous_default:
+        st.session_state["voice_preview_text"] = next_default
+    st.session_state["voice_preview_default_text"] = next_default
+
+
+def _voice_card_html(metadata, preview_text):
+    gender_labels = {
+        "female": tr("Female"),
+        "male": tr("Male"),
+        "unknown": tr("Not specified"),
+    }
+    preview = (preview_text or tr("Voice Example")).strip()
+    if len(preview) > 180:
+        preview = preview[:177].rstrip() + "..."
+    badges = [
+        gender_labels.get(metadata["gender"], tr("Not specified")),
+        metadata["language"],
+    ]
+    badges_html = "".join(
+        f'<span class="voice-card-badge">{html.escape(label)}</span>'
+        for label in badges
+    )
+    return (
+        f'<div class="voice-card-name">{html.escape(metadata["name"])}</div>'
+        f'<div class="voice-card-copy">{html.escape(preview)}</div>'
+        f'<div class="voice-card-badges">{badges_html}</div>'
+    )
+
+
+def _synthesize_voice_preview(voice_name, preview_text, voice_rate, voice_volume):
+    text = (preview_text or tr("Voice Example")).strip()
+    temp_dir = utils.storage_dir("temp", create=True)
+    audio_file = os.path.join(temp_dir, f"tmp-voice-{str(uuid4())}.mp3")
+    try:
+        sub_maker = voice.tts(
+            text=text,
+            voice_name=voice_name,
+            voice_rate=voice_rate,
+            voice_file=audio_file,
+            voice_volume=voice_volume,
+        )
+        if sub_maker and os.path.exists(audio_file):
+            with open(audio_file, "rb") as file:
+                st.session_state["voice_preview_audio"] = file.read()
+            st.session_state["voice_preview_audio_name"] = voice_name
+        else:
+            st.error(tr("Voice preview could not be generated"))
+    except Exception as exc:
+        logger.error(f"voice preview failed: {exc}")
+        st.error(tr("Voice preview could not be generated"))
+    finally:
+        if os.path.exists(audio_file):
+            os.remove(audio_file)
+
+
+def render_voice_gallery(filtered_voices, params, selected_tts_server):
+    metadata = [_voice_metadata(item) for item in filtered_voices]
+    saved_voice = config.ui.get("voice_name", "")
+    if (
+        "voice_gallery_selected" not in st.session_state
+        or st.session_state.get("voice_gallery_server") != selected_tts_server
+    ):
+        st.session_state["voice_gallery_selected"] = (
+            saved_voice if saved_voice in filtered_voices else filtered_voices[0]
+        )
+        st.session_state["voice_gallery_server"] = selected_tts_server
+        st.session_state["voice_gallery_page_initialized"] = False
+
+    selected_metadata = next(
+        (
+            item
+            for item in metadata
+            if item["id"] == st.session_state["voice_gallery_selected"]
+        ),
+        metadata[0],
+    )
+    st.session_state["voice_gallery_selected_language"] = selected_metadata[
+        "language_code"
+    ]
+    if "voice_preview_default_text" not in st.session_state:
+        default_preview_text = _voice_preview_example(
+            selected_metadata["language_code"]
+        )
+        st.session_state["voice_preview_default_text"] = default_preview_text
+        st.session_state["voice_preview_text"] = default_preview_text
+    preview_text = st.text_area(
+        tr("Voice Preview Text"),
+        key="voice_preview_text",
+        height=100,
+    )
+
+    filter_cols = st.columns([2, 1, 1], gap="small")
+    with filter_cols[0]:
+        search = st.text_input(tr("Search Voice"), key="voice_search").strip().lower()
+    language_codes = sorted({item["language_code"] for item in metadata})
+    language_options = ["all", *language_codes]
+    language_option_labels = {"all": tr("All")}
+    for code in language_codes:
+        language_option_labels[code] = next(
+            item["language"].split(" · ", 1)[0]
+            for item in metadata
+            if item["language_code"] == code
+        )
+    preferred_language = st.session_state.get("ui_language", "").split("-", 1)[0]
+    preferred_language_index = (
+        language_options.index(preferred_language)
+        if preferred_language in language_options
+        else 0
+    )
+    with filter_cols[1]:
+        language_filter = st.selectbox(
+            tr("Language"),
+            language_options,
+            format_func=language_option_labels.get,
+            index=preferred_language_index,
+            key="voice_language_filter",
+            on_change=_sync_voice_preview_language,
+        )
+    gender_option_labels = {
+        "all": tr("All"),
+        "female": tr("Female"),
+        "male": tr("Male"),
+    }
+    with filter_cols[2]:
+        gender_filter = st.selectbox(
+            tr("Gender"),
+            ["all", "female", "male"],
+            format_func=gender_option_labels.get,
+            key="voice_gender_filter",
+        )
+    visible = [
+        item
+        for item in metadata
+        if (not search or search in item["name"].lower() or search in item["id"].lower())
+        and (language_filter == "all" or item["language_code"] == language_filter)
+        and (gender_filter == "all" or item["gender"] == gender_filter)
+    ]
+    if not visible:
+        st.info(tr("No voices match the selected filters"))
+        params.voice_name = st.session_state["voice_gallery_selected"]
+        return params.voice_name
+
+    selected_voice = st.session_state["voice_gallery_selected"]
+    filter_signature = (search, language_filter, gender_filter)
+    if st.session_state.get("voice_filter_signature") != filter_signature:
+        selected_index = next(
+            (i for i, item in enumerate(visible) if item["id"] == selected_voice), 0
+        )
+        st.session_state["voice_gallery_page"] = selected_index // 3
+        st.session_state["voice_gallery_page_initialized"] = True
+        st.session_state["voice_filter_signature"] = filter_signature
+    page_size = 3
+    total_pages = max(1, (len(visible) + page_size - 1) // page_size)
+    if not st.session_state.get("voice_gallery_page_initialized", False):
+        selected_index = next(
+            (i for i, item in enumerate(visible) if item["id"] == selected_voice), 0
+        )
+        st.session_state["voice_gallery_page"] = selected_index // page_size
+        st.session_state["voice_gallery_page_initialized"] = True
+    page = min(st.session_state.get("voice_gallery_page", 0), total_pages - 1)
+    st.session_state["voice_gallery_page"] = page
+    page_items = visible[page * page_size : (page + 1) * page_size]
+
+    nav_cols = st.columns([0.45, 3, 3, 3, 0.45], gap="small")
+    with nav_cols[0]:
+        st.markdown(
+            '<span class="voice-gallery-arrow-col" style="display:none"></span>',
+            unsafe_allow_html=True,
+        )
+        if page > 0 and st.button("◀", key="voice_page_prev", use_container_width=True):
+            st.session_state["voice_gallery_page"] = page - 1
+            st.rerun()
+    preview_request = None
+    for index in range(page_size):
+        with nav_cols[index + 1]:
+            if index >= len(page_items):
+                st.empty()
+                continue
+            item = page_items[index]
+            preview_is_custom = preview_text != st.session_state.get(
+                "voice_preview_default_text", ""
+            )
+            card_preview_text = (
+                preview_text
+                if preview_is_custom
+                else _voice_preview_example(item["language_code"])
+            )
+            is_selected = item["id"] == selected_voice
+            card_token = utils.md5(item["id"])
+            card_state = "selected" if is_selected else "idle"
+            with st.container(
+                border=True,
+                key=f"voice_card_{card_state}_{card_token}",
+            ):
+                st.markdown(
+                    _voice_card_html(item, card_preview_text),
+                    unsafe_allow_html=True,
+                )
+                action_cols = st.columns(2, gap="small")
+                with action_cols[0]:
+                    select_label = tr("Selected") if is_selected else tr("Use")
+                    if st.button(
+                        select_label,
+                        key=f"voice_select_{card_token}",
+                        use_container_width=True,
+                    ):
+                        st.session_state["voice_gallery_selected"] = item["id"]
+                        st.session_state["voice_gallery_selected_language"] = item[
+                            "language_code"
+                        ]
+                        config.ui["voice_name"] = item["id"]
+                        if language_filter == "all":
+                            _sync_voice_preview_language()
+                        st.rerun()
+                with action_cols[1]:
+                    if st.button(
+                        tr("Listen"),
+                        key=f"voice_listen_{card_token}",
+                        use_container_width=True,
+                    ):
+                        preview_request = (item["id"], card_preview_text)
+    with nav_cols[4]:
+        st.markdown(
+            '<span class="voice-gallery-arrow-col" style="display:none"></span>',
+            unsafe_allow_html=True,
+        )
+        if (
+            page < total_pages - 1
+            and st.button("▶", key="voice_page_next", use_container_width=True)
+        ):
+            st.session_state["voice_gallery_page"] = page + 1
+            st.rerun()
+
+    st.markdown(
+        f'<div class="voice-gallery-page">{page + 1} / {total_pages}</div>',
+        unsafe_allow_html=True,
+    )
+    if preview_request:
+        _synthesize_voice_preview(
+            preview_request[0],
+            preview_request[1],
+            config.app.get("voice_rate", 1.0),
+            config.app.get("voice_volume", 1.0),
+        )
+    preview_audio = st.session_state.get("voice_preview_audio")
+    if preview_audio:
+        with st.container(key="voice_preview_player"):
+            st.audio(preview_audio, format="audio/mp3", autoplay=True)
+
+    params.voice_name = st.session_state["voice_gallery_selected"]
+    config.ui["voice_name"] = params.voice_name
+    return params.voice_name
+
+
+def render_font_gallery(params):
+    fonts = [f for f in get_all_fonts() if f.endswith(".ttf")]
+    if not fonts:
+        params.font_name = ""
+        return
+
+    if "selected_font" not in st.session_state:
+        st.session_state["selected_font"] = (
+            config.ui.get("font_name") or params.font_name or fonts[0]
+        )
+    selected = st.session_state["selected_font"]
+    if selected not in fonts:
+        selected = fonts[0]
+        st.session_state["selected_font"] = selected
+    # VideoParams is recreated on every Streamlit rerun. Keep the effective
+    # render value aligned with the card that remains selected in the UI.
+    params.font_name = selected
+    config.ui["font_name"] = selected
+    total_pages = max(1, (len(fonts) + 2) // 3)
+    if "font_page_initialized" not in st.session_state:
+        st.session_state["font_page"] = fonts.index(selected) // 3
+        st.session_state["font_page_initialized"] = True
+    page = st.session_state.get("font_page", 0)
+    if page >= total_pages:
+        page = total_pages - 1
+        st.session_state["font_page"] = page
+
+    start = page * 3
+    end = min(start + 3, len(fonts))
+    page_fonts = fonts[start:end]
+
+    previews = _get_font_preview_images_v2("transparent-v1")
+
+    cols = st.columns([0.5, 3, 3, 3, 0.5], gap="small")
+
+    with cols[0]:
+        st.markdown(
+            '<span class="font-gallery-arrow-col" style="display:none"></span>',
+            unsafe_allow_html=True,
+        )
+        if page > 0:
+            st.button("◀", key="font_prev",
+                       on_click=lambda: st.session_state.update(font_page=page - 1))
+
+    for i in range(3):
+        with cols[i + 1]:
+            if i < len(page_fonts):
+                font_name = page_fonts[i]
+                is_sel = font_name == selected
+                card_state = "selected" if is_sel else "idle"
+                with st.container(
+                    border=True,
+                    key=f"font_card_{card_state}_{i}",
+                ):
+                    if font_name in previews:
+                        st.markdown(
+                            _font_card_html(font_name, previews[font_name], is_sel),
+                            unsafe_allow_html=True,
+                        )
+                    _, btn_col, _ = st.columns([0.5, 3, 0.5])
+                    with btn_col:
+                        button_label = "Seleccionada" if is_sel else "Usar"
+                        if st.button(
+                            button_label,
+                            key=f"font_use_{font_name}",
+                            use_container_width=True,
+                        ):
+                            params.font_name = font_name
+                            st.session_state["selected_font"] = font_name
+                            config.ui["font_name"] = font_name
+                            st.rerun()
+            else:
+                st.markdown("<div style='min-height:220px'></div>", unsafe_allow_html=True)
+
+    with cols[4]:
+        st.markdown(
+            '<span class="font-gallery-arrow-col" style="display:none"></span>',
+            unsafe_allow_html=True,
+        )
+        if page < total_pages - 1:
+            st.button("▶", key="font_next",
+                       on_click=lambda: st.session_state.update(font_page=page + 1))
+
+    if total_pages > 1:
+        dots = " ".join("●" if i == page else "○" for i in range(total_pages))
+        st.markdown(
+            f'<div style="text-align:center;font-size:12px;color:#888;margin-top:4px;">{dots}</div>',
+            unsafe_allow_html=True,
+        )
 
 def open_task_folder(task_id):
     try:
@@ -233,6 +909,13 @@ locales = utils.load_locales(i18n_dir)
 def tr(key):
     loc = locales.get(st.session_state["ui_language"], {})
     return loc.get("Translation", {}).get(key, key)
+
+
+def _is_llm_provider_enabled(provider_id: str) -> bool:
+    if provider_id == "g4f":
+        return bool(config.app.get("allow_g4f_provider", False))
+    return True
+
 
 @st.cache_data(ttl=300, show_spinner=False)
 def get_groq_model_ids(api_key: str, base_url: str) -> list[str]:
@@ -319,13 +1002,26 @@ if not config.app.get("hide_config", False):
                 ("Pollinations", "pollinations"),
                 ("LiteLLM", "litellm"),
             ]
-            llm_provider_labels = [label for label, _ in llm_provider_options]
+            enabled_llm_provider_options = [
+                option
+                for option in llm_provider_options
+                if _is_llm_provider_enabled(option[1])
+            ]
+            disabled_llm_provider_options = [
+                option
+                for option in llm_provider_options
+                if not _is_llm_provider_enabled(option[1])
+            ]
+            llm_provider_labels = [
+                label for label, _ in enabled_llm_provider_options
+            ]
             llm_provider_values = {
-                label: provider_id for label, provider_id in llm_provider_options
+                label: provider_id
+                for label, provider_id in enabled_llm_provider_options
             }
             saved_llm_provider = config.app.get("llm_provider", "openai").lower()
             saved_llm_provider_index = 0
-            for i, (_, provider_id) in enumerate(llm_provider_options):
+            for i, (_, provider_id) in enumerate(enabled_llm_provider_options):
                 if provider_id == saved_llm_provider:
                     saved_llm_provider_index = i
                     break
@@ -338,6 +1034,16 @@ if not config.app.get("hide_config", False):
             llm_helper = st.container()
             llm_provider = llm_provider_values[llm_provider_label]
             config.app["llm_provider"] = llm_provider
+
+            if disabled_llm_provider_options:
+                st.caption(tr("Unavailable providers"))
+                for label, provider_id in disabled_llm_provider_options:
+                    st.button(
+                        f"{label} ({tr('Disabled')})",
+                        key=f"disabled_llm_provider_{provider_id}",
+                        disabled=True,
+                        use_container_width=True,
+                    )
 
             # Panel avanzado de proveedores LLM. Se mantiene en un expander para no
             # sobrecargar la interfaz principal. Usa literales (sin tr()) a propósito
@@ -358,7 +1064,9 @@ if not config.app.get("hide_config", False):
                 )
 
                 fallback_candidates = [
-                    pid for _, pid in llm_provider_options if pid != llm_provider
+                    pid
+                    for _, pid in enabled_llm_provider_options
+                    if pid != llm_provider
                 ]
                 saved_fallback = config.app.get("llm_fallback_providers", []) or []
                 if isinstance(saved_fallback, str):
@@ -507,7 +1215,7 @@ if not config.app.get("hide_config", False):
 
             if llm_provider == "gemini":
                 if not llm_model_name:
-                    llm_model_name = "gemini-2.5-flash"
+                    llm_model_name = "gemini-3.1-flash-lite"
 
                 with llm_helper:
                     tips = """
@@ -732,12 +1440,6 @@ if not config.app.get("hide_config", False):
             )
             save_keys_to_config("coverr_api_keys", coverr_api_key)
 
-llm_provider = config.app.get("llm_provider", "").lower()
-panel = st.columns(3)
-left_panel = panel[0]
-middle_panel = panel[1]
-right_panel = panel[2]
-
 params = VideoParams(video_subject="")
 params.match_materials_to_script = bool(
     st.session_state.get("match_materials_to_script", False)
@@ -745,7 +1447,8 @@ params.match_materials_to_script = bool(
 uploaded_files = []
 uploaded_audio_file = None
 
-with left_panel:
+
+def render_script_section(params):
     with st.container(border=True):
         st.write(tr("Video Script Settings"))
         params.video_subject = st.text_input(
@@ -762,12 +1465,8 @@ with left_panel:
         selected_index = st.selectbox(
             tr("Script Language"),
             index=0,
-            options=range(
-                len(video_languages)
-            ),  # Use the index as the internal option value
-            format_func=lambda x: video_languages[x][
-                0
-            ],  # The label is displayed to the user
+            options=range(len(video_languages)),
+            format_func=lambda x: video_languages[x][0],
         )
         params.video_language = video_languages[selected_index][1]
 
@@ -852,7 +1551,9 @@ with left_panel:
             tr("Video Keywords"), value=st.session_state["video_terms"]
         )
 
-with middle_panel:
+
+def render_video_settings_section(params):
+    global uploaded_files
     with st.container(border=True):
         st.write(tr("Video Settings"))
         video_concat_modes = [
@@ -864,10 +1565,14 @@ with middle_panel:
             (tr("Pixabay"), "pixabay"),
             (tr("Coverr"), "coverr"),
             (tr("Local file"), "local"),
+            (tr("Local Folder"), "local_folder"),
         ]
 
         saved_video_source_name = config.app.get("video_source", "pexels")
-        saved_video_source_index = [v[1] for v in video_sources].index(
+        saved_video_source_names = [v[1] for v in video_sources]
+        if saved_video_source_name not in saved_video_source_names:
+            saved_video_source_name = "pexels"
+        saved_video_source_index = saved_video_source_names.index(
             saved_video_source_name
         )
 
@@ -881,7 +1586,6 @@ with middle_panel:
         config.app["video_source"] = params.video_source
 
         if params.video_source == "local":
-            # Streamlit 的文件类型校验对扩展名大小写敏感，这里同时放行大小写两种形式。
             local_file_types = ["mp4", "mov", "avi", "flv", "mkv", "jpg", "jpeg", "png"]
             uploaded_files = st.file_uploader(
                 tr("Upload Local Files"),
@@ -889,21 +1593,35 @@ with middle_panel:
                 accept_multiple_files=True,
             )
 
+        if params.video_source == "local_folder":
+            local_folder_path = utils.storage_dir("local_videos", create=True)
+            folder_files = []
+            for f in os.listdir(local_folder_path):
+                ext = os.path.splitext(f)[1].lower()
+                if ext in [".mp4", ".mov", ".avi", ".flv", ".mkv", ".jpg", ".jpeg", ".png"]:
+                    folder_files.append(f)
+            folder_files.sort()
+            if folder_files:
+                selected_folder = st.multiselect(
+                    tr("Select from Local Videos"),
+                    options=folder_files,
+                    default=st.session_state.get("selected_folder_files", []),
+                    key="selected_folder_files",
+                )
+            else:
+                st.info(tr("No videos found in local directory. Upload files first using 'Local file' source."))
+                selected_folder = []
+
         selected_index = st.selectbox(
             tr("Video Concat Mode"),
             index=1,
-            options=range(
-                len(video_concat_modes)
-            ),  # Use the index as the internal option value
-            format_func=lambda x: video_concat_modes[x][
-                0
-            ],  # The label is displayed to the user
+            options=range(len(video_concat_modes)),
+            format_func=lambda x: video_concat_modes[x][0],
         )
         params.video_concat_mode = VideoConcatMode(
             video_concat_modes[selected_index][1]
         )
 
-        # 视频转场模式
         video_transition_modes = [
             (tr("None"), VideoTransitionMode.none.value),
             (tr("Shuffle"), VideoTransitionMode.shuffle.value),
@@ -926,38 +1644,36 @@ with middle_panel:
             (tr("Portrait"), VideoAspect.portrait.value),
             (tr("Landscape"), VideoAspect.landscape.value),
         ]
-        # Coverr 库 99% 是 16:9 横屏,默认竖屏会让画面被大量黑边包围。
-        # 用 source-specific widget key 让每个 source 各自记忆 aspect 选择:
-        #   - 首次切到 coverr → 默认 Landscape(index=1)
-        #   - 其他 source 沿用 Portrait(index=0)
-        #   - 用户在某 source 下手动改过 aspect,session_state 会记住,
-        #     下次回到同一 source 时尊重用户选择,不会再被强制覆盖。
         default_aspect_index = 1 if params.video_source == "coverr" else 0
         selected_index = st.selectbox(
             tr("Video Ratio"),
-            options=range(
-                len(video_aspect_ratios)
-            ),  # Use the index as the internal option value
-            format_func=lambda x: video_aspect_ratios[x][
-                0
-            ],  # The label is displayed to the user
+            options=range(len(video_aspect_ratios)),
+            format_func=lambda x: video_aspect_ratios[x][0],
             index=default_aspect_index,
             key=f"video_aspect_for_{params.video_source}",
         )
         params.video_aspect = VideoAspect(video_aspect_ratios[selected_index][1])
 
+        saved_clip_dur = config.app.get("video_clip_duration", 5)
+        clip_dur_options = [2, 3, 4, 5, 6, 7, 8, 9, 10]
+        clip_dur_index = 1
+        if saved_clip_dur in clip_dur_options:
+            clip_dur_index = clip_dur_options.index(saved_clip_dur)
         params.video_clip_duration = st.selectbox(
-            tr("Clip Duration"), options=[2, 3, 4, 5, 6, 7, 8, 9, 10], index=1
+            tr("Clip Duration"), options=clip_dur_options, index=clip_dur_index
         )
+        saved_video_count = config.app.get("video_count", 1)
+        video_count_options = [1, 2, 3, 4, 5]
+        video_count_index = 0
+        if saved_video_count in video_count_options:
+            video_count_index = video_count_options.index(saved_video_count)
         params.video_count = st.selectbox(
             tr("Number of Videos Generated Simultaneously"),
-            options=[1, 2, 3, 4, 5],
-            index=0,
+            options=video_count_options,
+            index=video_count_index,
         )
 
         with st.expander(tr("Advanced Video Settings"), expanded=False):
-            # 默认关闭，避免影响老用户的随机素材体验。开启后只改变关键词和素材
-            # 下载/拼接顺序，用于改善画面主题早于或晚于旁白的问题。
             params.match_materials_to_script = st.checkbox(
                 tr("Match Materials to Script Order"),
                 help=tr("Match Materials to Script Order Help"),
@@ -986,10 +1702,13 @@ with middle_panel:
                 help=tr("Video Encoder Help"),
             )
             config.app["video_codec"] = video_codec_options[selected_codec_index][1]
+
+
+def render_audio_settings_section(params, show_bgm_preview=False):
+    global uploaded_audio_file
     with st.container(border=True):
         st.write(tr("Audio Settings"))
 
-        # 添加TTS服务器选择下拉框
         tts_servers = [
             (voice.NO_VOICE_NAME, tr("No Voice")),
             ("azure-tts-v1", "Azure TTS V1"),
@@ -1076,20 +1795,28 @@ with middle_panel:
             saved_voice_name_index = 0
 
         # 确保有声音可选
+        voice_name = ""
         if friendly_names:
-            selected_friendly_name = st.selectbox(
-                tr("Speech Synthesis"),
-                options=list(friendly_names.values()),
-                index=min(saved_voice_name_index, len(friendly_names) - 1)
-                if friendly_names
-                else 0,
-            )
-
-            voice_name = list(friendly_names.keys())[
-                list(friendly_names.values()).index(selected_friendly_name)
-            ]
-            params.voice_name = voice_name
-            config.ui["voice_name"] = voice_name
+            if (
+                st.session_state.get("layout_mode") == "slices"
+                and selected_tts_server != voice.NO_VOICE_NAME
+            ):
+                voice_name = render_voice_gallery(
+                    filtered_voices,
+                    params,
+                    selected_tts_server,
+                )
+            else:
+                selected_friendly_name = st.selectbox(
+                    tr("Speech Synthesis"),
+                    options=list(friendly_names.values()),
+                    index=min(saved_voice_name_index, len(friendly_names) - 1),
+                )
+                voice_name = list(friendly_names.keys())[
+                    list(friendly_names.values()).index(selected_friendly_name)
+                ]
+                params.voice_name = voice_name
+                config.ui["voice_name"] = voice_name
         else:
             # 如果没有声音可选，显示提示信息
             st.warning(
@@ -1103,39 +1830,20 @@ with middle_panel:
         # 无配音模式会生成静音占位音频，不展示试听按钮，避免用户误以为需要测试声音。
         if (
             friendly_names
+            and st.session_state.get("layout_mode") != "slices"
             and selected_tts_server != voice.NO_VOICE_NAME
             and st.button(tr("Play Voice"))
         ):
-            play_content = params.video_subject
-            if not play_content:
-                play_content = params.video_script
-            if not play_content:
-                play_content = tr("Voice Example")
-            with st.spinner(tr("Synthesizing Voice")):
-                temp_dir = utils.storage_dir("temp", create=True)
-                audio_file = os.path.join(temp_dir, f"tmp-voice-{str(uuid4())}.mp3")
-                sub_maker = voice.tts(
-                    text=play_content,
-                    voice_name=voice_name,
-                    voice_rate=params.voice_rate,
-                    voice_file=audio_file,
-                    voice_volume=params.voice_volume,
-                )
-                # if the voice file generation failed, try again with a default content.
-                if not sub_maker:
-                    play_content = "This is a example voice. if you hear this, the voice synthesis failed with the original content."
-                    sub_maker = voice.tts(
-                        text=play_content,
-                        voice_name=voice_name,
-                        voice_rate=params.voice_rate,
-                        voice_file=audio_file,
-                        voice_volume=params.voice_volume,
-                    )
-
-                if sub_maker and os.path.exists(audio_file):
-                    st.audio(audio_file, format="audio/mp3")
-                    if os.path.exists(audio_file):
-                        os.remove(audio_file)
+            play_content = params.video_subject or params.video_script or tr("Voice Example")
+            _synthesize_voice_preview(
+                voice_name,
+                play_content,
+                config.app.get("voice_rate", 1.0),
+                config.app.get("voice_volume", 1.0),
+            )
+            preview_audio = st.session_state.get("voice_preview_audio")
+            if preview_audio:
+                st.audio(preview_audio, format="audio/mp3")
 
         # 当选择V2版本或者声音是V2声音时，显示服务区域和API key输入框
         if selected_tts_server == "azure-tts-v2" or (
@@ -1209,16 +1917,26 @@ with middle_panel:
 
             config.app["mimo_api_key"] = mimo_api_key
 
+        saved_voice_volume = config.app.get("voice_volume", 1.0)
+        volume_options = [0.6, 0.8, 1.0, 1.2, 1.5, 2.0, 3.0, 4.0, 5.0]
+        volume_index = 2
+        if saved_voice_volume in volume_options:
+            volume_index = volume_options.index(saved_voice_volume)
         params.voice_volume = st.selectbox(
             tr("Speech Volume"),
-            options=[0.6, 0.8, 1.0, 1.2, 1.5, 2.0, 3.0, 4.0, 5.0],
-            index=2,
+            options=volume_options,
+            index=volume_index,
         )
 
+        saved_voice_rate = config.app.get("voice_rate", 1.0)
+        rate_options = [0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.5, 1.8, 2.0]
+        rate_index = 2
+        if saved_voice_rate in rate_options:
+            rate_index = rate_options.index(saved_voice_rate)
         params.voice_rate = st.selectbox(
             tr("Speech Rate"),
-            options=[0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.5, 1.8, 2.0],
-            index=2,
+            options=rate_options,
+            index=rate_index,
         )
 
         custom_audio_file_types = ["mp3", "wav", "m4a", "aac", "flac", "ogg"]
@@ -1237,160 +1955,393 @@ with middle_panel:
                 )
             )
 
-        bgm_options = [
-            (tr("No Background Music"), ""),
-            (tr("Random Background Music"), "random"),
-            (tr("Custom Background Music"), "custom"),
-        ]
-        selected_index = st.selectbox(
+        saved_bgm_type = config.ui.get("bgm_type", "random")
+        song_list = get_all_songs_with_path()
+        song_names = [s["name"] for s in song_list]
+        bgm_dropdown_options = [tr("None"), tr("Random")] + song_names
+        saved_bgm_index = 1
+        if saved_bgm_type == "none":
+            saved_bgm_index = 0
+        elif saved_bgm_type == "random":
+            saved_bgm_index = 1
+        elif saved_bgm_type in song_names:
+            saved_bgm_index = bgm_dropdown_options.index(saved_bgm_type)
+        selected_bgm = st.selectbox(
             tr("Background Music"),
-            index=1,
-            options=range(
-                len(bgm_options)
-            ),  # Use the index as the internal option value
-            format_func=lambda x: bgm_options[x][
-                0
-            ],  # The label is displayed to the user
+            options=bgm_dropdown_options,
+            index=saved_bgm_index,
+            key="bgm_song_select",
         )
-        # Get the selected background music type
-        params.bgm_type = bgm_options[selected_index][1]
-
-        # Show or hide components based on the selection
-        if params.bgm_type == "custom":
-            custom_bgm_file = st.text_input(
-                tr("Custom Background Music File"), key="custom_bgm_file_input"
-            )
-            if custom_bgm_file:
-                # 这里不直接用 os.path.exists 判断，因为用户常见输入是
-                # output000.mp3，这个文件名需要由服务层映射到 resource/songs
-                # 目录后再校验。服务层会统一限制目录和文件类型，避免任意路径读取。
-                params.bgm_file = custom_bgm_file.strip()
-                # st.write(f":red[已选择自定义背景音乐]：**{custom_bgm_file}**")
+        if selected_bgm == tr("None"):
+            params.bgm_type = "none"
+            params.bgm_file = ""
+        elif selected_bgm == tr("Random"):
+            params.bgm_type = "random"
+            params.bgm_file = ""
+        else:
+            params.bgm_type = "custom"
+            params.bgm_file = selected_bgm
+            selected_song_path = None
+            for s in song_list:
+                if s["name"] == selected_bgm:
+                    selected_song_path = s["path"]
+                    break
+            if selected_song_path and os.path.isfile(selected_song_path):
+                st.audio(selected_song_path, format="audio/mp3")
+        config.ui["bgm_type"] = params.bgm_type
+        saved_bgm_volume = config.app.get("bgm_volume", 0.2)
+        bgm_vol_options = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+        bgm_vol_index = 2
+        if saved_bgm_volume in bgm_vol_options:
+            bgm_vol_index = bgm_vol_options.index(saved_bgm_volume)
         params.bgm_volume = st.selectbox(
             tr("Background Music Volume"),
-            options=[0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
-            index=2,
+            options=bgm_vol_options,
+            index=bgm_vol_index,
         )
 
-with right_panel:
+def render_subtitle_settings_section(params):
     with st.container(border=True):
         st.write(tr("Subtitle Settings"))
         params.subtitle_enabled = st.checkbox(tr("Enable Subtitles"), value=True)
-        font_names = get_all_fonts()
-        saved_font_name = config.ui.get("font_name", "MicrosoftYaHeiBold.ttc")
-        saved_font_name_index = 0
-        if saved_font_name in font_names:
-            saved_font_name_index = font_names.index(saved_font_name)
-        params.font_name = st.selectbox(
-            tr("Font"), font_names, index=saved_font_name_index
-        )
-        config.ui["font_name"] = params.font_name
 
-        subtitle_positions = [
-            (tr("Top"), "top"),
-            (tr("Center"), "center"),
-            (tr("Bottom"), "bottom"),
-            (tr("Custom"), "custom"),
-        ]
-        saved_subtitle_position = config.ui.get("subtitle_position", "bottom")
-        saved_position_index = 2
-        for i, (_, pos_value) in enumerate(subtitle_positions):
-            if pos_value == saved_subtitle_position:
-                saved_position_index = i
-                break
-        selected_index = st.selectbox(
-            tr("Position"),
-            index=saved_position_index,
-            options=range(len(subtitle_positions)),
-            format_func=lambda x: subtitle_positions[x][0],
-        )
-        params.subtitle_position = subtitle_positions[selected_index][1]
-        config.ui["subtitle_position"] = params.subtitle_position
-
-        if params.subtitle_position == "custom":
-            saved_custom_position = config.ui.get("custom_position", 70.0)
-            custom_position = st.text_input(
-                tr("Custom Position (% from top)"),
-                value=str(saved_custom_position),
-                key="custom_position_input",
+        if st.session_state.get("layout_mode") == "slices":
+            render_font_gallery(params)
+        else:
+            font_names = get_all_fonts()
+            saved_font_name = config.ui.get("font_name", "Charm-Regular.ttf")
+            saved_font_name_index = 0
+            if saved_font_name in font_names:
+                saved_font_name_index = font_names.index(saved_font_name)
+            params.font_name = st.selectbox(
+                tr("Font"), font_names, index=saved_font_name_index
             )
-            try:
-                params.custom_position = float(custom_position)
-                if params.custom_position < 0 or params.custom_position > 100:
-                    st.error(tr("Please enter a value between 0 and 100"))
-                else:
-                    config.ui["custom_position"] = params.custom_position
-            except ValueError:
-                st.error(tr("Please enter a valid number"))
+            config.ui["font_name"] = params.font_name
 
-        font_cols = st.columns([0.3, 0.7])
-        with font_cols[0]:
-            saved_text_fore_color = config.ui.get("text_fore_color", "#FFFFFF")
-            params.text_fore_color = st.color_picker(
-                tr("Font Color"), saved_text_fore_color
+        st.divider()
+
+        with st.container(border=True, key="subtitle_position_group"):
+            subtitle_positions = [
+                (tr("Top"), "top"),
+                (tr("Center"), "center"),
+                (tr("Bottom"), "bottom"),
+                (tr("Custom"), "custom"),
+            ]
+            saved_subtitle_position = config.ui.get("subtitle_position", "bottom")
+            saved_position_index = 2
+            for i, (_, pos_value) in enumerate(subtitle_positions):
+                if pos_value == saved_subtitle_position:
+                    saved_position_index = i
+                    break
+            selected_index = st.selectbox(
+                tr("Position"),
+                index=saved_position_index,
+                options=range(len(subtitle_positions)),
+                format_func=lambda x: subtitle_positions[x][0],
             )
-            config.ui["text_fore_color"] = params.text_fore_color
+            params.subtitle_position = subtitle_positions[selected_index][1]
+            config.ui["subtitle_position"] = params.subtitle_position
 
-        with font_cols[1]:
-            saved_font_size = config.ui.get("font_size", 60)
-            params.font_size = st.slider(tr("Font Size"), 30, 100, saved_font_size)
-            config.ui["font_size"] = params.font_size
+            if params.subtitle_position == "custom":
+                saved_custom_position = config.ui.get("custom_position", 70.0)
+                custom_position = st.text_input(
+                    tr("Custom Position (% from top)"),
+                    value=str(saved_custom_position),
+                    key="custom_position_input",
+                )
+                try:
+                    params.custom_position = float(custom_position)
+                    if params.custom_position < 0 or params.custom_position > 100:
+                        st.error(tr("Please enter a value between 0 and 100"))
+                    else:
+                        config.ui["custom_position"] = params.custom_position
+                except ValueError:
+                    st.error(tr("Please enter a valid number"))
 
-        stroke_cols = st.columns([0.3, 0.7])
-        with stroke_cols[0]:
-            params.stroke_color = st.color_picker(tr("Stroke Color"), "#000000")
-        with stroke_cols[1]:
-            params.stroke_width = st.slider(tr("Stroke Width"), 0.0, 10.0, 1.5)
+        appearance_cols = st.columns(2, gap="large")
+        with appearance_cols[0]:
+            with st.container(border=True, key="subtitle_font_group"):
+                st.markdown(f"**{tr('Font')}**")
+                font_controls = st.columns([1, 3], vertical_alignment="bottom")
+                with font_controls[0]:
+                    saved_text_fore_color = config.ui.get(
+                        "text_fore_color", "#FFFFFF"
+                    )
+                    params.text_fore_color = _centered_color_picker(
+                        tr("Font Color"),
+                        saved_text_fore_color,
+                        key="subtitle_font_color_picker",
+                    )
+                    config.ui["text_fore_color"] = params.text_fore_color
+                with font_controls[1]:
+                    saved_font_size = config.ui.get("font_size", 60)
+                    params.font_size = _centered_slider(
+                        tr("Font Size"),
+                        30,
+                        100,
+                        saved_font_size,
+                        key="subtitle_font_size_slider",
+                    )
+                    config.ui["font_size"] = params.font_size
 
-        subtitle_bg_cols = st.columns([0.4, 0.6])
+        with appearance_cols[1]:
+            with st.container(border=True, key="subtitle_stroke_group"):
+                st.markdown(f"**{tr('Stroke Color')}**")
+                stroke_controls = st.columns([1, 3], vertical_alignment="bottom")
+                with stroke_controls[0]:
+                    params.stroke_color = _centered_color_picker(
+                        tr("Stroke Color"),
+                        "#000000",
+                        key="subtitle_stroke_color_picker",
+                    )
+                with stroke_controls[1]:
+                    params.stroke_width = _centered_slider(
+                        tr("Stroke Width"),
+                        0.0,
+                        10.0,
+                        1.5,
+                        key="subtitle_stroke_width_slider",
+                    )
+
         saved_subtitle_background_enabled = config.ui.get(
             "subtitle_background_enabled", True
         )
-        with subtitle_bg_cols[0]:
-            subtitle_background_enabled = st.checkbox(
-                tr("Enable Subtitle Background"),
-                value=saved_subtitle_background_enabled,
+        with st.container(border=True, key="subtitle_background_group"):
+            saved_rounded_subtitle_background = config.ui.get(
+                "rounded_subtitle_background", False
             )
-        config.ui["subtitle_background_enabled"] = subtitle_background_enabled
-        if subtitle_background_enabled:
-            with subtitle_bg_cols[1]:
-                saved_subtitle_background_color = config.ui.get(
-                    "subtitle_background_color", "#000000"
+            background_toggles = st.columns(2, gap="large")
+            with background_toggles[0]:
+                subtitle_background_enabled = st.checkbox(
+                    tr("Enable Subtitle Background"),
+                    value=saved_subtitle_background_enabled,
                 )
-                params.text_background_color = st.color_picker(
-                    tr("Subtitle Background Color"),
-                    saved_subtitle_background_color,
-                )
-                config.ui["subtitle_background_color"] = params.text_background_color
-        else:
-            params.text_background_color = False
+            config.ui["subtitle_background_enabled"] = subtitle_background_enabled
 
-        saved_rounded_subtitle_background = config.ui.get(
-            "rounded_subtitle_background", False
-        )
-        # 背景关闭时，圆角背景没有可渲染的底色。这里禁用控件并保留原配置，
-        # 用户下次重新开启字幕背景后，可以继续使用之前保存的圆角偏好。
-        params.rounded_subtitle_background = st.checkbox(
-            tr("Rounded Subtitle Background"),
-            value=(
-                saved_rounded_subtitle_background
-                if subtitle_background_enabled
-                else False
-            ),
-            help=tr("Rounded Subtitle Background Help"),
-            disabled=not subtitle_background_enabled,
-        )
-        if subtitle_background_enabled:
-            config.ui["rounded_subtitle_background"] = (
-                params.rounded_subtitle_background
+            with background_toggles[1]:
+                params.rounded_subtitle_background = st.checkbox(
+                    tr("Rounded Subtitle Background"),
+                    value=(
+                        saved_rounded_subtitle_background
+                        if subtitle_background_enabled
+                        else False
+                    ),
+                    help=tr("Rounded Subtitle Background Help"),
+                    disabled=not subtitle_background_enabled,
+                )
+
+            saved_subtitle_background_color = config.ui.get(
+                "subtitle_background_color", "#000000"
             )
-    def _mask_api_key(key: str) -> str:
-        """Return a masked key showing only the last 4 characters."""
-        if not key:
-            return ""
-        suffix = key[-4:] if len(key) >= 4 else key
-        return f"****{suffix}"
+            selected_background_color = _centered_color_picker(
+                tr("Subtitle Background Color"),
+                saved_subtitle_background_color,
+                key="subtitle_background_color_picker",
+                disabled=not subtitle_background_enabled,
+            )
+            if subtitle_background_enabled:
+                params.text_background_color = selected_background_color
+                config.ui["subtitle_background_color"] = selected_background_color
+                config.ui["rounded_subtitle_background"] = (
+                    params.rounded_subtitle_background
+                )
+            else:
+                params.text_background_color = False
 
+
+def render_publish_section(params):
+    with st.container(border=True):
+        st.write(tr("Upload / Post"))
+        col1, col2 = st.columns(2)
+        with col1:
+            saved_enabled = config.app.get("upload_post_enabled", False)
+            upload_enabled = st.checkbox(
+                tr("Enable Upload-Post"),
+                value=saved_enabled,
+                key="upload_post_enabled_checkbox",
+            )
+            config.app["upload_post_enabled"] = upload_enabled
+        with col2:
+            saved_auto = config.app.get("upload_post_auto_upload", False)
+            auto_upload = st.checkbox(
+                tr("Auto upload after generation"),
+                value=saved_auto,
+                key="upload_post_auto_checkbox",
+            )
+            config.app["upload_post_auto_upload"] = auto_upload
+
+        if upload_enabled:
+            saved_api_key = config.app.get("upload_post_api_key", "")
+            saved_username = config.app.get("upload_post_username", "")
+            saved_platforms = config.app.get(
+                "upload_post_platforms", ["tiktok", "instagram"]
+            )
+
+            upload_api_key = st.text_input(
+                tr("Upload-Post API Key"),
+                value=saved_api_key,
+                type="password",
+                key="upload_post_api_key_input",
+            )
+            upload_username = st.text_input(
+                tr("Upload-Post Username"),
+                value=saved_username,
+                key="upload_post_username_input",
+            )
+            platform_options = ["tiktok", "instagram"]
+            selected_platforms = st.multiselect(
+                tr("Platforms"),
+                options=platform_options,
+                default=[p for p in saved_platforms if p in platform_options],
+                key="upload_post_platforms_select",
+            )
+            config.app["upload_post_api_key"] = upload_api_key
+            config.app["upload_post_username"] = upload_username
+            config.app["upload_post_platforms"] = selected_platforms
+
+
+def render_quality_section(params):
+    with st.expander(tr("Personal Quality"), expanded=False):
+        quality_enabled = st.checkbox(
+            tr("Enable quality enhancements"),
+            value=bool(config.quality.get("enabled", False)),
+            help=tr("Optional. When off, the video is generated exactly as before."),
+        )
+        params.quality_enabled = quality_enabled
+        if quality_enabled:
+            _q_profiles = ["fast", "balanced", "high", "archival"]
+            _q_platforms = ["shorts", "reels", "tiktok", "landscape"]
+            _q_styles = ["classic", "clean", "premium", "karaoke", "documentary"]
+
+            def _q_index(options, value, fallback):
+                return options.index(value) if value in options else fallback
+
+            q_cols = st.columns(3)
+            with q_cols[0]:
+                st.markdown(f"**{tr('Render')}**")
+                params.quality_profile = st.selectbox(
+                    tr("Quality Profile"),
+                    options=_q_profiles,
+                    index=_q_index(_q_profiles, str(config.quality.get("profile", "balanced")), 1),
+                    help=tr("Higher quality renders slower (high/archival use a lower CRF)."),
+                )
+                params.quality_target_platform = st.selectbox(
+                    tr("Target Platform"),
+                    options=_q_platforms,
+                    index=_q_index(_q_platforms, str(config.quality.get("target_platform", "shorts")), 0),
+                    help=tr("Sets the subtitle safe-area for the destination format."),
+                )
+            with q_cols[1]:
+                st.markdown(f"**{tr('Subtitles')}**")
+                params.quality_subtitle_style = st.selectbox(
+                    tr("Subtitle Style"),
+                    options=_q_styles,
+                    index=_q_index(_q_styles, str(config.quality.get("subtitle_style", "premium")), 2),
+                )
+                params.quality_word_highlight = st.checkbox(
+                    tr("Word Highlight (karaoke)"),
+                    value=bool(config.quality.get("word_highlight", False)),
+                    help=tr("Saves per-word timing; falls back to phrase subtitles if unavailable."),
+                )
+            with q_cols[2]:
+                st.markdown(f"**{tr('Content & material')}**")
+                params.quality_language = st.text_input(
+                    tr("Content Language"),
+                    value=str(config.quality.get("language", "es")),
+                )
+                params.quality_prefer_local_assets = st.checkbox(
+                    tr("Prefer Local Material Library"),
+                    value=bool(config.quality.get("prefer_local_assets", True)),
+                    help=tr("Use your indexed local clips before downloading stock."),
+                )
+                params.quality_content_package = st.checkbox(
+                    tr("Spanish Content Package"),
+                    value=bool(config.quality.get("content_package", False)),
+                    help=tr("Also generate title, description, hashtags and a review checklist."),
+                )
+
+        if _LOCAL_LIB_AVAILABLE:
+            st.markdown("---")
+            st.markdown(f"**{tr('Local Material Library')}**")
+            _lib_conn = None
+            try:
+                _lib_conn = _local_lib.connect(_local_lib_db_path())
+                _lib_entries = _local_lib.all_entries(_lib_conn)
+                _lib_total = len(_lib_entries)
+                _lib_videos = sum(1 for e in _lib_entries if e.media_type == "video")
+                _lib_images = sum(1 for e in _lib_entries if e.media_type == "image")
+                _lib_duration = sum(e.duration for e in _lib_entries)
+                if _lib_total == 0:
+                    st.info(
+                        "La biblioteca esta vacia. Agrega videos para poder usarlos en tus proyectos."
+                    )
+                else:
+                    st.markdown(
+                        f"**{_lib_total} entries** — "
+                        f"{_lib_videos} video(s), {_lib_images} image(s) — "
+                        f"{_lib_duration:.0f}s total duration"
+                    )
+                    _lib_rows = [
+                        {
+                            "path": e.path,
+                            "type": e.media_type,
+                            "duration": f"{e.duration:.1f}s",
+                            "source": e.source or "",
+                            "tags": ",".join(e.tags),
+                        }
+                        for e in _lib_entries[:50]
+                    ]
+                    st.dataframe(_lib_rows, use_container_width=True)
+
+                st.markdown(f"**{tr('Index a directory:')}**")
+                _idx_col1, _idx_col2 = st.columns([3, 1])
+                with _idx_col1:
+                    _index_dir = st.text_input(
+                        tr("Directory path"),
+                        key="lib_index_dir",
+                        placeholder="/path/to/your/videos",
+                    )
+                with _idx_col2:
+                    _index_source = st.text_input(
+                        tr("Source label"),
+                        value="user",
+                        key="lib_index_source",
+                    )
+                if st.button(tr("Index directory"), key="lib_index_btn"):
+                    if _index_dir and os.path.isdir(_index_dir):
+                        try:
+                            _idx_tags = []
+                            _idx_stats = _local_lib.index_directory(
+                                _lib_conn,
+                                _index_dir,
+                                source=_index_source,
+                                tags=_idx_tags,
+                            )
+                            st.success(
+                                f"scanned={_idx_stats['scanned']} "
+                                f"added={_idx_stats['added']} "
+                                f"updated={_idx_stats['updated']} "
+                                f"skipped={_idx_stats['skipped']}"
+                            )
+                        except Exception as _idx_exc:
+                            st.error(str(_idx_exc))
+                    else:
+                        st.error(tr("Directory not found or invalid path."))
+            except Exception as _lib_exc:
+                st.error(f"Local library error: {_lib_exc}")
+            finally:
+                if _lib_conn is not None:
+                    _lib_conn.close()
+
+
+def _mask_api_key(key: str) -> str:
+    if not key:
+        return ""
+    suffix = key[-4:] if len(key) >= 4 else key
+    return f"****{suffix}"
+
+
+def render_api_key_management():
     with st.expander(tr("Click to show API Key management"), expanded=False):
         st.subheader(tr("Manage Pexels, Pixabay and Coverr API Keys"))
 
@@ -1438,7 +2389,6 @@ with right_panel:
 
         with col2:
             st.subheader(tr("Pixabay API Keys"))
-
             if config.app["pixabay_api_keys"]:
                 st.write(tr("Current Keys:"))
                 for key in config.app["pixabay_api_keys"]:
@@ -1475,10 +2425,6 @@ with right_panel:
 
         with col3:
             st.subheader(tr("Coverr API Keys"))
-
-            # 与 pexels/pixabay 不同,coverr_api_keys 是 PR 新增配置项,
-            # 老用户的 config.toml 不一定包含,这里先兜底初始化为空列表,
-            # 防止下面 .append / 索引访问触发 KeyError。
             if "coverr_api_keys" not in config.app or config.app["coverr_api_keys"] is None:
                 config.app["coverr_api_keys"] = []
 
@@ -1516,153 +2462,55 @@ with right_panel:
                     config.save_config()
                     st.success(tr("Coverr API Key deleted successfully"))
 
-with st.expander(tr("Personal Quality"), expanded=False):
-    # Optional Personal Quality Stack overrides. Defaults read from the
-    # [quality] config; when disabled the pipeline behaves like upstream.
-    quality_enabled = st.checkbox(
-        tr("Enable quality enhancements"),
-        value=bool(config.quality.get("enabled", False)),
-        help=tr("Optional. When off, the video is generated exactly as before."),
-    )
-    params.quality_enabled = quality_enabled
-    if quality_enabled:
-        _q_profiles = ["fast", "balanced", "high", "archival"]
-        _q_platforms = ["shorts", "reels", "tiktok", "landscape"]
-        _q_styles = ["classic", "clean", "premium", "karaoke", "documentary"]
 
-        def _q_index(options, value, fallback):
-            return options.index(value) if value in options else fallback
+# ── Layout mode dispatch ────────────────────────────────────────────────────
+if st.session_state["layout_mode"] == "vertical":
+    panel = st.columns(3)
+    with panel[0]:
+        render_script_section(params)
+    with panel[1]:
+        render_video_settings_section(params)
+        render_audio_settings_section(params)
+    with panel[2]:
+        render_subtitle_settings_section(params)
+        render_publish_section(params)
+    render_quality_section(params)
+    render_api_key_management()
+else:
+    tab_labels = [
+        tr("Script"),
+        tr("Video"),
+        tr("Audio"),
+        tr("Subtitles"),
+        tr("Publish"),
+        tr("Quality"),
+    ]
+    tab_script, tab_video, tab_audio, tab_subtitles, tab_publish, tab_quality = st.tabs(tab_labels)
+    with tab_script:
+        render_script_section(params)
+    with tab_video:
+        render_video_settings_section(params)
+    with tab_audio:
+        render_audio_settings_section(params)
+    with tab_subtitles:
+        render_subtitle_settings_section(params)
+    with tab_publish:
+        render_publish_section(params)
+    with tab_quality:
+        render_quality_section(params)
+    render_api_key_management()
 
-        # Three columns grouped by what they actually control, so the layout
-        # itself signposts the options (render / subtitles / content).
-        q_cols = st.columns(3)
-        with q_cols[0]:
-            st.markdown(f"**{tr('Render')}**")
-            params.quality_profile = st.selectbox(
-                tr("Quality Profile"),
-                options=_q_profiles,
-                index=_q_index(_q_profiles, str(config.quality.get("profile", "balanced")), 1),
-                help=tr("Higher quality renders slower (high/archival use a lower CRF)."),
-            )
-            params.quality_target_platform = st.selectbox(
-                tr("Target Platform"),
-                options=_q_platforms,
-                index=_q_index(_q_platforms, str(config.quality.get("target_platform", "shorts")), 0),
-                help=tr("Sets the subtitle safe-area for the destination format."),
-            )
-            # TODO(plan-027): normalize_audio is not yet implemented in the render pipeline.
-            # Hiding the control until the feature is ready to avoid false confidence.
-            # params.quality_normalize_audio = st.checkbox(
-            #     tr("Normalize Audio"),
-            #     value=bool(config.quality.get("normalize_audio", True)),
-            # )
-        with q_cols[1]:
-            st.markdown(f"**{tr('Subtitles')}**")
-            params.quality_subtitle_style = st.selectbox(
-                tr("Subtitle Style"),
-                options=_q_styles,
-                index=_q_index(_q_styles, str(config.quality.get("subtitle_style", "premium")), 2),
-            )
-            params.quality_word_highlight = st.checkbox(
-                tr("Word Highlight (karaoke)"),
-                value=bool(config.quality.get("word_highlight", False)),
-                help=tr("Saves per-word timing; falls back to phrase subtitles if unavailable."),
-            )
-        with q_cols[2]:
-            st.markdown(f"**{tr('Content & material')}**")
-            params.quality_language = st.text_input(
-                tr("Content Language"),
-                value=str(config.quality.get("language", "es")),
-            )
-            params.quality_prefer_local_assets = st.checkbox(
-                tr("Prefer Local Material Library"),
-                value=bool(config.quality.get("prefer_local_assets", True)),
-                help=tr("Use your indexed local clips before downloading stock."),
-            )
-            params.quality_content_package = st.checkbox(
-                tr("Spanish Content Package"),
-                value=bool(config.quality.get("content_package", False)),
-                help=tr("Also generate title, description, hashtags and a review checklist."),
-            )
-
-    # ── Local Material Library panel ─────────────────────────────────────────
-    # Shown whenever the Personal Quality section is expanded, regardless of
-    # whether quality enhancements are toggled on. No nested expander — Streamlit
-    # forbids nesting expanders.
-    if _LOCAL_LIB_AVAILABLE:
-        st.markdown("---")
-        st.markdown("**Local Material Library**")
-        _lib_conn = None
-        try:
-            _lib_conn = _local_lib.connect(_local_lib_db_path())
-            _lib_entries = _local_lib.all_entries(_lib_conn)
-            _lib_total = len(_lib_entries)
-            _lib_videos = sum(1 for e in _lib_entries if e.media_type == "video")
-            _lib_images = sum(1 for e in _lib_entries if e.media_type == "image")
-            _lib_duration = sum(e.duration for e in _lib_entries)
-            if _lib_total == 0:
-                st.info(
-                    "Library is empty. Index a directory using the CLI: "
-                    "`python -m app.services.quality.library_cli index <dir>` "
-                    "or use the Index form below."
-                )
-            else:
-                st.markdown(
-                    f"**{_lib_total} entries** — "
-                    f"{_lib_videos} video(s), {_lib_images} image(s) — "
-                    f"{_lib_duration:.0f}s total duration"
-                )
-                _lib_rows = [
-                    {
-                        "path": e.path,
-                        "type": e.media_type,
-                        "duration": f"{e.duration:.1f}s",
-                        "source": e.source or "",
-                        "tags": ",".join(e.tags),
-                    }
-                    for e in _lib_entries[:50]
-                ]
-                st.dataframe(_lib_rows, use_container_width=True)
-
-            st.markdown("**Index a directory:**")
-            _idx_col1, _idx_col2 = st.columns([3, 1])
-            with _idx_col1:
-                _index_dir = st.text_input(
-                    "Directory path",
-                    key="lib_index_dir",
-                    placeholder="/path/to/your/videos",
-                )
-            with _idx_col2:
-                _index_source = st.text_input(
-                    "Source label",
-                    value="user",
-                    key="lib_index_source",
-                )
-            if st.button("Index directory", key="lib_index_btn"):
-                if _index_dir and os.path.isdir(_index_dir):
-                    try:
-                        _idx_tags = []
-                        _idx_stats = _local_lib.index_directory(
-                            _lib_conn,
-                            _index_dir,
-                            source=_index_source,
-                            tags=_idx_tags,
-                        )
-                        st.success(
-                            f"scanned={_idx_stats['scanned']} "
-                            f"added={_idx_stats['added']} "
-                            f"updated={_idx_stats['updated']} "
-                            f"skipped={_idx_stats['skipped']}"
-                        )
-                    except Exception as _idx_exc:
-                        st.error(str(_idx_exc))
-                else:
-                    st.error("Directory not found or invalid path.")
-        except Exception as _lib_exc:
-            st.error(f"Local library error: {_lib_exc}")
-        finally:
-            if _lib_conn is not None:
-                _lib_conn.close()
+# ── Persist all settings to config ──────────────────────────────────────────
+config.app["video_subject"] = st.session_state.get("video_subject", "")
+config.app["video_script"] = st.session_state.get("video_script", "")
+config.app["video_terms"] = st.session_state.get("video_terms", "")
+config.app["video_script_prompt"] = st.session_state.get("video_script_prompt", "")
+config.app["paragraph_number"] = st.session_state.get("paragraph_number_input", 1)
+config.app["voice_volume"] = params.voice_volume
+config.app["voice_rate"] = params.voice_rate
+config.app["bgm_volume"] = params.bgm_volume
+config.app["video_clip_duration"] = params.video_clip_duration
+config.app["video_count"] = params.video_count
 
 start_button = st.button(tr("Generate Video"), use_container_width=True, type="primary")
 if start_button:
@@ -1673,7 +2521,7 @@ if start_button:
         scroll_to_bottom()
         st.stop()
 
-    if params.video_source not in ["pexels", "pixabay", "coverr", "local"]:
+    if params.video_source not in ["pexels", "pixabay", "coverr", "local", "local_folder"]:
         st.error(tr("Please Select a Valid Video Source"))
         scroll_to_bottom()
         st.stop()
@@ -1709,8 +2557,18 @@ if start_button:
         # 每次重新上传时都以本次选择的素材为准，避免旧素材不断重复追加。
         params.video_materials = []
         persisted_local_materials = []
-        for file in uploaded_files:
-            file_path = os.path.join(local_videos_dir, f"{file.file_id}_{file.name}")
+        for sequence, file in enumerate(uploaded_files, start=1):
+            safe_filename = file_security.build_local_media_filename(
+                params.video_subject,
+                file.name,
+                task_id,
+                sequence,
+            )
+            file_path = file_security.resolve_path_within_directory(
+                local_videos_dir,
+                safe_filename,
+                require_file=False,
+            )
             with open(file_path, "wb") as f:
                 f.write(file.getbuffer())
                 m = MaterialInfo()
@@ -1735,6 +2593,18 @@ if start_button:
             m.url = material.get("url", "")
             m.duration = material.get("duration", 0)
             if m.url:
+                params.video_materials.append(m)
+
+    if params.video_source == "local_folder":
+        local_folder_path = utils.storage_dir("local_videos", create=True)
+        selected = st.session_state.get("selected_folder_files", [])
+        params.video_materials = []
+        for fname in selected:
+            fpath = os.path.join(local_folder_path, fname)
+            if os.path.isfile(fpath):
+                m = MaterialInfo()
+                m.provider = "local"
+                m.url = fpath
                 params.video_materials.append(m)
 
     log_container = st.empty()
@@ -1774,9 +2644,9 @@ if start_button:
     # Show quality stack sidecar download links if present
     sidecar_items = []
     for key, label in [
-        ("content_package", "Content Package (JSON)"),
-        ("manifest", "Render Manifest"),
-        ("word_timestamps", "Word Timestamps"),
+        ("content_package", tr("Content Package (JSON)")),
+        ("manifest", tr("Render Manifest")),
+        ("word_timestamps", tr("Word Timestamps")),
     ]:
         path_val = result.get(key)
         if path_val and isinstance(path_val, str) and os.path.isfile(path_val):
@@ -1790,7 +2660,7 @@ if start_button:
 
     if sidecar_items:
         st.markdown("---")
-        st.markdown("**Generated files (Quality Stack):**")
+        st.markdown(f"**{tr('Generated files (Quality Stack):')}**")
         for label, url, local_path in sidecar_items:
             if url:
                 st.markdown(f"- [{label}]({url})")

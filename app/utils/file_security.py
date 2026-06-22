@@ -1,4 +1,45 @@
 import os
+import re
+import unicodedata
+from datetime import datetime
+
+
+_ALLOWED_LOCAL_MEDIA_EXTENSIONS = {
+    ".avi",
+    ".flv",
+    ".jpeg",
+    ".jpg",
+    ".mkv",
+    ".mov",
+    ".mp4",
+    ".png",
+}
+
+
+def build_local_media_filename(
+    subject: str,
+    original_filename: str,
+    unique_id: str,
+    sequence: int,
+    *,
+    created_at: datetime | None = None,
+) -> str:
+    normalized_subject = unicodedata.normalize("NFKD", subject or "")
+    ascii_subject = normalized_subject.encode("ascii", "ignore").decode("ascii")
+    slug = re.sub(r"[^a-z0-9]+", "-", ascii_subject.lower()).strip("-")
+    slug = slug[:24].rstrip("-") or "material"
+
+    normalized_name = (original_filename or "").replace("\\", "/").split("/")[-1]
+    extension = os.path.splitext(normalized_name)[1].lower()
+    if extension not in _ALLOWED_LOCAL_MEDIA_EXTENSIONS:
+        raise ValueError("unsupported local media extension")
+
+    timestamp = (created_at or datetime.now()).strftime("%H%M%S")
+    short_id = re.sub(r"[^a-f0-9]", "", str(unique_id).lower())[:6]
+    if len(short_id) < 6:
+        raise ValueError("invalid media unique id")
+
+    return f"{slug}-{timestamp}-{sequence:02d}-{short_id}{extension}"
 
 
 def resolve_path_within_directory(

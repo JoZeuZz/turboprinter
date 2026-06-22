@@ -101,7 +101,6 @@
     "Upload Local Files": "Carregar arquivos locais",
     "Play Voice": "Reproduzir Voz",
     "Voice Example": "Este é um exemplo de texto para testar a síntese de fala",
-    "Synthesizing Voice": "Sintetizando voz, por favor aguarde...",
     "TTS Provider": "Selecione o provedor de síntese de voz",
     "TTS Servers": "Servidores TTS",
     "No voices available for the selected TTS server. Please select another server.": "Não há vozes disponíveis para o servidor TTS selecionado. Por favor, selecione outro servidor.",
@@ -181,6 +180,8 @@
     "Speed and volume are currently handled by the provider defaults": "Velocidade e volume são atualmente definidos pelos padrões do provedor",
     "Advanced Video Settings": "Configurações avançadas de vídeo",
     "Video Encoder": "Codificador de vídeo",
-    "Video Encoder Help": "Opção avançada. libx264 é o padrão mais seguro. Quando um codificador de hardware é selecionado, o aplicativo volta para libx264 se o FFmpeg, GPU ou driver atuais não puderem usá-lo."
+    "Video Encoder Help": "Opção avançada. libx264 é o padrão mais seguro. Quando um codificador de hardware é selecionado, o aplicativo volta para libx264 se o FFmpeg, GPU ou driver atuais não puderem usá-lo.",
+    "Unavailable providers": "Provedores indisponíveis",
+    "Disabled": "Desativado"
   }
 }
