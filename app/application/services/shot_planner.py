@@ -2,10 +2,14 @@ from __future__ import annotations
 
 import re
 
+from loguru import logger
+
 from app.domain.planning.models import ShotPlan, ShotSegment
+from app.infrastructure.llm.structured_output import StructuredLLMProvider
+from app.infrastructure.storage.base import ProjectStore
 
 _DEFAULT_SEGMENT_SEC = 5.0
-_STOPWORDS = {"para", "como", "pero", "este", "esta", "esto", "unos", "unas", "que", "los", "las", "del", "con", "por", "una", "uno"}
+_STOPWORDS = frozenset({"para", "como", "pero", "este", "esta", "esto", "unos", "unas", "que", "los", "las", "del", "con", "por", "una", "uno"})
 
 
 def _split_sentences(script: str) -> list[str]:
@@ -36,7 +40,7 @@ def heuristic_shot_plan(
     """Plan determinista sin red: split por oraciones + duración uniforme."""
     sentences = _split_sentences(script) or [script.strip()]
     n = len(sentences)
-    total = target_duration_sec if target_duration_sec else n * _DEFAULT_SEGMENT_SEC
+    total = target_duration_sec if target_duration_sec is not None else n * _DEFAULT_SEGMENT_SEC
     per = round(total / n, 3)
 
     segments: list[ShotSegment] = []
@@ -67,3 +71,89 @@ def heuristic_shot_plan(
         segments=segments,
         global_visual_style=visual_style,
     )
+
+
+_SYSTEM_RULES = """You are an audiovisual director for short-form video.
+Transform the narration script into a structured shot plan.
+Return ONLY valid JSON matching the schema.
+Rules:
+- Do not invent media URLs or clip IDs.
+- Split the narration into coherent visual segments.
+- Each segment must have a concrete visual_goal.
+- Each segment must include 2-5 concrete search_queries for stock video APIs.
+- Queries must be visually specific, not abstract.
+- Include fallback_queries and must_avoid when useful.
+- Keep visual continuity across the whole video.
+- Respect the target duration.
+"""
+
+
+def _build_prompt(script, language, target_duration_sec, topic, visual_style):
+    parts = [
+        _SYSTEM_RULES,
+        f"Language: {language}",
+    ]
+    if topic:
+        parts.append(f"Topic: {topic}")
+    if visual_style:
+        parts.append(f"Global visual style: {visual_style}")
+    if target_duration_sec:
+        parts.append(f"Target total duration (seconds): {target_duration_sec}")
+    parts.append(f"Script:\n{script}")
+    return "\n\n".join(parts)
+
+
+def _repair_prompt(base_prompt, error):
+    return (
+        base_prompt
+        + f"\n\nThe previous response was invalid: {error}\n"
+        "Return ONLY corrected JSON strictly matching the schema."
+    )
+
+
+class ShotPlanner:
+    def __init__(self, provider: StructuredLLMProvider, store: ProjectStore | None = None):
+        self._provider = provider
+        self._store = store
+
+    def plan(
+        self,
+        script: str,
+        language: str,
+        target_duration_sec: float | None = None,
+        topic: str | None = None,
+        visual_style: str | None = None,
+        task_id: str | None = None,
+    ) -> ShotPlan:
+        if not script or not script.strip():
+            raise ValueError("script must not be empty")
+
+        base_prompt = _build_prompt(script, language, target_duration_sec, topic, visual_style)
+        result: ShotPlan | None = None
+
+        try:
+            logger.info("[shot_planner] attempt 1 via structured provider")
+            result = self._provider.generate_structured(base_prompt, ShotPlan)
+        except Exception as exc:  # noqa: BLE001 - degradación controlada
+            logger.warning(f"[shot_planner] attempt 1 failed: {exc!r}; repairing")
+            try:
+                result = self._provider.generate_structured(
+                    _repair_prompt(base_prompt, exc), ShotPlan
+                )
+            except Exception as exc2:  # noqa: BLE001
+                logger.warning(
+                    f"[shot_planner] repair failed: {exc2!r}; using heuristic fallback"
+                )
+                result = heuristic_shot_plan(
+                    script, language, target_duration_sec, topic, visual_style, task_id
+                )
+
+        # propagar task_id al plan resultante
+        if task_id and result.task_id != task_id:
+            result = result.model_copy(update={"task_id": task_id})
+
+        if self._store is not None and task_id:
+            logger.info(f"[shot_planner] persisting shot_plan.json for task {task_id}")
+            self._store.save_shot_plan(task_id, result)
+
+        return result

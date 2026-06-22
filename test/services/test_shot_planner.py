@@ -1,6 +1,85 @@
 from __future__ import annotations
 
-from app.application.services.shot_planner import heuristic_shot_plan
+import pytest
+
+from app.application.services.shot_planner import ShotPlanner, heuristic_shot_plan
+from app.domain.planning.models import ShotPlan, ShotSegment
+
+
+def _valid_plan(language="es"):
+    return ShotPlan(
+        language=language,
+        script="s",
+        segments=[
+            ShotSegment(
+                id="seg_001",
+                order=1,
+                narration_text="hola",
+                target_duration_sec=5.0,
+                visual_goal="goal",
+                search_queries=["query uno"],
+            )
+        ],
+    )
+
+
+class _FakeProvider:
+    def __init__(self, results):
+        # results: lista de (raise_exc | ShotPlan) consumida por intento
+        self._results = list(results)
+        self.calls = 0
+
+    def capabilities(self, model=None):
+        raise NotImplementedError
+
+    def generate_structured(self, prompt, schema, model=None, temperature=0.4):
+        self.calls += 1
+        item = self._results.pop(0)
+        if isinstance(item, Exception):
+            raise item
+        return item
+
+
+def test_plan_returns_valid_provider_result():
+    provider = _FakeProvider([_valid_plan()])
+    planner = ShotPlanner(provider)
+    plan = planner.plan("hola mundo.", language="es")
+    assert provider.calls == 1
+    assert plan.segments[0].search_queries == ["query uno"]
+
+
+def test_plan_repairs_on_first_failure():
+    provider = _FakeProvider([ValueError("bad json"), _valid_plan()])
+    planner = ShotPlanner(provider)
+    plan = planner.plan("hola mundo.", language="es")
+    assert provider.calls == 2
+    assert plan.segments[0].order == 1
+
+
+def test_plan_falls_back_to_heuristic():
+    provider = _FakeProvider([ValueError("x"), ValueError("y")])
+    planner = ShotPlanner(provider)
+    plan = planner.plan("Primera. Segunda.", language="es", target_duration_sec=10.0)
+    assert provider.calls == 2
+    assert len(plan.segments) == 2  # heurístico por oraciones
+
+
+def test_plan_empty_script_raises():
+    planner = ShotPlanner(_FakeProvider([_valid_plan()]))
+    with pytest.raises(ValueError):
+        planner.plan("   ", language="es")
+
+
+def test_plan_persists_when_store_and_task_id(tmp_path):
+    from app.infrastructure.storage.filesystem_store import FilesystemProjectStore
+
+    store = FilesystemProjectStore(base_tasks_dir=str(tmp_path))
+    provider = _FakeProvider([_valid_plan()])
+    planner = ShotPlanner(provider, store=store)
+    planner.plan("hola.", language="es", task_id="t1")
+    loaded = store.load_shot_plan("t1")
+    assert loaded is not None
+    assert loaded.segments[0].search_queries == ["query uno"]
 
 
 def test_heuristic_plan_is_valid_and_ordered():
