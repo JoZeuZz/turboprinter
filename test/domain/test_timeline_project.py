@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 import pytest
 from pydantic import ValidationError
 
@@ -61,11 +63,11 @@ def test_track_items_must_be_sorted_by_start():
 
 def test_apply_move_updates_start_and_timestamp():
     p = _project()
-    before = p.updated_at
+    p.updated_at = datetime(2000, 1, 1, tzinfo=timezone.utc)
     p.apply(MoveClipCommand(track_id="t1", item_id="i1", new_start_sec=2.0))
     item = p.tracks[0].items[0]
     assert item.start_sec == 2.0
-    assert p.updated_at >= before
+    assert p.updated_at.year != 2000
 
 
 def test_apply_trim_updates_trim():
