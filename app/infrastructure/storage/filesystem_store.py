@@ -16,6 +16,7 @@ _SHOT_PLAN = "shot_plan.json"
 _TIMELINE = "timeline_project.json"
 _RENDER_SPEC = "render_spec.json"
 _MEDIA = "media_candidates.json"
+_SELECTED = "selected_media.json"
 
 
 class FilesystemProjectStore:
@@ -103,3 +104,18 @@ class FilesystemProjectStore:
             return _MEDIA_ADAPTER.validate_json(raw)
         except ValidationError as exc:
             raise ProjectStoreError(self._path(task_id, _MEDIA), exc) from exc
+
+    def save_selected_media(
+        self, task_id: str, selected: list[MediaCandidate]
+    ) -> None:
+        payload = _MEDIA_ADAPTER.dump_json(selected, indent=2).decode("utf-8")
+        self._write(task_id, _SELECTED, payload)
+
+    def load_selected_media(self, task_id: str) -> list[MediaCandidate]:
+        raw = self._read(task_id, _SELECTED)
+        if raw is None:
+            return []
+        try:
+            return _MEDIA_ADAPTER.validate_json(raw)
+        except ValidationError as exc:
+            raise ProjectStoreError(self._path(task_id, _SELECTED), exc) from exc
