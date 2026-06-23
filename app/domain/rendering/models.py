@@ -33,3 +33,18 @@ class RenderResult(BaseModel):
     success: bool
     error: str | None = None
     completed_at: datetime = Field(default_factory=_utcnow)
+
+
+class RenderManifest(BaseModel):
+    schema_version: Literal["1.0"] = "1.0"
+    project_id: str
+    task_id: str | None = None
+    renderer: str
+    output_path: str
+    video_item_count: int = 0
+    total_duration_sec: float | None = None
+    has_audio: bool = False
+    has_subtitles: bool = False
+    background_music: bool = False
+    warnings: list[str] = Field(default_factory=list)
+    created_at: datetime = Field(default_factory=_utcnow)
