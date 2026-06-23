@@ -211,6 +211,11 @@ multi_provider_media_enabled = (
 # Timeline renderer selector (Fase 5). Opt-in via project mode; default moviepy.
 timeline_renderer = os.getenv("TURBOPRINTER_TIMELINE_RENDERER", "moviepy").strip().lower()
 
+# Contextual music selection (Fase 8). Opt-in, default off.
+contextual_music_enabled = (
+    os.getenv("TURBOPRINTER_CONTEXTUAL_MUSIC", "false").strip().lower() == "true"
+)
+
 app["redis_host"] = os.getenv(
     "MPT_APP_REDIS_HOST",
     os.getenv("REDIS_HOST", app.get("redis_host", "localhost")),
