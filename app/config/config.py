@@ -166,6 +166,7 @@ siliconflow = _cfg.get("siliconflow", {})
 # [quality] table yields {} and the quality layer stays disabled, so behaviour
 # is identical to upstream. See app/services/quality/.
 quality = _cfg.get("quality", {})
+project_mode = _cfg.get("project_mode", {})
 # Optional per-intent LLM profiles. Tolerant by design: a missing [llm_profiles]
 # table yields {} and llm.get_llm_profile() falls back to built-in defaults, so
 # behaviour is identical to upstream. See app/services/llm.py LLM_PROFILES.
@@ -191,34 +192,54 @@ project_description = _cfg.get(
 project_version = _cfg.get("project_version", "1.3.0")
 reload_debug = False
 
+
+def _env_bool_or_config(env_name: str, cfg_value: bool = False) -> bool:
+    raw = os.getenv(env_name)
+    if raw is None:
+        return bool(cfg_value)
+    return raw.strip().lower() == "true"
+
+
+def _env_str_or_config(env_name: str, cfg_value: str, default: str) -> str:
+    raw = os.getenv(env_name)
+    value = raw if raw is not None else cfg_value or default
+    return str(value).strip().lower()
+
 # Personal fork feature flag (opt-in, tolerant to absence). When false or
 # unset, behaviour is identical to upstream: no project-mode wiring is active.
-project_mode_enabled = (
-    os.getenv("TURBOPRINTER_PROJECT_MODE_ENABLED", "false").strip().lower() == "true"
+project_mode_enabled = _env_bool_or_config(
+    "TURBOPRINTER_PROJECT_MODE_ENABLED", project_mode.get("enabled", False)
 )
 
 # Structured Shot Planner (Fase 2). Opt-in, default off: cuando está apagado
 # no se instancia el planner y el comportamiento es idéntico a upstream.
-structured_shot_planner_enabled = (
-    os.getenv("TURBOPRINTER_STRUCTURED_SHOT_PLANNER", "false").strip().lower() == "true"
+structured_shot_planner_enabled = _env_bool_or_config(
+    "TURBOPRINTER_STRUCTURED_SHOT_PLANNER",
+    project_mode.get("structured_shot_planner", False),
 )
 
 # Multi-provider media aggregation (Fase 3). Opt-in, default off.
-multi_provider_media_enabled = (
-    os.getenv("TURBOPRINTER_MULTI_PROVIDER_MEDIA", "false").strip().lower() == "true"
+multi_provider_media_enabled = _env_bool_or_config(
+    "TURBOPRINTER_MULTI_PROVIDER_MEDIA",
+    project_mode.get("multi_provider_media", False),
 )
 
 # Timeline renderer selector (Fase 5). Opt-in via project mode; default moviepy.
-timeline_renderer = os.getenv("TURBOPRINTER_TIMELINE_RENDERER", "moviepy").strip().lower()
+timeline_renderer = _env_str_or_config(
+    "TURBOPRINTER_TIMELINE_RENDERER",
+    project_mode.get("timeline_renderer", "moviepy"),
+    "moviepy",
+)
 
 # Contextual music selection (Fase 8). Opt-in, default off.
-contextual_music_enabled = (
-    os.getenv("TURBOPRINTER_CONTEXTUAL_MUSIC", "false").strip().lower() == "true"
+contextual_music_enabled = _env_bool_or_config(
+    "TURBOPRINTER_CONTEXTUAL_MUSIC",
+    project_mode.get("contextual_music", False),
 )
 
 # Reddit ingest (Fase 9). Opt-in, default off. PRAW is an optional dependency.
-reddit_ingest_enabled = (
-    os.getenv("TURBOPRINTER_REDDIT_INGEST", "false").strip().lower() == "true"
+reddit_ingest_enabled = _env_bool_or_config(
+    "TURBOPRINTER_REDDIT_INGEST", project_mode.get("reddit_ingest", False)
 )
 
 app["redis_host"] = os.getenv(

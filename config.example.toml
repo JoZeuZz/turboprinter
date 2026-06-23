@@ -425,6 +425,20 @@ upload_post_auto_upload = false
 
 
 ##############################################################################
+# Project Mode / Manual Editor (optional)
+##############################################################################
+# Enables the project/timeline API and the Streamlit Project Editor page. Env
+# vars with the TURBOPRINTER_* names still override these values at runtime.
+[project_mode]
+enabled = false
+structured_shot_planner = false
+multi_provider_media = false
+contextual_music = false
+timeline_renderer = "moviepy" # "moviepy" or "opencut" (stub, fails cleanly)
+reddit_ingest = false
+
+
+##############################################################################
 # Personal Quality Stack (optional)
 ##############################################################################
 # Capa opcional de calidad para este fork. Está DESACTIVADA por defecto:
