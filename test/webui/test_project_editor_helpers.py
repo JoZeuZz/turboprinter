@@ -76,3 +76,30 @@ def test_asset_id_for_local_path_matches_preview_asset():
     page = _load_page()
     assets = [{"asset_id": "media/clip.mp4", "path": "media/clip.mp4"}]
     assert page.asset_id_for_local_path("/tmp/project/media/clip.mp4", assets) == "media/clip.mp4"
+
+
+def test_format_license_unknown():
+    page = _load_page()
+    result = page._format_license({"unknown_or_provider_specific": True, "license_name": None})
+    assert "Custom" in result or "Desconocida" in result
+
+
+def test_format_license_known_name():
+    page = _load_page()
+    result = page._format_license({"license_name": "CC0", "unknown_or_provider_specific": False})
+    assert "CC0" in result
+
+
+def test_format_license_with_url():
+    page = _load_page()
+    result = page._format_license({
+        "license_name": "CC BY", "license_url": "https://creativecommons.org/licenses/by/4.0/",
+        "unknown_or_provider_specific": False,
+    })
+    assert "CC BY" in result
+    assert "https://creativecommons.org" in result
+
+
+def test_format_license_none():
+    page = _load_page()
+    assert page._format_license(None) == "—"
