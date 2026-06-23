@@ -15,6 +15,7 @@ from app.infrastructure.media_providers.stock_providers import (
     PexelsProvider,
     PixabayProvider,
 )
+from app.domain.media.vision_scoring import VisionRanker
 from app.infrastructure.storage.base import ProjectStore
 
 
@@ -28,11 +29,13 @@ class MediaAggregator:
         providers: list[MediaProvider],
         ranker: MediaRanker | None = None,
         store: ProjectStore | None = None,
+        vision_ranker: VisionRanker | None = None,
         max_workers: int = 4,
     ) -> None:
         self._providers = providers
         self._ranker = ranker or MediaRanker()
         self._store = store
+        self._vision_ranker = vision_ranker
         self._max_workers = max_workers
 
     @staticmethod
@@ -118,6 +121,12 @@ class MediaAggregator:
                 preferred_providers=tuple(seg.preferred_providers),
             )
             ranked = self._ranker.rank(cands, ctx)
+            if self._vision_ranker is not None:
+                ranked = self._vision_ranker.rescore_top_n(
+                    ranked,
+                    query=ctx.query,
+                    narration=seg.narration_text,
+                )
             best = next((c for c in ranked if c.id not in used_ids), None)
             if best is None:
                 logger.warning(f"[media] no candidate for segment {seg.id}")
@@ -137,4 +146,19 @@ def get_media_aggregator(store: ProjectStore | None = None) -> "MediaAggregator 
     if not getattr(config, "multi_provider_media_enabled", False):
         return None
     providers = [PexelsProvider(), PixabayProvider(), CoverrProvider(), LocalLibraryProvider()]
-    return MediaAggregator([p for p in providers if p.is_configured()], store=store)
+    vision_ranker: VisionRanker | None = None
+    if getattr(config, "vision_ranking_enabled", False):
+        model = getattr(config, "vision_model_name", None)
+        top_n = int(getattr(config, "vision_top_n", 3))
+        if model:
+            from app.infrastructure.llm.vision_provider import LiteLLMVisionProvider
+            vision_ranker = VisionRanker(LiteLLMVisionProvider(model=model), top_n=top_n)
+        else:
+            logger.warning(
+                "[vision] vision_ranking_enabled=True pero vision_model_name no configurado; ignorando"
+            )
+    return MediaAggregator(
+        [p for p in providers if p.is_configured()],
+        store=store,
+        vision_ranker=vision_ranker,
+    )
