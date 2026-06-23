@@ -240,6 +240,12 @@ uv run python cli.py --video-subject "..." --llm-provider gemini --llm-model gem
 - Do not expose the WebUI publicly without authentication / a reverse proxy
   (see section 7).
 
+### LLM Provider Registry (Plan 011a)
+
+`app/services/quality/llm_providers/` defines `OpenAICompatProvider`, `GeminiProvider`, and a `get_provider()` dispatcher. Currently, `_generate_response_single` in `llm.py` keeps known providers inline (openai, groq, deepseek, etc.) to preserve `test_llm.py` test patches on `llm.OpenAI`. The registry routes only unknown/custom provider names.
+
+To complete the migration: update `test_llm.py` to patch `openai_compat.OpenAI` instead of `llm.OpenAI`, then remove the `_inline` set from `_generate_response_single`.
+
 ---
 
 ## 4. Persistent storage (Proxmox)

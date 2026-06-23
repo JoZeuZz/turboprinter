@@ -218,7 +218,7 @@ class TestRegistry:
         assert isinstance(provider, OpenAICompatProvider)
 
     def test_provider_error_not_swallowed_by_generate_response_single(self):
-        """LLMProviderError from a provider must propagate up (not become 'Error: ...')."""
+        """LLMProviderError from a provider must be converted to 'Error: ...' string for the fallback chain."""
         from app.services.quality.llm_providers.base import LLMProviderError
         import app.services.llm as llm_mod
         fake_provider = MagicMock()

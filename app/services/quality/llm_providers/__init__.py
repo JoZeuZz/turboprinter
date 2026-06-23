@@ -1,15 +1,5 @@
-"""LLM provider registry for the Personal Quality Stack."""
+"""LLM provider dispatch for the Personal Quality Stack."""
 from .base import LLMConfigError, LLMProvider, LLMProviderError
-
-_REGISTRY: dict[str, type] = {}
-
-
-def register(name: str):
-    """Class decorator: register a provider under *name*."""
-    def decorator(cls):
-        _REGISTRY[name] = cls
-        return cls
-    return decorator
 
 
 def get_provider(name: str) -> "LLMProvider":
@@ -17,8 +7,6 @@ def get_provider(name: str) -> "LLMProvider":
     from .gemini import GeminiProvider
     from .openai_compat import OpenAICompatProvider
 
-    # Explicit registrations: gemini uses its own provider;
-    # the 13 OpenAI-compatible providers use OpenAICompatProvider.
     _explicit: dict[str, type] = {
         "gemini": GeminiProvider,
         **{k: OpenAICompatProvider for k in (
@@ -27,7 +15,7 @@ def get_provider(name: str) -> "LLMProvider":
             "mimo", "modelscope", "azure",
         )},
     }
-    cls = _explicit.get(name) or _REGISTRY.get(name) or OpenAICompatProvider
+    cls = _explicit.get(name) or OpenAICompatProvider
     return cls(name)
 
 
@@ -36,5 +24,4 @@ __all__ = [
     "LLMProvider",
     "LLMProviderError",
     "get_provider",
-    "register",
 ]

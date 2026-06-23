@@ -1093,7 +1093,7 @@ Please note that you must use English for generating video search terms; Chinese
         try:
             response = _generate_response(prompt)
             if "Error: " in response:
-                logger.error(f"failed to generate video script: {response}")
+                logger.error(f"failed to generate video terms: {response}")
                 return response
 
             # Try TermsResponse (structured JSON from json_mode providers),
