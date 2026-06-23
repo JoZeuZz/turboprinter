@@ -1274,19 +1274,7 @@ def generate_video(
             text_clips.append(clip)
         video_clip = CompositeVideoClip([video_clip, *text_clips])
 
-    bgm_file = get_bgm_file(bgm_type=params.bgm_type, bgm_file=params.bgm_file)
-    if bgm_file:
-        try:
-            bgm_clip = AudioFileClip(bgm_file).with_effects(
-                [
-                    afx.MultiplyVolume(params.bgm_volume),
-                    afx.AudioFadeOut(3),
-                    afx.AudioLoop(duration=video_clip.duration),
-                ]
-            )
-            audio_clip = CompositeAudioClip([audio_clip, bgm_clip])
-        except Exception as e:
-            logger.error(f"failed to add bgm: {str(e)}")
+    from app.services.quality.ffmpeg_mux import finalize as _ffmpeg_finalize
 
     video_clip = video_clip.with_audio(audio_clip)
     # 显式沿用输入音频的采样率；如果取不到，再回退到 MoviePy 默认的 44100Hz。
@@ -1316,12 +1304,47 @@ def generate_video(
                 render_profile, final_codec, include_audio=True
             )
         )
-    _write_videofile_with_codec_fallback(
-        video_clip,
-        output_file=output_file,
-        **write_kwargs,
-    )
+
+    bgm_file = get_bgm_file(bgm_type=params.bgm_type, bgm_file=params.bgm_file)
+
+    def _moviepy_fallback() -> None:
+        if bgm_file:
+            try:
+                bgm_clip = AudioFileClip(bgm_file).with_effects(
+                    [
+                        afx.MultiplyVolume(params.bgm_volume),
+                        afx.AudioFadeOut(3),
+                        afx.AudioLoop(duration=video_clip.duration),
+                    ]
+                )
+                combined = CompositeAudioClip([audio_clip, bgm_clip])
+                final_clip = video_clip.with_audio(combined)
+            except Exception as e:
+                logger.error(f"failed to add bgm in fallback: {e}")
+                final_clip = video_clip
+        else:
+            final_clip = video_clip
+        _write_videofile_with_codec_fallback(
+            final_clip,
+            output_file=output_file,
+            **write_kwargs,
+        )
+
+    visual_tmp = output_file + ".visual_tmp.mp4"
+    _write_videofile_with_codec_fallback(video_clip, output_file=visual_tmp, **write_kwargs)
     video_clip.close()
+
+    _ffmpeg_finalize(
+        visual_path=visual_tmp,
+        voice_path=audio_path,
+        bgm_path=bgm_file or None,
+        output_path=output_file,
+        bgm_volume=params.bgm_volume,
+        duck_db=12.0,
+        fps=fps,
+        codec=final_codec,
+        fallback_fn=_moviepy_fallback,
+    )
     del video_clip
 
 
