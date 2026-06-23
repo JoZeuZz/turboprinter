@@ -11,6 +11,7 @@ from app.models.schema import VideoAspect, VideoConcatMode, VideoParams
 from app.services import llm, material, subtitle, video, voice, upload_post
 from app.services import state as sm
 from app.services.quality import settings as quality_settings
+from app.services.quality.observability import phase_timer
 from app.utils import file_security, utils
 
 
@@ -389,17 +390,18 @@ def generate_final_videos(
             utils.task_dir(task_id), f"combined-{index}.mp4"
         )
         logger.info(f"\n\n## combining video: {index} => {combined_video_path}")
-        video.combine_videos(
-            combined_video_path=combined_video_path,
-            video_paths=downloaded_videos,
-            audio_file=audio_file,
-            video_aspect=params.video_aspect,
-            video_concat_mode=video_concat_mode,
-            video_transition_mode=video_transition_mode,
-            max_clip_duration=params.video_clip_duration,
-            threads=params.n_threads,
-            render_profile=render_profile,
-        )
+        with phase_timer("video_combine"):
+            video.combine_videos(
+                combined_video_path=combined_video_path,
+                video_paths=downloaded_videos,
+                audio_file=audio_file,
+                video_aspect=params.video_aspect,
+                video_concat_mode=video_concat_mode,
+                video_transition_mode=video_transition_mode,
+                max_clip_duration=params.video_clip_duration,
+                threads=params.n_threads,
+                render_profile=render_profile,
+            )
 
         _progress += 50 / params.video_count / 2
         sm.state.update_task(task_id, progress=_progress)
@@ -407,13 +409,14 @@ def generate_final_videos(
         final_video_path = path.join(utils.task_dir(task_id), f"final-{index}.mp4")
 
         logger.info(f"\n\n## generating video: {index} => {final_video_path}")
-        video.generate_video(
-            video_path=combined_video_path,
-            audio_path=audio_file,
-            subtitle_path=subtitle_path,
-            output_file=final_video_path,
-            params=params,
-        )
+        with phase_timer("video_final"):
+            video.generate_video(
+                video_path=combined_video_path,
+                audio_path=audio_file,
+                subtitle_path=subtitle_path,
+                output_file=final_video_path,
+                params=params,
+            )
 
         _progress += 50 / params.video_count / 2
         sm.state.update_task(task_id, progress=_progress)
@@ -581,7 +584,8 @@ def start(task_id, params: VideoParams, stop_at: str = "video", *, restrict_cust
     sm.state.update_task(task_id, state=const.TASK_STATE_PROCESSING, progress=5)
 
     # 1. Generate script
-    video_script = generate_script(task_id, params)
+    with phase_timer("script_gen"):
+        video_script = generate_script(task_id, params)
     if not video_script or "Error: " in video_script:
         sm.state.update_task(task_id, state=const.TASK_STATE_FAILED)
         return
@@ -618,9 +622,10 @@ def start(task_id, params: VideoParams, stop_at: str = "video", *, restrict_cust
     sm.state.update_task(task_id, state=const.TASK_STATE_PROCESSING, progress=20)
 
     # 3. Generate audio
-    audio_file, audio_duration, sub_maker = generate_audio(
-        task_id, params, video_script, restrict_custom_audio=restrict_custom_audio
-    )
+    with phase_timer("audio_gen"):
+        audio_file, audio_duration, sub_maker = generate_audio(
+            task_id, params, video_script, restrict_custom_audio=restrict_custom_audio
+        )
     if not audio_file:
         sm.state.update_task(task_id, state=const.TASK_STATE_FAILED)
         return
@@ -643,9 +648,10 @@ def start(task_id, params: VideoParams, stop_at: str = "video", *, restrict_cust
     )
 
     # 4. Generate subtitle
-    subtitle_path = generate_subtitle(
-        task_id, params, video_script, sub_maker, audio_file
-    )
+    with phase_timer("subtitle_gen"):
+        subtitle_path = generate_subtitle(
+            task_id, params, video_script, sub_maker, audio_file
+        )
 
     if stop_at == "subtitle":
         sm.state.update_task(
@@ -659,9 +665,10 @@ def start(task_id, params: VideoParams, stop_at: str = "video", *, restrict_cust
     sm.state.update_task(task_id, state=const.TASK_STATE_PROCESSING, progress=40)
 
     # 5. Get video materials
-    downloaded_videos = get_video_materials(
-        task_id, params, video_terms, audio_duration
-    )
+    with phase_timer("material_fetch"):
+        downloaded_videos = get_video_materials(
+            task_id, params, video_terms, audio_duration
+        )
     if not downloaded_videos:
         sm.state.update_task(task_id, state=const.TASK_STATE_FAILED)
         return
