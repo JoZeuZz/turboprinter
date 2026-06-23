@@ -110,10 +110,10 @@ class OpenAICompatProvider:
 
     def _call(self, prompt: str, *, json_mode: bool) -> str:
         if self._azure:
-            return self._call_azure(prompt)
+            return self._call_azure(prompt, json_mode=json_mode)
 
         if self._streaming:
-            return self._call_streaming(prompt)
+            return self._call_streaming(prompt, json_mode=json_mode)
 
         if self.name == "deepseek":
             return self._call_deepseek(prompt, json_mode=json_mode)
@@ -127,20 +127,26 @@ class OpenAICompatProvider:
         response = self._client.chat.completions.create(**call_kwargs)
         return _extract_chat_completion_text(response, self.name)
 
-    def _call_azure(self, prompt: str) -> str:
-        response = self._client.chat.completions.create(
-            model=self._model,
-            messages=[{"role": "user", "content": prompt}],
-        )
+    def _call_azure(self, prompt: str, *, json_mode: bool) -> str:
+        call_kwargs: dict[str, Any] = {
+            "model": self._model,
+            "messages": [{"role": "user", "content": prompt}],
+        }
+        if json_mode:
+            call_kwargs["response_format"] = {"type": "json_object"}
+        response = self._client.chat.completions.create(**call_kwargs)
         return _extract_chat_completion_text(response, self.name)
 
-    def _call_streaming(self, prompt: str) -> str:
-        response = self._client.chat.completions.create(
-            model=self._model,
-            messages=[{"role": "user", "content": prompt}],
-            extra_body={"enable_thinking": False},
-            stream=True,
-        )
+    def _call_streaming(self, prompt: str, *, json_mode: bool) -> str:
+        create_kwargs: dict[str, Any] = {
+            "model": self._model,
+            "messages": [{"role": "user", "content": prompt}],
+            "extra_body": {"enable_thinking": False},
+            "stream": True,
+        }
+        if json_mode:
+            create_kwargs["response_format"] = {"type": "json_object"}
+        response = self._client.chat.completions.create(**create_kwargs)
         content = ""
         for chunk in response:
             if not chunk.choices:
