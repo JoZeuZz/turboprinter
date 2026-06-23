@@ -99,11 +99,41 @@ Pexels/Pixabay keep traceable terms metadata. Coverr is marked as
 `provider_specific` with `unknown_or_provider_specific=true`; it no longer claims
 a simplified universal commercial/no-attribution license.
 
+## Timeline visualization
+
+`_gantt_data(tracks)` in `2_Project_Editor.py` extracts Altair-ready rows from
+video track items: `{"name", "start", "end", "segment_id"}`. The function is a
+pure utility with no Streamlit dependency and is covered by
+`test/services/test_project_editor_helpers.py`.
+
+In `tab_timeline`, a horizontal Gantt chart renders above the per-clip editors
+using `st.altair_chart`. Bars are colored by segment and show a tooltip with
+name/start/end/segment. Chart height scales with the number of clips. Altair
+5.5.0 is already a transitive dependency — no new packages required.
+
+## Music UI
+
+`_list_local_songs(songs_dir)` returns sorted basenames of audio files
+(`.mp3/.wav/.m4a/.ogg/.flac/.aac`) from the given directory, or `[]` if the
+directory does not exist. Covered by the same test module.
+
+In `tab_music`, the form now includes:
+
+- A `st.selectbox("Pista local", ...)` populated with files from `resource/songs/`.
+  The first option is `"(automático)"` (lets the API choose). When a specific
+  file is selected, `local_path` is included in the `POST /music/select` payload.
+- `st.slider` for volume (0.0–1.0, step 0.05) replacing the previous
+  `number_input`.
+
+The selected-music display shows structured metadata (title, provider, duration,
+composer) instead of a raw `st.json` dump.
+
 ## CI/Ruff
 
 CI now runs on pushes to `main` and `personal/quality-stack`, plus PRs. Ruff is
-added as a dev dependency and configured conservatively for syntax/runtime-name
-checks only (`E9`, `F821`) to avoid mass formatting or broad lint churn.
+configured with `E9`, `F821` (syntax/runtime-name), and `W291`/`W293` (trailing
+whitespace). Upstream files with whitespace inside docstring literals are
+excluded via `per-file-ignores` to avoid unsafe string mutations.
 
 ## Known risks
 
@@ -113,11 +143,12 @@ checks only (`E9`, `F821`) to avoid mass formatting or broad lint churn.
 - Manual reorder is button-based and queues move commands; no drag-and-drop.
 - License metadata remains informational. Users must review provider terms before
   publication.
-- Ruff config is intentionally narrow; broader lint/type checks remain future work.
+- E501 (line-length) not yet enforced: 121 existing violations in upstream files
+  make it impractical without a dedicated formatting pass.
 
 ## Pending work
 
 - Real OpenCut adapter after license/runtime/design review.
 - Richer media preview thumbnails and Range streaming for large project assets.
 - More granular timeline validation options if intentional gaps become a product requirement.
-- Wider Ruff rule set and optional type checking after existing code is prepared.
+- E501 enforcement and optional type checking after existing code is prepared.

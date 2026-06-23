@@ -66,14 +66,22 @@ on video tracks.
 
 ## Background render
 
-`POST /render` validates the timeline, builds a `RenderSpec` from
-`ExportSettings` + request flags, persists it, and schedules `_run_render` via
-FastAPI `BackgroundTasks`. Progress is reported through `app.services.state`
-(`sm.state`) using `const.TASK_STATE_PROCESSING|COMPLETE|FAILED`. `GET /render`
-returns the current state record. The actual render reuses the Fase 5
-`render_project_from_store` workflow, which now reads `render_spec.json` and
-selects the requested renderer. `opencut` remains a stub and records a controlled
-failed render result/manifest instead of silently falling back to MoviePy.
+`POST /render` accepts a `RenderRequest` body with:
+
+- `renderer`: `"moviepy" | "opencut" | null` — null preserves the value stored
+  in `render_spec.json`; explicit values override it. The Project Editor UI
+  exposes this as a selectbox with options "preservar / moviepy / opencut".
+- `include_subtitles`: bool (default `true`)
+- `include_background_music`: bool (default `true`)
+
+The handler validates the timeline, builds a `RenderSpec`, persists it, and
+schedules `_run_render` via FastAPI `BackgroundTasks`. Progress is reported
+through `app.services.state` (`sm.state`) using
+`const.TASK_STATE_PROCESSING|COMPLETE|FAILED`. `GET /render` returns the current
+state record. The actual render reuses the Fase 5 `render_project_from_store`
+workflow, which reads `render_spec.json` and selects the requested renderer.
+`opencut` remains a stub and records a controlled failed render result/manifest
+instead of silently falling back to MoviePy.
 
 ## Assets / preview
 
