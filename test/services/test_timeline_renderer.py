@@ -162,3 +162,46 @@ def test_opencut_adapter_raises_not_implemented():
     assert adapter.name == "opencut"
     with pytest.raises(NotImplementedError, match="OpenCut"):
         adapter.render(_project(), _spec(), "/tmp/out")
+
+
+def _project_with_music():
+    video = TimelineTrack(id="video_1", type="video", name="Video", items=[
+        _video_item("a", "/tmp/a.mp4", 0.0, 3.0),
+    ])
+    narration = TimelineTrack(id="audio_1", type="audio", name="Audio", items=[
+        TimelineItem(id="narr", local_path="/tmp/narration.mp3", start_sec=0.0, duration_sec=3.0),
+    ])
+    music = TimelineTrack(id="music_1", type="audio", name="Music", items=[
+        TimelineItem(id="m", local_path="/tmp/song.mp3", start_sec=0.0,
+                     duration_sec=3.0, volume=0.15),
+    ])
+    return TimelineProject(
+        project_id="task-1", task_id="task-1", title="Demo",
+        tracks=[video, narration, music], export=ExportSettings(width=1080, height=1920, fps=30),
+    )
+
+
+def test_resolve_render_inputs_separates_music_from_narration():
+    inputs = MoviePyTimelineRenderer()._resolve_render_inputs(_project_with_music())
+    assert inputs.narration_path == "/tmp/narration.mp3"
+    assert inputs.music_path == "/tmp/song.mp3"
+    assert inputs.music_volume == 0.15
+
+
+def test_render_passes_music_as_bgm(monkeypatch, tmp_path):
+    captured = {}
+
+    monkeypatch.setattr(mr, "_concat_timeline_clips", lambda *a, **k: open(a[3], "wb").close())
+
+    def fake_generate(video_path, audio_path, subtitle_path, output_file, params):
+        captured["bgm_file"] = params.bgm_file
+        captured["bgm_volume"] = params.bgm_volume
+        open(output_file, "wb").write(b"x")
+
+    monkeypatch.setattr(mr.video, "generate_video", fake_generate)
+    spec = RenderSpec(project_id="task-1", width=1080, height=1920, fps=30,
+                      include_background_music=True)
+    result = MoviePyTimelineRenderer().render(_project_with_music(), spec, str(tmp_path))
+    assert result.success is True
+    assert captured["bgm_file"] == "/tmp/song.mp3"
+    assert captured["bgm_volume"] == 0.15

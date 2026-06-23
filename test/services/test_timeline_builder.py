@@ -286,3 +286,36 @@ def test_get_timeline_builder_uses_project_mode_flag(monkeypatch):
 
     monkeypatch.setattr(tb.config, "project_mode_enabled", True)
     assert isinstance(tb.get_timeline_builder(), tb.TimelineBuilder)
+
+
+def test_build_adds_music_track_with_volume():
+    from app.domain.music.models import MusicTrack
+    music = MusicTrack(id="m1", provider="local", local_path="/tmp/song.mp3", title="calm")
+    project = TimelineBuilder().build(
+        _plan(),
+        {"seg_001": _candidate("seg_001", "mc-1"),
+         "seg_002": _candidate("seg_002", "mc-2"),
+         "seg_003": _candidate("seg_003", "mc-3")},
+        task_id="task-1",
+        narration_audio_path="/tmp/narration.mp3",
+        music_track=music,
+        music_volume=0.15,
+    )
+    music_tracks = [t for t in project.tracks if t.id == "music_1"]
+    assert len(music_tracks) == 1
+    item = music_tracks[0].items[0]
+    assert item.local_path == "/tmp/song.mp3"
+    assert item.duration_sec == 9.5
+    assert item.volume == 0.15
+    assert project.metadata["music_track_id"] == "m1"
+
+
+def test_build_without_music_has_no_music_track():
+    project = TimelineBuilder().build(
+        _plan(),
+        {"seg_001": _candidate("seg_001", "mc-1"),
+         "seg_002": _candidate("seg_002", "mc-2"),
+         "seg_003": _candidate("seg_003", "mc-3")},
+        task_id="task-1",
+    )
+    assert all(t.id != "music_1" for t in project.tracks)
