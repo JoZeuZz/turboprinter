@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+import glob
 import os
 
-from fastapi import Request
+from fastapi import BackgroundTasks, Request
 
 from app.application.services.media_aggregator import MediaAggregator
 from app.application.services.shot_planner import ShotPlanner
 from app.application.services.timeline_builder import TimelineBuilder
+from app.application.workflows import render_project as rp
 from app.config import config
 from app.controllers import base
 from app.controllers.v1.base import new_router
@@ -18,7 +20,9 @@ from app.infrastructure.media_providers.stock_providers import (
     PixabayProvider,
 )
 from app.domain.projects.models import TimelineProject
+from app.domain.rendering.models import RenderSpec
 from app.infrastructure.storage.filesystem_store import FilesystemProjectStore
+from app.models import const
 from app.models.exception import HttpException
 from app.models.project_schema import (
     BaseProjectResponse,
@@ -26,10 +30,12 @@ from app.models.project_schema import (
     CreateFromTopicRequest,
     MediaSearchRequest,
     PlanRequest,
+    RenderRequest,
     TimelineBuildRequest,
     TimelineCommandsRequest,
 )
 from app.services import llm
+from app.services import state as sm
 from app.utils import utils
 
 router = new_router()
@@ -174,3 +180,73 @@ def replace_timeline(request: Request, project_id: str, project: TimelineProject
     _require_project_mode(request)
     _store().save_timeline(project_id, project)
     return _ok({"project_id": project_id})
+
+
+def _run_render(project_id: str, spec: RenderSpec) -> None:
+    sm.state.update_task(project_id, state=const.TASK_STATE_PROCESSING, progress=10)
+    try:
+        store = _store()
+        store.save_render_spec(project_id, spec)
+        result = rp.render_project_from_store(project_id, store)
+        if result.success:
+            sm.state.update_task(
+                project_id, state=const.TASK_STATE_COMPLETE, progress=100,
+                output_path=result.output_path,
+            )
+        else:
+            sm.state.update_task(
+                project_id, state=const.TASK_STATE_FAILED, progress=100,
+                error=result.error,
+            )
+    except Exception as exc:  # noqa: BLE001
+        sm.state.update_task(
+            project_id, state=const.TASK_STATE_FAILED, progress=100, error=str(exc)
+        )
+
+
+@router.post("/projects/{project_id}/render", response_model=BaseProjectResponse,
+             status_code=202, summary="Render the project timeline (background)")
+def render_project_endpoint(request: Request, project_id: str, body: RenderRequest,
+                            background_tasks: BackgroundTasks):
+    _require_project_mode(request)
+    store = _store()
+    project = store.load_timeline(project_id)
+    if project is None:
+        raise HttpException(task_id=project_id, status_code=400, message="build timeline first")
+    spec = RenderSpec(
+        project_id=project.project_id, task_id=project_id,
+        renderer=body.renderer or getattr(config, "timeline_renderer", "moviepy"),
+        width=project.export.width, height=project.export.height, fps=project.export.fps,
+        codec=project.export.codec, audio_codec=project.export.audio_codec,
+        include_subtitles=body.include_subtitles,
+        include_background_music=body.include_background_music,
+    )
+    sm.state.update_task(project_id, state=const.TASK_STATE_PROCESSING, progress=0)
+    background_tasks.add_task(_run_render, project_id, spec)
+    return _ok({"project_id": project_id, "state": const.TASK_STATE_PROCESSING})
+
+
+@router.get("/projects/{project_id}/render", response_model=BaseProjectResponse,
+            summary="Get render status")
+def render_status(request: Request, project_id: str):
+    _require_project_mode(request)
+    task = sm.state.get_task(project_id)
+    if task is None:
+        raise HttpException(task_id=project_id, status_code=404, message="no render started")
+    return _ok(task)
+
+
+@router.get("/projects/{project_id}/assets", response_model=BaseProjectResponse,
+            summary="List project assets")
+def list_assets(request: Request, project_id: str):
+    _require_project_mode(request)
+    store = _store()
+    if not store.exists(project_id):
+        raise HttpException(task_id=project_id, status_code=404, message="project not found")
+    task_dir = store.project_dir(project_id)
+    assets = sorted(
+        os.path.relpath(p, task_dir)
+        for p in glob.glob(os.path.join(task_dir, "**", "*"), recursive=True)
+        if os.path.isfile(p)
+    )
+    return _ok({"project_id": project_id, "assets": assets})
