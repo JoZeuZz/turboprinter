@@ -304,12 +304,36 @@ def _generate_response(prompt: str) -> str:
 
 
 def _generate_response_single(prompt: str, provider_override: str | None = None) -> str:
+    from app.services.quality.llm_providers import LLMConfigError, LLMProviderError, get_provider
+
+    llm_provider = provider_override or config.app.get("llm_provider", _DEFAULT_LLM_PROVIDER)
+    logger.info(f"llm provider: {llm_provider}")
+
+    # Providers with inline implementations below — legacy providers with custom
+    # protocols (g4f, qwen, cloudflare, ernie, pollinations, litellm) plus the
+    # upstream OpenAI-compatible providers that have test coverage in test_llm.py.
+    _inline = {
+        "g4f", "qwen", "cloudflare", "ernie", "pollinations", "litellm",
+        "moonshot", "ollama", "openai", "aihubmix", "aimlapi", "oneapi",
+        "azure", "gemini", "grok", "groq", "minimax", "mimo", "deepseek",
+        "modelscope",
+    }
+
+    # Unknown / future providers: delegate to the Quality Stack registry.
+    if llm_provider not in _inline:
+        try:
+            provider = get_provider(llm_provider)
+            return provider.generate(prompt)
+        except LLMConfigError as e:
+            logger.error(f"provider config error [{llm_provider}]: {e}")
+            return f"Error: {_sanitize_error_message(e)}"
+        except LLMProviderError as e:
+            logger.error(f"provider call failed [{llm_provider}]: {e}")
+            return f"Error: {_sanitize_error_message(e)}"
+
+    # ---- inline provider implementations (upstream-compatible) ----
     try:
         content = ""
-        llm_provider = provider_override or config.app.get(
-            "llm_provider", _DEFAULT_LLM_PROVIDER
-        )
-        logger.info(f"llm provider: {llm_provider}")
         if llm_provider == "g4f":
             if not config.app.get("enable_g4f", False):
                 raise ValueError(
