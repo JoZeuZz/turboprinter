@@ -39,12 +39,15 @@ Licence/source is always recorded: `LocalMusicProvider` tags tracks as
 `local-library`; a real Jamendo implementation must record the Jamendo licence
 and source URL.
 
-## Timeline & render
+## Timeline & render (wired)
 
-The timeline can include a music audio track with a configurable `volume`; the
-final mix reuses the legacy `generate_video` background-music path (volume +
-fade), so narration is not covered. Wiring music into the `TimelineBuilder` is a
-follow-up; this phase delivers the selection + persistence contract.
+`TimelineBuilder.build(..., music_track=...)` appends a `music_1` audio track
+(type `audio`, with `volume`), and `build_from_store` loads the first track from
+`selected_music.json`. The MoviePy renderer separates `music_1` from the
+narration track in `_resolve_render_inputs` and, when
+`RenderSpec.include_background_music` is set, passes the music path/volume as
+`params.bgm_file`/`params.bgm_volume` into the legacy `generate_video` mix
+(volume + fade), so narration is not covered.
 
 ## Flag
 
