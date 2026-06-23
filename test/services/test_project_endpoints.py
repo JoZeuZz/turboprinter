@@ -123,3 +123,52 @@ def test_media_search_requires_shot_plan(client):
         "/api/v1/projects/from-script", json={"script": "Uno.", "language": "es"}
     ).json()["data"]["project_id"]
     assert client.post(f"/api/v1/projects/{pid}/media/search", json={}).status_code == 400
+
+
+def _seed_plan_and_media(pid):
+    from app.domain.media.models import MediaCandidate
+    from app.domain.planning.models import ShotPlan, ShotSegment
+    store = pj._store()
+    store.save_shot_plan(pid, ShotPlan(
+        task_id=pid, language="es", script="Uno. Dos.",
+        segments=[
+            ShotSegment(id="seg_001", order=1, narration_text="Uno.",
+                        target_duration_sec=3.0, visual_goal="x", search_queries=["q"]),
+            ShotSegment(id="seg_002", order=2, narration_text="Dos.",
+                        target_duration_sec=2.0, visual_goal="y", search_queries=["q"]),
+        ],
+    ))
+    store.save_selected_media(pid, [
+        MediaCandidate(id="mc-1", provider="pexels", local_path="/tmp/a.mp4",
+                       duration_sec=10.0, segment_id="seg_001"),
+        MediaCandidate(id="mc-2", provider="pexels", local_path="/tmp/b.mp4",
+                       duration_sec=10.0, segment_id="seg_002"),
+    ])
+
+
+def test_timeline_build_endpoint(client):
+    pid = client.post(
+        "/api/v1/projects/from-script", json={"script": "Uno. Dos.", "language": "es"}
+    ).json()["data"]["project_id"]
+    _seed_plan_and_media(pid)
+    r = client.post(f"/api/v1/projects/{pid}/timeline/build", json={"title": "Demo"})
+    assert r.status_code == 200
+    assert pj._store().load_timeline(pid) is not None
+
+
+def test_timeline_commands_endpoint(client):
+    pid = client.post(
+        "/api/v1/projects/from-script", json={"script": "Uno. Dos.", "language": "es"}
+    ).json()["data"]["project_id"]
+    _seed_plan_and_media(pid)
+    client.post(f"/api/v1/projects/{pid}/timeline/build", json={})
+    store = pj._store()
+    item_id = store.load_timeline(pid).tracks[0].items[0].id
+    r = client.post(f"/api/v1/projects/{pid}/timeline/commands", json={"commands": [
+        {"type": "trim", "track_id": "video_1", "item_id": item_id,
+         "trim_start_sec": 0.5, "trim_end_sec": 2.0},
+    ]})
+    assert r.status_code == 200
+    reloaded = store.load_timeline(pid).tracks[0].items[0]
+    assert reloaded.trim_start_sec == 0.5
+    assert reloaded.trim_end_sec == 2.0
