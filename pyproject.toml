@@ -42,7 +42,9 @@ g4f = [
 # `uv sync` instala este grupo por defecto; `uv sync --no-dev` lo omite.
 [dependency-groups]
 dev = [
+    "mypy>=1.10,<2",
     "pytest>=8,<9",
+    "pytest-cov>=6,<7",
     "ruff>=0.8,<1",
 ]
 
@@ -63,11 +65,35 @@ exclude = [
 ]
 
 [tool.ruff.lint]
-# E9/F821: syntax/runtime-name failures. W291/W293: trailing whitespace.
-select = ["E9", "F821", "W291", "W293"]
+# E9/F821: syntax/runtime-name failures. W291/W293: trailing whitespace. E501: line length.
+select = ["E9", "F821", "W291", "W293", "E501"]
 
 [tool.ruff.lint.per-file-ignores]
 # Upstream files with whitespace inside docstring literals — unsafe to auto-fix.
-"app/services/upload_post.py" = ["W291", "W293"]
-"app/services/voice.py" = ["W291", "W293"]
-"test/services/test_voice.py" = ["W291", "W293"]
+"app/services/upload_post.py" = ["W291", "W293", "E501"]
+"app/services/voice.py" = ["W291", "W293", "E501"]
+"app/services/task.py" = ["E501"]
+"app/services/video.py" = ["E501"]
+"app/services/material.py" = ["E501"]
+"app/services/subtitle.py" = ["E501"]
+"app/services/llm.py" = ["E501"]
+"app/utils/utils.py" = ["E501"]
+"app/controllers/v1/video.py" = ["E501"]
+"test/services/test_voice.py" = ["W291", "W293", "E501"]
+"test/services/test_material.py" = ["E501"]
+"test/services/test_task.py" = ["E501"]
+"webui/Main.py" = ["E501"]
+
+[tool.coverage.run]
+source = ["app/services/quality", "app/domain"]
+omit = ["*/test*", ".venv/*"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+follow_imports = "silent"
+warn_unused_ignores = false
