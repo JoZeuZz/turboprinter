@@ -229,3 +229,23 @@ class TestRegistry:
             result = llm_mod._generate_response_single("hello", provider_override="fake")
         # Should propagate as "Error: ..." string via the outer try/except in the fallback chain
         assert result.startswith("Error:")
+
+
+class TestGenerateTermsJsonMode:
+    def test_generate_terms_parses_terms_response(self):
+        """generate_terms must accept a TermsResponse JSON and return list[str]."""
+        import app.services.llm as llm_mod
+        terms_json = '{"terms": ["cats playing", "cute animals", "pets indoor"]}'
+        with patch.object(llm_mod, "_generate_response", return_value=terms_json):
+            result = llm_mod.generate_terms("cats", "Cats are great pets.", amount=3)
+        assert isinstance(result, list)
+        assert "cats playing" in result
+
+    def test_generate_terms_fallback_on_plain_json_array(self):
+        """Existing plain-array responses must still parse correctly."""
+        import app.services.llm as llm_mod
+        terms_json = '["cats playing", "cute animals", "pets indoor"]'
+        with patch.object(llm_mod, "_generate_response", return_value=terms_json):
+            result = llm_mod.generate_terms("cats", "Cats are great pets.", amount=3)
+        assert isinstance(result, list)
+        assert "cats playing" in result

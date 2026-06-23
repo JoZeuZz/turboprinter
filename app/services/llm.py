@@ -1095,7 +1095,16 @@ Please note that you must use English for generating video search terms; Chinese
             if "Error: " in response:
                 logger.error(f"failed to generate video script: {response}")
                 return response
-            search_terms = json.loads(_strip_code_fence(response))
+
+            # Try TermsResponse (structured JSON from json_mode providers),
+            # then fall back to plain JSON array (legacy behaviour).
+            try:
+                from app.services.quality.llm_providers.base import TermsResponse
+                parsed = TermsResponse.model_validate_json(_strip_code_fence(response))
+                search_terms = parsed.terms
+            except Exception:
+                search_terms = json.loads(_strip_code_fence(response))
+
             if not isinstance(search_terms, list) or not all(
                 isinstance(term, str) for term in search_terms
             ):
