@@ -48,6 +48,7 @@ from app.models.project_schema import (
 )
 from app.services import llm
 from app.services import state as sm
+from app.services.quality.observability import phase_timer
 from app.utils import utils
 
 router = new_router()
@@ -304,11 +305,12 @@ def plan_project(request: Request, project_id: str, body: PlanRequest):
     script = store.load_script(project_id) or ""
     if not script.strip():
         raise HttpException(task_id=project_id, status_code=400, message="project has no script")
-    plan = _shot_planner(store).plan(
-        script=script, language="es",
-        target_duration_sec=body.target_duration_sec,
-        visual_style=body.global_visual_style, task_id=project_id,
-    )
+    with phase_timer("plan", project_id=project_id):
+        plan = _shot_planner(store).plan(
+            script=script, language="es",
+            target_duration_sec=body.target_duration_sec,
+            visual_style=body.global_visual_style, task_id=project_id,
+        )
     return _ok({"project_id": project_id, "segment_count": len(plan.segments)})
 
 
@@ -320,9 +322,10 @@ def media_search(request: Request, project_id: str, body: MediaSearchRequest):
     plan = store.load_shot_plan(project_id)
     if plan is None:
         raise HttpException(task_id=project_id, status_code=400, message="run /plan first")
-    selection = _media_aggregator(store).select_for_plan(
-        plan, orientation=body.orientation, prefer_local=body.prefer_local, task_id=project_id,
-    )
+    with phase_timer("media_search", project_id=project_id):
+        selection = _media_aggregator(store).select_for_plan(
+            plan, orientation=body.orientation, prefer_local=body.prefer_local, task_id=project_id,
+        )
     return _ok({"project_id": project_id, "selected_count": len(selection)})
 
 
@@ -333,10 +336,11 @@ def timeline_build(request: Request, project_id: str, body: TimelineBuildRequest
     store = _store()
     if store.load_shot_plan(project_id) is None:
         raise HttpException(task_id=project_id, status_code=400, message="run /plan first")
-    project = _timeline_builder(store).build_from_store(
-        project_id, title=body.title,
-        narration_audio_path=body.narration_audio_path, subtitle_path=body.subtitle_path,
-    )
+    with phase_timer("timeline_build", project_id=project_id):
+        project = _timeline_builder(store).build_from_store(
+            project_id, title=body.title,
+            narration_audio_path=body.narration_audio_path, subtitle_path=body.subtitle_path,
+        )
     return _ok({"project_id": project_id, "track_count": len(project.tracks)})
 
 
@@ -385,7 +389,8 @@ def music_select(request: Request, project_id: str, body: MusicSelectRequest):
         store.save_selected_music(project_id, [])
         return _ok({"project_id": project_id, "selected": None, "selected_count": 0})
     mode = "commercial_safe" if body.commercial_safe_only else "local_only"
-    selected = MusicSelector().select(intent, _music_providers(body.local_only), mode=mode)
+    with phase_timer("music_select", project_id=project_id):
+        selected = MusicSelector().select(intent, _music_providers(body.local_only), mode=mode)
     tracks = []
     if selected is not None:
         selected = selected.model_copy(update={"volume": body.volume})
@@ -428,7 +433,8 @@ def _run_render(project_id: str, spec: RenderSpec) -> None:
     try:
         store = _store()
         store.save_render_spec(project_id, spec)
-        result = rp.render_project_from_store(project_id, store)
+        with phase_timer("render", project_id=project_id):
+            result = rp.render_project_from_store(project_id, store)
         if result.success:
             sm.state.update_task(
                 project_id, state=const.TASK_STATE_COMPLETE, progress=100,
