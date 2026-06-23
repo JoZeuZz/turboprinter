@@ -172,3 +172,43 @@ def test_timeline_commands_endpoint(client):
     reloaded = store.load_timeline(pid).tracks[0].items[0]
     assert reloaded.trim_start_sec == 0.5
     assert reloaded.trim_end_sec == 2.0
+
+
+def test_render_endpoint_background_and_status(client, monkeypatch):
+    from app.domain.rendering.models import RenderResult
+    from app.application.workflows import render_project as rp
+
+    pid = client.post(
+        "/api/v1/projects/from-script", json={"script": "Uno. Dos.", "language": "es"}
+    ).json()["data"]["project_id"]
+    _seed_plan_and_media(pid)
+    client.post(f"/api/v1/projects/{pid}/timeline/build", json={})
+
+    def fake_render(task_id, store, renderer=None, output_dir=None):
+        return RenderResult(project_id=task_id, output_path="/tmp/final.mp4",
+                            renderer_used="moviepy", success=True, duration_sec=5.0)
+
+    monkeypatch.setattr(rp, "render_project_from_store", fake_render)
+    r = client.post(f"/api/v1/projects/{pid}/render", json={})
+    assert r.status_code == 202
+
+    s = client.get(f"/api/v1/projects/{pid}/render")
+    assert s.status_code == 200
+    assert s.json()["data"]["state"] in (1, 4)  # COMPLETE or PROCESSING
+
+
+def test_render_requires_timeline(client):
+    pid = client.post(
+        "/api/v1/projects/from-script", json={"script": "Uno.", "language": "es"}
+    ).json()["data"]["project_id"]
+    assert client.post(f"/api/v1/projects/{pid}/render", json={}).status_code == 400
+
+
+def test_assets_endpoint_lists_files(client):
+    pid = client.post(
+        "/api/v1/projects/from-script", json={"script": "Uno.", "language": "es"}
+    ).json()["data"]["project_id"]
+    r = client.get(f"/api/v1/projects/{pid}/assets")
+    assert r.status_code == 200
+    names = r.json()["data"]["assets"]
+    assert any(a.endswith("script.txt") for a in names)
