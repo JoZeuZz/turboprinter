@@ -14,8 +14,20 @@ def register(name: str):
 
 def get_provider(name: str) -> "LLMProvider":
     """Return an instantiated provider for *name*, falling back to openai_compat."""
+    from .gemini import GeminiProvider
     from .openai_compat import OpenAICompatProvider
-    cls = _REGISTRY.get(name) or OpenAICompatProvider
+
+    # Explicit registrations: gemini uses its own provider;
+    # the 13 OpenAI-compatible providers use OpenAICompatProvider.
+    _explicit: dict[str, type] = {
+        "gemini": GeminiProvider,
+        **{k: OpenAICompatProvider for k in (
+            "openai", "groq", "deepseek", "ollama", "moonshot",
+            "aihubmix", "aimlapi", "oneapi", "grok", "minimax",
+            "mimo", "modelscope", "azure",
+        )},
+    }
+    cls = _explicit.get(name) or _REGISTRY.get(name) or OpenAICompatProvider
     return cls(name)
 
 

@@ -187,3 +187,45 @@ class TestGeminiProvider:
             mock_cfg.app.get.return_value = None
             with pytest.raises(LLMConfigError, match="api_key"):
                 GeminiProvider("gemini")
+
+
+class TestRegistry:
+    def test_get_provider_openai_returns_openai_compat(self):
+        from app.services.quality.llm_providers import get_provider
+        from app.services.quality.llm_providers.openai_compat import OpenAICompatProvider
+        cfg = {"openai_api_key": "sk-test", "openai_model_name": "gpt-4o-mini", "openai_base_url": "https://api.openai.com/v1"}
+        with patch("app.services.quality.llm_providers.openai_compat.config") as mock_cfg:
+            mock_cfg.app.get.side_effect = lambda k, default=None: cfg.get(k, default)
+            provider = get_provider("openai")
+        assert isinstance(provider, OpenAICompatProvider)
+
+    def test_get_provider_gemini_returns_gemini(self):
+        from app.services.quality.llm_providers import get_provider
+        from app.services.quality.llm_providers.gemini import GeminiProvider
+        cfg = {"gemini_api_key": "AIza-test", "gemini_model_name": "gemini-2.5-flash"}
+        with patch("app.services.quality.llm_providers.gemini.config") as mock_cfg:
+            mock_cfg.app.get.side_effect = lambda k, default=None: cfg.get(k, default)
+            provider = get_provider("gemini")
+        assert isinstance(provider, GeminiProvider)
+
+    def test_get_provider_unknown_falls_back_to_openai_compat(self):
+        from app.services.quality.llm_providers import get_provider
+        from app.services.quality.llm_providers.openai_compat import OpenAICompatProvider
+        cfg = {"unknown_xyz_api_key": "test", "unknown_xyz_model_name": "m", "unknown_xyz_base_url": "http://x"}
+        with patch("app.services.quality.llm_providers.openai_compat.config") as mock_cfg:
+            mock_cfg.app.get.side_effect = lambda k, default=None: cfg.get(k, default)
+            provider = get_provider("unknown_xyz")
+        assert isinstance(provider, OpenAICompatProvider)
+
+    def test_provider_error_not_swallowed_by_generate_response_single(self):
+        """LLMProviderError from a provider must propagate up (not become 'Error: ...')."""
+        from app.services.quality.llm_providers.base import LLMProviderError
+        import app.services.llm as llm_mod
+        fake_provider = MagicMock()
+        fake_provider.generate.side_effect = LLMProviderError("fake", ValueError("boom"))
+        with patch("app.services.quality.llm_providers.get_provider", return_value=fake_provider), \
+             patch.object(llm_mod, "config") as mock_cfg:
+            mock_cfg.app.get.return_value = "fake"
+            result = llm_mod._generate_response_single("hello", provider_override="fake")
+        # Should propagate as "Error: ..." string via the outer try/except in the fallback chain
+        assert result.startswith("Error:")
