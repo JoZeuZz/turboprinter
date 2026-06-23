@@ -7,6 +7,7 @@ from loguru import logger
 from app.config import config
 from app.domain.media.models import MediaCandidate
 from app.domain.media.scoring import MediaRanker, RankContext
+from app.domain.media.vision_scoring import VisionRanker
 from app.domain.planning.models import ShotPlan
 from app.infrastructure.media_providers.base import MediaProvider
 from app.infrastructure.media_providers.local_provider import LocalLibraryProvider
@@ -15,7 +16,6 @@ from app.infrastructure.media_providers.stock_providers import (
     PexelsProvider,
     PixabayProvider,
 )
-from app.domain.media.vision_scoring import VisionRanker
 from app.infrastructure.storage.base import ProjectStore
 
 
