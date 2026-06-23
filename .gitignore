@@ -32,6 +32,7 @@ test_*.py
 !test/services/test_*.py
 !test/domain/test_*.py
 !test/infrastructure/test_*.py
+!test/webui/test_*.py
 streamlit.log
 AGENTS.md
 config.toml
