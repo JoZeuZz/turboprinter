@@ -5,12 +5,14 @@ import os
 from pydantic import TypeAdapter, ValidationError
 
 from app.domain.media.models import MediaCandidate
+from app.domain.music.models import MusicTrack
 from app.domain.planning.models import ShotPlan
 from app.domain.projects.models import TimelineProject
 from app.domain.rendering.models import RenderManifest, RenderResult, RenderSpec
 from app.infrastructure.storage.base import ProjectStoreError
 
 _MEDIA_ADAPTER: TypeAdapter[list[MediaCandidate]] = TypeAdapter(list[MediaCandidate])
+_MUSIC_ADAPTER: TypeAdapter[list[MusicTrack]] = TypeAdapter(list[MusicTrack])
 
 _SCRIPT = "script.txt"
 _SHOT_PLAN = "shot_plan.json"
@@ -20,6 +22,7 @@ _RENDER_MANIFEST = "render_manifest.json"
 _RENDER_RESULT = "render_result.json"
 _MEDIA = "media_candidates.json"
 _SELECTED = "selected_media.json"
+_SELECTED_MUSIC = "selected_music.json"
 
 
 class FilesystemProjectStore:
@@ -131,6 +134,19 @@ class FilesystemProjectStore:
             return RenderResult.model_validate_json(raw)
         except ValidationError as exc:
             raise ProjectStoreError(self._path(task_id, _RENDER_RESULT), exc) from exc
+
+    def save_selected_music(self, task_id: str, tracks: list[MusicTrack]) -> None:
+        payload = _MUSIC_ADAPTER.dump_json(tracks, indent=2).decode("utf-8")
+        self._write(task_id, _SELECTED_MUSIC, payload)
+
+    def load_selected_music(self, task_id: str) -> list[MusicTrack]:
+        raw = self._read(task_id, _SELECTED_MUSIC)
+        if raw is None:
+            return []
+        try:
+            return _MUSIC_ADAPTER.validate_json(raw)
+        except ValidationError as exc:
+            raise ProjectStoreError(self._path(task_id, _SELECTED_MUSIC), exc) from exc
 
     def save_media_candidates(
         self, task_id: str, candidates: list[MediaCandidate]
