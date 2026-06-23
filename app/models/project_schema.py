@@ -30,6 +30,15 @@ class CreateFromScriptRequest(BaseModel):
     target_duration_sec: float | None = None
 
 
+class CreateFromRedditRequest(BaseModel):
+    url: str | None = None
+    title: str | None = None
+    body: str | None = None
+    comments: list[str] = []
+    language: str = "es"
+    topic: str | None = None
+
+
 class PlanRequest(BaseModel):
     target_duration_sec: float | None = None
     global_visual_style: str | None = None

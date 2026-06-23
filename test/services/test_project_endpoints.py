@@ -212,3 +212,44 @@ def test_assets_endpoint_lists_files(client):
     assert r.status_code == 200
     names = r.json()["data"]["assets"]
     assert any(a.endswith("script.txt") for a in names)
+
+
+def test_from_reddit_manual_payload(client, monkeypatch):
+    monkeypatch.setattr(pj.config, "reddit_ingest_enabled", True)
+    r = client.post("/api/v1/projects/from-reddit", json={
+        "title": "T", "body": "story by u/bob", "comments": ["nice by u/ann"],
+    })
+    assert r.status_code == 200
+    pid = r.json()["data"]["project_id"]
+    script = pj._store().load_script(pid)
+    assert "u/bob" not in script
+    assert "story" in script
+
+
+def test_from_reddit_url_uses_service(client, monkeypatch):
+    from app.domain.sources.models import StorySource
+    monkeypatch.setattr(pj.config, "reddit_ingest_enabled", True)
+
+    class FakeSvc:
+        def fetch(self, url, client=None):
+            return StorySource(id="abc", kind="reddit", title="Hi", body="text by u/x")
+        def from_manual(self, title, body, comments=None):
+            raise AssertionError("should use fetch for url")
+
+    monkeypatch.setattr(pj, "_reddit_service", lambda: FakeSvc())
+    r = client.post("/api/v1/projects/from-reddit", json={"url": "https://reddit.com/r/x/abc"})
+    assert r.status_code == 200
+    pid = r.json()["data"]["project_id"]
+    assert "u/x" not in pj._store().load_script(pid)
+
+
+def test_from_reddit_404_when_disabled(client, monkeypatch):
+    monkeypatch.setattr(pj.config, "reddit_ingest_enabled", False)
+    r = client.post("/api/v1/projects/from-reddit", json={"body": "x"})
+    assert r.status_code == 404
+
+
+def test_from_reddit_requires_payload(client, monkeypatch):
+    monkeypatch.setattr(pj.config, "reddit_ingest_enabled", True)
+    r = client.post("/api/v1/projects/from-reddit", json={})
+    assert r.status_code == 400

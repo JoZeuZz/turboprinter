@@ -7,6 +7,10 @@ from fastapi import BackgroundTasks, Request
 
 from app.application.services.media_aggregator import MediaAggregator
 from app.application.services.shot_planner import ShotPlanner
+from app.application.services.reddit_ingest import (
+    RedditIngestService,
+    RedditThreadNormalizer,
+)
 from app.application.services.timeline_builder import TimelineBuilder
 from app.application.workflows import render_project as rp
 from app.config import config
@@ -28,6 +32,7 @@ from app.models.project_schema import (
     BaseProjectResponse,
     CreateFromScriptRequest,
     CreateFromTopicRequest,
+    CreateFromRedditRequest,
     MediaSearchRequest,
     PlanRequest,
     RenderRequest,
@@ -95,6 +100,29 @@ def create_from_script(request: Request, body: CreateFromScriptRequest):
     task_id = utils.get_uuid()
     _store().save_script(task_id, body.script)
     return _ok({"project_id": task_id, "has_script": True})
+
+
+def _reddit_service():
+    return RedditIngestService()
+
+
+@router.post("/projects/from-reddit", response_model=BaseProjectResponse,
+             summary="Create a project from a Reddit thread or manual payload")
+def create_from_reddit(request: Request, body: CreateFromRedditRequest):
+    _require_project_mode(request)
+    if not getattr(config, "reddit_ingest_enabled", False):
+        raise HttpException(task_id="", status_code=404, message="reddit ingest disabled")
+    svc = _reddit_service()
+    if body.url:
+        source = svc.fetch(body.url)
+    elif body.body:
+        source = svc.from_manual(body.title or "", body.body, body.comments)
+    else:
+        raise HttpException(task_id="", status_code=400, message="url or body required")
+    script = RedditThreadNormalizer().to_script_text(source)
+    task_id = utils.get_uuid()
+    _store().save_script(task_id, script)
+    return _ok({"project_id": task_id, "has_script": bool(script), "source_kind": source.kind})
 
 
 @router.get("/projects/{project_id}", response_model=BaseProjectResponse,
