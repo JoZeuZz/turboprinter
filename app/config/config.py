@@ -242,6 +242,17 @@ reddit_ingest_enabled = _env_bool_or_config(
     "TURBOPRINTER_REDDIT_INGEST", project_mode.get("reddit_ingest", False)
 )
 
+# Vision ranking (Fase 4). Opt-in, default off.
+vision_ranking_enabled = _env_bool_or_config(
+    "TURBOPRINTER_VISION_RANKING_ENABLED",
+    project_mode.get("vision_ranking", False),
+)
+vision_model_name: str | None = (
+    project_mode.get("vision_model_name")
+    or app.get("litellm_model_name")
+)
+vision_top_n: int = int(project_mode.get("vision_top_n", 3))
+
 # Phase timing. Opt-in, default off. When enabled, each pipeline phase logs its
 # duration via loguru and project-mode phases append to timings.json.
 phase_timing_enabled = _env_bool_or_config(
