@@ -242,6 +242,12 @@ reddit_ingest_enabled = _env_bool_or_config(
     "TURBOPRINTER_REDDIT_INGEST", project_mode.get("reddit_ingest", False)
 )
 
+# Phase timing. Opt-in, default off. When enabled, each pipeline phase logs its
+# duration via loguru and project-mode phases append to timings.json.
+phase_timing_enabled = _env_bool_or_config(
+    "TURBOPRINTER_PHASE_TIMING", quality.get("phase_timing", False)
+)
+
 app["redis_host"] = os.getenv(
     "MPT_APP_REDIS_HOST",
     os.getenv("REDIS_HOST", app.get("redis_host", "localhost")),
