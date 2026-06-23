@@ -121,6 +121,22 @@ def test_select_for_plan_persists(tmp_path):
     assert store.load_media_candidates("t1")  # pool persisted
 
 
+def test_select_for_plan_persists_segment_scoped_candidate_pool(tmp_path):
+    from app.infrastructure.storage.filesystem_store import FilesystemProjectStore
+
+    store = FilesystemProjectStore(base_tasks_dir=str(tmp_path))
+    agg = ma.MediaAggregator([
+        FakeProvider("pexels", [
+            _c("shared", "pexels", url="https://x/shared.mp4", tags=["sunrise", "ocean"]),
+        ])
+    ], store=store)
+
+    agg.select_for_plan(_plan(), task_id="t1")
+
+    persisted = store.load_media_candidates("t1")
+    assert [candidate.segment_id for candidate in persisted] == ["seg_001", "seg_002"]
+
+
 def test_factory_returns_none_when_flag_off(monkeypatch):
     monkeypatch.setattr(ma.config, "multi_provider_media_enabled", False, raising=False)
     assert ma.get_media_aggregator() is None

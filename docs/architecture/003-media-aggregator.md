@@ -158,12 +158,34 @@ with ThreadPoolExecutor(max_workers=4) as ex:
 
 | Archivo | Dónde | Contenido |
 |---------|-------|-----------|
-| `media_candidates.json` | `storage/tasks/{task_id}/` | Pool completo de `MediaCandidate` (todos los segmentos, deduplicado). |
+| `media_candidates.json` | `storage/tasks/{task_id}/` | Pool completo de `MediaCandidate` segmentado por `segment_id` (deduplicado por segmento). |
 | `selected_media.json` | `storage/tasks/{task_id}/` | Lista de `MediaCandidate` seleccionados, uno por `segment_id`. |
+
+El pool persistido conserva `segment_id` también para candidatos no seleccionados,
+porque el editor manual y el endpoint `replace` solo permiten reemplazar por
+candidatos registrados para el mismo segmento.
 
 Métodos en `FilesystemProjectStore`:
 - `save_media_candidates(task_id, candidates)` / `load_media_candidates(task_id)`
 - `save_selected_media(task_id, selected)` / `load_selected_media(task_id)`
+
+## License metadata
+
+`LicenseInfo` stores traceable provider terms instead of a single optimistic flag.
+Fields include `commercial_use`, `attribution_required`, `license_name`,
+`license_url`, `usage_notes`, `source_terms_url`, `training_restricted`,
+`redistribution_restricted`, and `unknown_or_provider_specific`.
+
+Provider notes:
+
+- Pexels and Pixabay include their current public license/terms URLs and keep
+  `commercial_use=True` / `attribution_required=False` metadata.
+- Coverr is marked `type="provider_specific"` with
+  `unknown_or_provider_specific=True`; the system does not claim universal
+  commercial/no-attribution safety for Coverr.
+
+This metadata is informational and must not be treated as legal advice. Users
+should review source terms before publication.
 
 ---
 

@@ -43,6 +43,7 @@ g4f = [
 [dependency-groups]
 dev = [
     "pytest>=8,<9",
+    "ruff>=0.8,<1",
 ]
 
 [tool.hatch.build.targets.wheel]
@@ -51,3 +52,16 @@ packages = ["app"]
 [tool.uv]
 # 当前项目以应用运行形态为主，不作为可发布的 Python 包安装。
 package = false
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+exclude = [
+    ".venv",
+    "storage",
+    "models",
+]
+
+[tool.ruff.lint]
+# Conservative first pass: syntax/runtime-name failures only.
+select = ["E9", "F821"]

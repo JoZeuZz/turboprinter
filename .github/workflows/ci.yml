@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - main
+      - personal/quality-stack
 
 jobs:
   tests:
@@ -36,3 +37,6 @@ jobs:
 
       - name: Run tests
         run: uv run python -X utf8 -m pytest -q
+
+      - name: Run Ruff
+        run: uv run ruff check app webui test

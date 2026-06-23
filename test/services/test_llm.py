@@ -147,6 +147,9 @@ class TestScriptPromptOptions(unittest.TestCase):
 class TestLiteLLMProvider(unittest.TestCase):
     def setUp(self):
         self.original_app_config = dict(config.app)
+        config.app["llm_fallback_providers"] = []
+        config.app.pop("llm_request_timeout_seconds", None)
+        config.app.pop("llm_connect_timeout_seconds", None)
 
     def tearDown(self):
         config.app.clear()

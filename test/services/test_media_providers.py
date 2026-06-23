@@ -93,3 +93,26 @@ def test_coverr_aspect_defaults_to_portrait_on_bad_orientation(monkeypatch):
                         lambda search_term, minimum_duration, video_aspect=VideoAspect.portrait: (captured.__setitem__("aspect", video_aspect), [])[1])
     sp.CoverrProvider().search_videos("q", orientation="weird")
     assert captured["aspect"] == VideoAspect.portrait
+
+
+def test_coverr_license_is_provider_specific_not_simplified():
+    license_info = sp.CoverrProvider._license
+
+    assert license_info is not None
+    assert license_info.unknown_or_provider_specific is True
+    assert license_info.type == "provider_specific"
+    assert license_info.source_terms_url == "https://coverr.co/license"
+    assert not (
+        license_info.commercial_use is True
+        and license_info.attribution_required is False
+    )
+
+
+def test_stock_provider_licenses_include_terms_metadata():
+    pexels = sp.PexelsProvider._license
+    pixabay = sp.PixabayProvider._license
+
+    assert pexels.license_name == "Pexels License"
+    assert pexels.source_terms_url == "https://www.pexels.com/license/"
+    assert pixabay.license_name == "Pixabay Content License"
+    assert pixabay.source_terms_url == "https://pixabay.com/service/license-summary/"

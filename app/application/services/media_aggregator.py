@@ -47,6 +47,18 @@ class MediaAggregator:
             out.append(c)
         return out
 
+    @staticmethod
+    def _dedupe_segment_pool(cands: list[MediaCandidate]) -> list[MediaCandidate]:
+        seen: set[tuple[str | None, str]] = set()
+        out: list[MediaCandidate] = []
+        for c in cands:
+            key = (c.segment_id, _content_key(c))
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(c)
+        return out
+
     def search(
         self,
         query: str,
@@ -91,7 +103,7 @@ class MediaAggregator:
                 for q in seg.fallback_queries:
                     cands.extend(self.search(q, orientation, seg.target_duration_sec))
             cands = self._dedupe(cands)
-            pool.extend(cands)
+            pool.extend(c.model_copy(update={"segment_id": seg.id}) for c in cands)
 
             ctx = RankContext(
                 query=" ".join(seg.search_queries),
@@ -114,7 +126,7 @@ class MediaAggregator:
             used_ids.append(chosen.id)
 
         if self._store is not None and task_id:
-            self._store.save_media_candidates(task_id, self._dedupe(pool))
+            self._store.save_media_candidates(task_id, self._dedupe_segment_pool(pool))
             self._store.save_selected_media(task_id, list(selection.values()))
         return selection
 

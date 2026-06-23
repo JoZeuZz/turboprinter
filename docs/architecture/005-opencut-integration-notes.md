@@ -25,6 +25,11 @@ Modules:
 - `app/infrastructure/renderers/opencut_adapter.py` — `OpenCutAdapter` stub.
 - `app/application/workflows/render_project.py` — `get_timeline_renderer()` factory (gated by `TURBOPRINTER_PROJECT_MODE_ENABLED` + `TURBOPRINTER_TIMELINE_RENDERER`) and `render_project_from_store()`.
 
+`render_project_from_store()` reads persisted `render_spec.json` and selects the
+renderer from `RenderSpec.renderer` when no renderer is injected. This keeps API
+requests deterministic: `renderer="moviepy"` uses MoviePy and
+`renderer="opencut"` uses `OpenCutAdapter`.
+
 The domain layer (`app/domain/`) never imports moviepy or `VideoParams`. That
 coupling lives only in `app/infrastructure/renderers/`.
 
@@ -75,6 +80,9 @@ What is **not** done:
 
 - No OpenCut code is vendored or copied. `OpenCutAdapter.render` raises
   `NotImplementedError`.
+- The workflow catches that specific not-implemented failure and persists a clear
+  failed `render_result.json`/`render_manifest.json`; it does not fall back to
+  MoviePy silently.
 
 Risks before any real integration:
 

@@ -14,5 +14,6 @@ class MusicTrack(BaseModel):
     tags: list[str] = Field(default_factory=list)
     duration_sec: float | None = None
     license: LicenseInfo | None = None
+    volume: float | None = None
     score: float | None = None
     score_reasons: list[str] = Field(default_factory=list)

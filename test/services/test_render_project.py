@@ -65,6 +65,109 @@ def test_render_project_from_store_loads_and_renders(monkeypatch, tmp_path):
     assert captured["spec"] == (1080, 1920)
 
 
+def test_render_project_from_store_uses_moviepy_for_moviepy_spec(monkeypatch, tmp_path):
+    store = FilesystemProjectStore(base_tasks_dir=str(tmp_path / "tasks"))
+    store.save_timeline("task-1", _project())
+    store.save_render_spec(
+        "task-1",
+        RenderSpec(
+            project_id="task-1", renderer="moviepy",
+            width=1080, height=1920, fps=30,
+        ),
+    )
+    captured = {}
+
+    class FakeMoviePy:
+        name = "moviepy"
+
+        def __init__(self, store=None):
+            captured["store"] = store
+
+        def render(self, project, spec, output_dir):
+            captured["renderer"] = spec.renderer
+            return RenderResult(
+                project_id=project.project_id, output_path="/tmp/final.mp4",
+                renderer_used="moviepy", success=True,
+            )
+
+    monkeypatch.setattr(rp, "MoviePyTimelineRenderer", FakeMoviePy)
+
+    result = rp.render_project_from_store("task-1", store, output_dir=str(tmp_path / "out"))
+
+    assert result.success is True
+    assert result.renderer_used == "moviepy"
+    assert captured == {"store": store, "renderer": "moviepy"}
+
+
+def test_render_project_from_store_uses_opencut_for_opencut_spec(monkeypatch, tmp_path):
+    store = FilesystemProjectStore(base_tasks_dir=str(tmp_path / "tasks"))
+    store.save_timeline("task-1", _project())
+    store.save_render_spec(
+        "task-1",
+        RenderSpec(
+            project_id="task-1", renderer="opencut",
+            width=1080, height=1920, fps=30,
+        ),
+    )
+
+    class UnexpectedMoviePy:
+        def __init__(self, store=None):
+            raise AssertionError("MoviePy must not be used for opencut spec")
+
+    class FakeOpenCut:
+        name = "opencut"
+
+        def render(self, project, spec, output_dir):
+            return RenderResult(
+                project_id=project.project_id, output_path="/tmp/opencut.mp4",
+                renderer_used="opencut", success=True,
+            )
+
+    monkeypatch.setattr(rp, "MoviePyTimelineRenderer", UnexpectedMoviePy)
+    monkeypatch.setattr(rp, "OpenCutAdapter", FakeOpenCut)
+
+    result = rp.render_project_from_store("task-1", store, output_dir=str(tmp_path / "out"))
+
+    assert result.success is True
+    assert result.renderer_used == "opencut"
+
+
+def test_opencut_spec_returns_controlled_failure_and_manifest(monkeypatch, tmp_path):
+    store = FilesystemProjectStore(base_tasks_dir=str(tmp_path / "tasks"))
+    store.save_timeline("task-1", _project())
+    store.save_render_spec(
+        "task-1",
+        RenderSpec(
+            project_id="task-1", renderer="opencut",
+            width=1080, height=1920, fps=30,
+        ),
+    )
+
+    class UnexpectedMoviePy:
+        name = "moviepy"
+
+        def __init__(self, store=None):
+            pass
+
+        def render(self, project, spec, output_dir):
+            return RenderResult(
+                project_id=project.project_id, output_path="/tmp/moviepy.mp4",
+                renderer_used="moviepy", success=True,
+            )
+
+    monkeypatch.setattr(rp, "MoviePyTimelineRenderer", UnexpectedMoviePy)
+
+    result = rp.render_project_from_store("task-1", store, output_dir=str(tmp_path / "out"))
+
+    assert result.success is False
+    assert result.renderer_used == "opencut"
+    assert "not implemented" in (result.error or "").lower()
+    manifest = store.load_render_manifest("task-1")
+    assert manifest is not None
+    assert manifest.renderer == "opencut"
+    assert any("not implemented" in warning.lower() for warning in manifest.warnings)
+
+
 def test_render_project_from_store_requires_timeline(tmp_path):
     store = FilesystemProjectStore(base_tasks_dir=str(tmp_path / "tasks"))
     with pytest.raises(ValueError, match="timeline"):

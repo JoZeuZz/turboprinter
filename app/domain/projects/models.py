@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable, Sequence
 from datetime import datetime, timezone
 from typing import Any, Literal
 from uuid import uuid4
@@ -81,7 +82,7 @@ class TimelineProject(BaseModel):
             raise KeyError(f"item {item_id!r} not found in track {track_id!r}")
         raise KeyError(f"track {track_id!r} not found")
 
-    def apply(self, command: EditCommand) -> None:
+    def _apply_one(self, command: EditCommand) -> None:
         item = self._find_item(command.track_id, command.item_id)
         if isinstance(command, MoveClipCommand):
             item.start_sec = command.new_start_sec
@@ -91,7 +92,7 @@ class TimelineProject(BaseModel):
         elif isinstance(command, ReplaceClipCommand):
             cand = command.new_candidate
             item.media_id = cand.id
-            item.local_path = cand.local_path
+            item.local_path = cand.local_path or cand.download_url or cand.source_url
             item.provider = cand.provider
         elif isinstance(command, SetClipTimingCommand):
             item.duration_sec = command.duration_sec
@@ -99,4 +100,54 @@ class TimelineProject(BaseModel):
             item.volume = command.volume
         else:  # pragma: no cover - exhaustive guard
             raise TypeError(f"unsupported command: {type(command).__name__}")
-        self.updated_at = _utcnow()
+
+    def _sort_tracks(self) -> None:
+        for track in self.tracks:
+            track.items.sort(key=lambda i: (i.start_sec, i.id))
+
+    def _copy_from(self, other: "TimelineProject") -> None:
+        for field_name in self.__class__.model_fields:
+            setattr(self, field_name, getattr(other, field_name))
+
+    @staticmethod
+    def _validate_replace_path(
+        command: EditCommand,
+        media_path_exists: Callable[[str], bool] | None,
+    ) -> None:
+        if not isinstance(command, ReplaceClipCommand) or media_path_exists is None:
+            return
+        local_path = command.new_candidate.local_path
+        if local_path and not media_path_exists(local_path):
+            raise ValueError(f"replacement local_path does not exist: {local_path}")
+
+    def apply_all(
+        self,
+        commands: Sequence[EditCommand],
+        *,
+        validate: bool = True,
+        media_path_exists: Callable[[str], bool] | None = None,
+    ) -> "TimelineProject":
+        working = self.model_copy(deep=True)
+        for command in commands:
+            self._validate_replace_path(command, media_path_exists)
+            working._apply_one(command)
+        working._sort_tracks()
+        if validate:
+            from app.domain.projects.validators import validate_timeline_project
+
+            validate_timeline_project(working)
+        working.updated_at = _utcnow()
+        return working
+
+    def apply(
+        self,
+        command: EditCommand,
+        *,
+        validate: bool = True,
+        media_path_exists: Callable[[str], bool] | None = None,
+    ) -> "TimelineProject":
+        updated = self.apply_all(
+            [command], validate=validate, media_path_exists=media_path_exists
+        )
+        self._copy_from(updated)
+        return self

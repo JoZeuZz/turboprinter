@@ -10,8 +10,15 @@ A minimal manual editor lets the user review/edit a project before render:
 - create a project from a pasted script,
 - load an existing project by id,
 - run plan / search media / build timeline,
-- reorder clips, adjust trims, replace candidates (via edit commands),
-- launch a background render and poll its status.
+- review the script and ShotPlan segments,
+- inspect video timeline clips with segment, provider, path/source, start,
+  duration, trims, query and score metadata when available,
+- queue and save reorder, trim, duration and replace commands,
+- validate the timeline before render,
+- launch a background render with MoviePy or request OpenCut and receive a clear
+  not-implemented failure,
+- poll render status,
+- select contextual music and volume.
 
 ## Architecture
 
@@ -22,8 +29,9 @@ Two pieces, deliberately separated:
   Unit-tested with `requests` monkeypatched.
 - `webui/pages/2_Project_Editor.py` — a Streamlit multipage script that only
   orchestrates widgets and delegates to the client. Pure helpers
-  (`build_trim_command`, `build_reorder_command`) live at module top-level and
-  are unit-tested without running Streamlit.
+  (`build_trim_command`, `build_reorder_commands`, `build_set_timing_command`,
+  `build_replace_command`, `asset_id_for_local_path`) live at module top-level
+  and are unit-tested without running Streamlit.
 
 The page consumes **only** the Fase 6 REST API; it never imports `task.py`,
 `video.py` or `material.py`. `webui/Main.py` is not modified, so the legacy
@@ -38,7 +46,9 @@ isolated, lowers risk and follows the fork rule of small, localized changes.
 
 - A graphical timeline (CapCut/OpenCut-style) — not copied.
 - Frame-level editing, advanced transitions, complex multi-track UI.
-- Inline video preview beyond what asset URIs allow.
+- Drag-and-drop timeline reordering. Current MVP uses buttons and forms.
+- Frame-level preview/scrubbing. Current preview uses safe project-local asset URLs
+  with `st.video()` when available and shows links/placeholders otherwise.
 
 ## Path to a richer editor
 
