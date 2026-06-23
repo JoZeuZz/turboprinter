@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Protocol
+from typing import Protocol, runtime_checkable
 
 from pydantic import BaseModel
 
@@ -15,6 +15,7 @@ class VisionScore(BaseModel):
     reason: str
 
 
+@runtime_checkable
 class VisionProvider(Protocol):
     def score_thumbnail(
         self,

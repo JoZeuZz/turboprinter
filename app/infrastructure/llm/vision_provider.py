@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from typing import runtime_checkable
 
 import litellm
 from loguru import logger
@@ -28,19 +29,22 @@ class LiteLLMVisionProvider:
         query: str,
         narration: str,
     ) -> VisionScore | None:
-        if not thumbnail_url:
+        if thumbnail_url is None:
             return None
-        prompt = _PROMPT.format(narration=narration[:200], query=query[:100])
-        messages = [
-            {
-                "role": "user",
-                "content": [
-                    {"type": "image_url", "image_url": {"url": thumbnail_url}},
-                    {"type": "text", "text": prompt},
-                ],
-            }
-        ]
+        if not thumbnail_url:
+            logger.warning("[vision] empty thumbnail_url, skipping")
+            return None
         try:
+            prompt = _PROMPT.format(narration=narration[:200], query=query[:100])
+            messages = [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "image_url", "image_url": {"url": thumbnail_url}},
+                        {"type": "text", "text": prompt},
+                    ],
+                }
+            ]
             response = litellm.completion(
                 model=self._model,
                 messages=messages,
