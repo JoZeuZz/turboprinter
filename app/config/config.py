@@ -216,6 +216,11 @@ contextual_music_enabled = (
     os.getenv("TURBOPRINTER_CONTEXTUAL_MUSIC", "false").strip().lower() == "true"
 )
 
+# Reddit ingest (Fase 9). Opt-in, default off. PRAW is an optional dependency.
+reddit_ingest_enabled = (
+    os.getenv("TURBOPRINTER_REDDIT_INGEST", "false").strip().lower() == "true"
+)
+
 app["redis_host"] = os.getenv(
     "MPT_APP_REDIS_HOST",
     os.getenv("REDIS_HOST", app.get("redis_host", "localhost")),
