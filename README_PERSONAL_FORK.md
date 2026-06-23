@@ -45,6 +45,7 @@ The fork includes an **optional domain layer** (`app/domain/`) and **filesystem 
 | `app/infrastructure/renderers/opencut_adapter.py` | Experimental OpenCut renderer stub; raises `NotImplementedError` | Fase 5, behind `TimelineRenderer` interface |
 | `app/application/workflows/render_project.py` | Loads `timeline_project.json` + `render_spec.json` and renders via the selected renderer | Fase 5 standalone, not wired into legacy task pipeline |
 | `app/controllers/v1/projects.py` | Project-mode REST API under `/api/v1/projects` (create, plan, media, timeline, edit commands, background render, assets) | Fase 6, `404` when project mode is off; legacy endpoints untouched |
+| `app/application/services/music_selector.py` + `app/infrastructure/music_providers/` | Contextual music selection from `MusicIntent` (local library + Jamendo stub); writes `selected_music.json` | Fase 8, gated by `TURBOPRINTER_CONTEXTUAL_MUSIC`; legacy BGM untouched |
 | `TURBOPRINTER_PROJECT_MODE_ENABLED` | Environment flag (default: off) | enables project-mode wiring (in future plans) |
 | `TURBOPRINTER_STRUCTURED_SHOT_PLANNER` | Environment flag (default: off) | enables the structured Shot Planner (Fase 2) |
 
@@ -58,6 +59,7 @@ The fork includes an **optional domain layer** (`app/domain/`) and **filesystem 
 | `TURBOPRINTER_STRUCTURED_SHOT_PLANNER` | `false` | Activates the structured Shot Planner (Fase 2). Requires `litellm_model_name` set in `config.toml`. On LLM failure or missing model, degrades automatically to a local deterministic heuristic (split by sentences + uniform duration + keyword queries) — no external service required. |
 | `TURBOPRINTER_MULTI_PROVIDER_MEDIA` | `false` | Activates multi-provider media search (Pexels, Pixabay, Coverr + local library). Auto-detects providers with API keys configured in `config.toml`; if a provider fails the others continue. Without keys or a local library database the aggregator is inert. Set `TURBOPRINTER_PROJECT_MODE_ENABLED=true` to persist candidates and selection. |
 | `TURBOPRINTER_TIMELINE_RENDERER` | `moviepy` | Selects the project-mode renderer (`moviepy` or `opencut`). `opencut` is an experimental stub. Only effective when `TURBOPRINTER_PROJECT_MODE_ENABLED=true`. |
+| `TURBOPRINTER_CONTEXTUAL_MUSIC` | `false` | Activates contextual music selection (Fase 8) from `MusicIntent` using a local music library (+ optional Jamendo). Without the flag or a library, the legacy BGM behaviour is unchanged. |
 
 `TimelineBuilder` is available as a standalone service for project-mode workflows:
 it converts `shot_plan.json` plus `selected_media.json` into
