@@ -78,6 +78,15 @@ endpoints and WebUI are unaffected. Render runs in the background and reports
 progress via the existing task-state manager. See
 `docs/architecture/006-project-api.md`.
 
+### Project Editor (Fase 7)
+
+A minimal manual editor lives at `webui/pages/2_Project_Editor.py` (a separate
+Streamlit page; `webui/Main.py` is untouched). It consumes the Fase 6 API via a
+testable client `webui/project_api.py` to create/load a project, run
+plan/media/build, reorder clips, adjust trims, replace candidates and launch a
+background render. Requires `TURBOPRINTER_PROJECT_MODE_ENABLED=true` and the API
+running. See `docs/architecture/004-manual-editor-roadmap.md`.
+
 To enable the structured Shot Planner:
 
 ```bash
