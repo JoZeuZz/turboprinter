@@ -77,3 +77,79 @@ def test_build_video_params_keeps_bgm_when_enabled():
     assert params.video_aspect == VideoAspect.landscape
     assert params.subtitle_enabled is False
     assert params.bgm_type == "random"
+
+
+import os
+
+import pytest
+
+from app.infrastructure.renderers import moviepy_renderer as mr
+
+
+def _spec() -> RenderSpec:
+    return RenderSpec(project_id="task-1", width=1080, height=1920, fps=30)
+
+
+def test_render_orchestrates_concat_and_generate(monkeypatch, tmp_path):
+    calls = {}
+
+    def fake_concat(items, width, height, out_path, threads=2):
+        calls["concat"] = {"count": len(items), "size": (width, height), "out": out_path}
+        with open(out_path, "wb") as fh:
+            fh.write(b"video")
+
+    def fake_generate(video_path, audio_path, subtitle_path, output_file, params):
+        calls["generate"] = {
+            "video": video_path, "audio": audio_path,
+            "subtitle": subtitle_path, "output": output_file,
+        }
+        with open(output_file, "wb") as fh:
+            fh.write(b"final-output-bytes")
+
+    monkeypatch.setattr(mr, "_concat_timeline_clips", fake_concat)
+    monkeypatch.setattr(mr.video, "generate_video", fake_generate)
+
+    result = MoviePyTimelineRenderer().render(_project(), _spec(), str(tmp_path))
+
+    assert result.success is True
+    assert result.renderer_used == "moviepy"
+    assert os.path.exists(result.output_path)
+    assert result.file_size_bytes == len(b"final-output-bytes")
+    assert calls["concat"]["count"] == 2
+    assert calls["concat"]["size"] == (1080, 1920)
+    assert calls["generate"]["audio"] == "/tmp/narration.mp3"
+    assert calls["generate"]["subtitle"] == "/tmp/subs.srt"
+
+
+def test_render_persists_manifest_and_result(monkeypatch, tmp_path):
+    from app.infrastructure.storage.filesystem_store import FilesystemProjectStore
+
+    monkeypatch.setattr(mr, "_concat_timeline_clips", lambda *a, **k: open(a[3], "wb").close())
+    monkeypatch.setattr(
+        mr.video, "generate_video",
+        lambda video_path, audio_path, subtitle_path, output_file, params: open(
+            output_file, "wb"
+        ).write(b"x"),
+    )
+    store = FilesystemProjectStore(base_tasks_dir=str(tmp_path / "tasks"))
+    result = MoviePyTimelineRenderer(store=store).render(
+        _project(), _spec(), str(tmp_path / "out")
+    )
+    assert result.success is True
+    manifest = store.load_render_manifest("task-1")
+    assert manifest is not None
+    assert manifest.video_item_count == 2
+    assert manifest.has_audio is True
+    assert manifest.has_subtitles is True
+    assert store.load_render_result("task-1") is not None
+
+
+def test_render_returns_failure_on_exception(monkeypatch, tmp_path):
+    def boom(*args, **kwargs):
+        raise RuntimeError("ffmpeg exploded")
+
+    monkeypatch.setattr(mr, "_concat_timeline_clips", boom)
+    result = MoviePyTimelineRenderer().render(_project(), _spec(), str(tmp_path))
+    assert result.success is False
+    assert "ffmpeg exploded" in (result.error or "")
+    assert result.renderer_used == "moviepy"
