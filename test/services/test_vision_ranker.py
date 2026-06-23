@@ -24,13 +24,18 @@ def _cand(
 def test_rescore_reorders():
     """top-3 con relevancia distinta → orden cambia correctamente."""
     provider = MagicMock()
-    provider.score_thumbnail.side_effect = [
-        VisionScore(relevance=0.2, reason="low"),   # a: 1.0 + 3.0*0.2 = 1.6
-        VisionScore(relevance=0.9, reason="high"),  # b: 0.5 + 3.0*0.9 = 3.2
-        VisionScore(relevance=0.5, reason="mid"),   # c: 0.8 + 3.0*0.5 = 2.3
-    ]
+    _SCORES = {
+        "https://example.com/a.jpg": VisionScore(relevance=0.2, reason="low"),   # a: 1.0 + 3.0*0.2 = 1.6
+        "https://example.com/b.jpg": VisionScore(relevance=0.9, reason="high"),  # b: 0.5 + 3.0*0.9 = 3.2
+        "https://example.com/c.jpg": VisionScore(relevance=0.5, reason="mid"),   # c: 0.8 + 3.0*0.5 = 2.3
+    }
+    provider.score_thumbnail.side_effect = lambda url, q, n: _SCORES[url]
     ranker = VisionRanker(provider, top_n=3)
-    candidates = [_cand("a", score=1.0), _cand("b", score=0.5), _cand("c", score=0.8)]
+    candidates = [
+        _cand("a", score=1.0, thumbnail_url="https://example.com/a.jpg"),
+        _cand("b", score=0.5, thumbnail_url="https://example.com/b.jpg"),
+        _cand("c", score=0.8, thumbnail_url="https://example.com/c.jpg"),
+    ]
     result = ranker.rescore_top_n(candidates, query="sunset", narration="golden hour scene")
     assert [c.id for c in result] == ["b", "c", "a"]
 
