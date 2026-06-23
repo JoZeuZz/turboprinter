@@ -12,6 +12,7 @@ from app.infrastructure.storage.base import ProjectStoreError
 
 _MEDIA_ADAPTER: TypeAdapter[list[MediaCandidate]] = TypeAdapter(list[MediaCandidate])
 
+_SCRIPT = "script.txt"
 _SHOT_PLAN = "shot_plan.json"
 _TIMELINE = "timeline_project.json"
 _RENDER_SPEC = "render_spec.json"
@@ -55,6 +56,21 @@ class FilesystemProjectStore:
                 return fh.read()
         except OSError as exc:
             raise ProjectStoreError(path, exc) from exc
+
+    def project_dir(self, task_id: str, *, make: bool = False) -> str:
+        return self._task_dir(task_id, make=make)
+
+    def save_script(self, task_id: str, script: str) -> None:
+        self._write(task_id, _SCRIPT, script)
+
+    def load_script(self, task_id: str) -> str | None:
+        return self._read(task_id, _SCRIPT)
+
+    def exists(self, task_id: str) -> bool:
+        return os.path.exists(self._path(task_id, _SCRIPT)) or any(
+            os.path.exists(self._path(task_id, name))
+            for name in (_SHOT_PLAN, _TIMELINE, _SELECTED)
+        )
 
     def save_shot_plan(self, task_id: str, plan: ShotPlan) -> None:
         self._write(task_id, _SHOT_PLAN, plan.model_dump_json(indent=2))
