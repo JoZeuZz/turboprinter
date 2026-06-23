@@ -4,9 +4,13 @@ Consumes the Fase 6 project API. Does not touch the legacy pipeline.
 """
 from __future__ import annotations
 
+import os
+
 import streamlit as st
 
 from webui.project_api import ProjectApiClient, ProjectApiError
+
+_AUDIO_EXT = {".mp3", ".wav", ".m4a", ".ogg", ".flac", ".aac"}
 
 
 def build_trim_command(track_id: str, item_id: str, start: float, end: float) -> dict:
@@ -108,6 +112,32 @@ def _format_license(license: dict | None) -> str:
     if name:
         return name
     return "—"
+
+
+def _gantt_data(tracks: list[dict]) -> list[dict]:
+    """Extract Altair-ready rows from video track items."""
+    rows: list[dict] = []
+    for track in tracks:
+        for item in track.get("items") or []:
+            start = float(item.get("start_sec") or 0.0)
+            duration = float(item.get("duration_sec") or 0.0)
+            rows.append({
+                "name": item.get("id") or f"clip-{len(rows)}",
+                "start": start,
+                "end": start + duration,
+                "segment_id": item.get("segment_id") or "unknown",
+            })
+    return rows
+
+
+def _list_local_songs(songs_dir: str) -> list[str]:
+    """Return sorted basenames of audio files in songs_dir."""
+    if not os.path.isdir(songs_dir):
+        return []
+    return sorted(
+        entry for entry in os.listdir(songs_dir)
+        if os.path.splitext(entry)[1].lower() in _AUDIO_EXT
+    )
 
 
 def _queue(commands: list[dict]) -> None:  # pragma: no cover - Streamlit state wrapper
@@ -244,6 +274,33 @@ def _render_ui() -> None:  # pragma: no cover - Streamlit UI, validated manually
         video_tracks = [t for t in tracks if t.get("type") == "video"]
         if not video_tracks:
             st.info("Aún no hay timeline de video.")
+        else:
+            gantt_rows = _gantt_data(video_tracks)
+            if gantt_rows:
+                with st.expander("Visualización temporal", expanded=True):
+                    try:
+                        import altair as alt
+                        import pandas as pd
+
+                        df = pd.DataFrame(gantt_rows)
+                        chart = (
+                            alt.Chart(df)
+                            .mark_bar()
+                            .encode(
+                                x=alt.X("start:Q", title="segundos"),
+                                x2="end:Q",
+                                y=alt.Y("name:N", title="clip"),
+                                color=alt.Color(
+                                    "segment_id:N",
+                                    legend=alt.Legend(title="segmento"),
+                                ),
+                                tooltip=["name", "start", "end", "segment_id"],
+                            )
+                            .properties(height=max(80, len(df) * 28))
+                        )
+                        st.altair_chart(chart, use_container_width=True)
+                    except Exception as exc:  # noqa: BLE001
+                        st.caption(f"Gantt no disponible: {exc}")
         for track in video_tracks:
             st.subheader(f"{track.get('name', 'Video')} ({track.get('id')})")
             items = track.get("items") or []
@@ -329,8 +386,15 @@ def _render_ui() -> None:  # pragma: no cover - Streamlit UI, validated manually
                             _queue(commands)
 
     with tab_music:
+        from app.utils.utils import resource_dir as _resource_dir
+
+        _songs_dir = _resource_dir("songs")
+        _local_songs = _list_local_songs(_songs_dir)
+
         with st.form("music-select"):
             st.subheader("Seleccionar música contextual")
+            song_options = ["(automático)"] + _local_songs
+            selected_song = st.selectbox("Pista local", song_options)
             music_cols = st.columns(4)
             mood = music_cols[0].text_input("Mood", value="")
             energy = music_cols[1].text_input("Energy", value="")
@@ -339,22 +403,37 @@ def _render_ui() -> None:  # pragma: no cover - Streamlit UI, validated manually
             filter_cols = st.columns(3)
             commercial_safe = filter_cols[0].checkbox("Commercial safe only", value=True)
             local_only = filter_cols[1].checkbox("Local only", value=True)
-            volume = filter_cols[2].number_input("Volumen", min_value=0.0, max_value=2.0, value=0.2, step=0.05)
+            volume = filter_cols[2].slider("Volumen", min_value=0.0, max_value=1.0, value=0.2, step=0.05)
             if st.form_submit_button("Seleccionar música"):
-                payload = {
+                payload: dict = {
                     "commercial_safe_only": commercial_safe,
                     "local_only": local_only,
                     "volume": volume,
                 }
+                if selected_song != "(automático)":
+                    payload["local_path"] = os.path.join(_songs_dir, selected_song)
                 if mood or energy or tempo or style:
                     payload.update({"mood": mood, "energy": energy, "tempo": tempo, "style": style})
                 _safe(client.select_music, project_id, payload)
 
         if selected_music:
             for track in selected_music:
-                st.write(f"**{track.get('title') or track.get('id')}** · {track.get('provider')}")
-                st.caption(f"{track.get('local_path') or track.get('url')}")
-                st.json(track)
+                title = track.get("title") or track.get("id") or "pista"
+                provider = track.get("provider") or "?"
+                duration = track.get("duration_sec")
+                composer = track.get("composer") or track.get("artist")
+                meta = f"{provider}"
+                if duration is not None:
+                    meta += f" · {duration:.1f}s"
+                if composer:
+                    meta += f" · {composer}"
+                st.write(f"**{title}** — {meta}")
+                path_or_url = track.get("local_path") or track.get("url")
+                if path_or_url:
+                    st.caption(path_or_url)
+                license_info = track.get("license") or {}
+                if license_info:
+                    st.caption(f"Licencia: {_format_license(license_info)}")
         else:
             st.info("No hay música contextual seleccionada todavía.")
 
