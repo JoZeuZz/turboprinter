@@ -9,7 +9,10 @@ guaranteeing upstream behaviour.
 Presets: classic, clean, premium, karaoke, documentary.
 """
 
+import os
 from dataclasses import dataclass
+
+from loguru import logger
 
 # Fraction of the frame height reserved at the bottom for platform UI overlays
 # (captions, action bars). Vertical short-form platforms hide more.
@@ -118,6 +121,45 @@ _PRESETS = {
 }
 
 _DEFAULT_STYLE_NAME = "premium"
+
+
+_DEFAULT_FONT = "STHeitiMedium.ttc"
+_FONT_EXT = {".ttf", ".ttc", ".otf"}
+
+
+def resolve_font_path(name: str | None, fonts_dir: str) -> str:
+    """Return a validated font path, falling back to the default font.
+
+    Logs a warning when the requested font is not found on disk so the caller
+    always receives a usable path without raising at resolution time.
+    """
+    if os.name == "nt" and fonts_dir:
+        fonts_dir = fonts_dir.replace("\\", "/")
+    default_path = os.path.join(fonts_dir, _DEFAULT_FONT)
+    if not name:
+        return default_path
+    candidate = os.path.join(fonts_dir, name)
+    if os.name == "nt":
+        candidate = candidate.replace("\\", "/")
+    if os.path.isfile(candidate):
+        return candidate
+    logger.warning(f"font '{name}' not found in {fonts_dir}, falling back to {_DEFAULT_FONT}")
+    return default_path
+
+
+def list_available_fonts(fonts_dir: str) -> list[str]:
+    """Return sorted basenames of font files in fonts_dir."""
+    if not os.path.isdir(fonts_dir):
+        return []
+    return sorted(
+        entry for entry in os.listdir(fonts_dir)
+        if os.path.splitext(entry)[1].lower() in _FONT_EXT
+    )
+
+
+def list_subtitle_styles() -> list[str]:
+    """Return the list of available subtitle preset names."""
+    return list(_PRESETS.keys())
 
 
 def get_subtitle_style(name) -> SubtitleStyle:

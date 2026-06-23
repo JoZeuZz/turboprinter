@@ -40,6 +40,7 @@ from app.services.utils import video_effects
 from app.services.quality import render_profiles
 from app.services.quality import settings as quality_settings
 from app.services.quality import subtitle_styles, subtitle_text
+from app.services.quality.subtitle_styles import resolve_font_path as _resolve_font_path
 from app.utils import file_security, utils
 
 class SubClippedVideoClip:
@@ -1070,12 +1071,7 @@ def generate_video(
 
     font_path = ""
     if params.subtitle_enabled:
-        if not params.font_name:
-            params.font_name = "STHeitiMedium.ttc"
-        font_path = os.path.join(utils.font_dir(), params.font_name)
-        if os.name == "nt":
-            font_path = font_path.replace("\\", "/")
-
+        font_path = _resolve_font_path(params.font_name, utils.font_dir())
         logger.info(f"  ⑤ font: {font_path}")
 
     # Effective subtitle settings. When the quality stack is off this mirrors
@@ -1154,7 +1150,7 @@ def generate_video(
                     subtitle_render, karaoke_words, video_width, video_height,
                 )
             except Exception as exc:
-                logger.debug(f"karaoke render failed, using normal subtitle: {exc}")
+                logger.warning(f"karaoke render failed for phrase, using normal subtitle: {exc!r}")
                 karaoke_clip = None
             if karaoke_clip is not None:
                 return _position_subtitle_clip(
