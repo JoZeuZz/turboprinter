@@ -115,3 +115,75 @@ class TestOpenAICompatProvider:
             OpenAICompatProvider("groq")
         call_kwargs = MockClient.call_args[1]
         assert "groq.com" in call_kwargs.get("base_url", "")
+
+
+class TestGeminiProvider:
+    def test_generate_returns_text(self):
+        import sys
+        from app.services.quality.llm_providers.gemini import GeminiProvider
+        cfg = {"gemini_api_key": "AIza-test", "gemini_model_name": "gemini-2.5-flash"}
+        fake_part = MagicMock()
+        fake_part.text = "generated text"
+        fake_candidate = MagicMock()
+        fake_candidate.content.parts = [fake_part]
+        fake_candidate.finish_reason = "STOP"
+        fake_response = MagicMock()
+        fake_response.candidates = [fake_candidate]
+        fake_response.prompt_feedback = MagicMock(block_reason=None)
+
+        # Create mocks for the google.genai module
+        mock_genai = MagicMock()
+        mock_genai.Client.return_value.models.generate_content.return_value = fake_response
+        mock_genai.types = MagicMock()
+        mock_google = MagicMock()
+        mock_google.genai = mock_genai
+
+        with patch("app.services.quality.llm_providers.gemini.config") as mock_cfg, \
+             patch.dict(sys.modules, {"google": mock_google, "google.genai": mock_genai}):
+            mock_cfg.app.get.side_effect = lambda k, default=None: cfg.get(k, default)
+            provider = GeminiProvider("gemini")
+            result = provider.generate("test prompt")
+        assert result == "generated text"
+
+    def test_json_mode_sets_mime_type(self):
+        import sys
+        from app.services.quality.llm_providers.gemini import GeminiProvider
+        cfg = {"gemini_api_key": "AIza-test", "gemini_model_name": "gemini-2.5-flash"}
+        fake_part = MagicMock()
+        fake_part.text = '["cats"]'
+        fake_candidate = MagicMock()
+        fake_candidate.content.parts = [fake_part]
+        fake_candidate.finish_reason = "STOP"
+        fake_response = MagicMock()
+        fake_response.candidates = [fake_candidate]
+        fake_response.prompt_feedback = MagicMock(block_reason=None)
+
+        # Create mocks for the google.genai module
+        mock_genai = MagicMock()
+        create_mock = MagicMock(return_value=fake_response)
+        mock_genai.Client.return_value.models.generate_content = create_mock
+
+        # Mock GenerateContentConfig to track the kwargs it receives
+        config_mock = MagicMock()
+        mock_genai.types.GenerateContentConfig = MagicMock(side_effect=lambda **kwargs: (config_mock.update(kwargs), config_mock)[1])
+
+        mock_google = MagicMock()
+        mock_google.genai = mock_genai
+
+        with patch("app.services.quality.llm_providers.gemini.config") as mock_cfg, \
+             patch.dict(sys.modules, {"google": mock_google, "google.genai": mock_genai}):
+            mock_cfg.app.get.side_effect = lambda k, default=None: cfg.get(k, default)
+            provider = GeminiProvider("gemini")
+            provider.generate("test prompt", json_mode=True)
+
+        # Check that GenerateContentConfig was called with response_mime_type
+        gen_cfg_call_kwargs = mock_genai.types.GenerateContentConfig.call_args[1]
+        assert gen_cfg_call_kwargs.get("response_mime_type") == "application/json"
+
+    def test_missing_api_key_raises_config_error(self):
+        from app.services.quality.llm_providers.gemini import GeminiProvider
+        from app.services.quality.llm_providers.base import LLMConfigError
+        with patch("app.services.quality.llm_providers.gemini.config") as mock_cfg:
+            mock_cfg.app.get.return_value = None
+            with pytest.raises(LLMConfigError, match="api_key"):
+                GeminiProvider("gemini")
