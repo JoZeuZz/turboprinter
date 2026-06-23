@@ -49,6 +49,18 @@ def test_commercial_safe_excludes_unknown_license():
     assert chosen.id == "b"
 
 
+def test_commercial_safe_excludes_provider_specific_license():
+    tracks = [
+        MusicTrack(id="a", provider="local", tags=["inspirational"],
+                   license=LicenseInfo(type="local-library", commercial_use=None)),
+        MusicTrack(id="b", provider="local", tags=["inspirational"],
+                   license=LicenseInfo(type="provider_specific", commercial_use=True,
+                                       unknown_or_provider_specific=True)),
+    ]
+
+    assert MusicSelector().select(_intent(), [_Provider(tracks)], mode="commercial_safe") is None
+
+
 def test_select_returns_none_without_providers():
     assert MusicSelector().select(_intent(), []) is None
 

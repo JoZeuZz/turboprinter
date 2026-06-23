@@ -5,8 +5,19 @@ from app.domain.music.models import MusicTrack
 from app.domain.planning.models import MusicIntent
 
 
-def _license_known(track: MusicTrack) -> bool:
-    return track.license is not None and bool(track.license.type)
+def _commercial_safe_license(track: MusicTrack) -> bool:
+    license_info = track.license
+    if license_info is None:
+        return False
+    if license_info.unknown_or_provider_specific:
+        return False
+    if license_info.commercial_use is not True:
+        return False
+    if license_info.training_restricted is True:
+        return False
+    if license_info.redistribution_restricted is True:
+        return False
+    return True
 
 
 class MusicSelector:
@@ -23,7 +34,7 @@ class MusicSelector:
                 tags = {t.lower() for t in track.tags}
                 if tags & avoid:
                     continue
-                if mode == "commercial_safe" and not _license_known(track):
+                if mode == "commercial_safe" and not _commercial_safe_license(track):
                     continue
                 matches = len(tags & wanted)
                 if matches == 0:

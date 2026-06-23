@@ -265,6 +265,31 @@ def test_build_from_store_loads_plan_and_selected_media(tmp_path):
     assert store.load_timeline("task-1") is not None
 
 
+def test_build_from_store_uses_selected_music_volume(tmp_path):
+    from app.domain.music.models import MusicTrack
+    from app.infrastructure.storage.filesystem_store import FilesystemProjectStore
+
+    store = FilesystemProjectStore(base_tasks_dir=str(tmp_path))
+    store.save_shot_plan("task-1", _plan())
+    store.save_selected_media(
+        "task-1",
+        [
+            _candidate("seg_001", "mc-1"),
+            _candidate("seg_002", "mc-2"),
+            _candidate("seg_003", "mc-3"),
+        ],
+    )
+    store.save_selected_music(
+        "task-1",
+        [MusicTrack(id="m1", provider="local", local_path="/tmp/song.mp3", volume=0.33)],
+    )
+
+    project = TimelineBuilder(store=store).build_from_store("task-1")
+
+    music_track = [track for track in project.tracks if track.id == "music_1"][0]
+    assert music_track.items[0].volume == 0.33
+
+
 def test_build_from_store_requires_store():
     with pytest.raises(ValueError, match="ProjectStore"):
         TimelineBuilder().build_from_store("task-1")

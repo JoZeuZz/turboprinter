@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.domain.projects.commands import EditCommand
 
@@ -59,7 +59,18 @@ class TimelineCommandsRequest(BaseModel):
     commands: list[EditCommand]
 
 
+class MusicSelectRequest(BaseModel):
+    mood: str | None = None
+    energy: str | None = None
+    tempo: str | None = None
+    style: str | None = None
+    avoid: list[str] = Field(default_factory=list)
+    commercial_safe_only: bool = True
+    local_only: bool = True
+    volume: float = Field(default=0.2, ge=0.0, le=2.0)
+
+
 class RenderRequest(BaseModel):
-    renderer: str | None = None
+    renderer: Literal["moviepy", "opencut"] | None = None
     include_subtitles: bool = True
     include_background_music: bool = True

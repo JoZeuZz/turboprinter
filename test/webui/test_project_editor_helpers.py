@@ -39,3 +39,40 @@ def test_build_reorder_command_top_item_up_is_noop():
     page = _load_page()
     items = [{"id": "a", "start_sec": 0.0, "duration_sec": 3.0}]
     assert page.build_reorder_command("video_1", items, 0, "up") is None
+
+
+def test_build_reorder_commands_swap_adjacent_items():
+    page = _load_page()
+    items = [
+        {"id": "a", "start_sec": 0.0, "duration_sec": 3.0},
+        {"id": "b", "start_sec": 3.0, "duration_sec": 2.0},
+    ]
+
+    commands = page.build_reorder_commands("video_1", items, 1, "up")
+
+    assert commands == [
+        {"type": "move", "track_id": "video_1", "item_id": "b", "new_start_sec": 0.0},
+        {"type": "move", "track_id": "video_1", "item_id": "a", "new_start_sec": 2.0},
+    ]
+
+
+def test_build_set_timing_command():
+    page = _load_page()
+    assert page.build_set_timing_command("video_1", "i1", 4.5) == {
+        "type": "set_timing", "track_id": "video_1", "item_id": "i1", "duration_sec": 4.5,
+    }
+
+
+def test_build_replace_command():
+    page = _load_page()
+    candidate = {"id": "mc-1", "provider": "pexels", "local_path": "/tmp/a.mp4"}
+    cmd = page.build_replace_command("video_1", "i1", candidate)
+    assert cmd == {
+        "type": "replace", "track_id": "video_1", "item_id": "i1", "new_candidate": candidate,
+    }
+
+
+def test_asset_id_for_local_path_matches_preview_asset():
+    page = _load_page()
+    assets = [{"asset_id": "media/clip.mp4", "path": "media/clip.mp4"}]
+    assert page.asset_id_for_local_path("/tmp/project/media/clip.mp4", assets) == "media/clip.mp4"

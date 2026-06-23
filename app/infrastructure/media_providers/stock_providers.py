@@ -49,19 +49,50 @@ class PexelsProvider(_StockProvider):
     name = "pexels"
     _api_key_cfg = "pexels_api_keys"
     _search_fn_name = "search_videos_pexels"
-    _license = LicenseInfo(type="pexels", commercial_use=True, attribution_required=False)
+    _license = LicenseInfo(
+        type="pexels",
+        commercial_use=True,
+        attribution_required=False,
+        license_name="Pexels License",
+        license_url="https://www.pexels.com/license/",
+        source_terms_url="https://www.pexels.com/license/",
+        usage_notes="Pexels license metadata; review current source terms before publication.",
+        redistribution_restricted=True,
+    )
 
 
 class PixabayProvider(_StockProvider):
     name = "pixabay"
     _api_key_cfg = "pixabay_api_keys"
     _search_fn_name = "search_videos_pixabay"
-    _license = LicenseInfo(type="pixabay", commercial_use=True, attribution_required=False)
+    _license = LicenseInfo(
+        type="pixabay",
+        commercial_use=True,
+        attribution_required=False,
+        license_name="Pixabay Content License",
+        license_url="https://pixabay.com/service/license-summary/",
+        source_terms_url="https://pixabay.com/service/license-summary/",
+        usage_notes="Pixabay content-license metadata; review current source terms before publication.",
+        redistribution_restricted=True,
+    )
 
 
 class CoverrProvider(_StockProvider):
     name = "coverr"
     _api_key_cfg = "coverr_api_keys"
     _search_fn_name = "search_videos_coverr"
-    _license = LicenseInfo(type="coverr", commercial_use=True, attribution_required=False,
-                           source_url="https://coverr.co/license")
+    _license = LicenseInfo(
+        type="provider_specific",
+        commercial_use=None,
+        attribution_required=None,
+        license_name="Coverr provider-specific terms",
+        license_url="https://coverr.co/license",
+        source_terms_url="https://coverr.co/license",
+        source_url="https://coverr.co/license",
+        usage_notes=(
+            "Coverr terms are provider-specific. Review current Coverr license and API "
+            "terms before commercial use or redistribution."
+        ),
+        redistribution_restricted=True,
+        unknown_or_provider_specific=True,
+    )

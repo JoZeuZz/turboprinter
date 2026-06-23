@@ -147,6 +147,7 @@ class TimelineBuilder:
             else None
         )
         if music_path:
+            track_volume = music_track.volume if music_track.volume is not None else music_volume
             tracks.append(TimelineTrack(
                 id="music_1",
                 type="audio",
@@ -158,7 +159,7 @@ class TimelineBuilder:
                     start_sec=0.0,
                     duration_sec=cursor,
                     provider=music_track.provider,
-                    volume=music_volume,
+                    volume=track_volume,
                 )],
             ))
         if subtitle_path:

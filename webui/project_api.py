@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any
+from urllib.parse import quote
 
 import requests
 
@@ -69,6 +70,15 @@ class ProjectApiClient:
     def apply_commands(self, pid: str, commands: list[dict]) -> dict:
         return self._post(f"/projects/{pid}/timeline/commands", {"commands": commands})
 
+    def validate_timeline(self, pid: str) -> dict:
+        return self._post(f"/projects/{pid}/timeline/validate", {})
+
+    def select_music(self, pid: str, payload: dict) -> dict:
+        return self._post(f"/projects/{pid}/music/select", payload)
+
+    def music(self, pid: str) -> dict:
+        return self._get(f"/projects/{pid}/music")
+
     def render(self, pid: str, **opts) -> dict:
         return self._post(f"/projects/{pid}/render", opts)
 
@@ -77,3 +87,6 @@ class ProjectApiClient:
 
     def assets(self, pid: str) -> dict:
         return self._get(f"/projects/{pid}/assets")
+
+    def asset_url(self, pid: str, asset_id: str) -> str:
+        return self._url(f"/projects/{pid}/assets/{quote(asset_id, safe='/')}")

@@ -5,9 +5,16 @@ from pydantic import BaseModel
 
 class LicenseInfo(BaseModel):
     type: str | None = None
-    attribution_required: bool = False
     commercial_use: bool | None = None
+    attribution_required: bool | None = None
     source_url: str | None = None
+    license_name: str | None = None
+    license_url: str | None = None
+    usage_notes: str | None = None
+    source_terms_url: str | None = None
+    training_restricted: bool | None = None
+    redistribution_restricted: bool | None = None
+    unknown_or_provider_specific: bool = False
 
 
 class MediaCandidate(BaseModel):
