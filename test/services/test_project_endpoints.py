@@ -389,7 +389,9 @@ def test_music_select_endpoint_uses_manual_intent(client, monkeypatch):
         id="m1", provider="local", local_path="/tmp/inspirational.mp3",
         tags=["inspirational", "cinematic"], title="Inspire",
     )
-    monkeypatch.setattr(pj, "_music_providers", lambda local_only=True: [_FakeMusicProvider([track])])
+    monkeypatch.setattr(
+        pj, "_music_providers", lambda local_only=True: [_FakeMusicProvider([track])]
+    )
 
     r = client.post(f"/api/v1/projects/{pid}/music/select", json={
         "mood": "inspirational", "energy": "medium", "style": "cinematic",
@@ -419,8 +421,12 @@ def test_music_select_endpoint_uses_shot_plan_intent(client, monkeypatch):
             visual_goal="x", search_queries=["q"],
         )],
     ))
-    track = MusicTrack(id="m2", provider="local", local_path="/tmp/calm.mp3", tags=["calm", "ambient"])
-    monkeypatch.setattr(pj, "_music_providers", lambda local_only=True: [_FakeMusicProvider([track])])
+    track = MusicTrack(
+        id="m2", provider="local", local_path="/tmp/calm.mp3", tags=["calm", "ambient"]
+    )
+    monkeypatch.setattr(
+        pj, "_music_providers", lambda local_only=True: [_FakeMusicProvider([track])]
+    )
 
     r = client.post(f"/api/v1/projects/{pid}/music/select", json={"commercial_safe_only": False})
 
@@ -482,7 +488,9 @@ def test_render_endpoint_background_and_status(client, monkeypatch):
     assert s.json()["data"]["state"] in (1, 4)  # COMPLETE or PROCESSING
 
 
-def test_render_endpoint_preserves_existing_renderer_when_request_omits_renderer(client, monkeypatch):
+def test_render_endpoint_preserves_existing_renderer_when_request_omits_renderer(
+    client, monkeypatch
+):
     from app.domain.rendering.models import RenderResult, RenderSpec
     from app.application.workflows import render_project as rp
 
@@ -494,7 +502,9 @@ def test_render_endpoint_preserves_existing_renderer_when_request_omits_renderer
     client.post(f"/api/v1/projects/{pid}/timeline/build", json={})
     pj._store().save_render_spec(
         pid,
-        RenderSpec(project_id=pid, task_id=pid, renderer="opencut", width=1080, height=1920, fps=30),
+        RenderSpec(
+            project_id=pid, task_id=pid, renderer="opencut", width=1080, height=1920, fps=30
+        ),
     )
 
     captured = {}

@@ -32,7 +32,9 @@ def build_reorder_command(track_id: str, items: list[dict], index: int, directio
     }
 
 
-def build_reorder_commands(track_id: str, items: list[dict], index: int, direction: str) -> list[dict]:
+def build_reorder_commands(
+    track_id: str, items: list[dict], index: int, direction: str
+) -> list[dict]:
     if direction == "up" and index == 0:
         return []
     if direction == "down" and index >= len(items) - 1:
@@ -299,7 +301,10 @@ def _render_ui() -> None:  # pragma: no cover - Streamlit UI, validated manually
         if not segments:
             st.info("Aún no hay ShotPlan.")
         for segment in segments:
-            with st.expander(f"{segment.get('order')} · {segment.get('id')} · {segment.get('visual_goal')}"):
+            seg_label = (
+                f"{segment.get('order')} · {segment.get('id')} · {segment.get('visual_goal')}"
+            )
+            with st.expander(seg_label):
                 st.write(segment.get("narration_text"))
                 st.caption(f"Duración objetivo: {segment.get('target_duration_sec')}s")
                 st.write("Queries:", segment.get("search_queries") or [])
@@ -376,9 +381,11 @@ def _render_ui() -> None:  # pragma: no cover - Streamlit UI, validated manually
                         st.info("Preview no disponible para este clip.")
 
                     move_cols = st.columns(2)
-                    if move_cols[0].button("Mover arriba", key=f"up-{track.get('id')}-{item.get('id')}"):
+                    if move_cols[0].button("Mover arriba",
+                                           key=f"up-{track.get('id')}-{item.get('id')}"):
                         _queue(build_reorder_commands(track["id"], items, index, "up"))
-                    if move_cols[1].button("Mover abajo", key=f"down-{track.get('id')}-{item.get('id')}"):
+                    if move_cols[1].button("Mover abajo",
+                                           key=f"down-{track.get('id')}-{item.get('id')}"):
                         _queue(build_reorder_commands(track["id"], items, index, "down"))
 
                     with st.form(f"edit-{track.get('id')}-{item.get('id')}"):
@@ -388,7 +395,9 @@ def _render_ui() -> None:  # pragma: no cover - Streamlit UI, validated manually
                             value=float(item.get("trim_start_sec") or 0.0), step=0.1,
                             key=f"trim-start-{item.get('id')}",
                         )
-                        trim_end_default = item.get("trim_end_sec") or item.get("duration_sec") or 0.1
+                        trim_end_default = (
+                            item.get("trim_end_sec") or item.get("duration_sec") or 0.1
+                        )
                         trim_end = edit_cols[1].number_input(
                             "Trim end", min_value=0.0,
                             value=float(trim_end_default), step=0.1,
@@ -411,14 +420,25 @@ def _render_ui() -> None:  # pragma: no cover - Streamlit UI, validated manually
                                 "Reemplazar por candidato", labels, index=current_idx,
                                 key=f"replace-{item.get('id')}",
                             )
-                            selected_candidate = same_segment_candidates[labels.index(selected_label)]
+                            selected_candidate = same_segment_candidates[
+                                labels.index(selected_label)
+                            ]
                         submitted = st.form_submit_button("Añadir cambios")
                         if submitted:
-                            commands = [build_trim_command(track["id"], item["id"], trim_start, trim_end)]
+                            commands = [
+                                build_trim_command(track["id"], item["id"], trim_start, trim_end)
+                            ]
                             if abs(duration - float(item.get("duration_sec") or 0.0)) > 0.0001:
-                                commands.append(build_set_timing_command(track["id"], item["id"], duration))
-                            if selected_candidate and selected_candidate.get("id") != item.get("media_id"):
-                                commands.append(build_replace_command(track["id"], item["id"], selected_candidate))
+                                commands.append(
+                                    build_set_timing_command(track["id"], item["id"], duration)
+                                )
+                            if (selected_candidate
+                                    and selected_candidate.get("id") != item.get("media_id")):
+                                commands.append(
+                                    build_replace_command(
+                                        track["id"], item["id"], selected_candidate
+                                    )
+                                )
                             _queue(commands)
 
     with tab_music:
@@ -439,7 +459,9 @@ def _render_ui() -> None:  # pragma: no cover - Streamlit UI, validated manually
             filter_cols = st.columns(3)
             commercial_safe = filter_cols[0].checkbox("Commercial safe only", value=True)
             local_only = filter_cols[1].checkbox("Local only", value=True)
-            volume = filter_cols[2].slider("Volumen", min_value=0.0, max_value=1.0, value=0.2, step=0.05)
+            volume = filter_cols[2].slider(
+                "Volumen", min_value=0.0, max_value=1.0, value=0.2, step=0.05
+            )
             if st.form_submit_button("Seleccionar música"):
                 payload: dict = {
                     "commercial_safe_only": commercial_safe,

@@ -154,7 +154,9 @@ def _project_asset_registry(store: FilesystemProjectStore, project_id: str) -> d
     if timeline is not None:
         for track in timeline.tracks:
             local_paths.extend(item.local_path for item in track.items if item.local_path)
-    local_paths.extend(c.local_path for c in store.load_media_candidates(project_id) if c.local_path)
+    local_paths.extend(
+        c.local_path for c in store.load_media_candidates(project_id) if c.local_path
+    )
     local_paths.extend(c.local_path for c in store.load_selected_media(project_id) if c.local_path)
     local_paths.extend(m.local_path for m in store.load_selected_music(project_id) if m.local_path)
 
@@ -211,7 +213,8 @@ def _validate_replace_candidates(
             stored_value = getattr(stored, field_name)
             if (incoming or stored_value) and incoming != stored_value:
                 raise ValueError(
-                    f"replacement candidate {candidate.id!r} does not match project media candidates"
+                    f"replacement candidate {candidate.id!r} does not match"
+                    " project media candidates"
                 )
 
 

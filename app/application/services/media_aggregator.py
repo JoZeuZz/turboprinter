@@ -72,7 +72,9 @@ class MediaAggregator:
             return results
         with ThreadPoolExecutor(max_workers=self._max_workers) as ex:
             futs = {
-                ex.submit(p.search_videos, query, orientation, min_duration_sec, max_results_per_provider): p
+                ex.submit(
+                    p.search_videos, query, orientation, min_duration_sec, max_results_per_provider
+                ): p
                 for p in active
             }
             for fut in as_completed(futs):

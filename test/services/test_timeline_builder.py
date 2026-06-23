@@ -201,7 +201,9 @@ def test_build_accepts_selected_media_list():
 
 
 def test_build_creates_placeholder_for_missing_segment():
-    project = TimelineBuilder().build(_plan(), {"seg_001": _candidate("seg_001", "mc-1")}, task_id="task-1")
+    project = TimelineBuilder().build(
+        _plan(), {"seg_001": _candidate("seg_001", "mc-1")}, task_id="task-1"
+    )
     items = project.tracks[0].items
     assert items[1].provider == "placeholder"
     assert items[1].media_id is None
@@ -218,7 +220,11 @@ def test_build_rejects_non_positive_segment_duration():
 def test_build_adds_audio_and_subtitle_tracks():
     project = TimelineBuilder().build(
         _plan(),
-        {"seg_001": _candidate("seg_001", "mc-1"), "seg_002": _candidate("seg_002", "mc-2"), "seg_003": _candidate("seg_003", "mc-3")},
+        {
+            "seg_001": _candidate("seg_001", "mc-1"),
+            "seg_002": _candidate("seg_002", "mc-2"),
+            "seg_003": _candidate("seg_003", "mc-3"),
+        },
         task_id="task-1",
         narration_audio_path="/tmp/narration.mp3",
         subtitle_path="/tmp/subtitles.srt",

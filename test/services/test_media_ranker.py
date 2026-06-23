@@ -35,8 +35,12 @@ def test_prefer_local_boosts_local_candidate():
     ranker = MediaRanker()
     remote = _c("remote", provider="pexels")
     local = _c("local", provider="local", local_path="/lib/x.mp4")
-    ctx_off = RankContext(query="", orientation="portrait", target_duration_sec=5.0, prefer_local=False)
-    ctx_on = RankContext(query="", orientation="portrait", target_duration_sec=5.0, prefer_local=True)
+    ctx_off = RankContext(
+        query="", orientation="portrait", target_duration_sec=5.0, prefer_local=False
+    )
+    ctx_on = RankContext(
+        query="", orientation="portrait", target_duration_sec=5.0, prefer_local=True
+    )
     s_remote, _ = ranker.score_candidate(remote, ctx_off)
     s_local_off, _ = ranker.score_candidate(local, ctx_off)
     s_local_on, _ = ranker.score_candidate(local, ctx_on)
@@ -48,7 +52,9 @@ def test_diversity_penalises_used_provider():
     ranker = MediaRanker()
     c = _c("x", provider="pexels")
     ctx_fresh = RankContext(query="", orientation="portrait", target_duration_sec=5.0)
-    ctx_used = RankContext(query="", orientation="portrait", target_duration_sec=5.0, used_providers=("pexels",))
+    ctx_used = RankContext(
+        query="", orientation="portrait", target_duration_sec=5.0, used_providers=("pexels",)
+    )
     assert ranker.score_candidate(c, ctx_fresh)[0] > ranker.score_candidate(c, ctx_used)[0]
 
 

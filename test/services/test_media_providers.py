@@ -62,7 +62,9 @@ def test_pexels_provider_search_normalises(monkeypatch):
 
     monkeypatch.setattr(sp.material, "search_videos_pexels", fake_search)
     provider = sp.PexelsProvider()
-    cands = provider.search_videos("sunrise", orientation="portrait", min_duration_sec=3.0, max_results=1)
+    cands = provider.search_videos(
+        "sunrise", orientation="portrait", min_duration_sec=3.0, max_results=1
+    )
     assert captured["term"] == "sunrise"
     assert captured["min"] == 3
     assert captured["aspect"] == VideoAspect.portrait
@@ -72,7 +74,9 @@ def test_pexels_provider_search_normalises(monkeypatch):
 
 
 def test_pexels_is_configured(monkeypatch):
-    monkeypatch.setattr(sp.material, "get_api_key", lambda key: "KEY" if key == "pexels_api_keys" else None)
+    monkeypatch.setattr(
+        sp.material, "get_api_key", lambda key: "KEY" if key == "pexels_api_keys" else None
+    )
     assert sp.PexelsProvider().is_configured() is True
     monkeypatch.setattr(sp.material, "get_api_key", lambda key: None)
     assert sp.PexelsProvider().is_configured() is False
@@ -89,8 +93,12 @@ def test_pexels_download_sets_local_path(monkeypatch):
 
 def test_coverr_aspect_defaults_to_portrait_on_bad_orientation(monkeypatch):
     captured = {}
-    monkeypatch.setattr(sp.material, "search_videos_coverr",
-                        lambda search_term, minimum_duration, video_aspect=VideoAspect.portrait: (captured.__setitem__("aspect", video_aspect), [])[1])
+    monkeypatch.setattr(
+        sp.material, "search_videos_coverr",
+        lambda search_term, minimum_duration, video_aspect=VideoAspect.portrait: (
+            captured.__setitem__("aspect", video_aspect), []
+        )[1],
+    )
     sp.CoverrProvider().search_videos("q", orientation="weird")
     assert captured["aspect"] == VideoAspect.portrait
 
