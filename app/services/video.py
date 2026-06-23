@@ -1332,7 +1332,6 @@ def generate_video(
 
     visual_tmp = output_file + ".visual_tmp.mp4"
     _write_videofile_with_codec_fallback(video_clip, output_file=visual_tmp, **write_kwargs)
-    video_clip.close()
 
     _ffmpeg_finalize(
         visual_path=visual_tmp,
@@ -1345,6 +1344,7 @@ def generate_video(
         codec=final_codec,
         fallback_fn=_moviepy_fallback,
     )
+    video_clip.close()
     del video_clip
 
 
