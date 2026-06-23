@@ -9,7 +9,7 @@
 reddit url/thread (or manual payload)
    -> RedditIngestService.fetch / from_manual -> StorySource (anonymized)
    -> RedditThreadNormalizer.to_script_text -> text
-   -> (user reviews) -> POST /api/v1/projects/from-script (Fase 6)
+   -> POST /api/v1/projects/from-reddit (Fase 6, gated by the flag)
    -> plan -> media -> timeline -> render
 ```
 
@@ -25,6 +25,10 @@ reddit url/thread (or manual payload)
   - `RedditIngestService` — `from_manual()` (pasted text) and `fetch()` (lazy
     PRAW; an injectable `client` keeps tests offline). `get_reddit_ingest_service()`
     factory gated by the flag.
+- `app/controllers/v1/projects.py` — `POST /api/v1/projects/from-reddit` accepts
+  either `url` (thread) or a manual `title`/`body`/`comments` payload, normalizes
+  to script text and creates a project (`script.txt`). Returns `404` when the
+  flag is off; `400` when neither `url` nor `body` is provided.
 
 ## PRAW (optional)
 

@@ -26,6 +26,7 @@
 |--------|------|--------|
 | POST | `/api/v1/projects/from-topic` | create project; optional LLM script generation |
 | POST | `/api/v1/projects/from-script` | create project from pasted script |
+| POST | `/api/v1/projects/from-reddit` | create project from a Reddit thread/manual payload (Fase 9; `404` if reddit ingest off) |
 | GET | `/api/v1/projects/{id}` | project state flags |
 | PUT | `/api/v1/projects/{id}` | replace `timeline_project.json` |
 | POST | `/api/v1/projects/{id}/plan` | run `ShotPlanner` → `shot_plan.json` |
