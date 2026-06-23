@@ -89,3 +89,28 @@ def test_corrupt_json_raises(tmp_path):
     target.write_text("{ not valid json", encoding="utf-8")
     with pytest.raises(ProjectStoreError):
         store.load_shot_plan("task1")
+
+
+def test_render_manifest_and_result_roundtrip(tmp_path):
+    from app.domain.rendering.models import RenderManifest, RenderResult
+    from app.infrastructure.storage.filesystem_store import FilesystemProjectStore
+
+    store = FilesystemProjectStore(base_tasks_dir=str(tmp_path))
+    assert store.load_render_manifest("task-1") is None
+    assert store.load_render_result("task-1") is None
+
+    manifest = RenderManifest(
+        project_id="task-1", task_id="task-1", renderer="moviepy",
+        output_path="/tmp/final.mp4", video_item_count=2, total_duration_sec=7.0,
+    )
+    result = RenderResult(
+        project_id="task-1", output_path="/tmp/final.mp4",
+        renderer_used="moviepy", success=True, duration_sec=7.0,
+    )
+    store.save_render_manifest("task-1", manifest)
+    store.save_render_result("task-1", result)
+
+    loaded_manifest = store.load_render_manifest("task-1")
+    loaded_result = store.load_render_result("task-1")
+    assert loaded_manifest is not None and loaded_manifest.video_item_count == 2
+    assert loaded_result is not None and loaded_result.success is True
