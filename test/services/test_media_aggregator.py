@@ -144,3 +144,45 @@ def test_select_for_plan_persists_segment_scoped_candidate_pool(tmp_path):
 def test_factory_returns_none_when_flag_off(monkeypatch):
     monkeypatch.setattr(ma.config, "multi_provider_media_enabled", False, raising=False)
     assert ma.get_media_aggregator() is None
+
+
+def test_select_for_plan_calls_vision_ranker():
+    """VisionRanker.rescore_top_n llamado con query y narration_text del segmento."""
+    from unittest.mock import MagicMock
+    from app.domain.media.models import MediaCandidate
+
+    vision_ranker = MagicMock()
+    # rescore_top_n debe devolver la lista sin modificar para este test
+    vision_ranker.rescore_top_n.side_effect = lambda cands, query, narration: cands
+
+    agg = ma.MediaAggregator(
+        [FakeProvider("pexels", [_c("p1", "pexels", tags=["sunrise"])])],
+        vision_ranker=vision_ranker,
+    )
+    plan = _plan()
+    agg.select_for_plan(plan, orientation="portrait")
+
+    assert vision_ranker.rescore_top_n.call_count == len(plan.segments)
+    first_call = vision_ranker.rescore_top_n.call_args_list[0]
+    assert first_call.kwargs["query"] == "sunrise"
+    assert first_call.kwargs["narration"] == "a"
+
+
+def test_factory_includes_vision_ranker_when_flag_on(monkeypatch):
+    """get_media_aggregator() instancia VisionRanker cuando vision_ranking_enabled=True."""
+    monkeypatch.setattr(ma.config, "multi_provider_media_enabled", True, raising=False)
+    monkeypatch.setattr(ma.config, "vision_ranking_enabled", True, raising=False)
+    monkeypatch.setattr(ma.config, "vision_model_name", "ollama/llava", raising=False)
+    monkeypatch.setattr(ma.config, "vision_top_n", 3, raising=False)
+    agg = ma.get_media_aggregator()
+    assert agg is not None
+    assert agg._vision_ranker is not None
+
+
+def test_factory_no_vision_ranker_when_flag_off(monkeypatch):
+    """get_media_aggregator() no instancia VisionRanker cuando flag off."""
+    monkeypatch.setattr(ma.config, "multi_provider_media_enabled", True, raising=False)
+    monkeypatch.setattr(ma.config, "vision_ranking_enabled", False, raising=False)
+    agg = ma.get_media_aggregator()
+    assert agg is not None
+    assert agg._vision_ranker is None
