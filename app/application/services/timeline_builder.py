@@ -4,6 +4,7 @@ from collections.abc import Mapping, Sequence
 
 from app.config import config
 from app.domain.media.models import MediaCandidate
+from app.domain.music.models import MusicTrack
 from app.domain.planning.models import ShotPlan, ShotSegment
 from app.domain.projects.models import ExportSettings, TimelineItem, TimelineProject, TimelineTrack
 from app.domain.projects.validators import validate_no_gaps, validate_no_overlaps
@@ -49,6 +50,8 @@ class TimelineBuilder:
         export: ExportSettings | None = None,
         narration_audio_path: str | None = None,
         subtitle_path: str | None = None,
+        music_track: MusicTrack | None = None,
+        music_volume: float = 0.2,
     ) -> TimelineProject:
         project_task_id = task_id or shot_plan.task_id
         selection = self._selection_by_segment(selected_media)
@@ -138,6 +141,26 @@ class TimelineBuilder:
                     duration_sec=cursor,
                 )],
             ))
+        music_path = (
+            music_track.local_path
+            if music_track is not None and music_track.local_path
+            else None
+        )
+        if music_path:
+            tracks.append(TimelineTrack(
+                id="music_1",
+                type="audio",
+                name="Music",
+                items=[TimelineItem(
+                    id="item_music_1",
+                    media_id=music_track.id,
+                    local_path=music_path,
+                    start_sec=0.0,
+                    duration_sec=cursor,
+                    provider=music_track.provider,
+                    volume=music_volume,
+                )],
+            ))
         if subtitle_path:
             tracks.append(TimelineTrack(
                 id="subtitle_1",
@@ -164,6 +187,7 @@ class TimelineBuilder:
                 "repeated_media_segments": repeated_media_segments,
                 "invalid_media_segments": invalid_media_segments,
                 "selected_media_count": len(selection),
+                "music_track_id": music_track.id if music_path else None,
             },
         }
         if project_task_id:
@@ -186,6 +210,8 @@ class TimelineBuilder:
         shot_plan = self._store.load_shot_plan(task_id)
         if shot_plan is None:
             raise ValueError(f"shot_plan.json not found for task {task_id!r}")
+        selected_music = self._store.load_selected_music(task_id)
+        music_track = selected_music[0] if selected_music else None
         return self.build(
             shot_plan,
             self._store.load_selected_media(task_id),
@@ -194,6 +220,7 @@ class TimelineBuilder:
             export=export,
             narration_audio_path=narration_audio_path,
             subtitle_path=subtitle_path,
+            music_track=music_track,
         )
 
 

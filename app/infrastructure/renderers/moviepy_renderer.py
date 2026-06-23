@@ -15,6 +15,8 @@ class RenderInputs:
     video_items: list[TimelineItem] = field(default_factory=list)
     narration_path: str | None = None
     subtitle_path: str | None = None
+    music_path: str | None = None
+    music_volume: float | None = None
     total_duration_sec: float = 0.0
 
 
@@ -90,6 +92,9 @@ class MoviePyTimelineRenderer:
         for track in project.tracks:
             if track.type == "video":
                 inputs.video_items.extend(track.items)
+            elif track.type == "audio" and track.items and track.id == "music_1":
+                inputs.music_path = track.items[0].local_path
+                inputs.music_volume = track.items[0].volume
             elif track.type == "audio" and track.items and inputs.narration_path is None:
                 inputs.narration_path = track.items[0].local_path
             elif track.type == "subtitle" and track.items and inputs.subtitle_path is None:
@@ -115,6 +120,11 @@ class MoviePyTimelineRenderer:
         os.makedirs(output_dir, exist_ok=True)
         inputs = self._resolve_render_inputs(project)
         params = self._build_video_params(project, spec)
+        if spec.include_background_music and inputs.music_path:
+            params.bgm_file = inputs.music_path
+            params.bgm_type = ""
+            if inputs.music_volume is not None:
+                params.bgm_volume = inputs.music_volume
         width, height = params.video_aspect.to_resolution()
         combined_path = os.path.join(output_dir, "combined.mp4")
         output_file = os.path.join(output_dir, "final.mp4")
