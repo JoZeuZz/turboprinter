@@ -475,6 +475,8 @@ def render_project_endpoint(request: Request, project_id: str, body: RenderReque
         codec=project.export.codec, audio_codec=project.export.audio_codec,
         include_subtitles=body.include_subtitles,
         include_background_music=body.include_background_music,
+        subtitle_style=body.subtitle_style,
+        font_name=body.font_name,
     )
     sm.state.update_task(project_id, state=const.TASK_STATE_PROCESSING, progress=0)
     background_tasks.add_task(_run_render, project_id, spec)
