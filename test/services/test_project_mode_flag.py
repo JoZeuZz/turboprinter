@@ -37,3 +37,26 @@ def test_project_mode_string_env_overrides_config(monkeypatch):
     assert config._env_str_or_config(
         "TURBOPRINTER_TIMELINE_RENDERER", "moviepy", "moviepy"
     ) == "opencut"
+
+
+def test_vision_ranking_disabled_by_default(monkeypatch):
+    monkeypatch.delenv("TURBOPRINTER_VISION_RANKING_ENABLED", raising=False)
+    import importlib
+    from app.config import config
+    importlib.reload(config)
+    assert config.vision_ranking_enabled is False
+
+
+def test_vision_ranking_enabled_via_env(monkeypatch):
+    import importlib
+    monkeypatch.setenv("TURBOPRINTER_VISION_RANKING_ENABLED", "true")
+    from app.config import config
+    importlib.reload(config)
+    assert config.vision_ranking_enabled is True
+    monkeypatch.delenv("TURBOPRINTER_VISION_RANKING_ENABLED", raising=False)
+    importlib.reload(config)
+
+
+def test_vision_top_n_default():
+    from app.config import config
+    assert config.vision_top_n == 3
