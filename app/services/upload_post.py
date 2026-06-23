@@ -64,13 +64,13 @@ class UploadPostService:
         try:
             with open(video_path, 'rb') as video_file:
                 files = {'video': video_file}
-                
+
                 data = {
                     'user': self.username,
                     'title': title[:2200],
                     'privacy_level': privacy_level
                 }
-                
+
                 # Add each platform
                 for i, platform in enumerate(platforms):
                     data[f'platform[{i}]'] = platform
@@ -86,7 +86,7 @@ class UploadPostService:
                     files=files,
                     timeout=300
                 )
-                
+
                 response.raise_for_status()
                 result = response.json()
 
@@ -94,7 +94,7 @@ class UploadPostService:
                     logger.info(f"✅ Video cross-posted successfully! Request ID: {result.get('request_id')}")
                 else:
                     logger.warning(f"Cross-post failed: {result.get('message', 'Unknown error')}")
-                
+
                 return result
 
         except requests.exceptions.RequestException as e:
@@ -121,7 +121,7 @@ class UploadPostService:
                 headers=headers,
                 timeout=30
             )
-            
+
             response.raise_for_status()
             return response.json()
 

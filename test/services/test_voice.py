@@ -42,12 +42,12 @@ RUN_INTEGRATION_TESTS = os.environ.get("MPT_RUN_INTEGRATION_TESTS", "").lower() 
     "true",
     "yes",
 }
-                    
+
 class TestVoiceService(unittest.TestCase):
     def setUp(self):
         self.loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self.loop)
-    
+
     def tearDown(self):
         self.loop.close()
 
@@ -172,7 +172,7 @@ class TestVoiceService(unittest.TestCase):
 
         voice_name = "siliconflow:FunAudioLLM/CosyVoice2-0.5B:alex-Male"
         voice_name = vs.parse_voice_name(voice_name)
-        
+
         async def _do():
             parts = voice_name.split(":")
             if len(parts) >= 3:
@@ -196,7 +196,7 @@ class TestVoiceService(unittest.TestCase):
                 self.fail("siliconflow invalid voice name")
 
         self.loop.run_until_complete(_do())
-    
+
     @unittest.skipUnless(
         RUN_INTEGRATION_TESTS,
         "MPT_RUN_INTEGRATION_TESTS not set",
@@ -205,7 +205,7 @@ class TestVoiceService(unittest.TestCase):
         voice_name = "zh-CN-XiaoyiNeural-Female"
         voice_name = vs.parse_voice_name(voice_name)
         print(voice_name)
-        
+
         voice_file = f"{temp_dir}/tts-azure-v1-{voice_name}.mp3"
         subtitle_file = f"{temp_dir}/tts-azure-v1-{voice_name}.srt"
         sub_maker = vs.azure_tts_v1(
@@ -770,4 +770,4 @@ class TestVoiceService(unittest.TestCase):
 if __name__ == "__main__":
     # python -m unittest test.services.test_voice.TestVoiceService.test_azure_tts_v1
     # python -m unittest test.services.test_voice.TestVoiceService.test_azure_tts_v2
-    unittest.main() 
+    unittest.main()

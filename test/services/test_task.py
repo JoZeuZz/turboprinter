@@ -23,7 +23,7 @@ RUN_INTEGRATION_TESTS = os.environ.get("MPT_RUN_INTEGRATION_TESTS", "").lower() 
 class TestTaskService(unittest.TestCase):
     def setUp(self):
         pass
-    
+
     def tearDown(self):
         pass
 
@@ -86,7 +86,7 @@ class TestTaskService(unittest.TestCase):
 
         self.assertIsNone(result)
         update_task.assert_called_with("task-err", state=tm.const.TASK_STATE_FAILED)
-    
+
     def test_generate_audio_uses_custom_file_inside_task_directory(self):
         task_id = "test-custom-audio-safe"
         task_dir = utils.task_dir(task_id)
@@ -317,7 +317,7 @@ class TestTaskService(unittest.TestCase):
         )
         result = tm.start(task_id=task_id, params=params)
         print(result)
-    
+
 
 if __name__ == "__main__":
     unittest.main()

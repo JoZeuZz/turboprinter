@@ -470,7 +470,7 @@ def _generate_response_single(prompt: str, provider_override: str | None = None)
                     if not base_url:
                         base_url = "https://text.pollinations.ai/openai"
                     model_name = config.app.get("pollinations_model_name", "openai-fast")
-                   
+
                     # Prepare the payload
                     payload = {
                         "model": model_name,
@@ -479,30 +479,30 @@ def _generate_response_single(prompt: str, provider_override: str | None = None)
                         ],
                         "seed": 101  # Optional but helps with reproducibility
                     }
-                    
+
                     # Optional parameters if configured
                     if config.app.get("pollinations_private"):
                         payload["private"] = True
                     if config.app.get("pollinations_referrer"):
                         payload["referrer"] = config.app.get("pollinations_referrer")
-                    
+
                     headers = {
                         "Content-Type": "application/json"
                     }
-                    
+
                     # Make the API request
                     response = requests.post(
                         base_url, headers=headers, json=payload, timeout=(30, 120)
                     )
                     response.raise_for_status()
                     result = response.json()
-                    
+
                     if result and "choices" in result and len(result["choices"]) > 0:
                         content = result["choices"][0]["message"]["content"]
                         return _normalize_text_response(content, llm_provider)
                     else:
                         raise Exception(f"[{llm_provider}] returned an invalid response format")
-                        
+
                 except requests.exceptions.RequestException as e:
                     raise Exception(f"[{llm_provider}] request failed: {str(e)}")
                 except Exception as e:
@@ -760,10 +760,10 @@ def _generate_response_single(prompt: str, provider_override: str | None = None)
                         delta = chunk.choices[0].delta
                         if delta and delta.content:
                             content += delta.content
-                    
+
                     if not content.strip():
                         raise ValueError("Empty content in stream response")
-                    
+
                     return _normalize_text_response(content, llm_provider)
                 else:
                     raise Exception(f"[{llm_provider}] returned an empty response")
@@ -1378,4 +1378,4 @@ if __name__ == "__main__":
     )
     print("######################")
     print(search_terms)
-    
+
