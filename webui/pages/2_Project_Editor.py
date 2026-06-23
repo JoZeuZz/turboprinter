@@ -92,6 +92,24 @@ def _candidate_label(candidate: dict) -> str:
     return label
 
 
+def _format_license(license: dict | None) -> str:
+    if license is None:
+        return "—"
+    if license.get("unknown_or_provider_specific"):
+        name = license.get("license_name") or "Custom"
+        url = license.get("license_url") or license.get("source_terms_url")
+        if url:
+            return f"{name} ([ver]({url}))"
+        return f"{name} ⚠"
+    name = license.get("license_name")
+    url = license.get("license_url")
+    if name and url:
+        return f"{name} ([licencia]({url}))"
+    if name:
+        return name
+    return "—"
+
+
 def _queue(commands: list[dict]) -> None:  # pragma: no cover - Streamlit state wrapper
     if not commands:
         st.info("No hay cambios para guardar.")
@@ -254,6 +272,8 @@ def _render_ui() -> None:  # pragma: no cover - Streamlit UI, validated manually
                         f"trim: {item.get('trim_start_sec')} → {item.get('trim_end_sec')} · "
                         f"query: {query or 'n/a'} · score: {score if score is not None else 'n/a'}"
                     )
+                    license_info = current_candidate.get("license")
+                    st.caption(f"Licencia: {_format_license(license_info)}")
                     asset_id = asset_id_for_local_path(item.get("local_path"), preview_assets)
                     if asset_id:
                         st.video(client.asset_url(project_id, asset_id))
