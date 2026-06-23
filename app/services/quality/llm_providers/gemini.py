@@ -4,7 +4,7 @@ from __future__ import annotations
 from loguru import logger
 
 from app.config import config
-from app.services.llm import _extract_gemini_text, _normalize_text_response
+from app.services.llm import _extract_gemini_text
 
 from .base import LLMConfigError, LLMProviderError
 
