@@ -5,7 +5,9 @@ from app.infrastructure.storage.filesystem_store import FilesystemProjectStore
 
 
 def _cand(cid: str, provider: str = "pexels") -> MediaCandidate:
-    return MediaCandidate(id=cid, provider=provider, download_url=f"https://x/{cid}.mp4", segment_id="seg_001")
+    return MediaCandidate(
+        id=cid, provider=provider, download_url=f"https://x/{cid}.mp4", segment_id="seg_001"
+    )
 
 
 def test_save_load_selected_media_roundtrip(tmp_path):

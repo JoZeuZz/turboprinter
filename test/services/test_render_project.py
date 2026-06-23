@@ -41,7 +41,9 @@ def test_get_timeline_renderer_selects_opencut(monkeypatch):
 def test_render_project_from_store_loads_and_renders(monkeypatch, tmp_path):
     store = FilesystemProjectStore(base_tasks_dir=str(tmp_path / "tasks"))
     store.save_timeline("task-1", _project())
-    store.save_render_spec("task-1", RenderSpec(project_id="task-1", width=1080, height=1920, fps=30))
+    store.save_render_spec(
+        "task-1", RenderSpec(project_id="task-1", width=1080, height=1920, fps=30)
+    )
 
     captured = {}
 

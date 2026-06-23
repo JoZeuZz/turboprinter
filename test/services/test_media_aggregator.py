@@ -83,8 +83,10 @@ def _plan():
 
 def test_select_for_plan_picks_one_per_segment_with_diversity():
     agg = ma.MediaAggregator([
-        FakeProvider("pexels", [_c("p1", "pexels", tags=["sunrise"]), _c("p2", "pexels", tags=["ocean"])]),
-        FakeProvider("pixabay", [_c("x1", "pixabay", tags=["sunrise"]), _c("x2", "pixabay", tags=["ocean"])]),
+        FakeProvider("pexels", [_c("p1", "pexels", tags=["sunrise"]),
+                                _c("p2", "pexels", tags=["ocean"])]),
+        FakeProvider("pixabay", [_c("x1", "pixabay", tags=["sunrise"]),
+                                 _c("x2", "pixabay", tags=["ocean"])]),
     ])
     sel = agg.select_for_plan(_plan(), orientation="portrait")
     assert set(sel.keys()) == {"seg_001", "seg_002"}
@@ -115,7 +117,9 @@ def test_select_for_plan_uses_fallback_queries():
 def test_select_for_plan_persists(tmp_path):
     from app.infrastructure.storage.filesystem_store import FilesystemProjectStore
     store = FilesystemProjectStore(base_tasks_dir=str(tmp_path))
-    agg = ma.MediaAggregator([FakeProvider("pexels", [_c("p1", "pexels", tags=["sunrise"])])], store=store)
+    agg = ma.MediaAggregator(
+        [FakeProvider("pexels", [_c("p1", "pexels", tags=["sunrise"])])], store=store
+    )
     agg.select_for_plan(_plan(), task_id="t1")
     assert store.load_selected_media("t1")  # non-empty
     assert store.load_media_candidates("t1")  # pool persisted

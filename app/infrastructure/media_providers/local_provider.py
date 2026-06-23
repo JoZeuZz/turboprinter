@@ -40,8 +40,9 @@ class LocalLibraryProvider:
         for e in entries:
             if e.duration and e.duration < minimum:
                 continue
+            hash_prefix = e.hash[:12] if e.hash else local_library.compute_file_hash(e.path)[:12]
             out.append(MediaCandidate(
-                id="mc-local-" + (e.hash[:12] if e.hash else local_library.compute_file_hash(e.path)[:12]),
+                id="mc-local-" + hash_prefix,
                 provider="local",
                 local_path=e.path,
                 width=e.width or None,

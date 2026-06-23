@@ -72,7 +72,9 @@ class PixabayProvider(_StockProvider):
         license_name="Pixabay Content License",
         license_url="https://pixabay.com/service/license-summary/",
         source_terms_url="https://pixabay.com/service/license-summary/",
-        usage_notes="Pixabay content-license metadata; review current source terms before publication.",
+        usage_notes=(
+            "Pixabay content-license metadata; review current source terms before publication."
+        ),
         redistribution_restricted=True,
     )
 

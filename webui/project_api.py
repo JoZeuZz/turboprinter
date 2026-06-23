@@ -52,8 +52,10 @@ class ProjectApiClient:
                           {"script": script, "language": language, "topic": topic})
 
     def create_from_topic(self, topic: str, language: str, generate_script: bool = False) -> dict:
-        return self._post("/projects/from-topic",
-                          {"topic": topic, "language": language, "generate_script": generate_script})
+        return self._post(
+            "/projects/from-topic",
+            {"topic": topic, "language": language, "generate_script": generate_script},
+        )
 
     def get_project(self, pid: str) -> dict:
         return self._get(f"/projects/{pid}")

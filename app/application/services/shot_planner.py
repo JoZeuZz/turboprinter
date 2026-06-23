@@ -13,7 +13,10 @@ from app.infrastructure.llm.structured_output import (
 from app.infrastructure.storage.base import ProjectStore
 
 _DEFAULT_SEGMENT_SEC = 5.0
-_STOPWORDS = frozenset({"para", "como", "pero", "este", "esta", "esto", "unos", "unas", "que", "los", "las", "del", "con", "por", "una", "uno"})
+_STOPWORDS = frozenset({
+    "para", "como", "pero", "este", "esta", "esto", "unos", "unas",
+    "que", "los", "las", "del", "con", "por", "una", "uno",
+})
 
 
 def _split_sentences(script: str) -> list[str]:

@@ -67,7 +67,9 @@ def test_fetch_uses_injected_client():
 
 def test_fetch_without_client_or_praw_raises(monkeypatch):
     svc = RedditIngestService()
-    monkeypatch.setattr(svc, "_build_client", lambda: (_ for _ in ()).throw(RuntimeError("no praw")))
+    monkeypatch.setattr(
+        svc, "_build_client", lambda: (_ for _ in ()).throw(RuntimeError("no praw"))
+    )
     with pytest.raises(RuntimeError):
         svc.fetch("https://reddit.com/r/x/abc")
 

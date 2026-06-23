@@ -10,7 +10,9 @@ from app.infrastructure.renderers.opencut_adapter import OpenCutAdapter
 from app.infrastructure.storage.base import ProjectStore
 
 
-def _select_timeline_renderer(renderer_name: str, store: ProjectStore | None = None) -> TimelineRenderer:
+def _select_timeline_renderer(
+    renderer_name: str, store: ProjectStore | None = None
+) -> TimelineRenderer:
     name = (renderer_name or "moviepy").lower()
     if name == "opencut":
         return OpenCutAdapter()
