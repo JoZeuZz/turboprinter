@@ -114,6 +114,18 @@ def _format_license(license: dict | None) -> str:
     return "—"
 
 
+def _list_subtitle_styles() -> list[str]:
+    """Return available subtitle preset names."""
+    from app.services.quality.subtitle_styles import list_subtitle_styles
+    return list_subtitle_styles()
+
+
+def _list_available_fonts(fonts_dir: str) -> list[str]:
+    """Return sorted font basenames from fonts_dir."""
+    from app.services.quality.subtitle_styles import list_available_fonts
+    return list_available_fonts(fonts_dir)
+
+
 def _gantt_data(tracks: list[dict]) -> list[dict]:
     """Extract Altair-ready rows from video track items."""
     rows: list[dict] = []
@@ -232,6 +244,10 @@ def _render_ui() -> None:  # pragma: no cover - Streamlit UI, validated manually
         }
         if renderer != "preservar":
             render_kwargs["renderer"] = renderer
+        if st.session_state.get("_render_subtitle_style"):
+            render_kwargs["subtitle_style"] = st.session_state["_render_subtitle_style"]
+        if st.session_state.get("_render_font_name"):
+            render_kwargs["font_name"] = st.session_state["_render_font_name"]
         _safe(
             client.render,
             project_id,
@@ -242,6 +258,26 @@ def _render_ui() -> None:  # pragma: no cover - Streamlit UI, validated manually
             st.json(client.render_status(project_id))
         except ProjectApiError as exc:
             st.error(str(exc))
+
+    with st.expander("Opciones de subtítulos"):
+        from app.utils.utils import font_dir as _font_dir
+        _style_opts = ["(config)"] + _list_subtitle_styles()
+        _font_opts = ["(config)"] + _list_available_fonts(_font_dir())
+        sub_style_cols = st.columns(2)
+        chosen_style = sub_style_cols[0].selectbox("Estilo subtítulos", _style_opts)
+        chosen_font = sub_style_cols[1].selectbox("Fuente", _font_opts)
+        if chosen_style != "(config)":
+            st.session_state["_render_subtitle_style"] = chosen_style
+        else:
+            st.session_state.pop("_render_subtitle_style", None)
+        if chosen_font != "(config)":
+            st.session_state["_render_font_name"] = chosen_font
+        else:
+            st.session_state.pop("_render_font_name", None)
+        if chosen_style != "(config)":
+            st.caption(f"Estilo activo: `{chosen_style}`")
+        if chosen_font != "(config)":
+            st.caption(f"Fuente activa: `{chosen_font}`")
 
     script_text = project_state.get("script") or ""
     shot_plan = project_state.get("shot_plan") or {}
