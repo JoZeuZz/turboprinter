@@ -7,7 +7,7 @@ from pydantic import TypeAdapter, ValidationError
 from app.domain.media.models import MediaCandidate
 from app.domain.planning.models import ShotPlan
 from app.domain.projects.models import TimelineProject
-from app.domain.rendering.models import RenderSpec
+from app.domain.rendering.models import RenderManifest, RenderResult, RenderSpec
 from app.infrastructure.storage.base import ProjectStoreError
 
 _MEDIA_ADAPTER: TypeAdapter[list[MediaCandidate]] = TypeAdapter(list[MediaCandidate])
@@ -15,6 +15,8 @@ _MEDIA_ADAPTER: TypeAdapter[list[MediaCandidate]] = TypeAdapter(list[MediaCandid
 _SHOT_PLAN = "shot_plan.json"
 _TIMELINE = "timeline_project.json"
 _RENDER_SPEC = "render_spec.json"
+_RENDER_MANIFEST = "render_manifest.json"
+_RENDER_RESULT = "render_result.json"
 _MEDIA = "media_candidates.json"
 _SELECTED = "selected_media.json"
 
@@ -89,6 +91,30 @@ class FilesystemProjectStore:
             return RenderSpec.model_validate_json(raw)
         except ValidationError as exc:
             raise ProjectStoreError(self._path(task_id, _RENDER_SPEC), exc) from exc
+
+    def save_render_manifest(self, task_id: str, manifest: RenderManifest) -> None:
+        self._write(task_id, _RENDER_MANIFEST, manifest.model_dump_json(indent=2))
+
+    def load_render_manifest(self, task_id: str) -> RenderManifest | None:
+        raw = self._read(task_id, _RENDER_MANIFEST)
+        if raw is None:
+            return None
+        try:
+            return RenderManifest.model_validate_json(raw)
+        except ValidationError as exc:
+            raise ProjectStoreError(self._path(task_id, _RENDER_MANIFEST), exc) from exc
+
+    def save_render_result(self, task_id: str, result: RenderResult) -> None:
+        self._write(task_id, _RENDER_RESULT, result.model_dump_json(indent=2))
+
+    def load_render_result(self, task_id: str) -> RenderResult | None:
+        raw = self._read(task_id, _RENDER_RESULT)
+        if raw is None:
+            return None
+        try:
+            return RenderResult.model_validate_json(raw)
+        except ValidationError as exc:
+            raise ProjectStoreError(self._path(task_id, _RENDER_RESULT), exc) from exc
 
     def save_media_candidates(
         self, task_id: str, candidates: list[MediaCandidate]
