@@ -6,6 +6,7 @@ from fastapi import Request
 
 from app.application.services.media_aggregator import MediaAggregator
 from app.application.services.shot_planner import ShotPlanner
+from app.application.services.timeline_builder import TimelineBuilder
 from app.config import config
 from app.controllers import base
 from app.controllers.v1.base import new_router
@@ -16,6 +17,7 @@ from app.infrastructure.media_providers.stock_providers import (
     PexelsProvider,
     PixabayProvider,
 )
+from app.domain.projects.models import TimelineProject
 from app.infrastructure.storage.filesystem_store import FilesystemProjectStore
 from app.models.exception import HttpException
 from app.models.project_schema import (
@@ -24,6 +26,8 @@ from app.models.project_schema import (
     CreateFromTopicRequest,
     MediaSearchRequest,
     PlanRequest,
+    TimelineBuildRequest,
+    TimelineCommandsRequest,
 )
 from app.services import llm
 from app.utils import utils
@@ -54,6 +58,10 @@ def _shot_planner(store):
 def _media_aggregator(store):
     providers = [PexelsProvider(), PixabayProvider(), CoverrProvider(), LocalLibraryProvider()]
     return MediaAggregator([p for p in providers if p.is_configured()], store=store)
+
+
+def _timeline_builder(store):
+    return TimelineBuilder(store=store)
 
 
 @router.post("/projects/from-topic", response_model=BaseProjectResponse,
@@ -127,3 +135,42 @@ def media_search(request: Request, project_id: str, body: MediaSearchRequest):
         plan, orientation=body.orientation, prefer_local=body.prefer_local, task_id=project_id,
     )
     return _ok({"project_id": project_id, "selected_count": len(selection)})
+
+
+@router.post("/projects/{project_id}/timeline/build", response_model=BaseProjectResponse,
+             summary="Build the timeline from plan + selected media")
+def timeline_build(request: Request, project_id: str, body: TimelineBuildRequest):
+    _require_project_mode(request)
+    store = _store()
+    if store.load_shot_plan(project_id) is None:
+        raise HttpException(task_id=project_id, status_code=400, message="run /plan first")
+    project = _timeline_builder(store).build_from_store(
+        project_id, title=body.title,
+        narration_audio_path=body.narration_audio_path, subtitle_path=body.subtitle_path,
+    )
+    return _ok({"project_id": project_id, "track_count": len(project.tracks)})
+
+
+@router.post("/projects/{project_id}/timeline/commands", response_model=BaseProjectResponse,
+             summary="Apply edit commands to the timeline")
+def timeline_commands(request: Request, project_id: str, body: TimelineCommandsRequest):
+    _require_project_mode(request)
+    store = _store()
+    project = store.load_timeline(project_id)
+    if project is None:
+        raise HttpException(task_id=project_id, status_code=400, message="no timeline")
+    try:
+        for command in body.commands:
+            project.apply(command)
+    except (KeyError, TypeError) as exc:
+        raise HttpException(task_id=project_id, status_code=400, message=str(exc))
+    store.save_timeline(project_id, project)
+    return _ok({"project_id": project_id, "applied": len(body.commands)})
+
+
+@router.put("/projects/{project_id}", response_model=BaseProjectResponse,
+            summary="Replace the timeline project")
+def replace_timeline(request: Request, project_id: str, project: TimelineProject):
+    _require_project_mode(request)
+    _store().save_timeline(project_id, project)
+    return _ok({"project_id": project_id})
