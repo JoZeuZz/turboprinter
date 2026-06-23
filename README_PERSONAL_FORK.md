@@ -44,6 +44,7 @@ The fork includes an **optional domain layer** (`app/domain/`) and **filesystem 
 | `app/infrastructure/renderers/moviepy_renderer.py` | Renders a `TimelineProject` to `final.mp4`, honouring per-item trims/durations, reusing legacy `generate_video` for subtitles/BGM/mux; writes `render_manifest.json` + `render_result.json` | Fase 5, default renderer |
 | `app/infrastructure/renderers/opencut_adapter.py` | Experimental OpenCut renderer stub; raises `NotImplementedError` | Fase 5, behind `TimelineRenderer` interface |
 | `app/application/workflows/render_project.py` | Loads `timeline_project.json` + `render_spec.json` and renders via the selected renderer | Fase 5 standalone, not wired into legacy task pipeline |
+| `app/controllers/v1/projects.py` | Project-mode REST API under `/api/v1/projects` (create, plan, media, timeline, edit commands, background render, assets) | Fase 6, `404` when project mode is off; legacy endpoints untouched |
 | `TURBOPRINTER_PROJECT_MODE_ENABLED` | Environment flag (default: off) | enables project-mode wiring (in future plans) |
 | `TURBOPRINTER_STRUCTURED_SHOT_PLANNER` | Environment flag (default: off) | enables the structured Shot Planner (Fase 2) |
 
@@ -66,6 +67,16 @@ project into `final.mp4` (honouring per-item trims, reusing the legacy
 `render_result.json`. It is **not** wired into the legacy task pipeline; the
 upstream render path is untouched. See
 `docs/architecture/005-opencut-integration-notes.md`.
+
+### Project API (Fase 6)
+
+`app/controllers/v1/projects.py` exposes the project-mode pipeline over REST
+under `/api/v1/projects` (create from topic/script, run plan, search media,
+build/edit timeline, background render, list assets). All endpoints return
+`404` when `TURBOPRINTER_PROJECT_MODE_ENABLED` is off, so the legacy `video`/`llm`
+endpoints and WebUI are unaffected. Render runs in the background and reports
+progress via the existing task-state manager. See
+`docs/architecture/006-project-api.md`.
 
 To enable the structured Shot Planner:
 
