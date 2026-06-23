@@ -153,3 +153,12 @@ def test_render_returns_failure_on_exception(monkeypatch, tmp_path):
     assert result.success is False
     assert "ffmpeg exploded" in (result.error or "")
     assert result.renderer_used == "moviepy"
+
+
+def test_opencut_adapter_raises_not_implemented():
+    from app.infrastructure.renderers.opencut_adapter import OpenCutAdapter
+
+    adapter = OpenCutAdapter()
+    assert adapter.name == "opencut"
+    with pytest.raises(NotImplementedError, match="OpenCut"):
+        adapter.render(_project(), _spec(), "/tmp/out")
