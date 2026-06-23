@@ -74,3 +74,5 @@ class RenderRequest(BaseModel):
     renderer: Literal["moviepy", "opencut"] | None = None
     include_subtitles: bool = True
     include_background_music: bool = True
+    subtitle_style: str | None = None
+    font_name: str | None = None

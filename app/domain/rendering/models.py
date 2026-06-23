@@ -22,6 +22,8 @@ class RenderSpec(BaseModel):
     audio_codec: str = "aac"
     include_subtitles: bool = True
     include_background_music: bool = True
+    subtitle_style: str | None = None
+    font_name: str | None = None
 
 
 class RenderResult(BaseModel):

@@ -112,6 +112,10 @@ class MoviePyTimelineRenderer:
         if not spec.include_background_music:
             params.bgm_type = ""
             params.bgm_file = ""
+        if spec.font_name:
+            params.font_name = spec.font_name
+        if spec.subtitle_style:
+            params.quality_subtitle_style = spec.subtitle_style
         return params
 
     def render(
