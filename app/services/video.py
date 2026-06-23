@@ -480,37 +480,37 @@ def _open_video_clip_quietly(video_path: str, audio: bool = False) -> VideoFileC
 def close_clip(clip):
     if clip is None:
         return
-        
+
     try:
         # close main resources
         if hasattr(clip, 'reader') and clip.reader is not None:
             clip.reader.close()
-            
+
         # close audio resources
         if hasattr(clip, 'audio') and clip.audio is not None:
             if hasattr(clip.audio, 'reader') and clip.audio.reader is not None:
                 clip.audio.reader.close()
             del clip.audio
-            
+
         # close mask resources
         if hasattr(clip, 'mask') and clip.mask is not None:
             if hasattr(clip.mask, 'reader') and clip.mask.reader is not None:
                 clip.mask.reader.close()
             del clip.mask
-            
+
         # handle child clips in composite clips
         if hasattr(clip, 'clips') and clip.clips:
             for child_clip in clip.clips:
                 if child_clip is not clip:  # avoid possible circular references
                     close_clip(child_clip)
-            
+
         # clear clip list
         if hasattr(clip, 'clips'):
             clip.clips = []
-            
+
     except Exception as e:
         logger.error(f"failed to close clip: {str(e)}")
-    
+
     del clip
     gc.collect()
 
@@ -623,7 +623,7 @@ def combine_videos(
         clip_duration = clip.duration
         clip_w, clip_h = clip.size
         close_clip(clip)
-        
+
         start_time = 0
 
         while start_time < clip_duration:
@@ -652,21 +652,21 @@ def combine_videos(
         subclipped_items=subclipped_items,
         concat_mode=video_concat_mode,
     )
-        
+
     logger.debug(f"total subclipped items: {len(subclipped_items)}")
-    
+
     # Add downloaded clips over and over until the duration of the audio (max_duration) has been reached
     for i, subclipped_item in enumerate(subclipped_items):
         if video_duration >= audio_duration:
             break
-        
+
         logger.debug(
             f"processing clip {i+1}: {subclipped_item.width}x{subclipped_item.height}, "
             f"source: {os.path.basename(subclipped_item.source_file_path)}, "
             f"current duration: {video_duration:.2f}s, "
             f"remaining: {audio_duration - video_duration:.2f}s"
         )
-        
+
         try:
             clip = _open_video_clip_quietly(subclipped_item.file_path).subclipped(
                 subclipped_item.start_time, subclipped_item.end_time
@@ -678,7 +678,7 @@ def combine_videos(
                 clip_ratio = clip.w / clip.h
                 video_ratio = video_width / video_height
                 logger.debug(f"resizing clip, source: {clip_w}x{clip_h}, ratio: {clip_ratio:.2f}, target: {video_width}x{video_height}, ratio: {video_ratio:.2f}")
-                
+
                 if clip_ratio == video_ratio:
                     clip = clip.resized(new_size=(video_width, video_height))
                 else:
@@ -693,7 +693,7 @@ def combine_videos(
                     background = ColorClip(size=(video_width, video_height), color=(0, 0, 0)).with_duration(clip_duration)
                     clip_resized = clip.resized(new_size=(new_width, new_height)).with_position("center")
                     clip = CompositeVideoClip([background, clip_resized])
-                    
+
             shuffle_side = random.choice(["left", "right", "top", "bottom"])
             if transition_value in (None, VideoTransitionMode.none.value):
                 clip = clip
@@ -717,7 +717,7 @@ def combine_videos(
 
             if clip.duration > max_clip_duration:
                 clip = clip.subclipped(0, max_clip_duration)
-                
+
             # wirte clip to temp file
             clip_file = f"{output_dir}/temp-clip-{i+1}.mp4"
             clip_codec = _get_configured_video_codec()
@@ -751,10 +751,10 @@ def combine_videos(
                 )
             )
             video_duration += clip_duration_saved
-            
+
         except Exception as e:
             logger.error(f"failed to process clip: {str(e)}")
-    
+
     # loop processed clips until the video duration matches or exceeds the audio duration.
     if video_duration < audio_duration:
         logger.warning(f"video duration ({video_duration:.2f}s) is shorter than audio duration ({audio_duration:.2f}s), looping clips to match audio length.")
@@ -765,13 +765,13 @@ def combine_videos(
             processed_clips.append(clip)
             video_duration += clip.duration
         logger.info(f"video duration: {video_duration:.2f}s, audio duration: {audio_duration:.2f}s, looped {len(processed_clips)-len(base_clips)} clips")
-     
+
     # merge video clips progressively, avoid loading all videos at once to avoid memory overflow
     logger.info("starting clip merging process")
     if not processed_clips:
         logger.warning("no clips available for merging")
         return combined_video_path
-    
+
     # if there is only one clip, use it directly
     if len(processed_clips) == 1:
         logger.info("using single clip directly")

@@ -63,5 +63,11 @@ exclude = [
 ]
 
 [tool.ruff.lint]
-# Conservative first pass: syntax/runtime-name failures only.
-select = ["E9", "F821"]
+# E9/F821: syntax/runtime-name failures. W291/W293: trailing whitespace.
+select = ["E9", "F821", "W291", "W293"]
+
+[tool.ruff.lint.per-file-ignores]
+# Upstream files with whitespace inside docstring literals — unsafe to auto-fix.
+"app/services/upload_post.py" = ["W291", "W293"]
+"app/services/voice.py" = ["W291", "W293"]
+"test/services/test_voice.py" = ["W291", "W293"]

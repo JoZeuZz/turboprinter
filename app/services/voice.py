@@ -93,7 +93,7 @@ def get_gemini_voices() -> list[str]:
     # Gemini TTS支持的语音列表
     voices_with_gender = [
         ("Zephyr", "Female"),
-        ("Puck", "Male"), 
+        ("Puck", "Male"),
         ("Charon", "Male"),
         ("Kore", "Female"),
         ("Fenrir", "Male"),
@@ -108,7 +108,7 @@ def get_gemini_voices() -> list[str]:
         ("Orion", "Male"),
         ("Atlas", "Male"),
     ]
-    
+
     # 添加gemini:前缀，并格式化为显示名称
     return [
         f"gemini:{voice}-{gender}"
@@ -1021,23 +1021,23 @@ def gemini_tts(
                 ),
             ),
         )
-        
+
         # 检查响应
         if not response.candidates or not response.candidates[0].content:
             logger.error("No audio content received from Gemini TTS")
             return None
-            
+
         # 获取音频数据
         audio_data = None
         for part in response.candidates[0].content.parts:
             if hasattr(part, 'inline_data') and part.inline_data:
                 audio_data = part.inline_data.data
                 break
-                
+
         if not audio_data:
             logger.error("No audio data found in response")
             return None
-            
+
         # 音频数据已经是原始字节，不需要base64解码
         if isinstance(audio_data, str):
             # 如果是字符串，则需要base64解码
@@ -1045,14 +1045,14 @@ def gemini_tts(
         else:
             # 如果已经是字节，直接使用
             audio_bytes = audio_data
-        
+
         # 尝试不同的音频格式 - Gemini可能返回不同的格式
         audio_segment = None
-        
+
         # Gemini返回Linear PCM格式，按照文档参数解析
         try:
             audio_segment = AudioSegment.from_file(
-                io.BytesIO(audio_bytes), 
+                io.BytesIO(audio_bytes),
                 format="raw",
                 frame_rate=24000,  # Gemini TTS默认采样率
                 channels=1,        # 单声道
@@ -1061,13 +1061,13 @@ def gemini_tts(
         except Exception as e:
             logger.error(f"Failed to load PCM audio: {e}")
             return None
-        
+
         # 导出为MP3格式
         ensure_file_path_exists(voice_file)
         audio_segment.export(voice_file, format="mp3")
-        
+
         logger.info(f"completed, output file: {voice_file}")
-        
+
         # Gemini 拿不到 edge_tts 那种逐词边界事件，因此这里退回到
         # 项目原有的 `subs/offset` 兼容结构，至少保证后续字幕与时长
         # 计算链路可继续工作。
@@ -1078,7 +1078,7 @@ def gemini_tts(
             text=text,
             audio_duration_seconds=audio_duration,
         )
-        
+
     except ImportError as e:
         logger.error(f"Missing required package for Gemini TTS: {str(e)}. Please install: pip install pydub")
         return None
