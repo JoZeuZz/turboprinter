@@ -43,39 +43,41 @@ export function ApiKeyInput({ label, value, placeholder, onSave }: ApiKeyInputPr
     <div className="flex flex-col gap-1">
       <label className="text-xs font-medium text-muted">{label}</label>
       {editing ? (
-        <div className="flex items-center gap-1">
-          <div className="relative flex-1">
-            <input
-              type={revealed ? "text" : "password"}
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              placeholder={placeholder}
-              className="h-8 w-full rounded border border-border bg-surface px-3 pr-8 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
-            />
+        <>
+          <div className="flex items-center gap-1">
+            <div className="relative flex-1">
+              <input
+                type={revealed ? "text" : "password"}
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                placeholder={placeholder}
+                className="h-8 w-full rounded border border-border bg-surface px-3 pr-8 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
+              />
+              <button
+                type="button"
+                onClick={() => setRevealed((r) => !r)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted hover:text-foreground"
+              >
+                {revealed ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+              </button>
+            </div>
             <button
-              type="button"
-              onClick={() => setRevealed((r) => !r)}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted hover:text-foreground"
+              onClick={handleSave}
+              disabled={saving}
+              className="flex items-center gap-1 rounded border border-border bg-surface px-2 py-1 text-xs text-accent hover:border-accent disabled:opacity-50"
             >
-              {revealed ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+              <Save className="h-3 w-3" />
+              {saving ? "Saving…" : "Save"}
+            </button>
+            <button
+              onClick={() => setEditing(false)}
+              className="rounded border border-border px-2 py-1 text-xs text-muted hover:text-foreground"
+            >
+              Cancel
             </button>
           </div>
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="flex items-center gap-1 rounded border border-border bg-surface px-2 py-1 text-xs text-accent hover:border-accent disabled:opacity-50"
-          >
-            <Save className="h-3 w-3" />
-            {saving ? "Saving…" : "Save"}
-          </button>
-          <button
-            onClick={() => setEditing(false)}
-            className="rounded border border-border px-2 py-1 text-xs text-muted hover:text-foreground"
-          >
-            Cancel
-          </button>
-        </div>
-        {error && <p className="text-red-400 text-xs mt-1">{error}</p>}
+          {error && <p className="text-red-400 text-xs mt-1">{error}</p>}
+        </>
       ) : (
         <div className="flex items-center gap-2">
           <span className="font-mono text-xs text-muted">{maskedDisplay}</span>
