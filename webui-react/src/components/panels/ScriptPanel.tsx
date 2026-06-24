@@ -3,12 +3,19 @@ import { useState } from "react";
 import { Wand2 } from "lucide-react";
 import { Button, Input, Textarea, Collapsible } from "../ui";
 import { useVideoStore } from "../../store/useVideoStore";
+import { useProjectWorkspaceStore } from "../../store/useProjectWorkspaceStore";
 import { llmApi } from "../../api/llm";
 
 export function ScriptPanel() {
   const store = useVideoStore();
+  const workspaceStore = useProjectWorkspaceStore();
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const handleTopicChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    store.set("video_subject", e.target.value);
+    workspaceStore.setTopic(e.target.value);
+  };
 
   const handleGenerateScript = async () => {
     if (!store.video_subject.trim()) return;
@@ -45,7 +52,7 @@ export function ScriptPanel() {
         label="Topic"
         placeholder="e.g. Benefits of morning exercise"
         value={store.video_subject}
-        onChange={(e) => store.set("video_subject", e.target.value)}
+        onChange={handleTopicChange}
       />
 
       <div className="flex flex-col gap-1">
@@ -125,6 +132,24 @@ export function ScriptPanel() {
           rows={3}
         />
       </Collapsible>
+
+      <div className="flex gap-2 pt-2">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => workspaceStore.setPanel("script")}
+          className="flex-none"
+        >
+          ← Back
+        </Button>
+        <Button
+          className="flex-1"
+          disabled={!store.video_subject.trim()}
+          onClick={() => workspaceStore.setPanel("config")}
+        >
+          Continue to Settings →
+        </Button>
+      </div>
     </section>
   );
 }
