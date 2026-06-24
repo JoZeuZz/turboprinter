@@ -1345,7 +1345,6 @@ def generate_video(
         fallback_fn=_moviepy_fallback,
     )
     video_clip.close()
-    del video_clip
 
 
 def preprocess_video(materials: List[MaterialInfo], clip_duration=4):
