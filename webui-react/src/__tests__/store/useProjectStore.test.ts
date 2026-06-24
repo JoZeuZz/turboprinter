@@ -97,4 +97,19 @@ describe("useProjectStore", () => {
       errors: ["gap before first item"],
     });
   });
+
+  it("render is blocked and sets error when timeline validation is invalid", async () => {
+    useProjectStore.setState({
+      projectId: "project-1",
+      timelineValidation: { valid: false, errors: ["gap before first item"] },
+    });
+
+    await act(async () => {
+      await useProjectStore.getState().render();
+    });
+
+    expect(projectsApi.startRender).not.toHaveBeenCalled();
+    expect(useProjectStore.getState().mode).toBe("error");
+    expect(useProjectStore.getState().error).toBe("gap before first item");
+  });
 });
