@@ -1,10 +1,9 @@
 // webui-react/src/components/layout/NavBar.tsx
 import { NavLink } from "react-router-dom";
-import { Wand2, Film, Settings } from "lucide-react";
+import { Home, Settings } from "lucide-react";
 
 const NAV_ITEMS = [
-  { to: "/", label: "Auto", icon: Wand2, end: true },
-  { to: "/editor", label: "Editor", icon: Film, end: false },
+  { to: "/", label: "Home", icon: Home, end: true },
   { to: "/settings", label: "Config", icon: Settings, end: false },
 ];
 
