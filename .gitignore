@@ -52,3 +52,7 @@ CLAUDE.local.md
 superpowers/
 plans/
 specs/
+
+# React frontend build artifacts (served from disk, not tracked)
+resource/public/assets/
+resource/public/index.html
