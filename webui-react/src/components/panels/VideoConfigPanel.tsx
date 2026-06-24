@@ -103,12 +103,13 @@ export function VideoConfigPanel() {
         <h2 className="text-sm font-semibold text-foreground">
           Configure your video
         </h2>
-        <button
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={() => workspaceStore.setPanel("script")}
-          className="text-xs text-muted hover:text-foreground"
         >
           ← Back
-        </button>
+        </Button>
       </div>
 
       <TabBar tabs={TABS} active={tab} onChange={setTab} />

@@ -133,17 +133,8 @@ export function ScriptPanel() {
         />
       </Collapsible>
 
-      <div className="flex gap-2 pt-2">
+      <div className="pt-4 border-t border-border flex justify-end">
         <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => workspaceStore.setPanel("script")}
-          className="flex-none"
-        >
-          ← Back
-        </Button>
-        <Button
-          className="flex-1"
           disabled={!store.video_subject.trim()}
           onClick={() => workspaceStore.setPanel("config")}
         >
