@@ -3,7 +3,7 @@ from __future__ import annotations
 import glob
 import os
 
-from fastapi import BackgroundTasks, Request
+from fastapi import BackgroundTasks, Query, Request
 from fastapi.responses import FileResponse
 
 from app.application.services.media_aggregator import MediaAggregator
@@ -349,7 +349,12 @@ def timeline_build(request: Request, project_id: str, body: TimelineBuildRequest
 
 @router.post("/projects/{project_id}/timeline/commands", response_model=BaseProjectResponse,
              summary="Apply edit commands to the timeline")
-def timeline_commands(request: Request, project_id: str, body: TimelineCommandsRequest):
+def timeline_commands(
+    request: Request,
+    project_id: str,
+    body: TimelineCommandsRequest,
+    validate: bool = Query(False),
+):
     _require_project_mode(request, project_id)
     store = _store()
     project = store.load_timeline(project_id)
@@ -357,11 +362,24 @@ def timeline_commands(request: Request, project_id: str, body: TimelineCommandsR
         raise HttpException(task_id=project_id, status_code=400, message="no timeline")
     try:
         _validate_replace_candidates(store, project_id, body.commands)
-        project = project.apply_all(body.commands, media_path_exists=os.path.exists)
+        project = project.apply_all(
+            body.commands,
+            validate=False,
+            media_path_exists=os.path.exists,
+        )
     except (KeyError, TypeError, ValueError) as exc:
         raise HttpException(task_id=project_id, status_code=400, message=str(exc))
     store.save_timeline(project_id, project)
-    return _ok({"project_id": project_id, "applied": len(body.commands)})
+    result = {"project_id": project_id, "applied": len(body.commands)}
+    if validate:
+        try:
+            validate_timeline_project(project)
+            result["valid"] = True
+            result["errors"] = []
+        except ValueError as exc:
+            result["valid"] = False
+            result["errors"] = [str(exc)]
+    return _ok(result)
 
 
 @router.post("/projects/{project_id}/timeline/validate", response_model=BaseProjectResponse,
