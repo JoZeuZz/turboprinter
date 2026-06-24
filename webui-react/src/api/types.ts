@@ -366,11 +366,14 @@ export interface TimelineBuildResponse {
 export interface TimelineCommandsResponse {
   project_id: string;
   applied: number;
+  valid?: boolean;
+  errors?: string[];
 }
 
 export interface TimelineValidateResponse {
   project_id: string;
   valid: boolean;
+  errors?: string[];
 }
 
 export interface MusicSelectResponse {

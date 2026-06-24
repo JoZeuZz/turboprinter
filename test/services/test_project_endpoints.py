@@ -182,25 +182,74 @@ def test_timeline_commands_endpoint(client):
     assert reloaded.trim_end_sec == 3.5
 
 
-def test_timeline_commands_reject_invalid_change_without_persisting(client):
+def test_timeline_commands_default_response_has_no_validation_keys(client):
     pid = client.post(
         "/api/v1/projects/from-script", json={"script": "Uno. Dos.", "language": "es"}
     ).json()["data"]["project_id"]
     _seed_plan_and_media(pid)
     client.post(f"/api/v1/projects/{pid}/timeline/build", json={})
     store = pj._store()
-    before = store.load_timeline(pid)
-    item_id = before.tracks[0].items[0].id
+    item_id = store.load_timeline(pid).tracks[0].items[0].id
 
     r = client.post(f"/api/v1/projects/{pid}/timeline/commands", json={"commands": [
-        {"type": "set_timing", "track_id": "video_1", "item_id": item_id,
-         "duration_sec": 10.0},
+        {"type": "trim", "track_id": "video_1", "item_id": item_id,
+         "trim_start_sec": 0.5, "trim_end_sec": 3.5},
     ]})
 
-    assert r.status_code == 400
-    assert "trim range" in r.json()["message"].lower()
+    assert r.status_code == 200
+    assert r.json()["data"] == {"project_id": pid, "applied": 1}
+
+
+def test_timeline_commands_validate_true_reports_valid(client):
+    pid = client.post(
+        "/api/v1/projects/from-script", json={"script": "Uno. Dos.", "language": "es"}
+    ).json()["data"]["project_id"]
+    _seed_plan_and_media(pid)
+    client.post(f"/api/v1/projects/{pid}/timeline/build", json={})
+    store = pj._store()
+    item_id = store.load_timeline(pid).tracks[0].items[0].id
+
+    r = client.post(
+        f"/api/v1/projects/{pid}/timeline/commands?validate=true",
+        json={"commands": [
+            {"type": "trim", "track_id": "video_1", "item_id": item_id,
+             "trim_start_sec": 0.5, "trim_end_sec": 3.5},
+        ]},
+    )
+
+    assert r.status_code == 200
+    assert r.json()["data"] == {
+        "project_id": pid,
+        "applied": 1,
+        "valid": True,
+        "errors": [],
+    }
+
+
+def test_timeline_commands_validate_true_reports_invalid_and_persists(client):
+    pid = client.post(
+        "/api/v1/projects/from-script", json={"script": "Uno. Dos.", "language": "es"}
+    ).json()["data"]["project_id"]
+    _seed_plan_and_media(pid)
+    client.post(f"/api/v1/projects/{pid}/timeline/build", json={})
+    store = pj._store()
+    item_id = store.load_timeline(pid).tracks[0].items[0].id
+
+    r = client.post(
+        f"/api/v1/projects/{pid}/timeline/commands?validate=true",
+        json={"commands": [
+            {"type": "set_timing", "track_id": "video_1", "item_id": item_id,
+             "duration_sec": 10.0},
+        ]},
+    )
+
+    assert r.status_code == 200
+    data = r.json()["data"]
+    assert data["valid"] is False
+    assert data["errors"]
+    assert "trim range" in data["errors"][0].lower()
     after = store.load_timeline(pid)
-    assert after.tracks[0].items[0].duration_sec == before.tracks[0].items[0].duration_sec
+    assert after.tracks[0].items[0].duration_sec == 10.0
 
 
 def test_timeline_replace_rejects_candidate_not_in_project_pool(client, tmp_path):

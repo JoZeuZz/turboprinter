@@ -11,6 +11,7 @@ export function Editor() {
   ) ?? [];
   const isLoading = projectStore.mode === "loading";
   const hasProject = Boolean(projectStore.projectId);
+  const hasValidationError = projectStore.timelineValidation?.valid === false;
 
   const createProject = () => {
     void projectStore.create({ topic, generate_script: true });
@@ -64,7 +65,10 @@ export function Editor() {
             >
               Build timeline
             </Button>
-            <Button onClick={() => void projectStore.render()} disabled={!projectStore.project || isLoading}>
+            <Button
+              onClick={() => void projectStore.render()}
+              disabled={!projectStore.project || isLoading || hasValidationError}
+            >
               Render
             </Button>
           </div>
@@ -77,6 +81,24 @@ export function Editor() {
           {projectStore.mode === "error" && projectStore.error && (
             <div className="rounded-md border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-200">
               {projectStore.error}
+            </div>
+          )}
+          {projectStore.timelineValidation && (
+            <div
+              className={`rounded-md border p-3 text-sm ${
+                hasValidationError
+                  ? "border-red-500/40 bg-red-500/10 text-red-200"
+                  : "border-green-500/40 bg-green-500/10 text-green-200"
+              }`}
+            >
+              <p>
+                Timeline validation: {projectStore.timelineValidation.valid ? "valid" : "invalid"}
+              </p>
+              {projectStore.timelineValidation.errors.map((validationError) => (
+                <p key={validationError} className="mt-1">
+                  {validationError}
+                </p>
+              ))}
             </div>
           )}
           {projectStore.renderStatus && (
