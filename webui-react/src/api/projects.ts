@@ -130,4 +130,9 @@ export const projectsApi = {
     apiFetch<ListAssetsResponse>(`/projects/${projectId}/assets`),
 
   getAsset: (projectId: string, assetId: string) => fetchAsset(projectId, assetId),
+
+  listProjects: (limit = 20) =>
+    apiFetch<{ projects: Array<{ project_id: string; topic: string | null; updated_at: string }> }>(
+      `/projects?limit=${limit}`
+    ),
 };
