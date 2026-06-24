@@ -228,6 +228,8 @@ export interface TimelineItem {
   id: string;
   media_id?: string | null;
   local_path?: string | null;
+  thumbnail_url?: string | null;
+  source_url?: string | null;
   start_sec: number;
   duration_sec: number;
   trim_start_sec?: number;
@@ -237,6 +239,8 @@ export interface TimelineItem {
   transition_in?: string | null;
   transition_out?: string | null;
   volume?: number | null;
+  text?: string | null;
+  keywords?: string[];
 }
 
 export type TrackType = "video" | "audio" | "subtitle" | "overlay";
