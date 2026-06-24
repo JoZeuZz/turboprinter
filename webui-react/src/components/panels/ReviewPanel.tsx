@@ -1,6 +1,6 @@
 // webui-react/src/components/panels/ReviewPanel.tsx
 import { useState } from "react";
-import { Edit3, Clapperboard } from "lucide-react";
+import { ArrowLeft, Clapperboard } from "lucide-react";
 import { Button } from "../ui";
 import { ClipGrid } from "./ClipGrid";
 import { useProjectStore } from "../../store/useProjectStore";
@@ -67,7 +67,7 @@ export function ReviewPanel() {
 
       <div className="flex gap-2 pt-2 border-t border-border">
         <Button variant="ghost" onClick={handleBackToScript}>
-          <Edit3 className="mr-1.5 h-3.5 w-3.5" />
+          <ArrowLeft className="mr-1.5 h-3.5 w-3.5" />
           ← Back to Script
         </Button>
         <Button onClick={handleRender} className="flex-1">

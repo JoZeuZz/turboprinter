@@ -30,14 +30,14 @@ export function ClipGrid({ clips, excluded, onExclude }: ClipGridProps) {
                 background: `hsl(${(idx * 47) % 360}, 20%, 18%)`,
               }}
             >
-              {clip.local_path ? (
+              {clip.thumbnail_url ? (
                 <img
-                  src={clip.local_path}
+                  src={clip.thumbnail_url}
                   alt={`clip ${idx + 1}`}
                   className="w-full h-full object-cover"
                 />
               ) : (
-                <span>{clip.id}</span>
+                <span>#{idx + 1}</span>
               )}
             </div>
 
