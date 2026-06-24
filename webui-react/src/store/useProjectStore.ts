@@ -132,12 +132,13 @@ export const useProjectStore = create<ProjectStoreState>((set, get) => {
       }
     },
     render: async (params = {}) => {
+      const { timelineValidation } = get();
+      if (timelineValidation?.valid === false) {
+        set({ mode: "error", error: timelineValidation.errors[0] ?? "Timeline validation failed" });
+        return;
+      }
       set({ mode: "loading", error: null });
       try {
-        const { timelineValidation } = get();
-        if (timelineValidation?.valid === false) {
-          throw new Error(timelineValidation.errors[0] ?? "Timeline validation failed");
-        }
         const projectId = requireProjectId();
         await projectsApi.startRender(projectId, params);
         await get().pollRenderStatus();
