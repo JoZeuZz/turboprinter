@@ -47,12 +47,13 @@ CLAUDE.local.md
 # Serena MCP: caché/índice local del proyecto.
 .serena/
 
-# Superpowers: artefactos locales de mi flujo personal.
-.superpowers/
-superpowers/
-plans/
-specs/
+# Superpowers: artefactos locales de mi flujo personal (solo root-level).
+/.superpowers/
+/superpowers/
+/plans/
+/specs/
 
 # React frontend build artifacts (served from disk, not tracked)
 resource/public/assets/
 resource/public/index.html
+advisor-plans/
