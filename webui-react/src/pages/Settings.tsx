@@ -1,20 +1,52 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useConfigStore } from "../store/useConfigStore";
 import { configApi } from "../api/config";
+import { ApiKeyInput, Collapsible } from "../components/ui";
 
 export function Settings() {
   const { config, setConfig } = useConfigStore();
+  const [apiKeys, setApiKeys] = useState<Record<string, string>>({
+    openai: "",
+    anthropic: "",
+    deepseek: "",
+  });
 
   useEffect(() => {
     configApi.get().then(setConfig).catch(() => {});
   }, []);
 
+  const handleSaveKey = async (keyName: string, value: string) => {
+    setApiKeys((prev) => ({ ...prev, [keyName]: value }));
+  };
+
   return (
-    <div className="p-6 max-w-xl space-y-6">
+    <div className="p-6 max-w-xl space-y-4">
       <h1 className="text-base font-semibold text-foreground">Settings</h1>
 
-      <section className="rounded-md border border-border bg-surface p-4 space-y-3">
-        <h2 className="text-sm font-medium text-foreground">Server Config</h2>
+      <Collapsible title="LLM API Keys" defaultOpen>
+        <div className="space-y-3">
+          <ApiKeyInput
+            label="OpenAI API Key"
+            value={apiKeys.openai}
+            placeholder="sk-..."
+            onSave={(v) => handleSaveKey("openai", v)}
+          />
+          <ApiKeyInput
+            label="Anthropic API Key"
+            value={apiKeys.anthropic}
+            placeholder="sk-ant-..."
+            onSave={(v) => handleSaveKey("anthropic", v)}
+          />
+          <ApiKeyInput
+            label="DeepSeek API Key"
+            value={apiKeys.deepseek}
+            placeholder="sk-..."
+            onSave={(v) => handleSaveKey("deepseek", v)}
+          />
+        </div>
+      </Collapsible>
+
+      <Collapsible title="Server Config">
         {!config ? (
           <p className="text-sm text-muted">Loading…</p>
         ) : (
@@ -33,10 +65,10 @@ export function Settings() {
             </div>
           </dl>
         )}
-      </section>
+      </Collapsible>
 
       <p className="text-xs text-muted">
-        To change API keys or LLM providers, edit <code className="font-mono">config.toml</code> and restart the server.
+        For full config, edit <code className="font-mono">config.toml</code> and restart the server.
       </p>
     </div>
   );
