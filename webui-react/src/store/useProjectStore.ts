@@ -1,6 +1,7 @@
 // webui-react/src/store/useProjectStore.ts
 import { create } from "zustand";
 import { ApiError } from "../api/client";
+import { pollUntilComplete } from "../api/polling";
 import { projectsApi } from "../api/projects";
 import {
   TASK_STATE_COMPLETE,
@@ -38,10 +39,6 @@ const initialState = {
   error: null,
   renderStatus: null,
 };
-
-function delay(ms: number) {
-  return new Promise((resolve) => window.setTimeout(resolve, ms));
-}
 
 export const useProjectStore = create<ProjectStoreState>((set, get) => {
   const fail = (error: unknown) => {
@@ -120,14 +117,23 @@ export const useProjectStore = create<ProjectStoreState>((set, get) => {
     pollRenderStatus: async (intervalMs = 1500) => {
       const projectId = requireProjectId();
 
-      for (;;) {
-        const status = await projectsApi.getRenderStatus(projectId);
-        set({ renderStatus: status, mode: "ready", error: null });
-        if (status.state === TASK_STATE_COMPLETE || status.state === TASK_STATE_FAILED) {
-          return status;
-        }
-        await delay(intervalMs);
+      set({ mode: "loading", error: null });
+      const status = await pollUntilComplete(
+        () => projectsApi.getRenderStatus(projectId),
+        (nextStatus) => set({ renderStatus: nextStatus, error: null }),
+        (nextStatus) =>
+          nextStatus.state === TASK_STATE_COMPLETE ||
+          nextStatus.state === TASK_STATE_FAILED,
+        intervalMs
+      );
+
+      if (status.state === TASK_STATE_FAILED) {
+        set({ mode: "error", error: status.error ?? "Render failed" });
+      } else {
+        set({ mode: "ready", error: null });
       }
+
+      return status;
     },
     reset: () => set({ ...initialState }),
   };
