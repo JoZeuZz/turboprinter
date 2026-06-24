@@ -164,4 +164,12 @@ describe("projectsApi", () => {
       message: "project mode disabled",
     });
   });
+
+  it("getAsset fetches the raw project asset response", async () => {
+    const blob = new Blob(["asset"]);
+    globalThis.fetch = vi.fn().mockResolvedValue({ ok: true, blob: async () => blob } as Response);
+
+    await expect(projectsApi.getAsset("project-1", "preview/thumb.png")).resolves.toBe(blob);
+    expect(fetch).toHaveBeenCalledWith("/api/v1/projects/project-1/assets/preview/thumb.png");
+  });
 });

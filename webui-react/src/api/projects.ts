@@ -1,5 +1,5 @@
 // webui-react/src/api/projects.ts
-import { apiFetch } from "./client";
+import { ApiError, apiFetch } from "./client";
 import type {
   CreateFromTopicRequest,
   CreateFromScriptRequest,
@@ -25,6 +25,23 @@ import type {
   RenderStatusResponse,
   ListAssetsResponse,
 } from "./types";
+
+const API_BASE = "/api/v1";
+
+function encodeAssetPath(assetId: string) {
+  return assetId.split("/").map(encodeURIComponent).join("/");
+}
+
+async function fetchAsset(projectId: string, assetId: string): Promise<Blob> {
+  const response = await fetch(
+    `${API_BASE}/projects/${encodeURIComponent(projectId)}/assets/${encodeAssetPath(assetId)}`
+  );
+  if (!response.ok) {
+    const json = await response.json().catch(() => ({}));
+    throw new ApiError(json.status ?? response.status, json.message ?? "Request failed");
+  }
+  return response.blob();
+}
 
 export const projectsApi = {
   createFromTopic: (params: CreateFromTopicRequest) =>
@@ -110,4 +127,6 @@ export const projectsApi = {
 
   listAssets: (projectId: string) =>
     apiFetch<ListAssetsResponse>(`/projects/${projectId}/assets`),
+
+  getAsset: (projectId: string, assetId: string) => fetchAsset(projectId, assetId),
 };
