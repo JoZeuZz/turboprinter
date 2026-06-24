@@ -11,11 +11,17 @@ import {
   type PlanRequest,
   type RenderRequest,
   type RenderStatusResponse,
+  type TimelineCommandsRequest,
   type TimelineBuildRequest,
   type TimelineProject,
 } from "../api/types";
 
 type ProjectMode = "idle" | "loading" | "ready" | "disabled" | "error";
+
+interface TimelineValidationState {
+  valid: boolean;
+  errors: string[];
+}
 
 interface ProjectStoreState {
   projectId: string | null;
@@ -23,10 +29,12 @@ interface ProjectStoreState {
   mode: ProjectMode;
   error: string | null;
   renderStatus: RenderStatusResponse | null;
+  timelineValidation: TimelineValidationState | null;
   create: (params: CreateFromTopicRequest) => Promise<void>;
   plan: (params?: PlanRequest) => Promise<void>;
   mediaSearch: (params?: MediaSearchRequest) => Promise<void>;
   buildTimeline: (params?: TimelineBuildRequest) => Promise<void>;
+  applyTimelineCommands: (params: TimelineCommandsRequest) => Promise<void>;
   render: (params?: RenderRequest) => Promise<void>;
   pollRenderStatus: (intervalMs?: number) => Promise<RenderStatusResponse>;
   reset: () => void;
@@ -38,6 +46,7 @@ const initialState = {
   mode: "idle" as ProjectMode,
   error: null,
   renderStatus: null,
+  timelineValidation: null,
 };
 
 export const useProjectStore = create<ProjectStoreState>((set, get) => {
@@ -95,7 +104,7 @@ export const useProjectStore = create<ProjectStoreState>((set, get) => {
       }
     },
     buildTimeline: async (params = {}) => {
-      set({ mode: "loading", error: null });
+      set({ mode: "loading", error: null, timelineValidation: null });
       try {
         const projectId = requireProjectId();
         await projectsApi.buildTimeline(projectId, params);
@@ -104,9 +113,31 @@ export const useProjectStore = create<ProjectStoreState>((set, get) => {
         fail(error);
       }
     },
+    applyTimelineCommands: async (params) => {
+      set({ mode: "loading", error: null });
+      try {
+        const projectId = requireProjectId();
+        const response = await projectsApi.applyTimelineCommands(projectId, params, true);
+        if (response.valid != null) {
+          set({
+            timelineValidation: {
+              valid: response.valid,
+              errors: response.errors ?? [],
+            },
+          });
+        }
+        await refresh(projectId);
+      } catch (error) {
+        fail(error);
+      }
+    },
     render: async (params = {}) => {
       set({ mode: "loading", error: null });
       try {
+        const { timelineValidation } = get();
+        if (timelineValidation?.valid === false) {
+          throw new Error(timelineValidation.errors[0] ?? "Timeline validation failed");
+        }
         const projectId = requireProjectId();
         await projectsApi.startRender(projectId, params);
         await get().pollRenderStatus();

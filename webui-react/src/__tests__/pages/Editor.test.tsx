@@ -14,6 +14,7 @@ vi.mock("../../api/projects", () => ({
     planProject: vi.fn(),
     mediaSearch: vi.fn(),
     buildTimeline: vi.fn(),
+    applyTimelineCommands: vi.fn(),
     startRender: vi.fn(),
     getRenderStatus: vi.fn(),
   },
@@ -62,5 +63,31 @@ describe("Editor", () => {
 
     expect(screen.getByText("clip-1")).toBeInTheDocument();
     expect(screen.getByText(/0.0s - 5.0s/)).toBeInTheDocument();
+  });
+
+  it("shows validation errors and disables render", () => {
+    act(() => {
+      useProjectStore.setState({
+        projectId: "project-1",
+        mode: "ready",
+        timelineValidation: { valid: false, errors: ["gap before first item"] },
+        project: {
+          project_id: "project-1",
+          tracks: [
+            {
+              id: "video",
+              type: "video",
+              name: "Video",
+              items: [{ id: "clip-1", start_sec: 0, duration_sec: 5 }],
+            },
+          ],
+        },
+      });
+    });
+
+    render(<Editor />);
+
+    expect(screen.getByText(/gap before first item/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /render/i })).toBeDisabled();
   });
 });

@@ -94,6 +94,26 @@ describe("projectsApi", () => {
       },
     },
     {
+      name: "applyTimelineCommandsWithValidation",
+      call: () =>
+        projectsApi.applyTimelineCommands(
+          "project-1",
+          {
+            commands: [
+              { type: "move", track_id: "video", item_id: "clip-1", new_start_sec: 2 },
+            ],
+          },
+          true
+        ),
+      path: "/api/v1/projects/project-1/timeline/commands?validate=true",
+      method: "POST",
+      body: {
+        commands: [
+          { type: "move", track_id: "video", item_id: "clip-1", new_start_sec: 2 },
+        ],
+      },
+    },
+    {
       name: "validateTimeline",
       call: () => projectsApi.validateTimeline("project-1"),
       path: "/api/v1/projects/project-1/timeline/validate",

@@ -85,10 +85,11 @@ export const projectsApi = {
 
   applyTimelineCommands: (
     projectId: string,
-    params: TimelineCommandsRequest
+    params: TimelineCommandsRequest,
+    validate = false
   ) =>
     apiFetch<TimelineCommandsResponse>(
-      `/projects/${projectId}/timeline/commands`,
+      `/projects/${projectId}/timeline/commands${validate ? "?validate=true" : ""}`,
       {
         method: "POST",
         body: JSON.stringify(params),

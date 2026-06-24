@@ -12,6 +12,7 @@ vi.mock("../../api/projects", () => ({
     planProject: vi.fn(),
     mediaSearch: vi.fn(),
     buildTimeline: vi.fn(),
+    applyTimelineCommands: vi.fn(),
     startRender: vi.fn(),
     getRenderStatus: vi.fn(),
   },
@@ -70,5 +71,30 @@ describe("useProjectStore", () => {
     expect(useProjectStore.getState().projectId).toBe("project-1");
     expect(useProjectStore.getState().project?.tracks[0].items[0].id).toBe("clip-1");
     expect(useProjectStore.getState().mode).toBe("ready");
+  });
+
+  it("stores invalid timeline validation after applying commands", async () => {
+    useProjectStore.setState({ projectId: "project-1" });
+    vi.mocked(projectsApi.applyTimelineCommands).mockResolvedValue({
+      project_id: "project-1",
+      applied: 1,
+      valid: false,
+      errors: ["gap before first item"],
+    });
+    vi.mocked(projectsApi.getProject).mockResolvedValue(projectWithTimeline);
+
+    await act(async () => {
+      await useProjectStore.getState().applyTimelineCommands({ commands: [] });
+    });
+
+    expect(projectsApi.applyTimelineCommands).toHaveBeenCalledWith(
+      "project-1",
+      { commands: [] },
+      true
+    );
+    expect(useProjectStore.getState().timelineValidation).toEqual({
+      valid: false,
+      errors: ["gap before first item"],
+    });
   });
 });
