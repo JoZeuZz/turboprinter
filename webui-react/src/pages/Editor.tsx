@@ -43,7 +43,7 @@ export function Editor() {
           />
 
           <div className="grid gap-2">
-            <Button onClick={createProject} disabled={!topic.trim()} isLoading={isLoading}>
+            <Button onClick={createProject} disabled={!topic.trim() || isLoading} isLoading={isLoading}>
               Create project
             </Button>
             <Button variant="ghost" onClick={() => void projectStore.plan()} disabled={!hasProject || isLoading}>
