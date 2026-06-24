@@ -14,7 +14,7 @@ const CLIPS: TimelineItem[] = [
 describe("ClipGrid", () => {
   it("renders clip count", () => {
     render(<ClipGrid clips={CLIPS} onExclude={vi.fn()} excluded={[]} />);
-    expect(screen.getAllByText(/clip-/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/#[0-9]/i).length).toBeGreaterThan(0);
   });
 
   it("calls onExclude when exclude button clicked", async () => {
