@@ -14,6 +14,7 @@ export function ApiKeyInput({ label, value, placeholder, onSave }: ApiKeyInputPr
   const [revealed, setRevealed] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const maskedDisplay = value ? "•".repeat(8) + value.slice(-4) : "(not set)";
 
@@ -21,6 +22,7 @@ export function ApiKeyInput({ label, value, placeholder, onSave }: ApiKeyInputPr
     setDraft(value);
     setEditing(true);
     setSaved(false);
+    setError(null);
   };
 
   const handleSave = async () => {
@@ -29,6 +31,9 @@ export function ApiKeyInput({ label, value, placeholder, onSave }: ApiKeyInputPr
       await onSave(draft);
       setSaved(true);
       setEditing(false);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Save failed');
     } finally {
       setSaving(false);
     }
@@ -70,6 +75,7 @@ export function ApiKeyInput({ label, value, placeholder, onSave }: ApiKeyInputPr
             Cancel
           </button>
         </div>
+        {error && <p className="text-red-400 text-xs mt-1">{error}</p>}
       ) : (
         <div className="flex items-center gap-2">
           <span className="font-mono text-xs text-muted">{maskedDisplay}</span>
