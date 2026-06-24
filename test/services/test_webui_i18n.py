@@ -6,6 +6,19 @@ import unittest
 
 ROOT_DIR = Path(__file__).parent.parent.parent
 WEBUI_MAIN = ROOT_DIR / "webui" / "Main.py"
+WEBUI_COMPONENTS = ROOT_DIR / "webui" / "components"
+WEBUI_SOURCES = [
+    WEBUI_MAIN,
+    WEBUI_COMPONENTS / "api_keys.py",
+    WEBUI_COMPONENTS / "audio.py",
+    WEBUI_COMPONENTS / "projects.py",
+    WEBUI_COMPONENTS / "publish.py",
+    WEBUI_COMPONENTS / "quality.py",
+    WEBUI_COMPONENTS / "subtitles.py",
+    WEBUI_COMPONENTS / "video.py",
+    WEBUI_COMPONENTS / "voice_gallery.py",
+]
+WEBUI_FONT_GALLERY = WEBUI_COMPONENTS / "media.py"
 I18N_DIR = ROOT_DIR / "webui" / "i18n"
 
 
@@ -30,9 +43,17 @@ def _load_translation(locale):
     return data.get("Translation", {})
 
 
+def _collect_static_tr_keys():
+    visitor = _TrKeyVisitor()
+    for source_path in WEBUI_SOURCES:
+        tree = ast.parse(source_path.read_text(encoding="utf-8"))
+        visitor.visit(tree)
+    return visitor.keys
+
+
 class TestWebuiI18n(unittest.TestCase):
     def test_font_gallery_applies_persisted_selection_to_render_params(self):
-        tree = ast.parse(WEBUI_MAIN.read_text(encoding="utf-8"))
+        tree = ast.parse(WEBUI_FONT_GALLERY.read_text(encoding="utf-8"))
         render_font_gallery = next(
             node
             for node in tree.body
@@ -57,13 +78,9 @@ class TestWebuiI18n(unittest.TestCase):
         self.assertEqual(len(assignments), 1)
 
     def test_spanish_locale_covers_static_webui_labels(self):
-        tree = ast.parse(WEBUI_MAIN.read_text(encoding="utf-8"))
-        visitor = _TrKeyVisitor()
-        visitor.visit(tree)
-
         es_keys = set(_load_translation("es"))
 
-        self.assertEqual(sorted(visitor.keys - es_keys), [])
+        self.assertEqual(sorted(_collect_static_tr_keys() - es_keys), [])
 
     def test_spanish_navigation_and_publish_labels_are_translated(self):
         translations = _load_translation("es")
@@ -81,13 +98,9 @@ class TestWebuiI18n(unittest.TestCase):
             self.assertEqual(translations.get(key), value)
 
     def test_english_locale_covers_static_webui_labels(self):
-        tree = ast.parse(WEBUI_MAIN.read_text(encoding="utf-8"))
-        visitor = _TrKeyVisitor()
-        visitor.visit(tree)
-
         en_keys = set(_load_translation("en"))
 
-        self.assertEqual(sorted(visitor.keys - en_keys), [])
+        self.assertEqual(sorted(_collect_static_tr_keys() - en_keys), [])
 
     def test_russian_locale_covers_english_locale(self):
         en_keys = set(_load_translation("en"))
@@ -96,13 +109,9 @@ class TestWebuiI18n(unittest.TestCase):
         self.assertEqual(sorted(en_keys - ru_keys), [])
 
     def test_russian_locale_covers_static_webui_labels(self):
-        tree = ast.parse(WEBUI_MAIN.read_text(encoding="utf-8"))
-        visitor = _TrKeyVisitor()
-        visitor.visit(tree)
-
         ru_keys = set(_load_translation("ru"))
 
-        self.assertEqual(sorted(visitor.keys - ru_keys), [])
+        self.assertEqual(sorted(_collect_static_tr_keys() - ru_keys), [])
 
     def test_script_language_options_include_russian(self):
         tree = ast.parse(WEBUI_MAIN.read_text(encoding="utf-8"))
