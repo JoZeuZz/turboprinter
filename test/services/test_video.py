@@ -574,6 +574,24 @@ class TestVideoService(unittest.TestCase):
                     result = vd._get_temp_audio_dir("/some/output/dir")
                     self.assertEqual(result, "/some/output/dir")
 
+    def test_generate_video_has_no_f821_undefined_name_in_closure(self):
+        # Regression: `del video_clip` in generate_video's outer scope caused ruff
+        # to flag video_clip as F821 (undefined) inside _moviepy_fallback closure.
+        # Root cause: pyflakes/ruff treats `del x` in outer scope as making x
+        # undefined for nested functions that close over x. Fix: remove del.
+        import subprocess
+        result = subprocess.run(
+            ["uv", "run", "ruff", "check", "app/services/video.py", "--select", "F821"],
+            capture_output=True,
+            text=True,
+            cwd=str(Path(__file__).parent.parent.parent),
+        )
+        self.assertEqual(
+            result.returncode,
+            0,
+            f"F821 undefined-name errors in video.py (del in outer scope breaks closure):\n{result.stdout}",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
