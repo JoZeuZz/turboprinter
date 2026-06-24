@@ -218,6 +218,15 @@ def _validate_replace_candidates(
                 )
 
 
+@router.get("/projects", response_model=BaseProjectResponse,
+            summary="List recent projects")
+def list_projects(request: Request, limit: int = 20):
+    _require_project_mode(request)
+    store = _store()
+    projects = store.list_projects(limit=limit)
+    return _ok({"projects": projects})
+
+
 @router.post("/projects/from-topic", response_model=BaseProjectResponse,
              summary="Create a project from a topic")
 def create_from_topic(request: Request, body: CreateFromTopicRequest):

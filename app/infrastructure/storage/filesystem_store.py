@@ -1,8 +1,13 @@
 from __future__ import annotations
 
+import datetime
+import json as _json
+import logging
 import os
 
 from pydantic import TypeAdapter, ValidationError
+
+logger = logging.getLogger(__name__)
 
 from app.domain.media.models import MediaCandidate
 from app.domain.music.models import MusicTrack
@@ -74,6 +79,45 @@ class FilesystemProjectStore:
             os.path.exists(self._path(task_id, name))
             for name in (_SHOT_PLAN, _TIMELINE, _SELECTED)
         )
+
+    def _base_dir(self) -> str:
+        """Return the base directory that contains all project subdirectories."""
+        if self._base is not None:
+            return self._base
+        from app.utils import utils
+        return utils.task_dir()
+
+    def list_projects(self, limit: int = 20) -> list[dict]:
+        """Return recent projects sorted by mtime descending."""
+        base = self._base_dir()
+        if not os.path.isdir(base):
+            return []
+        entries: list[dict] = []
+        for name in os.listdir(base):
+            timeline_path = os.path.join(base, name, _TIMELINE)
+            if not os.path.isfile(timeline_path):
+                continue
+            try:
+                mtime = os.path.getmtime(timeline_path)
+                with open(timeline_path, encoding="utf-8") as fh:
+                    data = _json.load(fh)
+                topic = data.get("title") or (
+                    (data.get("shot_plan") or {}).get("topic")
+                )
+                entries.append({
+                    "project_id": name,
+                    "topic": topic,
+                    "updated_at": mtime,
+                })
+            except (OSError, ValueError, KeyError) as exc:
+                logger.warning("list_projects: skipping %s — %s", name, exc)
+                continue
+        entries.sort(key=lambda x: x["updated_at"], reverse=True)
+        for entry in entries:
+            entry["updated_at"] = datetime.datetime.fromtimestamp(
+                entry["updated_at"], tz=datetime.timezone.utc
+            ).isoformat()
+        return entries[:limit]
 
     def save_shot_plan(self, task_id: str, plan: ShotPlan) -> None:
         self._write(task_id, _SHOT_PLAN, plan.model_dump_json(indent=2))
