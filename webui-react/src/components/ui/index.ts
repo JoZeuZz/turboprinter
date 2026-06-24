@@ -7,3 +7,5 @@ export { Slider } from "./Slider";
 export { Checkbox } from "./Checkbox";
 export { Collapsible } from "./Collapsible";
 export { ColorPicker } from "./ColorPicker";
+export { StateBadge } from "./StateBadge";
+export { TabBar } from "./TabBar";
