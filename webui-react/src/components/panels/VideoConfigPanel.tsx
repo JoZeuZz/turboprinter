@@ -14,6 +14,8 @@ import { useVideoStore } from "../../store/useVideoStore";
 import { useConfigStore } from "../../store/useConfigStore";
 import { useProjectWorkspaceStore } from "../../store/useProjectWorkspaceStore";
 import { videoApi } from "../../api/video";
+import { voiceApi } from "../../api/voice";
+import { TTS_PROVIDERS, type TtsProvider } from "../../api/types";
 import type {
   VideoAspect,
   VideoConcatMode,
@@ -47,17 +49,6 @@ const TRANSITION_OPTIONS = [
   { value: "SlideOut", label: "Slide Out" },
 ];
 
-const VOICE_OPTIONS = [
-  { value: "", label: "Default" },
-  { value: "es-ES-AlvaroNeural", label: "es-ES Álvaro (Male)" },
-  { value: "es-ES-ElviraNeural", label: "es-ES Elvira (Female)" },
-  { value: "es-MX-DaliaNeural", label: "es-MX Dalia (Female)" },
-  { value: "es-MX-JorgeNeural", label: "es-MX Jorge (Male)" },
-  { value: "en-US-JennyNeural", label: "en-US Jenny (Female)" },
-  { value: "en-US-GuyNeural", label: "en-US Guy (Male)" },
-  { value: "zh-CN-XiaoxiaoNeural", label: "zh-CN Xiaoxiao (Female)" },
-  { value: "zh-CN-YunxiNeural", label: "zh-CN Yunxi (Male)" },
-];
 
 const FONT_OPTIONS = [
   { value: "STHeitiMedium.ttc", label: "STHeitiMedium (default)" },
@@ -75,6 +66,8 @@ const POSITION_OPTIONS = [
 export function VideoConfigPanel() {
   const [tab, setTab] = useState("video");
   const [bgmFiles, setBgmFiles] = useState<BgmFile[]>([]);
+  const [voiceOptions, setVoiceOptions] = useState<{ value: string; label: string }[]>([]);
+  const [voiceLoadError, setVoiceLoadError] = useState<string | null>(null);
   const store = useVideoStore();
   const { config } = useConfigStore();
   const workspaceStore = useProjectWorkspaceStore();
@@ -82,6 +75,16 @@ export function VideoConfigPanel() {
   useEffect(() => {
     videoApi.getBgmList().then((r) => setBgmFiles(r.files)).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    setVoiceLoadError(null);
+    voiceApi
+      .getVoices(store.tts_provider)
+      .then(setVoiceOptions)
+      .catch(() => {
+        setVoiceLoadError("No se pudieron cargar las voces");
+      });
+  }, [store.tts_provider]);
 
   const videoSourceOptions = (
     config?.video_sources ?? ["pexels", "pixabay", "local"]
@@ -187,29 +190,47 @@ export function VideoConfigPanel() {
         {tab === "audio" && (
           <>
             <Select
-              label="Voice"
-              value={store.voice_name ?? ""}
-              options={VOICE_OPTIONS}
-              onChange={(e) => store.set("voice_name", e.target.value)}
+              label="TTS Provider"
+              value={store.tts_provider}
+              options={TTS_PROVIDERS.map((p) => ({ value: p.value, label: p.label }))}
+              onChange={(e) => {
+                store.set("tts_provider", e.target.value as TtsProvider);
+                store.set("voice_name", "");
+              }}
             />
-            <Slider
-              label="Voice Volume"
-              value={store.voice_volume ?? 1.0}
-              min={0}
-              max={2}
-              step={0.1}
-              onChange={(v) => store.set("voice_volume", v)}
-              displayValue={(store.voice_volume ?? 1.0).toFixed(1)}
-            />
-            <Slider
-              label="Voice Rate"
-              value={store.voice_rate ?? 1.0}
-              min={0.5}
-              max={2.0}
-              step={0.1}
-              onChange={(v) => store.set("voice_rate", v)}
-              displayValue={`${(store.voice_rate ?? 1.0).toFixed(1)}×`}
-            />
+
+            {store.tts_provider !== "no-voice" && (
+              <>
+                {voiceLoadError && (
+                  <p className="text-xs text-red-400">{voiceLoadError}</p>
+                )}
+                <Select
+                  label="Voice"
+                  value={store.voice_name ?? ""}
+                  options={[{ value: "", label: "Default" }, ...voiceOptions]}
+                  onChange={(e) => store.set("voice_name", e.target.value)}
+                />
+                <Slider
+                  label="Voice Volume"
+                  value={store.voice_volume ?? 1.0}
+                  min={0}
+                  max={2}
+                  step={0.1}
+                  onChange={(v) => store.set("voice_volume", v)}
+                  displayValue={(store.voice_volume ?? 1.0).toFixed(1)}
+                />
+                <Slider
+                  label="Voice Rate"
+                  value={store.voice_rate ?? 1.0}
+                  min={0.5}
+                  max={2.0}
+                  step={0.1}
+                  onChange={(v) => store.set("voice_rate", v)}
+                  displayValue={`${(store.voice_rate ?? 1.0).toFixed(1)}×`}
+                />
+              </>
+            )}
+
             <Select
               label="Background Music"
               value={
