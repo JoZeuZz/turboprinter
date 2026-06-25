@@ -9,6 +9,7 @@ import {
   Checkbox,
   ColorPicker,
   Collapsible,
+  Input,
 } from "../ui";
 import { useVideoStore } from "../../store/useVideoStore";
 import { useConfigStore } from "../../store/useConfigStore";
@@ -163,21 +164,16 @@ export function VideoConfigPanel() {
               displayValue={`${store.video_clip_duration ?? 5}s`}
             />
             <Collapsible title="Advanced">
-              <div className="flex flex-col gap-1">
-                <label className="text-xs font-medium text-muted">
-                  Video Count
-                </label>
-                <input
-                  type="number"
-                  min={1}
-                  max={10}
-                  value={store.video_count ?? 1}
-                  onChange={(e) =>
-                    store.set("video_count", parseInt(e.target.value, 10))
-                  }
-                  className="h-9 rounded-md border border-border bg-surface px-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
-                />
-              </div>
+              <Input
+                label="Video Count"
+                type="number"
+                min={1}
+                max={10}
+                value={store.video_count ?? 1}
+                onChange={(e) =>
+                  store.set("video_count", parseInt(e.target.value, 10))
+                }
+              />
               <Checkbox
                 label="Match clips to script"
                 checked={store.match_materials_to_script ?? false}
@@ -295,21 +291,16 @@ export function VideoConfigPanel() {
                   options={FONT_OPTIONS}
                   onChange={(e) => store.set("font_name", e.target.value)}
                 />
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs font-medium text-muted">
-                    Font Size
-                  </label>
-                  <input
-                    type="number"
-                    min={20}
-                    max={120}
-                    value={store.font_size ?? 60}
-                    onChange={(e) =>
-                      store.set("font_size", parseInt(e.target.value, 10))
-                    }
-                    className="h-9 rounded-md border border-border bg-surface px-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
-                  />
-                </div>
+                <Input
+                  label="Font Size"
+                  type="number"
+                  min={20}
+                  max={120}
+                  value={store.font_size ?? 60}
+                  onChange={(e) =>
+                    store.set("font_size", parseInt(e.target.value, 10))
+                  }
+                />
                 <ColorPicker
                   label="Text Color"
                   value={store.text_fore_color ?? "#FFFFFF"}
