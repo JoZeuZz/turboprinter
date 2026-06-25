@@ -41,7 +41,7 @@ export function ApiKeyInput({ label, value, placeholder, onSave }: ApiKeyInputPr
 
   return (
     <div className="flex flex-col gap-1">
-      <label className="text-xs font-medium text-muted">{label}</label>
+      <label className="text-xs font-medium text-foreground/60">{label}</label>
       {editing ? (
         <>
           <div className="flex items-center gap-1">
@@ -51,7 +51,7 @@ export function ApiKeyInput({ label, value, placeholder, onSave }: ApiKeyInputPr
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 placeholder={placeholder}
-                className="h-8 w-full rounded border border-border bg-surface px-3 pr-8 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
+                className="h-8 w-full rounded border border-border bg-surface-2 px-3 pr-8 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
               />
               <button
                 type="button"
@@ -64,7 +64,7 @@ export function ApiKeyInput({ label, value, placeholder, onSave }: ApiKeyInputPr
             <button
               onClick={handleSave}
               disabled={saving}
-              className="flex items-center gap-1 rounded border border-border bg-surface px-2 py-1 text-xs text-accent hover:border-accent disabled:opacity-50"
+              className="flex items-center gap-1 rounded border border-border bg-surface-2 px-2 py-1 text-xs text-accent hover:border-accent disabled:opacity-50"
             >
               <Save className="h-3 w-3" />
               {saving ? "Saving…" : "Save"}

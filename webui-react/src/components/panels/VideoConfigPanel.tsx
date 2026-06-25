@@ -118,7 +118,7 @@ export function VideoConfigPanel() {
 
       <TabBar tabs={TABS} active={tab} onChange={setTab} />
 
-      <div className="flex-1 overflow-y-auto py-4 space-y-4">
+      <div className="flex-1 overflow-y-auto py-4 space-y-3">
         {tab === "video" && (
           <>
             <Select

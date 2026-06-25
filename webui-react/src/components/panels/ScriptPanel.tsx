@@ -1,7 +1,7 @@
 // webui-react/src/components/panels/ScriptPanel.tsx
 import { useState } from "react";
 import { Wand2 } from "lucide-react";
-import { Button, Input, Textarea, Collapsible } from "../ui";
+import { Button, Input, Select, Textarea, Collapsible } from "../ui";
 import { useVideoStore } from "../../store/useVideoStore";
 import { useProjectWorkspaceStore } from "../../store/useProjectWorkspaceStore";
 import { llmApi } from "../../api/llm";
@@ -45,8 +45,8 @@ export function ScriptPanel() {
   };
 
   return (
-    <section className="flex flex-col gap-4">
-      <h2 className="text-sm font-semibold text-foreground">Script</h2>
+    <section className="flex flex-col gap-3 px-6 py-5 max-w-2xl mx-auto w-full">
+      <h2 className="text-base font-semibold text-foreground">Script</h2>
 
       <Input
         label="Topic"
@@ -55,24 +55,22 @@ export function ScriptPanel() {
         onChange={handleTopicChange}
       />
 
-      <div className="flex flex-col gap-1">
-        <label className="text-xs font-medium text-muted">Language</label>
-        <select
-          value={store.video_language ?? ""}
-          onChange={(e) => store.set("video_language", e.target.value)}
-          className="h-9 rounded-md border border-border bg-surface px-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
-        >
-          <option value="">Auto detect</option>
-          <option value="en">English</option>
-          <option value="es">Español</option>
-          <option value="zh">中文</option>
-          <option value="fr">Français</option>
-          <option value="de">Deutsch</option>
-          <option value="ja">日本語</option>
-          <option value="ko">한국어</option>
-          <option value="pt">Português</option>
-        </select>
-      </div>
+      <Select
+        label="Language"
+        value={store.video_language ?? ""}
+        options={[
+          { value: "", label: "Auto detect" },
+          { value: "en", label: "English" },
+          { value: "es", label: "Español" },
+          { value: "zh", label: "中文" },
+          { value: "fr", label: "Français" },
+          { value: "de", label: "Deutsch" },
+          { value: "ja", label: "日本語" },
+          { value: "ko", label: "한국어" },
+          { value: "pt", label: "Português" },
+        ]}
+        onChange={(e) => store.set("video_language", e.target.value)}
+      />
 
       <Button
         onClick={handleGenerateScript}
