@@ -1,5 +1,6 @@
 // webui-react/src/store/useProjectStore.ts
 import { create } from "zustand";
+import { persist, createJSONStorage } from "zustand/middleware";
 import { ApiError } from "../api/client";
 import { pollUntilComplete } from "../api/polling";
 import { projectsApi } from "../api/projects";
@@ -49,124 +50,136 @@ const initialState = {
   timelineValidation: null,
 };
 
-export const useProjectStore = create<ProjectStoreState>((set, get) => {
-  const fail = (error: unknown) => {
-    if (error instanceof ApiError && error.status === 404) {
-      set({ mode: "disabled", error: error.message });
-      return;
-    }
-    set({ mode: "error", error: error instanceof Error ? error.message : "Project action failed" });
-  };
-
-  const requireProjectId = () => {
-    const { projectId } = get();
-    if (!projectId) {
-      throw new Error("Create a project first");
-    }
-    return projectId;
-  };
-
-  const refresh = async (projectId: string) => {
-    const state = await projectsApi.getProject(projectId);
-    set({ project: state.timeline ?? null, mode: "ready", error: null });
-  };
-
-  return {
-    ...initialState,
-    create: async (params) => {
-      set({ mode: "loading", error: null });
-      try {
-        const { project_id } = await projectsApi.createFromTopic(params);
-        set({ projectId: project_id });
-        await refresh(project_id);
-      } catch (error) {
-        fail(error);
-      }
-    },
-    plan: async (params = {}) => {
-      set({ mode: "loading", error: null });
-      try {
-        const projectId = requireProjectId();
-        await projectsApi.planProject(projectId, params);
-        await refresh(projectId);
-      } catch (error) {
-        fail(error);
-      }
-    },
-    mediaSearch: async (params = {}) => {
-      set({ mode: "loading", error: null });
-      try {
-        const projectId = requireProjectId();
-        await projectsApi.mediaSearch(projectId, params);
-        await refresh(projectId);
-      } catch (error) {
-        fail(error);
-      }
-    },
-    buildTimeline: async (params = {}) => {
-      set({ mode: "loading", error: null, timelineValidation: null });
-      try {
-        const projectId = requireProjectId();
-        await projectsApi.buildTimeline(projectId, params);
-        await refresh(projectId);
-      } catch (error) {
-        fail(error);
-      }
-    },
-    applyTimelineCommands: async (params) => {
-      set({ mode: "loading", error: null });
-      try {
-        const projectId = requireProjectId();
-        const response = await projectsApi.applyTimelineCommands(projectId, params, true);
-        if (response.valid != null) {
-          set({
-            timelineValidation: {
-              valid: response.valid,
-              errors: response.errors ?? [],
-            },
-          });
+export const useProjectStore = create<ProjectStoreState>()(
+  persist(
+    (set, get) => {
+      const fail = (error: unknown) => {
+        if (error instanceof ApiError && error.status === 404) {
+          set({ mode: "disabled", error: error.message });
+          return;
         }
-        await refresh(projectId);
-      } catch (error) {
-        fail(error);
-      }
-    },
-    render: async (params = {}) => {
-      const { timelineValidation } = get();
-      if (timelineValidation?.valid === false) {
-        set({ mode: "error", error: timelineValidation.errors[0] ?? "Timeline validation failed" });
-        return;
-      }
-      set({ mode: "loading", error: null });
-      try {
-        const projectId = requireProjectId();
-        await projectsApi.startRender(projectId, params);
-        await get().pollRenderStatus();
-      } catch (error) {
-        fail(error);
-      }
-    },
-    pollRenderStatus: async (intervalMs = 1500) => {
-      const projectId = requireProjectId();
+        set({ mode: "error", error: error instanceof Error ? error.message : "Project action failed" });
+      };
 
-      set({ mode: "loading", error: null });
-      const status = await pollUntilComplete(
-        () => projectsApi.getRenderStatus(projectId),
-        (nextStatus) => set({ renderStatus: nextStatus, error: null }),
-        (nextStatus) =>
-          nextStatus.state === TASK_STATE_COMPLETE ||
-          nextStatus.state === TASK_STATE_FAILED,
-        intervalMs
-      );
+      const requireProjectId = () => {
+        const { projectId } = get();
+        if (!projectId) {
+          throw new Error("Create a project first");
+        }
+        return projectId;
+      };
 
-      if (status.state === TASK_STATE_FAILED) {
-        set({ mode: "error", error: status.error ?? "Render failed" });
-      } else {
-        set({ mode: "ready", error: null });
-      }
+      const refresh = async (projectId: string) => {
+        const state = await projectsApi.getProject(projectId);
+        set({ project: state.timeline ?? null, mode: "ready", error: null });
+      };
 
-      return status;
+      return {
+        ...initialState,
+        create: async (params) => {
+          set({ mode: "loading", error: null });
+          try {
+            const { project_id } = await projectsApi.createFromTopic(params);
+            set({ projectId: project_id });
+            await refresh(project_id);
+          } catch (error) {
+            fail(error);
+          }
+        },
+        plan: async (params = {}) => {
+          set({ mode: "loading", error: null });
+          try {
+            const projectId = requireProjectId();
+            await projectsApi.planProject(projectId, params);
+            await refresh(projectId);
+          } catch (error) {
+            fail(error);
+          }
+        },
+        mediaSearch: async (params = {}) => {
+          set({ mode: "loading", error: null });
+          try {
+            const projectId = requireProjectId();
+            await projectsApi.mediaSearch(projectId, params);
+            await refresh(projectId);
+          } catch (error) {
+            fail(error);
+          }
+        },
+        buildTimeline: async (params = {}) => {
+          set({ mode: "loading", error: null, timelineValidation: null });
+          try {
+            const projectId = requireProjectId();
+            await projectsApi.buildTimeline(projectId, params);
+            await refresh(projectId);
+          } catch (error) {
+            fail(error);
+          }
+        },
+        applyTimelineCommands: async (params) => {
+          set({ mode: "loading", error: null });
+          try {
+            const projectId = requireProjectId();
+            const response = await projectsApi.applyTimelineCommands(projectId, params, true);
+            if (response.valid != null) {
+              set({
+                timelineValidation: {
+                  valid: response.valid,
+                  errors: response.errors ?? [],
+                },
+              });
+            }
+            await refresh(projectId);
+          } catch (error) {
+            fail(error);
+          }
+        },
+        render: async (params = {}) => {
+          const { timelineValidation } = get();
+          if (timelineValidation?.valid === false) {
+            set({ mode: "error", error: timelineValidation.errors[0] ?? "Timeline validation failed" });
+            return;
+          }
+          set({ mode: "loading", error: null });
+          try {
+            const projectId = requireProjectId();
+            await projectsApi.startRender(projectId, params);
+            await get().pollRenderStatus();
+          } catch (error) {
+            fail(error);
+          }
+        },
+        pollRenderStatus: async (intervalMs = 1500) => {
+          const projectId = requireProjectId();
+
+          set({ mode: "loading", error: null });
+          const status = await pollUntilComplete(
+            () => projectsApi.getRenderStatus(projectId),
+            (nextStatus) => set({ renderStatus: nextStatus, error: null }),
+            (nextStatus) =>
+              nextStatus.state === TASK_STATE_COMPLETE ||
+              nextStatus.state === TASK_STATE_FAILED,
+            intervalMs
+          );
+
+          if (status.state === TASK_STATE_FAILED) {
+            set({ mode: "error", error: status.error ?? "Render failed" });
+          } else {
+            set({ mode: "ready", error: null });
+          }
+
+          return status;
+        },
+        reset: () => set({ ...initialState }),
+      };
     },
-    reset: () => set({ ...initialState }),
-  };
-});
+    {
+      name: "mpt-project",
+      storage: createJSONStorage(() => sessionStorage),
+      partialize: (state) => ({
+        projectId: state.projectId,
+        project: state.project,
+      }),
+    }
+  )
+);
