@@ -10,3 +10,4 @@ export { ColorPicker } from "./ColorPicker";
 export { StateBadge } from "./StateBadge";
 export { TabBar } from "./TabBar";
 export { ApiKeyInput } from "./ApiKeyInput";
+export { ClipPreviewModal } from "./ClipPreviewModal";
