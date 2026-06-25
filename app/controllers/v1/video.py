@@ -60,6 +60,32 @@ else:
     )
 
 
+def _voice_label(voice_value: str) -> str:
+    """Generate human-readable label from voice value string."""
+    if voice_value.startswith("siliconflow:"):
+        # "siliconflow:FunAudioLLM/CosyVoice2-0.5B:alex-Male"
+        name_gender = voice_value.split(":")[-1]
+        name, _, gender = name_gender.rpartition("-")
+        return f"{name} ({gender})"
+    if voice_value.startswith("gemini:"):
+        # "gemini:Zephyr-Female"
+        name_gender = voice_value[7:]
+        name, _, gender = name_gender.rpartition("-")
+        return f"{name} ({gender})"
+    if voice_value.startswith("mimo:"):
+        # "mimo:冰糖-Female"
+        name_gender = voice_value[5:]
+        name, _, gender = name_gender.rpartition("-")
+        return f"{name} ({gender})"
+    # Azure: "es-ES-AlvaroNeural-Male" or "zh-CN-XiaoxiaoMultilingualNeural-V2-Female"
+    for suffix in ("-Female", "-Male"):
+        if voice_value.endswith(suffix):
+            gender = suffix[1:]
+            base = voice_value[: -len(suffix)]
+            return f"{base} ({gender})"
+    return voice_value
+
+
 def _sanitize_upload_filename(filename: str, request_id: str) -> str:
     # 浏览器或客户端有时会附带目录信息，甚至可能夹带 ../ 这类穿越片段。
     # 这里只保留纯文件名，避免上传接口把文件写到目标目录之外。
@@ -252,6 +278,32 @@ def get_all_tasks(request: Request, page: int = Query(1, ge=1), page_size: int =
     }
     return utils.get_response(200, response)
 
+
+
+@router.get("/voices", summary="List TTS voices by provider")
+def get_voices(provider: str = Query("azure-tts-v1", description="TTS provider key")):
+    from app.services.voice import (
+        get_all_azure_voices,
+        get_siliconflow_voices,
+        get_gemini_voices,
+        get_mimo_voices,
+    )
+
+    if provider == "no-voice":
+        raw: list[str] = []
+    elif provider == "siliconflow":
+        raw = get_siliconflow_voices()
+    elif provider == "gemini-tts":
+        raw = get_gemini_voices()
+    elif provider == "mimo-tts":
+        raw = get_mimo_voices()
+    elif provider == "azure-tts-v2":
+        raw = [v for v in get_all_azure_voices() if "V2" in v]
+    else:  # azure-tts-v1 (default)
+        raw = [v for v in get_all_azure_voices() if "V2" not in v]
+
+    voices = [{"value": v, "label": _voice_label(v)} for v in raw]
+    return utils.get_response(200, {"voices": voices})
 
 
 @router.get(

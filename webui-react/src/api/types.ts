@@ -413,3 +413,25 @@ export interface ListAssetsResponse {
   assets: string[];
   preview_assets: ProjectAsset[];
 }
+
+// ─── TTS Provider types ───────────────────────────────────────────────────────
+
+export const TTS_PROVIDERS = [
+  { value: "no-voice", label: "Sin voz" },
+  { value: "azure-tts-v1", label: "Azure TTS V1" },
+  { value: "azure-tts-v2", label: "Azure TTS V2" },
+  { value: "siliconflow", label: "SiliconFlow TTS" },
+  { value: "gemini-tts", label: "Google Gemini TTS" },
+  { value: "mimo-tts", label: "Xiaomi MiMo TTS" },
+] as const;
+
+export type TtsProvider = (typeof TTS_PROVIDERS)[number]["value"];
+
+export interface VoiceOption {
+  value: string;
+  label: string;
+}
+
+export interface VoicesResponse {
+  voices: VoiceOption[];
+}
