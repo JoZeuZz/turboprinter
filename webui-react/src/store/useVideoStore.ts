@@ -1,8 +1,14 @@
 // webui-react/src/store/useVideoStore.ts
 import { create } from "zustand";
+import { persist, createJSONStorage } from "zustand/middleware";
 import type { VideoParams } from "../api/types";
+import { type TtsProvider } from "../api/types";
 
-const DEFAULTS: VideoParams = {
+interface VideoStoreExtras {
+  tts_provider: TtsProvider;
+}
+
+const DEFAULTS: VideoParams & VideoStoreExtras = {
   video_subject: "",
   video_script: "",
   video_terms: null,
@@ -34,20 +40,32 @@ const DEFAULTS: VideoParams = {
   paragraph_number: 1,
   video_script_prompt: "",
   custom_system_prompt: "",
+  tts_provider: "azure-tts-v1",
 };
 
-interface VideoStoreState extends VideoParams {
-  set: <K extends keyof VideoParams>(key: K, value: VideoParams[K]) => void;
+interface VideoStoreState extends VideoParams, VideoStoreExtras {
+  set: <K extends keyof (VideoParams & VideoStoreExtras)>(
+    key: K,
+    value: (VideoParams & VideoStoreExtras)[K]
+  ) => void;
   reset: () => void;
   toParams: () => VideoParams;
 }
 
-export const useVideoStore = create<VideoStoreState>((set, get) => ({
-  ...DEFAULTS,
-  set: (key, value) => set({ [key]: value } as Partial<VideoStoreState>),
-  reset: () => set({ ...DEFAULTS }),
-  toParams: (): VideoParams => {
-    const { set: _s, reset: _r, toParams: _t, ...params } = get();
-    return params as VideoParams;
-  },
-}));
+export const useVideoStore = create<VideoStoreState>()(
+  persist(
+    (set, get) => ({
+      ...DEFAULTS,
+      set: (key, value) => set({ [key]: value } as Partial<VideoStoreState>),
+      reset: () => set({ ...DEFAULTS }),
+      toParams: (): VideoParams => {
+        const { set: _s, reset: _r, toParams: _t, tts_provider: _tp, ...params } = get();
+        return params as VideoParams;
+      },
+    }),
+    {
+      name: "mpt-video",
+      storage: createJSONStorage(() => sessionStorage),
+    }
+  )
+);
