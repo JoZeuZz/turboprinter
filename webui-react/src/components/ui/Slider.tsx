@@ -21,7 +21,7 @@ export function Slider({
   return (
     <div className="flex flex-col gap-1">
       <div className="flex items-center justify-between">
-        <label className="text-xs font-medium text-muted">{label}</label>
+        <label className="text-xs font-medium text-foreground/60">{label}</label>
         <span className="text-xs text-foreground tabular-nums">
           {displayValue ?? value}
         </span>
