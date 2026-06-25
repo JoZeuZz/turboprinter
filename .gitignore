@@ -50,8 +50,10 @@ CLAUDE.local.md
 # Superpowers: artefactos locales de mi flujo personal (solo root-level).
 /.superpowers/
 /superpowers/
-/plans/
-/specs/
+plans/
+specs/
+docs/design/
+docs/superpowers/
 
 # React frontend build artifacts (served from disk, not tracked)
 resource/public/assets/
