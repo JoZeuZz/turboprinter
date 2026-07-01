@@ -72,6 +72,17 @@ export function ScriptPanel() {
         onChange={(e) => store.set("video_language", e.target.value)}
       />
 
+      <Input
+        label="Paragraphs"
+        type="number"
+        min={1}
+        max={10}
+        value={store.paragraph_number ?? 1}
+        onChange={(e) =>
+          store.set("paragraph_number", parseInt(e.target.value, 10))
+        }
+      />
+
       <Button
         onClick={handleGenerateScript}
         isLoading={generating}
@@ -105,16 +116,6 @@ export function ScriptPanel() {
       />
 
       <Collapsible title="Advanced Prompt">
-        <Input
-          label="Paragraphs"
-          type="number"
-          min={1}
-          max={10}
-          value={store.paragraph_number ?? 1}
-          onChange={(e) =>
-            store.set("paragraph_number", parseInt(e.target.value, 10))
-          }
-        />
         <Textarea
           label="Script Prompt"
           placeholder="Additional instructions for script generation..."
