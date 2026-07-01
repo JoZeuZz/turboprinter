@@ -26,6 +26,13 @@ from app.models.schema import (
 from app.services import llm, voice
 from app.services import task as tm
 from app.utils import utils
+from webui.components.media import (
+    centered_color_picker,
+    centered_slider,
+    render_font_gallery,
+)
+from webui.components.voice_gallery import render_voice_gallery
+from webui.styles import STREAMLIT_STYLE
 
 try:
     from app.services.quality import local_library as _local_lib
@@ -52,14 +59,7 @@ st.set_page_config(
 )
 
 
-streamlit_style = """
-<style>
-h1 {
-    padding-top: 0 !important;
-}
-</style>
-"""
-st.markdown(streamlit_style, unsafe_allow_html=True)
+st.markdown(STREAMLIT_STYLE, unsafe_allow_html=True)
 
 # 定义资源目录
 font_dir = os.path.join(root_dir, "resource", "fonts")
@@ -87,6 +87,8 @@ if "match_materials_to_script" not in st.session_state:
     )
 if "ui_language" not in st.session_state:
     st.session_state["ui_language"] = config.ui.get("language", system_locale)
+if "layout_mode" not in st.session_state:
+    st.session_state["layout_mode"] = config.ui.get("layout_mode", "vertical")
 if "local_video_materials" not in st.session_state:
     # 记住用户最近一次已经落盘的本地素材，避免仅修改文案后二次生成时丢失素材列表。
     st.session_state["local_video_materials"] = []
@@ -233,6 +235,24 @@ locales = utils.load_locales(i18n_dir)
 def tr(key):
     loc = locales.get(st.session_state["ui_language"], {})
     return loc.get("Translation", {}).get(key, key)
+
+
+layout_mode = st.radio(
+    tr("Interface Mode"),
+    options=["vertical", "slices"],
+    format_func=lambda value: (
+        tr("Vertical") if value == "vertical" else tr("Slices")
+    ),
+    index=0 if st.session_state["layout_mode"] == "vertical" else 1,
+    horizontal=True,
+    label_visibility="collapsed",
+    key="layout_mode_radio",
+)
+if layout_mode != st.session_state["layout_mode"]:
+    st.session_state["layout_mode"] = layout_mode
+    config.ui["layout_mode"] = layout_mode
+    st.rerun()
+
 
 @st.cache_data(ttl=300, show_spinner=False)
 def get_groq_model_ids(api_key: str, base_url: str) -> list[str]:
@@ -733,10 +753,19 @@ if not config.app.get("hide_config", False):
             save_keys_to_config("coverr_api_keys", coverr_api_key)
 
 llm_provider = config.app.get("llm_provider", "").lower()
-panel = st.columns(3)
-left_panel = panel[0]
-middle_panel = panel[1]
-right_panel = panel[2]
+if st.session_state["layout_mode"] == "slices":
+    left_panel, middle_panel, right_panel = st.tabs(
+        [
+            tr("Script"),
+            tr("Video and Audio"),
+            tr("Subtitles, Publish and Quality"),
+        ]
+    )
+else:
+    panel = st.columns(3)
+    left_panel = panel[0]
+    middle_panel = panel[1]
+    right_panel = panel[2]
 
 params = VideoParams(video_subject="")
 params.match_materials_to_script = bool(
@@ -1021,109 +1050,84 @@ with middle_panel:
         filtered_voices = []
 
         if selected_tts_server == voice.NO_VOICE_NAME:
-            # 无配音是显式模式，只提供一个稳定 sentinel。这样普通 TTS 的空配置
-            # 不会被误判为静音，后端也能继续通过同一条音频/字幕流程生成视频。
             filtered_voices = [voice.NO_VOICE_NAME]
         elif selected_tts_server == "siliconflow":
-            # 获取硅基流动的声音列表
             filtered_voices = voice.get_siliconflow_voices()
         elif selected_tts_server == "gemini-tts":
-            # 获取Gemini TTS的声音列表
             filtered_voices = voice.get_gemini_voices()
         elif selected_tts_server == "mimo-tts":
-            # 获取 Xiaomi MiMo TTS 的预置音色列表
             filtered_voices = voice.get_mimo_voices()
         else:
-            # 获取Azure的声音列表
             all_voices = voice.get_all_azure_voices(filter_locals=None)
-
-            # 根据选择的TTS服务器筛选声音
             for v in all_voices:
                 if selected_tts_server == "azure-tts-v2":
-                    # V2版本的声音名称中包含"v2"
                     if "V2" in v:
                         filtered_voices.append(v)
-                else:
-                    # V1版本的声音名称中不包含"v2"
-                    if "V2" not in v:
-                        filtered_voices.append(v)
+                elif "V2" not in v:
+                    filtered_voices.append(v)
 
-        if selected_tts_server == voice.NO_VOICE_NAME:
-            friendly_names = {voice.NO_VOICE_NAME: tr("No Voice")}
-        else:
-            friendly_names = {
-                v: v.replace("Female", tr("Female"))
-                .replace("Male", tr("Male"))
-                .replace("Neural", "")
-                for v in filtered_voices
-            }
+        voice_name = ""
+        if st.session_state["layout_mode"] == "vertical":
+            if selected_tts_server == voice.NO_VOICE_NAME:
+                friendly_names = {voice.NO_VOICE_NAME: tr("No Voice")}
+            else:
+                friendly_names = {
+                    v: v.replace("Female", tr("Female"))
+                    .replace("Male", tr("Male"))
+                    .replace("Neural", "")
+                    for v in filtered_voices
+                }
 
-        saved_voice_name = config.ui.get("voice_name", "")
-        saved_voice_name_index = 0
-
-        # 检查保存的声音是否在当前筛选的声音列表中
-        if saved_voice_name in friendly_names:
-            saved_voice_name_index = list(friendly_names.keys()).index(saved_voice_name)
-        else:
-            # 如果不在，则根据当前UI语言选择一个默认声音
-            for i, v in enumerate(filtered_voices):
-                if v.lower().startswith(st.session_state["ui_language"].lower()):
-                    saved_voice_name_index = i
-                    break
-
-        # 如果没有找到匹配的声音，使用第一个声音
-        if saved_voice_name_index >= len(friendly_names) and friendly_names:
+            saved_voice_name = config.ui.get("voice_name", "")
             saved_voice_name_index = 0
 
-        # 确保有声音可选
-        if friendly_names:
-            selected_friendly_name = st.selectbox(
-                tr("Speech Synthesis"),
-                options=list(friendly_names.values()),
-                index=min(saved_voice_name_index, len(friendly_names) - 1)
-                if friendly_names
-                else 0,
-            )
+            if saved_voice_name in friendly_names:
+                saved_voice_name_index = list(friendly_names.keys()).index(saved_voice_name)
+            else:
+                for i, v in enumerate(filtered_voices):
+                    if v.lower().startswith(st.session_state["ui_language"].lower()):
+                        saved_voice_name_index = i
+                        break
 
-            voice_name = list(friendly_names.keys())[
-                list(friendly_names.values()).index(selected_friendly_name)
-            ]
-            params.voice_name = voice_name
-            config.ui["voice_name"] = voice_name
-        else:
-            # 如果没有声音可选，显示提示信息
-            st.warning(
-                tr(
-                    "No voices available for the selected TTS server. Please select another server."
-                )
-            )
-            params.voice_name = ""
-            config.ui["voice_name"] = ""
+            if saved_voice_name_index >= len(friendly_names) and friendly_names:
+                saved_voice_name_index = 0
 
-        # 无配音模式会生成静音占位音频，不展示试听按钮，避免用户误以为需要测试声音。
-        if (
-            friendly_names
-            and selected_tts_server != voice.NO_VOICE_NAME
-            and st.button(tr("Play Voice"))
-        ):
-            play_content = params.video_subject
-            if not play_content:
-                play_content = params.video_script
-            if not play_content:
-                play_content = tr("Voice Example")
-            with st.spinner(tr("Synthesizing Voice")):
-                temp_dir = utils.storage_dir("temp", create=True)
-                audio_file = os.path.join(temp_dir, f"tmp-voice-{str(uuid4())}.mp3")
-                sub_maker = voice.tts(
-                    text=play_content,
-                    voice_name=voice_name,
-                    voice_rate=params.voice_rate,
-                    voice_file=audio_file,
-                    voice_volume=params.voice_volume,
+            if friendly_names:
+                selected_friendly_name = st.selectbox(
+                    tr("Speech Synthesis"),
+                    options=list(friendly_names.values()),
+                    index=min(saved_voice_name_index, len(friendly_names) - 1)
+                    if friendly_names
+                    else 0,
                 )
-                # if the voice file generation failed, try again with a default content.
-                if not sub_maker:
-                    play_content = "This is a example voice. if you hear this, the voice synthesis failed with the original content."
+
+                voice_name = list(friendly_names.keys())[
+                    list(friendly_names.values()).index(selected_friendly_name)
+                ]
+                params.voice_name = voice_name
+                config.ui["voice_name"] = voice_name
+            else:
+                st.warning(
+                    tr(
+                        "No voices available for the selected TTS server. Please select another server."
+                    )
+                )
+                params.voice_name = ""
+                config.ui["voice_name"] = ""
+
+            if (
+                friendly_names
+                and selected_tts_server != voice.NO_VOICE_NAME
+                and st.button(tr("Play Voice"))
+            ):
+                play_content = params.video_subject
+                if not play_content:
+                    play_content = params.video_script
+                if not play_content:
+                    play_content = tr("Voice Example")
+                with st.spinner(tr("Synthesizing Voice")):
+                    temp_dir = utils.storage_dir("temp", create=True)
+                    audio_file = os.path.join(temp_dir, f"tmp-voice-{str(uuid4())}.mp3")
                     sub_maker = voice.tts(
                         text=play_content,
                         voice_name=voice_name,
@@ -1131,13 +1135,41 @@ with middle_panel:
                         voice_file=audio_file,
                         voice_volume=params.voice_volume,
                     )
+                    if not sub_maker:
+                        play_content = "This is a example voice. if you hear this, the voice synthesis failed with the original content."
+                        sub_maker = voice.tts(
+                            text=play_content,
+                            voice_name=voice_name,
+                            voice_rate=params.voice_rate,
+                            voice_file=audio_file,
+                            voice_volume=params.voice_volume,
+                        )
 
-                if sub_maker and os.path.exists(audio_file):
-                    st.audio(audio_file, format="audio/mp3")
-                    if os.path.exists(audio_file):
-                        os.remove(audio_file)
+                    if sub_maker and os.path.exists(audio_file):
+                        st.audio(audio_file, format="audio/mp3")
+                        if os.path.exists(audio_file):
+                            os.remove(audio_file)
+        else:
+            if selected_tts_server == voice.NO_VOICE_NAME:
+                voice_name = voice.NO_VOICE_NAME
+                params.voice_name = voice_name
+                config.ui["voice_name"] = voice_name
+            elif filtered_voices:
+                voice_name = render_voice_gallery(
+                    filtered_voices,
+                    params,
+                    selected_tts_server,
+                    tr,
+                )
+            else:
+                st.warning(
+                    tr(
+                        "No voices available for the selected TTS server. Please select another server."
+                    )
+                )
+                params.voice_name = ""
+                config.ui["voice_name"] = ""
 
-        # 当选择V2版本或者声音是V2声音时，显示服务区域和API key输入框
         if selected_tts_server == "azure-tts-v2" or (
             voice_name and voice.is_azure_v2_voice(voice_name)
         ):
@@ -1276,15 +1308,18 @@ with right_panel:
     with st.container(border=True):
         st.write(tr("Subtitle Settings"))
         params.subtitle_enabled = st.checkbox(tr("Enable Subtitles"), value=True)
-        font_names = get_all_fonts()
-        saved_font_name = config.ui.get("font_name", "MicrosoftYaHeiBold.ttc")
-        saved_font_name_index = 0
-        if saved_font_name in font_names:
-            saved_font_name_index = font_names.index(saved_font_name)
-        params.font_name = st.selectbox(
-            tr("Font"), font_names, index=saved_font_name_index
-        )
-        config.ui["font_name"] = params.font_name
+        if st.session_state["layout_mode"] == "vertical":
+            font_names = get_all_fonts()
+            saved_font_name = config.ui.get("font_name", "MicrosoftYaHeiBold.ttc")
+            saved_font_name_index = 0
+            if saved_font_name in font_names:
+                saved_font_name_index = font_names.index(saved_font_name)
+            params.font_name = st.selectbox(
+                tr("Font"), font_names, index=saved_font_name_index
+            )
+            config.ui["font_name"] = params.font_name
+        else:
+            render_font_gallery(params, font_dir, tr)
 
         subtitle_positions = [
             (tr("Top"), "top"),
@@ -1323,47 +1358,114 @@ with right_panel:
             except ValueError:
                 st.error(tr("Please enter a valid number"))
 
-        font_cols = st.columns([0.3, 0.7])
-        with font_cols[0]:
-            saved_text_fore_color = config.ui.get("text_fore_color", "#FFFFFF")
-            params.text_fore_color = st.color_picker(
-                tr("Font Color"), saved_text_fore_color
+        if st.session_state["layout_mode"] == "vertical":
+            font_cols = st.columns([0.3, 0.7])
+            with font_cols[0]:
+                saved_text_fore_color = config.ui.get("text_fore_color", "#FFFFFF")
+                params.text_fore_color = st.color_picker(
+                    tr("Font Color"), saved_text_fore_color
+                )
+                config.ui["text_fore_color"] = params.text_fore_color
+
+            with font_cols[1]:
+                saved_font_size = config.ui.get("font_size", 60)
+                params.font_size = st.slider(tr("Font Size"), 30, 100, saved_font_size)
+                config.ui["font_size"] = params.font_size
+
+            stroke_cols = st.columns([0.3, 0.7])
+            with stroke_cols[0]:
+                params.stroke_color = st.color_picker(tr("Stroke Color"), "#000000")
+            with stroke_cols[1]:
+                params.stroke_width = st.slider(tr("Stroke Width"), 0.0, 10.0, 1.5)
+
+            subtitle_bg_cols = st.columns([0.4, 0.6])
+            saved_subtitle_background_enabled = config.ui.get(
+                "subtitle_background_enabled", True
             )
-            config.ui["text_fore_color"] = params.text_fore_color
+            with subtitle_bg_cols[0]:
+                subtitle_background_enabled = st.checkbox(
+                    tr("Enable Subtitle Background"),
+                    value=saved_subtitle_background_enabled,
+                )
+            config.ui["subtitle_background_enabled"] = subtitle_background_enabled
+            if subtitle_background_enabled:
+                with subtitle_bg_cols[1]:
+                    saved_subtitle_background_color = config.ui.get(
+                        "subtitle_background_color", "#000000"
+                    )
+                    params.text_background_color = st.color_picker(
+                        tr("Subtitle Background Color"),
+                        saved_subtitle_background_color,
+                    )
+                    config.ui["subtitle_background_color"] = params.text_background_color
+            else:
+                params.text_background_color = False
+        else:
+            font_cols = st.columns(2)
+            with font_cols[0]:
+                saved_text_fore_color = config.ui.get("text_fore_color", "#FFFFFF")
+                params.text_fore_color = centered_color_picker(
+                    tr("Font Color"),
+                    saved_text_fore_color,
+                    key="subtitle_font_color",
+                )
+                config.ui["text_fore_color"] = params.text_fore_color
 
-        with font_cols[1]:
-            saved_font_size = config.ui.get("font_size", 60)
-            params.font_size = st.slider(tr("Font Size"), 30, 100, saved_font_size)
-            config.ui["font_size"] = params.font_size
+            with font_cols[1]:
+                saved_font_size = config.ui.get("font_size", 60)
+                params.font_size = centered_slider(
+                    tr("Font Size"),
+                    30,
+                    100,
+                    saved_font_size,
+                    key="subtitle_font_size",
+                )
+                config.ui["font_size"] = params.font_size
 
-        stroke_cols = st.columns([0.3, 0.7])
-        with stroke_cols[0]:
-            params.stroke_color = st.color_picker(tr("Stroke Color"), "#000000")
-        with stroke_cols[1]:
-            params.stroke_width = st.slider(tr("Stroke Width"), 0.0, 10.0, 1.5)
+            stroke_cols = st.columns(2)
+            with stroke_cols[0]:
+                saved_stroke_color = config.ui.get("stroke_color", "#000000")
+                params.stroke_color = centered_color_picker(
+                    tr("Stroke Color"),
+                    saved_stroke_color,
+                    key="subtitle_stroke_color",
+                )
+                config.ui["stroke_color"] = params.stroke_color
+            with stroke_cols[1]:
+                saved_stroke_width = config.ui.get("stroke_width", 1.5)
+                params.stroke_width = centered_slider(
+                    tr("Stroke Width"),
+                    0.0,
+                    10.0,
+                    saved_stroke_width,
+                    key="subtitle_stroke_width",
+                )
+                config.ui["stroke_width"] = params.stroke_width
 
-        subtitle_bg_cols = st.columns([0.4, 0.6])
-        saved_subtitle_background_enabled = config.ui.get(
-            "subtitle_background_enabled", True
-        )
-        with subtitle_bg_cols[0]:
-            subtitle_background_enabled = st.checkbox(
-                tr("Enable Subtitle Background"),
-                value=saved_subtitle_background_enabled,
+            subtitle_bg_cols = st.columns(2)
+            saved_subtitle_background_enabled = config.ui.get(
+                "subtitle_background_enabled", True
             )
-        config.ui["subtitle_background_enabled"] = subtitle_background_enabled
-        if subtitle_background_enabled:
+            with subtitle_bg_cols[0]:
+                subtitle_background_enabled = st.checkbox(
+                    tr("Enable Subtitle Background"),
+                    value=saved_subtitle_background_enabled,
+                )
+            config.ui["subtitle_background_enabled"] = subtitle_background_enabled
             with subtitle_bg_cols[1]:
                 saved_subtitle_background_color = config.ui.get(
                     "subtitle_background_color", "#000000"
                 )
-                params.text_background_color = st.color_picker(
+                picked_subtitle_background_color = centered_color_picker(
                     tr("Subtitle Background Color"),
                     saved_subtitle_background_color,
+                    key="subtitle_background_color",
+                    disabled=not subtitle_background_enabled,
                 )
-                config.ui["subtitle_background_color"] = params.text_background_color
-        else:
-            params.text_background_color = False
+                config.ui["subtitle_background_color"] = picked_subtitle_background_color
+                params.text_background_color = (
+                    picked_subtitle_background_color if subtitle_background_enabled else False
+                )
 
         saved_rounded_subtitle_background = config.ui.get(
             "rounded_subtitle_background", False
