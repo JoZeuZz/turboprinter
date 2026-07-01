@@ -127,6 +127,13 @@ class VideoParams(BaseModel):
     quality_language: Optional[str] = None
 
 
+class VoicePreviewRequest(BaseModel):
+    voice_name: str = Field(min_length=1)
+    text: str = Field(default="", max_length=500)
+    voice_rate: float = 1.0
+    voice_volume: float = 1.0
+
+
 class SubtitleRequest(BaseModel):
     video_script: str
     video_language: Optional[str] = ""

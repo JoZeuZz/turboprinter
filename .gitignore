@@ -58,4 +58,10 @@ docs/superpowers/
 # React frontend build artifacts (served from disk, not tracked)
 resource/public/assets/
 resource/public/index.html
+resource/public/fonts/
 advisor-plans/
+
+# Codex local workspace artifacts
+.agents/
+skills-lock.json
+.pytest_cache/

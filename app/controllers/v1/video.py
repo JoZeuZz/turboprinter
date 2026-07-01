@@ -8,6 +8,7 @@ from fastapi import BackgroundTasks, Depends, Path, Query, Request, UploadFile
 from fastapi.params import File
 from fastapi.responses import FileResponse, StreamingResponse
 from loguru import logger
+from starlette.background import BackgroundTask
 
 from app.config import config
 from app.controllers import base
@@ -27,10 +28,12 @@ from app.models.schema import (
     TaskResponse,
     TaskVideoRequest,
     VideoMaterialUploadResponse,
-    VideoMaterialRetrieveResponse
+    VideoMaterialRetrieveResponse,
+    VoicePreviewRequest,
 )
 from app.services import state as sm
 from app.services import task as tm
+from app.services import voice
 from app.utils import file_security, utils
 
 # 认证依赖项
@@ -304,6 +307,52 @@ def get_voices(provider: str = Query("azure-tts-v1", description="TTS provider k
 
     voices = [{"value": v, "label": _voice_label(v)} for v in raw]
     return utils.get_response(200, {"voices": voices})
+
+
+@router.post("/voices/preview", summary="Generate a short TTS voice preview")
+def preview_voice(request: Request, body: VoicePreviewRequest):
+    request_id = base.get_task_id(request)
+    preview_text = (
+        body.text.strip()
+        or "This is an example text for testing speech synthesis."
+    )
+    temp_dir = utils.storage_dir("temp", create=True)
+    audio_file = os.path.join(temp_dir, f"voice-preview-{utils.get_uuid()}.mp3")
+
+    try:
+        sub_maker = voice.tts(
+            text=preview_text,
+            voice_name=body.voice_name,
+            voice_rate=body.voice_rate,
+            voice_file=audio_file,
+            voice_volume=body.voice_volume,
+        )
+    except Exception as exc:
+        logger.error(f"voice preview failed, request_id: {request_id}, error: {exc}")
+        if os.path.exists(audio_file):
+            try:
+                os.remove(audio_file)
+            except OSError:
+                pass
+        raise HttpException(
+            task_id=request_id,
+            status_code=500,
+            message="Voice preview could not be generated",
+        )
+
+    if not sub_maker or not os.path.exists(audio_file):
+        raise HttpException(
+            task_id=request_id,
+            status_code=500,
+            message="Voice preview could not be generated",
+        )
+
+    return FileResponse(
+        audio_file,
+        media_type="audio/mpeg",
+        filename="voice-preview.mp3",
+        background=BackgroundTask(lambda: os.path.exists(audio_file) and os.remove(audio_file)),
+    )
 
 
 @router.get(
