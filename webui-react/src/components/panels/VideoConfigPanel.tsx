@@ -16,6 +16,8 @@ import { useConfigStore } from "../../store/useConfigStore";
 import { useProjectWorkspaceStore } from "../../store/useProjectWorkspaceStore";
 import { videoApi } from "../../api/video";
 import { voiceApi } from "../../api/voice";
+import { SubtitleFontGallery } from "../subtitles/SubtitleFontGallery";
+import { VoiceGallery } from "../voice/VoiceGallery";
 import { TTS_PROVIDERS, type TtsProvider } from "../../api/types";
 import type {
   VideoAspect,
@@ -50,12 +52,6 @@ const TRANSITION_OPTIONS = [
   { value: "SlideOut", label: "Slide Out" },
 ];
 
-
-const FONT_OPTIONS = [
-  { value: "STHeitiMedium.ttc", label: "STHeitiMedium (default)" },
-  { value: "NotoSansHans-Medium.ttf", label: "NotoSans Han" },
-  { value: "HarmonyOS_Sans_SC_Medium.ttf", label: "HarmonyOS Sans" },
-];
 
 const POSITION_OPTIONS = [
   { value: "bottom", label: "Bottom" },
@@ -200,11 +196,12 @@ export function VideoConfigPanel() {
                 {voiceLoadError && (
                   <p className="text-xs text-red-400">{voiceLoadError}</p>
                 )}
-                <Select
-                  label="Voice"
-                  value={store.voice_name ?? ""}
-                  options={[{ value: "", label: "Default" }, ...voiceOptions]}
-                  onChange={(e) => store.set("voice_name", e.target.value)}
+                <VoiceGallery
+                  voices={voiceOptions}
+                  selectedVoice={store.voice_name ?? ""}
+                  voiceRate={store.voice_rate ?? 1.0}
+                  voiceVolume={store.voice_volume ?? 1.0}
+                  onSelect={(voiceName) => store.set("voice_name", voiceName)}
                 />
                 <Slider
                   label="Voice Volume"
@@ -285,11 +282,9 @@ export function VideoConfigPanel() {
                     displayValue={`${store.custom_position ?? 70}%`}
                   />
                 )}
-                <Select
-                  label="Font"
+                <SubtitleFontGallery
                   value={store.font_name ?? "STHeitiMedium.ttc"}
-                  options={FONT_OPTIONS}
-                  onChange={(e) => store.set("font_name", e.target.value)}
+                  onChange={(fontName) => store.set("font_name", fontName)}
                 />
                 <Input
                   label="Font Size"

@@ -11,14 +11,20 @@ vi.mock("../../api/video", () => ({
   },
 }));
 
+vi.mock("../../api/voice", () => ({
+  voiceApi: {
+    previewVoice: vi.fn(),
+  },
+}));
+
 beforeEach(() => {
   act(() => useVideoStore.getState().reset());
 });
 
 describe("AudioSubtitlePanel", () => {
-  it("renders voice select", () => {
+  it("renders voice gallery", () => {
     render(<AudioSubtitlePanel />);
-    expect(screen.getByLabelText("Voice")).toBeInTheDocument();
+    expect(screen.getByText("Buscar voz")).toBeInTheDocument();
   });
 
   it("renders subtitle checkbox checked by default", () => {

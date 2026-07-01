@@ -9,6 +9,8 @@ import {
 } from "../ui";
 import { useVideoStore } from "../../store/useVideoStore";
 import { videoApi } from "../../api/video";
+import { SubtitleFontGallery } from "../subtitles/SubtitleFontGallery";
+import { VoiceGallery } from "../voice/VoiceGallery";
 import type { BgmFile } from "../../api/types";
 
 const VOICE_OPTIONS = [
@@ -21,12 +23,6 @@ const VOICE_OPTIONS = [
   { value: "en-US-GuyNeural", label: "en-US Guy (Male)" },
   { value: "zh-CN-XiaoxiaoNeural", label: "zh-CN Xiaoxiao (Female)" },
   { value: "zh-CN-YunxiNeural", label: "zh-CN Yunxi (Male)" },
-];
-
-const FONT_OPTIONS = [
-  { value: "STHeitiMedium.ttc", label: "STHeitiMedium (default)" },
-  { value: "NotoSansHans-Medium.ttf", label: "NotoSans Han" },
-  { value: "HarmonyOS_Sans_SC_Medium.ttf", label: "HarmonyOS Sans" },
 ];
 
 const POSITION_OPTIONS = [
@@ -55,11 +51,12 @@ export function AudioSubtitlePanel() {
       <h2 className="text-sm font-semibold text-foreground">Audio & Subtitles</h2>
 
       {/* Voice */}
-      <Select
-        label="Voice"
-        value={store.voice_name ?? ""}
-        options={VOICE_OPTIONS}
-        onChange={(e) => store.set("voice_name", e.target.value)}
+      <VoiceGallery
+        voices={VOICE_OPTIONS.filter((voice) => voice.value)}
+        selectedVoice={store.voice_name ?? ""}
+        voiceRate={store.voice_rate ?? 1.0}
+        voiceVolume={store.voice_volume ?? 1.0}
+        onSelect={(voiceName) => store.set("voice_name", voiceName)}
       />
 
       <Slider
@@ -136,11 +133,9 @@ export function AudioSubtitlePanel() {
             />
           )}
 
-          <Select
-            label="Font"
+          <SubtitleFontGallery
             value={store.font_name ?? "STHeitiMedium.ttc"}
-            options={FONT_OPTIONS}
-            onChange={(e) => store.set("font_name", e.target.value)}
+            onChange={(fontName) => store.set("font_name", fontName)}
           />
 
           <div className="flex flex-col gap-1">

@@ -34,3 +34,29 @@ export async function apiFetch<T>(
 
   return json.data as T;
 }
+
+export async function apiBlobFetch(
+  path: string,
+  options?: RequestInit
+): Promise<Blob> {
+  const response = await fetch(`${API_BASE}${path}`, {
+    headers: {
+      "Content-Type": "application/json",
+      ...options?.headers,
+    },
+    ...options,
+  });
+
+  if (!response.ok) {
+    let message = "Request failed";
+    try {
+      const json = await response.json();
+      message = json.message ?? message;
+    } catch {
+      // Non-JSON error responses are still surfaced with a generic message.
+    }
+    throw new ApiError(response.status, message);
+  }
+
+  return response.blob();
+}

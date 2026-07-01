@@ -9,7 +9,7 @@ import { voiceApi } from "../../api/voice";
 import { videoApi } from "../../api/video";
 
 vi.mock("../../api/voice", () => ({
-  voiceApi: { getVoices: vi.fn() },
+  voiceApi: { getVoices: vi.fn(), previewVoice: vi.fn() },
 }));
 
 vi.mock("../../api/video", () => ({
@@ -52,7 +52,7 @@ describe("VideoConfigPanel", () => {
   it("switches tab on click", async () => {
     render(<VideoConfigPanel />);
     await userEvent.click(screen.getByText("Audio"));
-    expect(screen.getByLabelText("Voice")).toBeInTheDocument();
+    expect(screen.getByText("Buscar voz")).toBeInTheDocument();
   });
 
   it("shows Generate Video button", () => {
@@ -75,7 +75,7 @@ describe("VideoConfigPanel TTS", () => {
       expect(voiceApi.getVoices).toHaveBeenCalledWith("azure-tts-v1")
     );
     await waitFor(() =>
-      expect(screen.getByText("es-ES AlvaroNeural (Male)")).toBeInTheDocument()
+      expect(screen.getByText("Alvaro")).toBeInTheDocument()
     );
   });
 
@@ -102,7 +102,7 @@ describe("VideoConfigPanel TTS", () => {
     const providerSelect = screen.getByLabelText("TTS Provider") as HTMLSelectElement;
     await userEvent.selectOptions(providerSelect, "no-voice");
     await waitFor(() =>
-      expect(screen.queryByLabelText("Voice")).not.toBeInTheDocument()
+      expect(screen.queryByText("Buscar voz")).not.toBeInTheDocument()
     );
   });
 });
