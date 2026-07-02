@@ -3,10 +3,11 @@ import { forwardRef, useId } from "react";
 
 interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
   label?: string;
+  hint?: string;
 }
 
 export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
-  ({ label, className = "", id, ...props }, ref) => {
+  ({ label, hint, className = "", id, ...props }, ref) => {
     const generatedId = useId();
     const textareaId = id ?? (label ? generatedId : undefined);
     return (
@@ -22,6 +23,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
           className={`min-h-[80px] rounded-md border border-border bg-surface-2 px-3 py-2 text-sm text-foreground placeholder:text-muted focus:outline-none focus:ring-1 focus:ring-accent resize-none disabled:opacity-50 ${className}`}
           {...props}
         />
+        {hint && <p className="text-xs text-muted">{hint}</p>}
       </div>
     );
   }

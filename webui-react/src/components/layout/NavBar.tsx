@@ -1,9 +1,11 @@
 // webui-react/src/components/layout/NavBar.tsx
 import { NavLink } from "react-router-dom";
 import { Home, Settings, Film } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useProjectStore } from "../../store/useProjectStore";
 
 export function NavBar() {
+  const { t } = useTranslation();
   const { projectId } = useProjectStore();
   const workspaceHref = projectId ? `/project/${projectId}` : "/";
 
@@ -15,7 +17,7 @@ export function NavBar() {
       <NavLink
         to="/"
         end
-        title="Home"
+        title={t("nav.home")}
         className={({ isActive }) =>
           `flex h-10 w-10 flex-col items-center justify-center rounded-md text-[10px] gap-0.5 transition-colors ${
             isActive
@@ -25,12 +27,12 @@ export function NavBar() {
         }
       >
         <Home className="h-4 w-4" />
-        Home
+        {t("nav.home")}
       </NavLink>
       <NavLink
         to={workspaceHref}
         end={false}
-        title="Workspace"
+        title={t("nav.workspace")}
         className={({ isActive }) =>
           `flex h-10 w-10 flex-col items-center justify-center rounded-md text-[10px] gap-0.5 transition-colors ${
             isActive && workspaceHref !== "/"
@@ -40,12 +42,12 @@ export function NavBar() {
         }
       >
         <Film className="h-4 w-4" />
-        Work
+        {t("nav.workspace")}
       </NavLink>
       <NavLink
         to="/settings"
         end={false}
-        title="Config"
+        title={t("nav.config")}
         className={({ isActive }) =>
           `flex h-10 w-10 flex-col items-center justify-center rounded-md text-[10px] gap-0.5 transition-colors ${
             isActive
@@ -55,7 +57,7 @@ export function NavBar() {
         }
       >
         <Settings className="h-4 w-4" />
-        Config
+        {t("nav.config")}
       </NavLink>
     </nav>
   );

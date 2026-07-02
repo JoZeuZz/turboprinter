@@ -1,20 +1,33 @@
 // webui-react/src/components/panels/ScriptPanel.tsx
 import { useState } from "react";
 import { Wand2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router-dom";
+import { ApiError } from "../../api/client";
+import { projectsApi } from "../../api/projects";
 import { Button, Input, Select, Textarea, Collapsible } from "../ui";
+import { useProjectHistoryStore } from "../../store/useProjectHistoryStore";
+import { useProjectStore } from "../../store/useProjectStore";
 import { useVideoStore } from "../../store/useVideoStore";
 import { useProjectWorkspaceStore } from "../../store/useProjectWorkspaceStore";
 import { llmApi } from "../../api/llm";
 
 export function ScriptPanel() {
+  const { t } = useTranslation();
   const store = useVideoStore();
   const workspaceStore = useProjectWorkspaceStore();
+  const projectStore = useProjectStore();
+  const updateCurrentDraft = useProjectHistoryStore((s) => s.updateCurrentDraft);
+  const removeDraft = useProjectHistoryStore((s) => s.removeDraft);
+  const currentDraftId = useProjectHistoryStore((s) => s.currentDraftId);
+  const navigate = useNavigate();
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleTopicChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     store.set("video_subject", e.target.value);
     workspaceStore.setTopic(e.target.value);
+    updateCurrentDraft(e.target.value);
   };
 
   const handleGenerateScript = async () => {
@@ -37,29 +50,46 @@ export function ScriptPanel() {
         amount: 5,
       });
       store.set("video_terms", video_terms.join(", "));
+
+      try {
+        const { project_id } = await projectsApi.createFromScript({
+          script: video_script,
+          language: store.video_language,
+          topic: store.video_subject,
+        });
+        await projectStore.open(project_id);
+        removeDraft(currentDraftId);
+        navigate(`/project/${project_id}`, { replace: true });
+      } catch (projectError) {
+        if (!(projectError instanceof ApiError && projectError.status === 404)) {
+          throw projectError;
+        }
+      }
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to generate script");
+      setError(e instanceof Error ? e.message : t("panels.script.failed"));
     } finally {
       setGenerating(false);
     }
   };
 
   return (
-    <section className="flex flex-col gap-3 px-6 py-5 max-w-2xl mx-auto w-full">
-      <h2 className="text-base font-semibold text-foreground">Script</h2>
+    <section className="flex h-full w-full max-w-5xl mx-auto flex-col px-6 py-5">
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-2xl space-y-3">
+          <h2 className="text-base font-semibold text-foreground">{t("panels.script.title")}</h2>
 
       <Input
-        label="Topic"
-        placeholder="e.g. Benefits of morning exercise"
+        label={t("panels.script.topic")}
+        placeholder={t("panels.script.subjectPlaceholder")}
         value={store.video_subject}
         onChange={handleTopicChange}
       />
 
       <Select
-        label="Language"
+        label={t("voice.language")}
         value={store.video_language ?? ""}
         options={[
-          { value: "", label: "Auto detect" },
+          { value: "", label: t("panels.script.autoDetect") },
           { value: "en", label: "English" },
           { value: "es", label: "Español" },
           { value: "zh", label: "中文" },
@@ -73,7 +103,7 @@ export function ScriptPanel() {
       />
 
       <Input
-        label="Paragraphs"
+        label={t("panels.script.paragraphs")}
         type="number"
         min={1}
         max={10}
@@ -90,7 +120,7 @@ export function ScriptPanel() {
         className="w-full"
       >
         <Wand2 className="mr-2 h-4 w-4" />
-        Generate Script
+        {t("panels.script.generate")}
       </Button>
 
       {error && (
@@ -100,44 +130,47 @@ export function ScriptPanel() {
       )}
 
       <Textarea
-        label="Script"
-        placeholder="Generated script will appear here, or paste your own..."
+        label={t("panels.script.scriptLabel")}
+        placeholder={t("panels.script.scriptPlaceholder")}
         value={store.video_script ?? ""}
         onChange={(e) => store.set("video_script", e.target.value)}
         rows={8}
       />
 
       <Textarea
-        label="Keywords"
-        placeholder="keyword1, keyword2, keyword3"
+        label={t("panels.script.keywords")}
+        placeholder={t("panels.script.keywordsPlaceholder")}
         value={typeof store.video_terms === "string" ? store.video_terms : (store.video_terms ?? []).join(", ")}
         onChange={(e) => store.set("video_terms", e.target.value)}
         rows={2}
       />
 
-      <Collapsible title="Advanced Prompt">
+      <Collapsible title={t("panels.script.advancedPrompt")}>
         <Textarea
-          label="Script Prompt"
-          placeholder="Additional instructions for script generation..."
+          label={t("panels.script.scriptPromptLabel")}
+          placeholder={t("panels.script.extraInstructionsPlaceholder")}
           value={store.video_script_prompt ?? ""}
           onChange={(e) => store.set("video_script_prompt", e.target.value)}
           rows={3}
         />
         <Textarea
-          label="System Prompt"
-          placeholder="Custom system prompt override..."
+          label={t("panels.script.systemPromptLabel")}
+          placeholder={t("panels.script.systemPromptPlaceholder")}
           value={store.custom_system_prompt ?? ""}
           onChange={(e) => store.set("custom_system_prompt", e.target.value)}
           rows={3}
         />
       </Collapsible>
 
-      <div className="pt-4 border-t border-border flex justify-end">
+        </div>
+      </div>
+
+      <div className="w-full max-w-2xl pt-4 border-t border-border flex justify-end">
         <Button
           disabled={!store.video_subject.trim()}
           onClick={() => workspaceStore.setPanel("config")}
         >
-          Continue to Settings →
+          {t("panels.script.continueToSettings")}
         </Button>
       </div>
     </section>

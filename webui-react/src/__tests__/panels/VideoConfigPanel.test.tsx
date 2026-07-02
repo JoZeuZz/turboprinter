@@ -46,7 +46,7 @@ describe("VideoConfigPanel", () => {
     render(<VideoConfigPanel />);
     expect(screen.getByText("Video")).toBeInTheDocument();
     expect(screen.getByText("Audio")).toBeInTheDocument();
-    expect(screen.getByText("Subtitles")).toBeInTheDocument();
+    expect(screen.getByText("Subtítulos")).toBeInTheDocument();
   });
 
   it("switches tab on click", async () => {
@@ -57,7 +57,7 @@ describe("VideoConfigPanel", () => {
 
   it("shows Generate Video button", () => {
     render(<VideoConfigPanel />);
-    expect(screen.getByText(/Generate Video/i)).toBeInTheDocument();
+    expect(screen.getByText(/Generar video/i)).toBeInTheDocument();
   });
 });
 
@@ -65,7 +65,7 @@ describe("VideoConfigPanel TTS", () => {
   it("renders TTS Provider select in audio tab", async () => {
     render(<VideoConfigPanel />);
     await userEvent.click(screen.getByText("Audio"));
-    expect(screen.getByLabelText("TTS Provider")).toBeInTheDocument();
+    expect(screen.getByLabelText("Proveedor TTS")).toBeInTheDocument();
   });
 
   it("fetches voices on mount and populates voice select", async () => {
@@ -87,7 +87,7 @@ describe("VideoConfigPanel TTS", () => {
     await userEvent.click(screen.getByText("Audio"));
     await waitFor(() => expect(voiceApi.getVoices).toHaveBeenCalledTimes(1));
 
-    const providerSelect = screen.getByLabelText("TTS Provider") as HTMLSelectElement;
+    const providerSelect = screen.getByLabelText("Proveedor TTS") as HTMLSelectElement;
     await userEvent.selectOptions(providerSelect, "siliconflow");
 
     await waitFor(() =>
@@ -99,7 +99,7 @@ describe("VideoConfigPanel TTS", () => {
     vi.mocked(voiceApi.getVoices).mockResolvedValue([]);
     render(<VideoConfigPanel />);
     await userEvent.click(screen.getByText("Audio"));
-    const providerSelect = screen.getByLabelText("TTS Provider") as HTMLSelectElement;
+    const providerSelect = screen.getByLabelText("Proveedor TTS") as HTMLSelectElement;
     await userEvent.selectOptions(providerSelect, "no-voice");
     await waitFor(() =>
       expect(screen.queryByText("Buscar voz")).not.toBeInTheDocument()

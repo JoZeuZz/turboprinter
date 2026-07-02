@@ -29,7 +29,7 @@ describe("AudioSubtitlePanel", () => {
 
   it("renders subtitle checkbox checked by default", () => {
     render(<AudioSubtitlePanel />);
-    const checkbox = screen.getByRole("checkbox", { name: /enable subtitles/i });
+    const checkbox = screen.getByRole("checkbox", { name: /activar subtítulos/i });
     expect(checkbox).toBeChecked();
   });
 });

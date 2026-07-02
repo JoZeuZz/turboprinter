@@ -6,6 +6,7 @@ import { type TtsProvider } from "../api/types";
 
 interface VideoStoreExtras {
   tts_provider: TtsProvider;
+  preview_text: string;
 }
 
 const DEFAULTS: VideoParams & VideoStoreExtras = {
@@ -41,6 +42,7 @@ const DEFAULTS: VideoParams & VideoStoreExtras = {
   video_script_prompt: "",
   custom_system_prompt: "",
   tts_provider: "azure-tts-v1",
+  preview_text: "Este es un texto de ejemplo para probar la sintesis de voz.",
 };
 
 interface VideoStoreState extends VideoParams, VideoStoreExtras {
@@ -59,7 +61,14 @@ export const useVideoStore = create<VideoStoreState>()(
       set: (key, value) => set({ [key]: value } as Partial<VideoStoreState>),
       reset: () => set({ ...DEFAULTS }),
       toParams: (): VideoParams => {
-        const { set: _s, reset: _r, toParams: _t, tts_provider: _tp, ...params } = get();
+        const {
+          set: _s,
+          reset: _r,
+          toParams: _t,
+          tts_provider: _tp,
+          preview_text: _pt,
+          ...params
+        } = get();
         return params as VideoParams;
       },
     }),

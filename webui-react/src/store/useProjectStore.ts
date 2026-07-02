@@ -8,6 +8,7 @@ import {
   TASK_STATE_COMPLETE,
   TASK_STATE_FAILED,
   type CreateFromTopicRequest,
+  type GetProjectResponse,
   type MediaSearchRequest,
   type PlanRequest,
   type RenderRequest,
@@ -31,6 +32,7 @@ interface ProjectStoreState {
   error: string | null;
   renderStatus: RenderStatusResponse | null;
   timelineValidation: TimelineValidationState | null;
+  open: (projectId: string) => Promise<GetProjectResponse>;
   create: (params: CreateFromTopicRequest) => Promise<void>;
   plan: (params?: PlanRequest) => Promise<void>;
   mediaSearch: (params?: MediaSearchRequest) => Promise<void>;
@@ -76,6 +78,23 @@ export const useProjectStore = create<ProjectStoreState>()(
 
       return {
         ...initialState,
+        open: async (projectId) => {
+          set({ mode: "loading", error: null });
+          try {
+            const state = await projectsApi.getProject(projectId);
+            set({
+              projectId,
+              project: state.timeline ?? null,
+              mode: "ready",
+              error: null,
+              timelineValidation: null,
+            });
+            return state;
+          } catch (error) {
+            fail(error);
+            throw error;
+          }
+        },
         create: async (params) => {
           set({ mode: "loading", error: null });
           try {

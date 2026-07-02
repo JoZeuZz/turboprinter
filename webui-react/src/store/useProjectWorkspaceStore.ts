@@ -3,6 +3,7 @@ import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { videoApi } from "../api/video";
 import { pollTask } from "../api/polling";
+import { useProjectHistoryStore } from "./useProjectHistoryStore";
 import type { TaskStatus, VideoParams } from "../api/types";
 import type { WorkspacePanel } from "../types/workspace";
 
@@ -44,6 +45,8 @@ export const useProjectWorkspaceStore = create<WorkspaceStoreState>()(
         set({ panel: "generating", error: null, taskStatus: null, videoUrls: [] });
         try {
           const { task_id } = await videoApi.createTask(params);
+          const { currentDraftId, removeDraft } = useProjectHistoryStore.getState();
+          removeDraft(currentDraftId);
           set({ taskId: task_id });
           await pollTask(task_id, (status: TaskStatus) => {
             set({ taskStatus: status });

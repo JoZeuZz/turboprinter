@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { StateBadge } from "../ui/StateBadge";
+import { useProjectHistoryStore } from "../../store/useProjectHistoryStore";
 import { useProjectWorkspaceStore } from "../../store/useProjectWorkspaceStore";
 import { useProjectStore } from "../../store/useProjectStore";
 
@@ -12,8 +14,10 @@ const MODE_BADGE: Record<string, { label: string; className: string }> = {
 };
 
 export function TopicBar() {
+  const { t } = useTranslation();
   const { topic, setTopic, panel } = useProjectWorkspaceStore();
   const { mode } = useProjectStore();
+  const updateCurrentDraft = useProjectHistoryStore((s) => s.updateCurrentDraft);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(topic);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -23,7 +27,9 @@ export function TopicBar() {
   }, [editing]);
 
   const commit = () => {
-    setTopic(draft.trim() || topic);
+    const nextTopic = draft.trim() || topic;
+    setTopic(nextTopic);
+    updateCurrentDraft(nextTopic);
     setEditing(false);
   };
 
@@ -45,7 +51,7 @@ export function TopicBar() {
             }
           }}
           className="flex-1 bg-transparent text-sm text-foreground outline-none"
-          placeholder="Untitled project"
+          placeholder={t("topbar.untitledProject")}
         />
       ) : (
         <button
@@ -55,7 +61,7 @@ export function TopicBar() {
           }}
           className="flex-1 text-left text-sm text-foreground hover:text-accent truncate"
         >
-          {topic || <span className="text-muted">Untitled project</span>}
+          {topic || <span className="text-muted">{t("topbar.untitledProject")}</span>}
         </button>
       )}
 

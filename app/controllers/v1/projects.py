@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import glob
+import json
 import os
+import datetime
 
 from fastapi import BackgroundTasks, Query, Request
 from fastapi.responses import FileResponse
@@ -43,6 +45,7 @@ from app.models.project_schema import (
     MusicSelectRequest,
     PlanRequest,
     RenderRequest,
+    RenameProjectRequest,
     TimelineBuildRequest,
     TimelineCommandsRequest,
 )
@@ -81,6 +84,59 @@ def _require_project_mode(request: Request, project_id: str | None = None) -> st
 
 def _ok(data) -> BaseProjectResponse:
     return BaseProjectResponse(data=data)
+
+
+def _task_meta_path(task_id: str) -> str:
+    return os.path.join(utils.task_dir(task_id), "_meta", "script.json")
+
+
+def _load_task_script_meta(task_id: str) -> dict | None:
+    meta_path = _task_meta_path(task_id)
+    if not os.path.isfile(meta_path):
+        return None
+    try:
+        with open(meta_path, encoding="utf-8") as fh:
+            return json.load(fh)
+    except (OSError, ValueError):
+        return None
+
+
+def _list_generated_video_tasks(limit: int = 20) -> list[dict]:
+    tasks_dir = utils.task_dir()
+    if not os.path.isdir(tasks_dir):
+        return []
+
+    entries: list[dict] = []
+    for task_id in os.listdir(tasks_dir):
+        task_path = os.path.join(tasks_dir, task_id)
+        if not os.path.isdir(task_path):
+            continue
+
+        meta = _load_task_script_meta(task_id)
+        if meta is None:
+            continue
+
+        video_files = [
+            os.path.join(task_path, name)
+            for name in os.listdir(task_path)
+            if name.startswith(("final-", "combined-")) and name.endswith(".mp4")
+        ]
+        paths = [path for path in video_files if os.path.isfile(path)]
+        paths.append(_task_meta_path(task_id))
+        mtime = max(os.path.getmtime(path) for path in paths if os.path.isfile(path))
+        params = meta.get("params") or {}
+        topic = params.get("video_subject") or meta.get("script", "")[:80].strip()
+        entries.append({
+            "project_id": task_id,
+            "topic": topic,
+            "updated_at": datetime.datetime.fromtimestamp(
+                mtime, tz=datetime.timezone.utc
+            ).isoformat(),
+            "kind": "task",
+        })
+
+    entries.sort(key=lambda item: item["updated_at"], reverse=True)
+    return entries[:limit]
 
 
 def _dump_model(model):
@@ -221,7 +277,9 @@ def _validate_replace_candidates(
 @router.get("/projects", response_model=BaseProjectResponse,
             summary="List recent projects")
 def list_projects(request: Request, limit: int = 20):
-    _require_project_mode(request)
+    if not getattr(config, "project_mode_enabled", False):
+        projects = _list_generated_video_tasks(limit=limit)
+        return _ok({"projects": projects})
     store = _store()
     projects = store.list_projects(limit=limit)
     return _ok({"projects": projects})
@@ -240,6 +298,7 @@ def create_from_topic(request: Request, body: CreateFromTopicRequest):
             paragraph_number=body.paragraph_number,
         )
     store.save_script(task_id, script)
+    store.save_project_metadata(task_id, topic=body.topic)
     return _ok({"project_id": task_id, "has_script": bool(script)})
 
 
@@ -250,7 +309,9 @@ def create_from_script(request: Request, body: CreateFromScriptRequest):
     if not body.script.strip():
         raise HttpException(task_id="", status_code=400, message="script is empty")
     task_id = utils.get_uuid()
-    _store().save_script(task_id, body.script)
+    store = _store()
+    store.save_script(task_id, body.script)
+    store.save_project_metadata(task_id, topic=body.topic)
     return _ok({"project_id": task_id, "has_script": True})
 
 
@@ -273,13 +334,50 @@ def create_from_reddit(request: Request, body: CreateFromRedditRequest):
         raise HttpException(task_id="", status_code=400, message="url or body required")
     script = RedditThreadNormalizer().to_script_text(source)
     task_id = utils.get_uuid()
-    _store().save_script(task_id, script)
+    store = _store()
+    store.save_script(task_id, script)
+    store.save_project_metadata(task_id, topic=body.topic or body.title or getattr(source, "title", None))
     return _ok({"project_id": task_id, "has_script": bool(script), "source_kind": source.kind})
 
 
 @router.get("/projects/{project_id}", response_model=BaseProjectResponse,
             summary="Get project state")
 def get_project(request: Request, project_id: str):
+    if not getattr(config, "project_mode_enabled", False):
+        _validate_project_id(project_id)
+        meta = _load_task_script_meta(project_id)
+        if meta is None:
+            raise HttpException(task_id=project_id, status_code=404, message="project not found")
+        params = meta.get("params") or {}
+        task_path = utils.task_dir(project_id)
+        final_videos = sorted(
+            f"/api/v1/stream/{project_id}/{name}"
+            for name in os.listdir(task_path)
+            if name.startswith("final-") and name.endswith(".mp4")
+        ) if os.path.isdir(task_path) else []
+        combined_videos = sorted(
+            f"/api/v1/stream/{project_id}/{name}"
+            for name in os.listdir(task_path)
+            if name.startswith("combined-") and name.endswith(".mp4")
+        ) if os.path.isdir(task_path) else []
+        return _ok({
+            "project_id": project_id,
+            "has_script": bool(meta.get("script")),
+            "has_shot_plan": False,
+            "has_selected_media": False,
+            "has_timeline": False,
+            "script": meta.get("script"),
+            "shot_plan": None,
+            "timeline": None,
+            "media_candidates": [],
+            "selected_media": [],
+            "selected_music": [],
+            "preview_assets": [],
+            "topic": params.get("video_subject"),
+            "params": params,
+            "videos": final_videos,
+            "combined_videos": combined_videos,
+        })
     _require_project_mode(request, project_id)
     store = _store()
     if not store.exists(project_id):
@@ -307,6 +405,42 @@ def get_project(request: Request, project_id: str):
             for asset_id in sorted(_project_asset_registry(store, project_id))
         ],
     })
+
+
+@router.delete("/projects/{project_id}", response_model=BaseProjectResponse,
+               summary="Delete a project")
+def delete_project(request: Request, project_id: str):
+    _require_project_mode(request, project_id)
+    store = _store()
+    if not store.exists(project_id):
+        raise HttpException(task_id=project_id, status_code=404, message="project not found")
+    store.delete_project(project_id)
+    return _ok({"project_id": project_id, "deleted": True})
+
+
+@router.patch("/projects/{project_id}/metadata", response_model=BaseProjectResponse,
+              summary="Rename a project")
+def rename_project(request: Request, project_id: str, body: RenameProjectRequest):
+    _require_project_mode(request, project_id)
+    topic = body.topic.strip()
+    if not topic:
+        raise HttpException(task_id=project_id, status_code=400, message="topic is empty")
+    store = _store()
+    if not store.exists(project_id):
+        raise HttpException(task_id=project_id, status_code=404, message="project not found")
+    store.save_project_metadata(project_id, topic=topic)
+    return _ok({"project_id": project_id, "topic": topic})
+
+
+@router.post("/projects/{project_id}/duplicate", response_model=BaseProjectResponse,
+             summary="Duplicate a project's video config into a new project")
+def duplicate_project(request: Request, project_id: str):
+    _require_project_mode(request, project_id)
+    store = _store()
+    if not store.exists(project_id):
+        raise HttpException(task_id=project_id, status_code=404, message="project not found")
+    new_id = store.duplicate_video_config(project_id)
+    return _ok({"project_id": new_id})
 
 
 @router.post("/projects/{project_id}/plan", response_model=BaseProjectResponse,

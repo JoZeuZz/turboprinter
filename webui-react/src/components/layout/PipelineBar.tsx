@@ -1,5 +1,6 @@
 import { Check } from "lucide-react";
-import { PANEL_ORDER, PANEL_LABEL } from "../../types/workspace";
+import { useTranslation } from "react-i18next";
+import { PANEL_ORDER, PANEL_LABEL_KEY } from "../../types/workspace";
 import type { WorkspacePanel } from "../../types/workspace";
 
 interface PipelineBarProps {
@@ -8,6 +9,7 @@ interface PipelineBarProps {
 }
 
 export function PipelineBar({ currentPanel, completedPanels }: PipelineBarProps) {
+  const { t } = useTranslation();
   return (
     <div className="flex items-center justify-center gap-0 border-t border-border bg-surface px-4 py-2">
       {PANEL_ORDER.map((panel, idx) => {
@@ -44,7 +46,7 @@ export function PipelineBar({ currentPanel, completedPanels }: PipelineBarProps)
                   isActive ? "text-foreground" : isFuture ? "text-muted" : "text-accent"
                 }`}
               >
-                {PANEL_LABEL[panel]}
+                {t(PANEL_LABEL_KEY[panel])}
               </span>
             </div>
           </div>

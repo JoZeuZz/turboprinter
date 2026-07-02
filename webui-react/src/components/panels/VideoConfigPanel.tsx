@@ -1,6 +1,7 @@
 // webui-react/src/components/panels/VideoConfigPanel.tsx
 import { useState, useEffect } from "react";
 import { Wand2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import {
   TabBar,
   Button,
@@ -10,6 +11,7 @@ import {
   ColorPicker,
   Collapsible,
   Input,
+  Textarea,
 } from "../ui";
 import { useVideoStore } from "../../store/useVideoStore";
 import { useConfigStore } from "../../store/useConfigStore";
@@ -17,6 +19,7 @@ import { useProjectWorkspaceStore } from "../../store/useProjectWorkspaceStore";
 import { videoApi } from "../../api/video";
 import { voiceApi } from "../../api/voice";
 import { SubtitleFontGallery } from "../subtitles/SubtitleFontGallery";
+import { SubtitlePreview } from "../subtitles/SubtitlePreview";
 import { VoiceGallery } from "../voice/VoiceGallery";
 import { TTS_PROVIDERS, type TtsProvider } from "../../api/types";
 import type {
@@ -26,41 +29,8 @@ import type {
   BgmFile,
 } from "../../api/types";
 
-const TABS = [
-  { key: "video", label: "Video" },
-  { key: "audio", label: "Audio" },
-  { key: "subtitles", label: "Subtitles" },
-];
-
-const ASPECT_OPTIONS = [
-  { value: "9:16", label: "Portrait 9:16" },
-  { value: "16:9", label: "Landscape 16:9" },
-  { value: "1:1", label: "Square 1:1" },
-];
-
-const CONCAT_OPTIONS = [
-  { value: "random", label: "Random" },
-  { value: "sequential", label: "Sequential" },
-];
-
-const TRANSITION_OPTIONS = [
-  { value: "", label: "None" },
-  { value: "Shuffle", label: "Shuffle" },
-  { value: "FadeIn", label: "Fade In" },
-  { value: "FadeOut", label: "Fade Out" },
-  { value: "SlideIn", label: "Slide In" },
-  { value: "SlideOut", label: "Slide Out" },
-];
-
-
-const POSITION_OPTIONS = [
-  { value: "bottom", label: "Bottom" },
-  { value: "top", label: "Top" },
-  { value: "center", label: "Center" },
-  { value: "custom", label: "Custom %" },
-];
-
 export function VideoConfigPanel() {
+  const { t } = useTranslation();
   const [tab, setTab] = useState("video");
   const [bgmFiles, setBgmFiles] = useState<BgmFile[]>([]);
   const [voiceOptions, setVoiceOptions] = useState<{ value: string; label: string }[]>([]);
@@ -68,6 +38,39 @@ export function VideoConfigPanel() {
   const store = useVideoStore();
   const { config } = useConfigStore();
   const workspaceStore = useProjectWorkspaceStore();
+
+  const TABS = [
+    { key: "video", label: t("panels.videoConfig.tabs.video") },
+    { key: "audio", label: t("panels.videoConfig.tabs.audio") },
+    { key: "subtitles", label: t("panels.videoConfig.tabs.subtitles") },
+  ];
+
+  const ASPECT_OPTIONS = [
+    { value: "9:16", label: t("videoSettings.aspectPortrait") },
+    { value: "16:9", label: t("videoSettings.aspectLandscape") },
+    { value: "1:1", label: t("videoSettings.aspectSquare") },
+  ];
+
+  const CONCAT_OPTIONS = [
+    { value: "random", label: t("videoSettings.random") },
+    { value: "sequential", label: t("videoSettings.sequential") },
+  ];
+
+  const TRANSITION_OPTIONS = [
+    { value: "", label: t("videoSettings.transitionNone") },
+    { value: "Shuffle", label: t("videoSettings.transitionShuffle") },
+    { value: "FadeIn", label: t("videoSettings.transitionFadeIn") },
+    { value: "FadeOut", label: t("videoSettings.transitionFadeOut") },
+    { value: "SlideIn", label: t("videoSettings.transitionSlideIn") },
+    { value: "SlideOut", label: t("videoSettings.transitionSlideOut") },
+  ];
+
+  const POSITION_OPTIONS = [
+    { value: "bottom", label: t("audioSubtitle.positionBottom") },
+    { value: "top", label: t("audioSubtitle.positionTop") },
+    { value: "center", label: t("audioSubtitle.positionCenter") },
+    { value: "custom", label: t("audioSubtitle.positionCustom") },
+  ];
 
   useEffect(() => {
     videoApi.getBgmList().then((r) => setBgmFiles(r.files)).catch(() => {});
@@ -79,7 +82,7 @@ export function VideoConfigPanel() {
       .getVoices(store.tts_provider)
       .then(setVoiceOptions)
       .catch(() => {
-        setVoiceLoadError("No se pudieron cargar las voces");
+        setVoiceLoadError(t("panels.videoConfig.voiceLoadError"));
       });
   }, [store.tts_provider]);
 
@@ -88,8 +91,8 @@ export function VideoConfigPanel() {
   ).map((s) => ({ value: s, label: s.charAt(0).toUpperCase() + s.slice(1) }));
 
   const bgmOptions = [
-    { value: "random", label: "Random" },
-    { value: "", label: "None" },
+    { value: "random", label: t("audioSubtitle.bgmRandom") },
+    { value: "", label: t("audioSubtitle.bgmNone") },
     ...bgmFiles.map((f) => ({ value: f.file, label: f.name })),
   ];
 
@@ -98,33 +101,36 @@ export function VideoConfigPanel() {
   };
 
   return (
-    <section className="flex flex-col h-full max-w-xl mx-auto w-full px-6 py-4">
+    <section className="grid h-full min-h-0 w-full max-w-5xl mx-auto grid-rows-[auto_auto_minmax(0,1fr)_auto] px-6 py-4">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-sm font-semibold text-foreground">
-          Configure your video
+          {t("panels.videoConfig.title")}
         </h2>
         <Button
           variant="ghost"
           size="sm"
           onClick={() => workspaceStore.setPanel("script")}
         >
-          ← Back
+          {t("panels.videoConfig.back")}
         </Button>
       </div>
 
       <TabBar tabs={TABS} active={tab} onChange={setTab} />
 
-      <div className="flex-1 overflow-y-auto py-4 space-y-3">
+      <div className="min-h-0 overflow-hidden py-4">
+        <div className="grid h-full min-h-0 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(220px,260px)]">
+          <div className="h-full min-h-0 overflow-y-auto pr-1 pb-6">
+            <div className="min-w-0 space-y-3">
         {tab === "video" && (
           <>
             <Select
-              label="Source"
+              label={t("videoSettings.source")}
               value={store.video_source ?? "pexels"}
               options={videoSourceOptions}
               onChange={(e) => store.set("video_source", e.target.value)}
             />
             <Select
-              label="Aspect Ratio"
+              label={t("videoSettings.aspectRatio")}
               value={store.video_aspect ?? "9:16"}
               options={ASPECT_OPTIONS}
               onChange={(e) =>
@@ -132,7 +138,7 @@ export function VideoConfigPanel() {
               }
             />
             <Select
-              label="Clip Order"
+              label={t("videoSettings.clipOrder")}
               value={store.video_concat_mode ?? "random"}
               options={CONCAT_OPTIONS}
               onChange={(e) =>
@@ -140,7 +146,7 @@ export function VideoConfigPanel() {
               }
             />
             <Select
-              label="Transition"
+              label={t("videoSettings.transition")}
               value={store.video_transition_mode ?? ""}
               options={TRANSITION_OPTIONS}
               onChange={(e) =>
@@ -151,7 +157,7 @@ export function VideoConfigPanel() {
               }
             />
             <Slider
-              label="Clip Duration (s)"
+              label={t("videoSettings.clipDuration")}
               value={store.video_clip_duration ?? 5}
               min={1}
               max={15}
@@ -159,9 +165,9 @@ export function VideoConfigPanel() {
               onChange={(v) => store.set("video_clip_duration", v)}
               displayValue={`${store.video_clip_duration ?? 5}s`}
             />
-            <Collapsible title="Advanced">
+            <Collapsible title={t("panels.videoConfig.advanced")}>
               <Input
-                label="Video Count"
+                label={t("videoSettings.count")}
                 type="number"
                 min={1}
                 max={10}
@@ -171,7 +177,7 @@ export function VideoConfigPanel() {
                 }
               />
               <Checkbox
-                label="Match clips to script"
+                label={t("videoSettings.matchClips")}
                 checked={store.match_materials_to_script ?? false}
                 onChange={(v) => store.set("match_materials_to_script", v)}
               />
@@ -182,7 +188,7 @@ export function VideoConfigPanel() {
         {tab === "audio" && (
           <>
             <Select
-              label="TTS Provider"
+              label={t("panels.videoConfig.ttsProvider")}
               value={store.tts_provider}
               options={TTS_PROVIDERS.map((p) => ({ value: p.value, label: p.label }))}
               onChange={(e) => {
@@ -196,15 +202,23 @@ export function VideoConfigPanel() {
                 {voiceLoadError && (
                   <p className="text-xs text-red-400">{voiceLoadError}</p>
                 )}
+                <Textarea
+                  label={t("panels.videoConfig.previewText")}
+                  placeholder={t("panels.videoConfig.voicePreviewPlaceholder")}
+                  value={store.preview_text ?? ""}
+                  onChange={(e) => store.set("preview_text", e.target.value)}
+                  rows={3}
+                />
                 <VoiceGallery
                   voices={voiceOptions}
                   selectedVoice={store.voice_name ?? ""}
                   voiceRate={store.voice_rate ?? 1.0}
                   voiceVolume={store.voice_volume ?? 1.0}
+                  sampleText={store.preview_text}
                   onSelect={(voiceName) => store.set("voice_name", voiceName)}
                 />
                 <Slider
-                  label="Voice Volume"
+                  label={t("audioSubtitle.voiceVolume")}
                   value={store.voice_volume ?? 1.0}
                   min={0}
                   max={2}
@@ -213,7 +227,7 @@ export function VideoConfigPanel() {
                   displayValue={(store.voice_volume ?? 1.0).toFixed(1)}
                 />
                 <Slider
-                  label="Voice Rate"
+                  label={t("audioSubtitle.voiceRate")}
                   value={store.voice_rate ?? 1.0}
                   min={0.5}
                   max={2.0}
@@ -225,7 +239,7 @@ export function VideoConfigPanel() {
             )}
 
             <Select
-              label="Background Music"
+              label={t("audioSubtitle.backgroundMusic")}
               value={
                 store.bgm_file === "" && store.bgm_type === "random"
                   ? "random"
@@ -243,7 +257,7 @@ export function VideoConfigPanel() {
               }}
             />
             <Slider
-              label="BGM Volume"
+              label={t("audioSubtitle.bgmVolume")}
               value={store.bgm_volume ?? 0.2}
               min={0}
               max={1}
@@ -256,77 +270,114 @@ export function VideoConfigPanel() {
 
         {tab === "subtitles" && (
           <>
-            <Checkbox
-              label="Enable subtitles"
-              checked={store.subtitle_enabled ?? true}
-              onChange={(v) => store.set("subtitle_enabled", v)}
-            />
-            {store.subtitle_enabled && (
-              <Collapsible title="Subtitle Style" defaultOpen>
-                <Select
-                  label="Position"
-                  value={store.subtitle_position ?? "bottom"}
-                  options={POSITION_OPTIONS}
-                  onChange={(e) =>
-                    store.set("subtitle_position", e.target.value)
-                  }
-                />
-                {store.subtitle_position === "custom" && (
-                  <Slider
-                    label="Custom Position %"
-                    value={store.custom_position ?? 70}
-                    min={0}
-                    max={100}
-                    step={1}
-                    onChange={(v) => store.set("custom_position", v)}
-                    displayValue={`${store.custom_position ?? 70}%`}
+              <Checkbox
+                label={t("audioSubtitle.enableSubtitles")}
+                checked={store.subtitle_enabled ?? true}
+                onChange={(v) => store.set("subtitle_enabled", v)}
+              />
+              {store.subtitle_enabled && (
+                <Collapsible title={t("panels.videoConfig.subtitleStyle")} defaultOpen>
+                  <Select
+                    label={t("audioSubtitle.position")}
+                    value={store.subtitle_position ?? "bottom"}
+                    options={POSITION_OPTIONS}
+                    onChange={(e) =>
+                      store.set("subtitle_position", e.target.value)
+                    }
                   />
-                )}
-                <SubtitleFontGallery
-                  value={store.font_name ?? "STHeitiMedium.ttc"}
-                  onChange={(fontName) => store.set("font_name", fontName)}
-                />
-                <Input
-                  label="Font Size"
-                  type="number"
-                  min={20}
-                  max={120}
-                  value={store.font_size ?? 60}
-                  onChange={(e) =>
-                    store.set("font_size", parseInt(e.target.value, 10))
-                  }
-                />
-                <ColorPicker
-                  label="Text Color"
-                  value={store.text_fore_color ?? "#FFFFFF"}
-                  onChange={(v) => store.set("text_fore_color", v)}
-                />
-                <ColorPicker
-                  label="Stroke Color"
-                  value={store.stroke_color ?? "#000000"}
-                  onChange={(v) => store.set("stroke_color", v)}
-                />
-                <Slider
-                  label="Stroke Width"
-                  value={store.stroke_width ?? 1.5}
-                  min={0}
-                  max={5}
-                  step={0.5}
-                  onChange={(v) => store.set("stroke_width", v)}
-                  displayValue={(store.stroke_width ?? 1.5).toFixed(1)}
-                />
-                <Checkbox
-                  label="Rounded background"
-                  checked={store.rounded_subtitle_background ?? false}
-                  onChange={(v) => store.set("rounded_subtitle_background", v)}
-                />
-              </Collapsible>
-            )}
+                  {store.subtitle_position === "custom" && (
+                    <Slider
+                      label={t("audioSubtitle.customPositionPercent")}
+                      value={store.custom_position ?? 70}
+                      min={0}
+                      max={100}
+                      step={1}
+                      onChange={(v) => store.set("custom_position", v)}
+                      displayValue={`${store.custom_position ?? 70}%`}
+                    />
+                  )}
+                  <SubtitleFontGallery
+                    value={store.font_name ?? "STHeitiMedium.ttc"}
+                    onChange={(fontName) => store.set("font_name", fontName)}
+                  />
+                  <Input
+                    label={t("audioSubtitle.fontSize")}
+                    type="number"
+                    min={20}
+                    max={120}
+                    value={store.font_size ?? 60}
+                    onChange={(e) =>
+                      store.set("font_size", parseInt(e.target.value, 10))
+                    }
+                  />
+                  <ColorPicker
+                    label={t("audioSubtitle.textColor")}
+                    value={store.text_fore_color ?? "#FFFFFF"}
+                    onChange={(v) => store.set("text_fore_color", v)}
+                  />
+                  <ColorPicker
+                    label={t("audioSubtitle.strokeColor")}
+                    value={store.stroke_color ?? "#000000"}
+                    onChange={(v) => store.set("stroke_color", v)}
+                  />
+                  <Slider
+                    label={t("audioSubtitle.strokeWidth")}
+                    value={store.stroke_width ?? 1.5}
+                    min={0}
+                    max={5}
+                    step={0.5}
+                    onChange={(v) => store.set("stroke_width", v)}
+                    displayValue={(store.stroke_width ?? 1.5).toFixed(1)}
+                  />
+                  <Checkbox
+                    label={t("panels.videoConfig.subtitleBackground")}
+                    checked={store.text_background_color !== false}
+                    onChange={(v) =>
+                      store.set("text_background_color", v ? "#000000" : false)
+                    }
+                  />
+                  {store.text_background_color !== false && (
+                    <ColorPicker
+                      label={t("panels.videoConfig.backgroundColor")}
+                      value={
+                        typeof store.text_background_color === "string"
+                          ? store.text_background_color
+                          : "#000000"
+                      }
+                      onChange={(v) => store.set("text_background_color", v)}
+                    />
+                  )}
+                  <Checkbox
+                    label={t("audioSubtitle.roundedBackground")}
+                    checked={store.rounded_subtitle_background ?? false}
+                    onChange={(v) => store.set("rounded_subtitle_background", v)}
+                  />
+                </Collapsible>
+              )}
           </>
         )}
+          </div>
+          </div>
+
+          <div className="hidden min-h-0 self-start lg:block">
+          <SubtitlePreview
+            enabled={store.subtitle_enabled ?? true}
+            position={store.subtitle_position ?? "bottom"}
+            customPosition={store.custom_position ?? 70}
+            fontName={store.font_name ?? "STHeitiMedium.ttc"}
+            fontSize={store.font_size ?? 60}
+            textColor={store.text_fore_color ?? "#FFFFFF"}
+            strokeColor={store.stroke_color ?? "#000000"}
+            strokeWidth={store.stroke_width ?? 1.5}
+            textBackgroundColor={store.text_background_color ?? true}
+            roundedBackground={store.rounded_subtitle_background ?? false}
+            sampleText={store.preview_text || store.video_script}
+          />
+          </div>
+          </div>
       </div>
 
-      <div className="border-t border-border pt-4">
+      <div className="shrink-0 border-t border-border pt-4">
         <Button
           className="w-full"
           size="lg"
@@ -334,7 +385,7 @@ export function VideoConfigPanel() {
           disabled={!store.video_subject.trim()}
         >
           <Wand2 className="mr-2 h-4 w-4" />
-          Generate Video
+          {t("panels.videoConfig.generate")}
         </Button>
       </div>
     </section>

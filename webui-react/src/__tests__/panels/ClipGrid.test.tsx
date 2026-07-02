@@ -20,7 +20,7 @@ describe("ClipGrid", () => {
   it("calls onExclude when exclude button clicked", async () => {
     const onExclude = vi.fn();
     render(<ClipGrid clips={CLIPS} onExclude={onExclude} excluded={[]} />);
-    const excludeButtons = screen.getAllByTitle(/exclude/i);
+    const excludeButtons = screen.getAllByTitle(/excluir/i);
     await userEvent.click(excludeButtons[0]);
     expect(onExclude).toHaveBeenCalledWith("clip-1");
   });

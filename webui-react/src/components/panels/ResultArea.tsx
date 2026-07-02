@@ -1,8 +1,10 @@
 // webui-react/src/components/panels/ResultArea.tsx
+import { useTranslation } from "react-i18next";
 import { useTaskStore } from "../../store/useTaskStore";
 import { TASK_STATE_COMPLETE } from "../../api/types";
 
 export function ResultArea() {
+  const { t } = useTranslation();
   const { status } = useTaskStore();
 
   if (status?.state !== TASK_STATE_COMPLETE) return null;
@@ -14,7 +16,7 @@ export function ResultArea() {
 
   return (
     <div className="flex flex-col gap-4">
-      <h3 className="text-sm font-semibold text-foreground">Results</h3>
+      <h3 className="text-sm font-semibold text-foreground">{t("panels.result.title")}</h3>
       {unique.map((url) => (
         <div key={url} className="rounded-md overflow-hidden border border-border bg-surface">
           <video
@@ -28,7 +30,7 @@ export function ResultArea() {
               download
               className="text-xs text-accent hover:text-accent-hover underline"
             >
-              Download
+              {t("common.download")}
             </a>
           </div>
         </div>

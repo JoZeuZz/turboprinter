@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Eye, EyeOff, Save } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 interface ApiKeyInputProps {
   label: string;
@@ -9,6 +10,7 @@ interface ApiKeyInputProps {
 }
 
 export function ApiKeyInput({ label, value, placeholder, onSave }: ApiKeyInputProps) {
+  const { t } = useTranslation();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const [revealed, setRevealed] = useState(false);
@@ -16,7 +18,7 @@ export function ApiKeyInput({ label, value, placeholder, onSave }: ApiKeyInputPr
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const maskedDisplay = value ? "•".repeat(8) + value.slice(-4) : "(not set)";
+  const maskedDisplay = value ? "•".repeat(8) + value.slice(-4) : t("apiKey.notSet");
 
   const handleEdit = () => {
     setDraft(value);
@@ -33,7 +35,7 @@ export function ApiKeyInput({ label, value, placeholder, onSave }: ApiKeyInputPr
       setEditing(false);
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Save failed');
+      setError(err instanceof Error ? err.message : t("apiKey.saveFailed"));
     } finally {
       setSaving(false);
     }
@@ -67,13 +69,13 @@ export function ApiKeyInput({ label, value, placeholder, onSave }: ApiKeyInputPr
               className="flex items-center gap-1 rounded border border-border bg-surface-2 px-2 py-1 text-xs text-accent hover:border-accent disabled:opacity-50"
             >
               <Save className="h-3 w-3" />
-              {saving ? "Saving…" : "Save"}
+              {saving ? t("apiKey.saving") : t("common.save")}
             </button>
             <button
               onClick={() => setEditing(false)}
               className="rounded border border-border px-2 py-1 text-xs text-muted hover:text-foreground"
             >
-              Cancel
+              {t("common.cancel")}
             </button>
           </div>
           {error && <p className="text-red-400 text-xs mt-1">{error}</p>}
@@ -81,12 +83,12 @@ export function ApiKeyInput({ label, value, placeholder, onSave }: ApiKeyInputPr
       ) : (
         <div className="flex items-center gap-2">
           <span className="font-mono text-xs text-muted">{maskedDisplay}</span>
-          {saved && <span className="text-xs text-green-400">✓ Saved</span>}
+          {saved && <span className="text-xs text-green-400">{t("apiKey.saved")}</span>}
           <button
             onClick={handleEdit}
             className="ml-auto text-xs text-accent hover:text-accent-hover"
           >
-            Edit
+            {t("common.edit")}
           </button>
         </div>
       )}

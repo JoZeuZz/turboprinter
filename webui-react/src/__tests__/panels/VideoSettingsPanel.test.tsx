@@ -12,13 +12,13 @@ beforeEach(() => {
 describe("VideoSettingsPanel", () => {
   it("renders aspect ratio select with default 9:16", () => {
     render(<VideoSettingsPanel />);
-    const select = screen.getByLabelText("Aspect Ratio") as HTMLSelectElement;
+    const select = screen.getByLabelText("Relación de aspecto") as HTMLSelectElement;
     expect(select.value).toBe("9:16");
   });
 
   it("renders source select with default pexels", () => {
     render(<VideoSettingsPanel />);
-    const select = screen.getByLabelText("Source") as HTMLSelectElement;
+    const select = screen.getByLabelText("Fuente") as HTMLSelectElement;
     expect(select.value).toBe("pexels");
   });
 });

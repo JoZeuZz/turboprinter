@@ -1,12 +1,14 @@
 // webui-react/src/components/editor/VideoPreview.tsx
 import { useRef, useState } from "react";
 import { Play, Pause, SkipBack, SkipForward } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 interface VideoPreviewProps {
   src?: string;
 }
 
 export function VideoPreview({ src }: VideoPreviewProps) {
+  const { t } = useTranslation();
   const videoRef = useRef<HTMLVideoElement>(null);
   const [playing, setPlaying] = useState(false);
 
@@ -31,7 +33,7 @@ export function VideoPreview({ src }: VideoPreviewProps) {
         />
       ) : (
         <div className="w-full h-40 flex items-center justify-center bg-surface text-muted text-sm">
-          Select a clip to preview
+          {t("editor.previewEmpty")}
         </div>
       )}
       <div className="flex items-center justify-center gap-3 py-2 bg-surface">

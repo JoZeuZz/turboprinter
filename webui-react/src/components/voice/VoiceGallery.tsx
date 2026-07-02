@@ -1,5 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Play } from "lucide-react";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import { voiceApi } from "../../api/voice";
 import type { VoiceOption } from "../../api/types";
 
@@ -8,6 +10,7 @@ interface VoiceGalleryProps {
   selectedVoice: string;
   voiceRate: number;
   voiceVolume: number;
+  sampleText?: string;
   onSelect: (voice: string) => void;
 }
 
@@ -21,23 +24,23 @@ interface VoiceCard {
 
 const PAGE_SIZE = 3;
 
-const LANGUAGE_NAMES: Record<string, string> = {
-  ar: "Árabe",
-  de: "Alemán",
-  en: "Inglés",
-  es: "Español",
-  fr: "Francés",
-  hi: "Hindi",
-  it: "Italiano",
-  ja: "Japonés",
-  ko: "Coreano",
-  pt: "Portugués",
-  ru: "Ruso",
-  tr: "Turco",
-  vi: "Vietnamita",
-  zh: "Chino",
-  multi: "Multilingüe",
-};
+const LANGUAGE_CODES = [
+  "ar",
+  "de",
+  "en",
+  "es",
+  "fr",
+  "hi",
+  "it",
+  "ja",
+  "ko",
+  "pt",
+  "ru",
+  "tr",
+  "vi",
+  "zh",
+  "multi",
+] as const;
 
 const PREVIEW_TEXT: Record<string, string> = {
   ar: "هذا نص تجريبي لاختبار تحويل النص إلى كلام.",
@@ -57,7 +60,13 @@ const PREVIEW_TEXT: Record<string, string> = {
   multi: "This is an example text for testing speech synthesis.",
 };
 
-function voiceMetadata(option: VoiceOption): VoiceCard {
+function languageName(t: TFunction, code: string): string {
+  return LANGUAGE_CODES.includes(code as (typeof LANGUAGE_CODES)[number])
+    ? t(`voice.languageNames.${code}`)
+    : code;
+}
+
+function voiceMetadata(option: VoiceOption, t: TFunction): VoiceCard {
   const raw = option.value;
   const gender = raw.endsWith("-Female")
     ? "female"
@@ -88,7 +97,11 @@ function voiceMetadata(option: VoiceOption): VoiceCard {
     }
   }
 
-  const languageBase = LANGUAGE_NAMES[languageCode] ?? (locale || "Desconocido");
+  const languageBase = LANGUAGE_CODES.includes(
+    languageCode as (typeof LANGUAGE_CODES)[number]
+  )
+    ? languageName(t, languageCode)
+    : locale || t("voice.unknown");
   return {
     value: raw,
     name: name.replace(/_/g, " ").trim() || option.label,
@@ -107,8 +120,10 @@ export function VoiceGallery({
   selectedVoice,
   voiceRate,
   voiceVolume,
+  sampleText,
   onSelect,
 }: VoiceGalleryProps) {
+  const { t } = useTranslation();
   const [page, setPage] = useState(0);
   const [search, setSearch] = useState("");
   const [language, setLanguage] = useState("all");
@@ -117,7 +132,7 @@ export function VoiceGallery({
   const [error, setError] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  const cards = useMemo(() => voices.map(voiceMetadata), [voices]);
+  const cards = useMemo(() => voices.map((v) => voiceMetadata(v, t)), [voices, t]);
   const languageOptions = useMemo(
     () => Array.from(new Set(cards.map((card) => card.languageCode))).sort(),
     [cards]
@@ -147,7 +162,7 @@ export function VoiceGallery({
       audioRef.current?.pause();
       const blob = await voiceApi.previewVoice({
         voice_name: card.value,
-        text: previewText(card.languageCode),
+        text: sampleText?.trim() || previewText(card.languageCode),
         voice_rate: voiceRate,
         voice_volume: voiceVolume,
       });
@@ -157,7 +172,7 @@ export function VoiceGallery({
       audio.onended = () => URL.revokeObjectURL(url);
       await audio.play();
     } catch {
-      setError("No se pudo probar esta voz.");
+      setError(t("voice.previewError"));
     } finally {
       setPreviewing(null);
     }
@@ -166,7 +181,7 @@ export function VoiceGallery({
   if (!voices.length) {
     return (
       <p className="rounded-md border border-border bg-surface px-3 py-2 text-xs text-muted">
-        No hay voces disponibles para este proveedor.
+        {t("voice.noVoices")}
       </p>
     );
   }
@@ -175,19 +190,19 @@ export function VoiceGallery({
     <div className="flex flex-col gap-3">
       <div className="grid grid-cols-[1fr_8rem_7rem] gap-2">
         <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-foreground/60">Buscar voz</label>
+          <label className="text-xs font-medium text-foreground/60">{t("voice.search")}</label>
           <input
             value={search}
             onChange={(event) => {
               setSearch(event.target.value);
               setPage(0);
             }}
-            placeholder="Nombre o código"
+            placeholder={t("voice.namePlaceholder")}
             className="h-9 rounded-md border border-border bg-surface-2 px-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
           />
         </div>
         <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-foreground/60">Idioma</label>
+          <label className="text-xs font-medium text-foreground/60">{t("voice.language")}</label>
           <select
             value={language}
             onChange={(event) => {
@@ -196,16 +211,16 @@ export function VoiceGallery({
             }}
             className="h-9 rounded-md border border-border bg-surface-2 px-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
           >
-            <option value="all">Todos</option>
+            <option value="all">{t("common.all")}</option>
             {languageOptions.map((code) => (
               <option key={code} value={code}>
-                {LANGUAGE_NAMES[code] ?? code}
+                {languageName(t, code)}
               </option>
             ))}
           </select>
         </div>
         <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-foreground/60">Sexo</label>
+          <label className="text-xs font-medium text-foreground/60">{t("voice.gender")}</label>
           <select
             value={gender}
             onChange={(event) => {
@@ -214,15 +229,15 @@ export function VoiceGallery({
             }}
             className="h-9 rounded-md border border-border bg-surface-2 px-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
           >
-            <option value="all">Todos</option>
-            <option value="female">Femenino</option>
-            <option value="male">Masculino</option>
+            <option value="all">{t("common.all")}</option>
+            <option value="female">{t("voice.female")}</option>
+            <option value="male">{t("voice.male")}</option>
           </select>
         </div>
       </div>
 
       <div className="flex items-center justify-between">
-        <label className="text-xs font-medium text-foreground/60">Voz</label>
+        <label className="text-xs font-medium text-foreground/60">{t("voice.voice")}</label>
         <span className="text-[11px] text-muted">
           {currentPage + 1} / {totalPages}
         </span>
@@ -231,7 +246,7 @@ export function VoiceGallery({
       <div className="relative px-8">
         <button
           type="button"
-          aria-label="Voces anteriores"
+          aria-label={t("voice.prev")}
           disabled={currentPage === 0}
           onClick={() => setPage((value) => Math.max(0, value - 1))}
           className="absolute left-0 top-1/2 z-10 -translate-y-1/2 rounded-md border border-border bg-surface-2/95 p-1.5 text-foreground shadow-lg transition hover:border-accent disabled:cursor-not-allowed disabled:opacity-30"
@@ -258,15 +273,15 @@ export function VoiceGallery({
                     {card.name}
                   </h3>
                   <p className="mt-2 line-clamp-2 min-h-[2.25rem] text-[11px] leading-4 text-foreground/65">
-                    {previewText(card.languageCode)}
+                    {sampleText?.trim() || previewText(card.languageCode)}
                   </p>
                   <div className="mt-2 flex flex-wrap gap-1">
                     <span className="rounded-full border border-border bg-surface-2 px-2 py-0.5 text-[10px] text-foreground/80">
                       {card.gender === "female"
-                        ? "Femenino"
+                        ? t("voice.female")
                         : card.gender === "male"
-                          ? "Masculino"
-                          : "Sin especificar"}
+                          ? t("voice.male")
+                          : t("voice.unspecified")}
                     </span>
                     <span className="rounded-full border border-border bg-surface-2 px-2 py-0.5 text-[10px] text-foreground/80">
                       {card.languageLabel}
@@ -284,7 +299,7 @@ export function VoiceGallery({
                         : "border-border bg-surface-2 text-foreground hover:border-accent"
                     }`}
                   >
-                    {isSelected ? "Seleccionada" : "Usar"}
+                    {isSelected ? t("voice.selected") : t("voice.use")}
                   </button>
                   <button
                     type="button"
@@ -293,7 +308,7 @@ export function VoiceGallery({
                     className="inline-flex items-center justify-center rounded-md border border-border bg-surface-2 px-2 py-1.5 text-xs font-medium text-foreground transition hover:border-accent disabled:cursor-wait disabled:opacity-60"
                   >
                     <Play className="mr-1 h-3 w-3" />
-                    {isPreviewing ? "..." : "Probar"}
+                    {isPreviewing ? "..." : t("voice.tryIt")}
                   </button>
                 </div>
               </article>
@@ -310,7 +325,7 @@ export function VoiceGallery({
 
         <button
           type="button"
-          aria-label="Voces siguientes"
+          aria-label={t("voice.next")}
           disabled={currentPage >= totalPages - 1}
           onClick={() => setPage((value) => Math.min(totalPages - 1, value + 1))}
           className="absolute right-0 top-1/2 z-10 -translate-y-1/2 rounded-md border border-border bg-surface-2/95 p-1.5 text-foreground shadow-lg transition hover:border-accent disabled:cursor-not-allowed disabled:opacity-30"

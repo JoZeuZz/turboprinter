@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 interface SubtitleFont {
   value: string;
@@ -13,7 +14,7 @@ interface SubtitleFontGalleryProps {
   onChange: (value: string) => void;
 }
 
-const FONTS: SubtitleFont[] = [
+export const SUBTITLE_FONTS: SubtitleFont[] = [
   {
     value: "STHeitiMedium.ttc",
     label: "STHeitiMedium",
@@ -58,32 +59,38 @@ const FONTS: SubtitleFont[] = [
 
 const PAGE_SIZE = 3;
 
+export function getSubtitleFontFamily(value: string | null | undefined) {
+  const selectedFont = SUBTITLE_FONTS.find((font) => font.value === value);
+  return selectedFont?.family ?? SUBTITLE_FONTS[0].family;
+}
+
 export function SubtitleFontGallery({
   value,
   onChange,
 }: SubtitleFontGalleryProps) {
+  const { t } = useTranslation();
   const selectedValue = value || "STHeitiMedium.ttc";
   const initialPage = Math.max(
     0,
     Math.floor(
       Math.max(
         0,
-        FONTS.findIndex((font) => font.value === selectedValue)
+        SUBTITLE_FONTS.findIndex((font) => font.value === selectedValue)
       ) / PAGE_SIZE
     )
   );
   const [page, setPage] = useState(initialPage);
 
-  const totalPages = Math.ceil(FONTS.length / PAGE_SIZE);
+  const totalPages = Math.ceil(SUBTITLE_FONTS.length / PAGE_SIZE);
   const visibleFonts = useMemo(
-    () => FONTS.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE),
+    () => SUBTITLE_FONTS.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE),
     [page]
   );
 
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center justify-between">
-        <label className="text-xs font-medium text-foreground/60">Font</label>
+        <label className="text-xs font-medium text-foreground/60">{t("subtitles.font")}</label>
         <span className="text-[11px] text-muted">
           {page + 1} / {totalPages}
         </span>
@@ -92,7 +99,7 @@ export function SubtitleFontGallery({
       <div className="relative px-8">
         <button
           type="button"
-          aria-label="Previous fonts"
+          aria-label={t("subtitles.prevFonts")}
           disabled={page === 0}
           onClick={() => setPage((current) => Math.max(0, current - 1))}
           className="absolute left-0 top-1/2 z-10 -translate-y-1/2 rounded-md border border-border bg-surface-2/95 p-1.5 text-foreground shadow-lg transition hover:border-accent disabled:cursor-not-allowed disabled:opacity-30"
@@ -138,7 +145,7 @@ export function SubtitleFontGallery({
                           : "border-border bg-surface-2 text-foreground"
                       }`}
                     >
-                      {isSelected ? "Selected" : "Use"}
+                      {isSelected ? t("subtitles.selected") : t("subtitles.use")}
                     </div>
                   </div>
                 </div>
@@ -156,7 +163,7 @@ export function SubtitleFontGallery({
 
         <button
           type="button"
-          aria-label="Next fonts"
+          aria-label={t("subtitles.nextFonts")}
           disabled={page >= totalPages - 1}
           onClick={() =>
             setPage((current) => Math.min(totalPages - 1, current + 1))

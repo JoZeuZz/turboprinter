@@ -1,5 +1,6 @@
 // webui-react/src/components/panels/ClipGrid.tsx
 import { X, Play } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import type { TimelineItem } from "../../api/types";
 
 interface ClipGridProps {
@@ -9,6 +10,7 @@ interface ClipGridProps {
 }
 
 export function ClipGrid({ clips, excluded, onExclude }: ClipGridProps) {
+  const { t } = useTranslation();
   return (
     <div className="grid grid-cols-4 gap-3">
       {clips.map((clip, idx) => {
@@ -33,7 +35,7 @@ export function ClipGrid({ clips, excluded, onExclude }: ClipGridProps) {
               {clip.thumbnail_url ? (
                 <img
                   src={clip.thumbnail_url}
-                  alt={`clip ${idx + 1}`}
+                  alt={t("clips.altClip", { n: idx + 1 })}
                   className="w-full h-full object-cover"
                 />
               ) : (
@@ -47,7 +49,7 @@ export function ClipGrid({ clips, excluded, onExclude }: ClipGridProps) {
                 <Play className="h-3 w-3 text-white" />
               </button>
               <button
-                title="Exclude clip"
+                title={t("clips.exclude")}
                 onClick={() => onExclude(clip.id)}
                 className="rounded-full bg-red-500/60 p-1.5 hover:bg-red-500"
               >

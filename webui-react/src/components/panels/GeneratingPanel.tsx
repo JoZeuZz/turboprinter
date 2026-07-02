@@ -1,22 +1,24 @@
 // webui-react/src/components/panels/GeneratingPanel.tsx
 import { useEffect, useState } from "react";
 import { Check, Loader2, Circle, ChevronDown, ChevronUp } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useProjectWorkspaceStore } from "../../store/useProjectWorkspaceStore";
 import { TASK_STATE_COMPLETE, TASK_STATE_FAILED } from "../../api/types";
 
-const STEPS = [
-  { label: "Script ready", threshold: 5 },
-  { label: "Audio (TTS) synthesized", threshold: 20 },
-  { label: "Word timestamps extracted", threshold: 30 },
-  { label: "Downloading Clips", threshold: 70 },
-  { label: "Assembling video", threshold: 90 },
-  { label: "Burning subtitles", threshold: 99 },
-];
-
 export function GeneratingPanel() {
+  const { t } = useTranslation();
   const { taskStatus, error, setPanel } = useProjectWorkspaceStore();
   const [logsOpen, setLogsOpen] = useState(false);
   const progress = taskStatus?.progress ?? 0;
+
+  const STEPS = [
+    { label: t("panels.generating.steps.scriptReady"), threshold: 5 },
+    { label: t("panels.generating.steps.audioSynthesized"), threshold: 20 },
+    { label: t("panels.generating.steps.timestampsExtracted"), threshold: 30 },
+    { label: t("panels.generating.steps.downloadingClips"), threshold: 70 },
+    { label: t("panels.generating.steps.assemblingVideo"), threshold: 90 },
+    { label: t("panels.generating.steps.burningSubtitles"), threshold: 99 },
+  ];
 
   // Auto-transition on completion
   useEffect(() => {
@@ -26,9 +28,9 @@ export function GeneratingPanel() {
   }, [taskStatus?.state, setPanel]);
 
   return (
-    <div className="flex flex-col items-center justify-start min-h-full p-8">
+    <div className="flex h-full w-full max-w-5xl mx-auto flex-col justify-start px-6 py-5">
       <div className="w-full max-w-md space-y-6">
-        <h2 className="text-sm font-semibold text-foreground">Generating your video</h2>
+        <h2 className="text-sm font-semibold text-foreground">{t("panels.generating.title")}</h2>
 
         {error && (
           <div className="rounded-md border border-red-800 bg-red-900/20 px-3 py-2 space-y-2">
@@ -37,26 +39,26 @@ export function GeneratingPanel() {
               onClick={() => setPanel("config")}
               className="text-xs text-red-300 underline hover:text-red-100"
             >
-              Try Again
+              {t("panels.generating.tryAgain")}
             </button>
           </div>
         )}
 
         {taskStatus?.state === TASK_STATE_FAILED && !error && (
           <div className="rounded-md border border-red-800 bg-red-900/20 px-3 py-2 space-y-2">
-            <p className="text-xs text-red-400">Task failed. Please try again.</p>
+            <p className="text-xs text-red-400">{t("panels.generating.failed")}</p>
             <button
               onClick={() => setPanel("config")}
               className="text-xs text-red-300 underline hover:text-red-100"
             >
-              Try Again
+              {t("panels.generating.tryAgain")}
             </button>
           </div>
         )}
 
         <div className="space-y-1">
           <div className="flex items-center justify-between text-xs text-muted">
-            <span>Progress</span>
+            <span>{t("panels.generating.progress")}</span>
             <span>{progress}%</span>
           </div>
           <div className="h-1.5 w-full rounded-full bg-border overflow-hidden">
@@ -101,11 +103,11 @@ export function GeneratingPanel() {
           className="flex items-center gap-1 text-xs text-muted hover:text-foreground"
         >
           {logsOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-          {logsOpen ? "Hide logs" : "Show logs"}
+          {logsOpen ? t("panels.generating.hideLogs") : t("panels.generating.showLogs")}
         </button>
         {logsOpen && (
           <div className="rounded-md border border-border bg-base p-3 font-mono text-xs text-muted h-28 overflow-y-auto">
-            <p>Polling task… progress {progress}%</p>
+            <p>{t("panels.generating.pollingTask", { progress })}</p>
           </div>
         )}
       </div>

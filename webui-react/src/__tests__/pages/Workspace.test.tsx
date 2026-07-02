@@ -9,18 +9,18 @@ beforeEach(() => useProjectWorkspaceStore.getState().reset());
 describe("Workspace", () => {
   it("shows ScriptPanel when panel is script", () => {
     render(<MemoryRouter><Workspace /></MemoryRouter>);
-    expect(screen.getByText(/Topic/i)).toBeInTheDocument();
+    expect(screen.getByText(/Tema/i)).toBeInTheDocument();
   });
 
   it("shows VideoConfigPanel when panel is config", () => {
     useProjectWorkspaceStore.setState({ panel: "config" });
     render(<MemoryRouter><Workspace /></MemoryRouter>);
-    expect(screen.getByText(/Generate Video/i)).toBeInTheDocument();
+    expect(screen.getByText(/Generar video/i)).toBeInTheDocument();
   });
 
   it("shows DonePanel when panel is done", () => {
     useProjectWorkspaceStore.setState({ panel: "done", videoUrls: [] });
     render(<MemoryRouter><Workspace /></MemoryRouter>);
-    expect(screen.getByText(/Video ready/i)).toBeInTheDocument();
+    expect(screen.getByText(/Video listo/i)).toBeInTheDocument();
   });
 });

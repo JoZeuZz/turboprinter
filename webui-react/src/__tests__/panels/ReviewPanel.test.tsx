@@ -63,7 +63,7 @@ describe("ReviewPanel", () => {
       makeStore({ mode: "disabled" }) as never
     );
     render(<ReviewPanel />);
-    expect(screen.getByText(/review not available/i)).toBeInTheDocument();
+    expect(screen.getByText(/revisión no disponible/i)).toBeInTheDocument();
   });
 
   it("on Render, calls applyTimelineCommands with move commands for all non-excluded clips", async () => {
@@ -71,7 +71,7 @@ describe("ReviewPanel", () => {
     vi.mocked(useProjectStore).mockReturnValue(store as never);
     render(<ReviewPanel />);
     await act(async () => {
-      fireEvent.click(screen.getByText(/render video/i));
+      fireEvent.click(screen.getByText(/renderizar video/i));
     });
     expect(store.applyTimelineCommands).toHaveBeenCalledWith({
       commands: [
@@ -93,7 +93,7 @@ describe("ReviewPanel", () => {
     fireEvent.click(excludeButtons[1]);
 
     await act(async () => {
-      fireEvent.click(screen.getByText(/render video/i));
+      fireEvent.click(screen.getByText(/renderizar video/i));
     });
 
     const { commands } = (store.applyTimelineCommands as ReturnType<typeof vi.fn>).mock.calls[0][0];

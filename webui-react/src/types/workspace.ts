@@ -22,12 +22,12 @@ export const PANEL_ORDER: WorkspacePanel[] = [
   "done",
 ];
 
-export const PANEL_LABEL: Record<WorkspacePanel, string> = {
-  script: "Script",
-  config: "Settings",
-  generating: "Generate",
-  review: "Review",
-  editor: "Edit",
-  rendering: "Render",
-  done: "Done",
+export const PANEL_LABEL_KEY: Record<WorkspacePanel, string> = {
+  script: "pipeline.script",
+  config: "pipeline.config",
+  generating: "pipeline.generating",
+  review: "pipeline.review",
+  editor: "pipeline.editor",
+  rendering: "pipeline.rendering",
+  done: "pipeline.done",
 };

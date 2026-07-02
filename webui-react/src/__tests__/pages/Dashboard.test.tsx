@@ -18,7 +18,7 @@ describe("Dashboard", () => {
         <Dashboard />
       </MemoryRouter>
     );
-    expect(screen.getByText(/New Project/i)).toBeInTheDocument();
+    expect(screen.getByText(/Nuevo proyecto/i)).toBeInTheDocument();
   });
 
   it("shows empty state when no projects", async () => {
@@ -28,6 +28,6 @@ describe("Dashboard", () => {
       </MemoryRouter>
     );
     // Wait for async load
-    await screen.findByText(/no projects yet/i);
+    await screen.findByText(/aún no hay proyectos/i);
   });
 });

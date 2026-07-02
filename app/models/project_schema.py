@@ -76,3 +76,7 @@ class RenderRequest(BaseModel):
     include_background_music: bool = True
     subtitle_style: str | None = None
     font_name: str | None = None
+
+
+class RenameProjectRequest(BaseModel):
+    topic: str
