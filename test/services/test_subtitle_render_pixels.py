@@ -69,7 +69,7 @@ class SubtitleRenderPixelTest(unittest.TestCase):
         # (b) subtitle sits in the lower third
         self.assertGreater(_vertical_centroid(mask), 0.6)
         # (c) a filled dark box is present behind the text
-        self.assertGreater(_count_color(frame, (0, 0, 0)), 400)
+        self.assertGreater(_count_color(frame, (0, 0, 0)), 20000)
 
     def test_top_no_background(self):
         frame = _render_frame(
