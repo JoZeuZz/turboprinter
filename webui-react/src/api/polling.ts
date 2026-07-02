@@ -1,5 +1,6 @@
 // webui-react/src/api/polling.ts
 import { apiFetch } from "./client";
+import i18n from "../i18n";
 import {
   TaskStatus,
   TASK_STATE_COMPLETE,
@@ -37,7 +38,7 @@ export function pollTask(
     intervalMs
   ).then((status) => {
     if (status.state === TASK_STATE_FAILED) {
-      throw new Error("Task failed on server");
+      throw new Error(i18n.t("errors.taskFailed"));
     }
 
     return status;

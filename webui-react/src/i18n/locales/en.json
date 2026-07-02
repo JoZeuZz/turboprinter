@@ -311,6 +311,15 @@
     "offline": "Offline",
     "error": "Error"
   },
+  "errors": {
+    "taskFailed": "Task failed on server",
+    "requestFailed": "Request failed",
+    "generationFailed": "Generation failed",
+    "projectAction": "Project action failed",
+    "createFirst": "Create a project first",
+    "timelineInvalid": "Timeline validation failed",
+    "renderFailed": "Render failed"
+  },
   "origin": {
     "draft": "Unsaved",
     "history": "From history",

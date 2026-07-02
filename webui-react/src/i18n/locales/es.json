@@ -311,6 +311,15 @@
     "offline": "Sin conexión",
     "error": "Error"
   },
+  "errors": {
+    "taskFailed": "La tarea falló en el servidor",
+    "requestFailed": "La solicitud falló",
+    "generationFailed": "La generación falló",
+    "projectAction": "La acción del proyecto falló",
+    "createFirst": "Crea un proyecto primero",
+    "timelineInvalid": "La validación del timeline falló",
+    "renderFailed": "El render falló"
+  },
   "origin": {
     "draft": "Sin guardar",
     "history": "Desde historial",

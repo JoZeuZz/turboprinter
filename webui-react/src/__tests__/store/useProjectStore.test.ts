@@ -112,4 +112,10 @@ describe("useProjectStore", () => {
     expect(useProjectStore.getState().mode).toBe("error");
     expect(useProjectStore.getState().error).toBe("gap before first item");
   });
+
+  it("surfaces the Spanish 'create a project first' error when no project is open", async () => {
+    await expect(useProjectStore.getState().plan()).rejects.toThrow(
+      "Crea un proyecto primero"
+    );
+  });
 });

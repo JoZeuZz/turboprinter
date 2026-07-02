@@ -1,5 +1,6 @@
 // webui-react/src/store/useProjectWorkspaceStore.ts
 import { create } from "zustand";
+import i18n from "../i18n";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { videoApi } from "../api/video";
 import { pollTask } from "../api/polling";
@@ -64,7 +65,7 @@ export const useProjectWorkspaceStore = create<WorkspaceStoreState>()(
         } catch (e) {
           set({
             panel: "config",
-            error: e instanceof Error ? e.message : "Generation failed",
+            error: e instanceof Error ? e.message : i18n.t("errors.generationFailed"),
           });
         }
       },
