@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { getSubtitleFontFamily } from "./SubtitleFontGallery";
+import { resolvePreviewStyle, PREVIEW_DIMS } from "../../lib/subtitlePreviewStyle";
 
 interface SubtitlePreviewProps {
   enabled: boolean;
@@ -18,29 +19,6 @@ interface SubtitlePreviewProps {
 const DEFAULT_SAMPLE =
   "Este es un ejemplo de subtitulo para previsualizar el estilo.";
 
-function resolveBackgroundColor(value: SubtitlePreviewProps["textBackgroundColor"]) {
-  if (typeof value === "string" && value.trim()) {
-    return value;
-  }
-  return value === false ? "transparent" : "rgba(0, 0, 0, 0.72)";
-}
-
-function resolvePosition(position: string | null | undefined, customPosition = 70) {
-  if (position === "top") {
-    return { top: "12%", transform: "translateX(-50%)" };
-  }
-
-  if (position === "center") {
-    return { top: "50%", transform: "translate(-50%, -50%)" };
-  }
-
-  if (position === "custom") {
-    return { top: `${customPosition}%`, transform: "translate(-50%, -50%)" };
-  }
-
-  return { bottom: "12%", transform: "translateX(-50%)" };
-}
-
 export function SubtitlePreview({
   enabled,
   position,
@@ -55,11 +33,25 @@ export function SubtitlePreview({
   sampleText,
 }: SubtitlePreviewProps) {
   const { t } = useTranslation();
-  const resolvedPosition = resolvePosition(position, customPosition ?? 70);
-  const previewFontSize = Math.max(16, Math.min(34, (fontSize ?? 60) * 0.44));
-  const previewStroke = Math.max(0, Math.min(2.5, strokeWidth ?? 1.5));
-  const backgroundColor = resolveBackgroundColor(textBackgroundColor);
-  const hasBackground = textBackgroundColor !== false;
+  const previewStyle = resolvePreviewStyle(
+    {
+      fontSize: fontSize ?? 60,
+      strokeWidth: strokeWidth ?? 1.5,
+      position: position ?? "bottom",
+      customPosition: customPosition ?? undefined,
+      textColor: textColor ?? null,
+      strokeColor: strokeColor ?? null,
+      backgroundColor: textBackgroundColor ?? true,
+      roundedBackground: roundedBackground ?? null,
+    },
+    PREVIEW_DIMS
+  );
+  const positionStyle =
+    previewStyle.position.anchor === "bottom"
+      ? { bottom: `${previewStyle.position.offsetPct}%`, transform: "translateX(-50%)" }
+      : previewStyle.position.anchor === "center"
+        ? { top: "50%", transform: "translate(-50%, -50%)" }
+        : { top: `${previewStyle.position.offsetPct}%`, transform: "translateX(-50%)" };
   const text = sampleText?.trim() || DEFAULT_SAMPLE;
 
   return (
@@ -89,26 +81,24 @@ export function SubtitlePreview({
           className={`absolute left-1/2 w-[86%] text-center transition-opacity ${
             enabled ? "opacity-100" : "opacity-35"
           }`}
-          style={resolvedPosition}
+          style={positionStyle}
         >
           <div
             className={`inline-block max-w-full px-3 py-1.5 leading-tight ${
-              roundedBackground ? "rounded-xl" : "rounded-sm"
+              previewStyle.background?.rounded ? "rounded-xl" : "rounded-sm"
             }`}
-            style={{
-              backgroundColor: hasBackground ? backgroundColor : "transparent",
-            }}
+            style={{ backgroundColor: previewStyle.background ? previewStyle.background.color : "transparent" }}
           >
             <span
               className="block break-words font-semibold"
               style={{
-                color: textColor ?? "#FFFFFF",
+                color: previewStyle.color,
                 fontFamily: `"${getSubtitleFontFamily(fontName)}", sans-serif`,
-                fontSize: `${previewFontSize}px`,
-                WebkitTextStroke: `${previewStroke}px ${strokeColor ?? "#000000"}`,
+                fontSize: `${previewStyle.fontSizePx}px`,
+                WebkitTextStroke: `${previewStyle.strokePx}px ${previewStyle.strokeColor}`,
                 textShadow:
-                  previewStroke > 0
-                    ? `0 1px 2px ${strokeColor ?? "#000000"}, 0 0 8px rgba(0,0,0,0.45)`
+                  previewStyle.strokePx > 0
+                    ? `0 1px 2px ${previewStyle.strokeColor}, 0 0 8px rgba(0,0,0,0.45)`
                     : "0 1px 2px rgba(0,0,0,0.45)",
               }}
             >
