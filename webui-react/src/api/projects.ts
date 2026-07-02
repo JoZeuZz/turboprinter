@@ -135,4 +135,20 @@ export const projectsApi = {
     apiFetch<{ projects: Array<{ project_id: string; topic: string | null; updated_at: string }> }>(
       `/projects?limit=${limit}`
     ),
+
+  deleteProject: (id: string) =>
+    apiFetch<{ project_id: string; deleted: boolean }>(`/projects/${id}`, {
+      method: "DELETE",
+    }),
+
+  renameProject: (id: string, topic: string) =>
+    apiFetch<{ project_id: string; topic: string }>(`/projects/${id}/metadata`, {
+      method: "PATCH",
+      body: JSON.stringify({ topic }),
+    }),
+
+  duplicateProject: (id: string) =>
+    apiFetch<{ project_id: string }>(`/projects/${id}/duplicate`, {
+      method: "POST",
+    }),
 };
