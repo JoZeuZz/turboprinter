@@ -21,5 +21,10 @@
     "draft": "Borrador",
     "rowActions": "Acciones de {{name}}",
     "deleteConfirm": "¿Eliminar «{{name}}»? No se puede deshacer."
+  },
+  "settings": {
+    "language": "Idioma",
+    "languageEs": "Español",
+    "languageEn": "English"
   }
 }

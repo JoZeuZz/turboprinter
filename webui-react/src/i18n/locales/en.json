@@ -21,5 +21,10 @@
     "draft": "Draft",
     "rowActions": "{{name}} actions",
     "deleteConfirm": "Delete «{{name}}»? This can't be undone."
+  },
+  "settings": {
+    "language": "Language",
+    "languageEs": "Español",
+    "languageEn": "English"
   }
 }

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { configApi } from "../api/config";
 import type { EditableConfig } from "../api/types";
 import { Button, Checkbox, Collapsible, Input, Select, Textarea } from "../components/ui";
+import { LanguageSelector } from "../components/settings/LanguageSelector";
 import { useConfigStore } from "../store/useConfigStore";
 
 type SectionName = keyof EditableConfig;
@@ -114,6 +115,9 @@ export function Settings() {
         </div>
         <div className="flex items-center gap-3">
           {saved && <span className="text-xs text-green-400">Guardado</span>}
+          <div className="w-40">
+            <LanguageSelector />
+          </div>
           <Button onClick={saveSettings} isLoading={saving} disabled={saving}>
             Guardar configuración
           </Button>
