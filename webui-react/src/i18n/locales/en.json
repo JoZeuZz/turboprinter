@@ -33,5 +33,40 @@
   "dashboard": {
     "projects": "Projects",
     "noProjects": "No projects yet"
+  },
+  "panels": {
+    "script": {
+      "title": "Script",
+      "subjectPlaceholder": "e.g. Benefits of morning exercise",
+      "scriptPlaceholder": "Generated script will appear here, or paste your own...",
+      "keywordsPlaceholder": "keyword1, keyword2, keyword3",
+      "advancedPrompt": "Advanced Prompt",
+      "extraInstructionsPlaceholder": "Additional instructions for script generation...",
+      "systemPromptPlaceholder": "Custom system prompt override..."
+    },
+    "videoConfig": {
+      "advanced": "Advanced",
+      "voicePreviewPlaceholder": "Type the text you want to hear and see in the preview...",
+      "subtitleStyle": "Subtitle Style"
+    },
+    "review": {
+      "notAvailable": "Review not available — rendering directly",
+      "reviewClips": "Review clips",
+      "noClips": "No clips found. Build a timeline first."
+    },
+    "generating": {
+      "title": "Generating your video",
+      "failed": "Task failed. Please try again.",
+      "progress": "Progress"
+    },
+    "rendering": {
+      "title": "Rendering final video",
+      "progress": "Progress",
+      "assembling": "Assembling your video…",
+      "complete": "Render complete!"
+    },
+    "done": { "ready": "Video ready", "none": "No videos were produced." },
+    "progressArea": { "generating": "Generating…", "done": "Done! Videos ready below." },
+    "result": { "title": "Results" }
   }
 }

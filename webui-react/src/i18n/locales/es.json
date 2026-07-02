@@ -33,5 +33,40 @@
   "dashboard": {
     "projects": "Proyectos",
     "noProjects": "Aún no hay proyectos"
+  },
+  "panels": {
+    "script": {
+      "title": "Guion",
+      "subjectPlaceholder": "ej. Beneficios del ejercicio matutino",
+      "scriptPlaceholder": "El guion generado aparecerá aquí, o pega el tuyo...",
+      "keywordsPlaceholder": "palabra1, palabra2, palabra3",
+      "advancedPrompt": "Prompt avanzado",
+      "extraInstructionsPlaceholder": "Instrucciones adicionales para la generación del guion...",
+      "systemPromptPlaceholder": "Reemplazo del system prompt..."
+    },
+    "videoConfig": {
+      "advanced": "Avanzado",
+      "voicePreviewPlaceholder": "Escribe el texto que quieres escuchar y ver en la preview...",
+      "subtitleStyle": "Estilo de subtítulos"
+    },
+    "review": {
+      "notAvailable": "Revisión no disponible — renderizando directamente",
+      "reviewClips": "Revisar clips",
+      "noClips": "No se encontraron clips. Construye una línea de tiempo primero."
+    },
+    "generating": {
+      "title": "Generando tu video",
+      "failed": "La tarea falló. Inténtalo de nuevo.",
+      "progress": "Progreso"
+    },
+    "rendering": {
+      "title": "Renderizando video final",
+      "progress": "Progreso",
+      "assembling": "Ensamblando tu video…",
+      "complete": "¡Render completo!"
+    },
+    "done": { "ready": "Video listo", "none": "No se produjeron videos." },
+    "progressArea": { "generating": "Generando…", "done": "¡Listo! Videos abajo." },
+    "result": { "title": "Resultados" }
   }
 }

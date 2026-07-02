@@ -28,7 +28,7 @@ describe("ProgressArea", () => {
     });
     render(<ProgressArea />);
     expect(screen.getByText("45%")).toBeInTheDocument();
-    expect(screen.getByText(/generating/i)).toBeInTheDocument();
+    expect(screen.getByText(/generando/i)).toBeInTheDocument();
   });
 
   it("shows done message on COMPLETE", () => {
@@ -41,6 +41,6 @@ describe("ProgressArea", () => {
       });
     });
     render(<ProgressArea />);
-    expect(screen.getByText(/done/i)).toBeInTheDocument();
+    expect(screen.getByText(/listo/i)).toBeInTheDocument();
   });
 });

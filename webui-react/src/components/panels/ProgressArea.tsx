@@ -1,8 +1,10 @@
 // webui-react/src/components/panels/ProgressArea.tsx
+import { useTranslation } from "react-i18next";
 import { useTaskStore } from "../../store/useTaskStore";
 import { TASK_STATE_COMPLETE, TASK_STATE_FAILED } from "../../api/types";
 
 export function ProgressArea() {
+  const { t } = useTranslation();
   const { status, isRunning, error } = useTaskStore();
 
   if (!isRunning && !status && !error) return null;
@@ -15,7 +17,7 @@ export function ProgressArea() {
       {isRunning && status && status.state !== TASK_STATE_COMPLETE && status.state !== TASK_STATE_FAILED && (
         <>
           <div className="flex items-center justify-between text-xs text-muted">
-            <span>Generating…</span>
+            <span>{t("panels.progressArea.generating")}</span>
             <span>{status.progress}%</span>
           </div>
           <div className="h-1.5 w-full rounded-full bg-border overflow-hidden">
@@ -27,7 +29,7 @@ export function ProgressArea() {
         </>
       )}
       {status?.state === TASK_STATE_COMPLETE && (
-        <p className="text-sm text-green-400">Done! Videos ready below.</p>
+        <p className="text-sm text-green-400">{t("panels.progressArea.done")}</p>
       )}
     </div>
   );

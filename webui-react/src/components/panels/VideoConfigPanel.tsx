@@ -1,6 +1,7 @@
 // webui-react/src/components/panels/VideoConfigPanel.tsx
 import { useState, useEffect } from "react";
 import { Wand2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import {
   TabBar,
   Button,
@@ -63,6 +64,7 @@ const POSITION_OPTIONS = [
 ];
 
 export function VideoConfigPanel() {
+  const { t } = useTranslation();
   const [tab, setTab] = useState("video");
   const [bgmFiles, setBgmFiles] = useState<BgmFile[]>([]);
   const [voiceOptions, setVoiceOptions] = useState<{ value: string; label: string }[]>([]);
@@ -164,7 +166,7 @@ export function VideoConfigPanel() {
               onChange={(v) => store.set("video_clip_duration", v)}
               displayValue={`${store.video_clip_duration ?? 5}s`}
             />
-            <Collapsible title="Advanced">
+            <Collapsible title={t("panels.videoConfig.advanced")}>
               <Input
                 label="Video Count"
                 type="number"
@@ -203,7 +205,7 @@ export function VideoConfigPanel() {
                 )}
                 <Textarea
                   label="Texto de prueba"
-                  placeholder="Escribe el texto que quieres escuchar y ver en la preview..."
+                  placeholder={t("panels.videoConfig.voicePreviewPlaceholder")}
                   value={store.preview_text ?? ""}
                   onChange={(e) => store.set("preview_text", e.target.value)}
                   rows={3}
@@ -275,7 +277,7 @@ export function VideoConfigPanel() {
                 onChange={(v) => store.set("subtitle_enabled", v)}
               />
               {store.subtitle_enabled && (
-                <Collapsible title="Subtitle Style" defaultOpen>
+                <Collapsible title={t("panels.videoConfig.subtitleStyle")} defaultOpen>
                   <Select
                     label="Position"
                     value={store.subtitle_position ?? "bottom"}

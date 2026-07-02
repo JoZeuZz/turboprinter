@@ -1,6 +1,7 @@
 // webui-react/src/components/panels/ReviewPanel.tsx
 import { useState, useEffect } from "react";
 import { ArrowLeft, Clapperboard } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import {
   DndContext,
   closestCenter,
@@ -19,6 +20,7 @@ import { useProjectWorkspaceStore } from "../../store/useProjectWorkspaceStore";
 import type { TimelineItem, EditCommand } from "../../api/types";
 
 export function ReviewPanel() {
+  const { t } = useTranslation();
   const projectStore = useProjectStore();
   const { setPanel } = useProjectWorkspaceStore();
 
@@ -37,7 +39,7 @@ export function ReviewPanel() {
   if (projectStore.mode === "disabled") {
     return (
       <div className="flex h-full w-full max-w-5xl mx-auto flex-col items-start justify-center px-6 py-5 text-center">
-        <p className="text-sm text-muted">Review not available — rendering directly</p>
+        <p className="text-sm text-muted">{t("panels.review.notAvailable")}</p>
         <p className="text-xs text-muted mt-1">
           Enable project mode on the server to use clip review.
         </p>
@@ -107,7 +109,7 @@ export function ReviewPanel() {
     <div className="flex h-full w-full max-w-5xl mx-auto flex-col gap-4 px-6 py-5">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-sm font-semibold text-foreground">Review clips</h2>
+          <h2 className="text-sm font-semibold text-foreground">{t("panels.review.reviewClips")}</h2>
           <p className="text-xs text-muted mt-0.5">
             {orderedClips.length} clips · ~{totalDuration.toFixed(0)}s total
             {excluded.size > 0 && ` · ${excluded.size} excluded`}
@@ -117,7 +119,7 @@ export function ReviewPanel() {
 
       {orderedClips.length === 0 ? (
         <div className="flex flex-1 items-center justify-center">
-          <p className="text-sm text-muted">No clips found. Build a timeline first.</p>
+          <p className="text-sm text-muted">{t("panels.review.noClips")}</p>
         </div>
       ) : (
         <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>

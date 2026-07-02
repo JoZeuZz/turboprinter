@@ -1,5 +1,6 @@
 // webui-react/src/components/panels/RenderingPanel.tsx
 import { useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { useProjectStore } from "../../store/useProjectStore";
 import { useProjectWorkspaceStore } from "../../store/useProjectWorkspaceStore";
 import { TASK_STATE_COMPLETE, TASK_STATE_FAILED } from "../../api/types";
@@ -7,6 +8,7 @@ import { Loader2, CheckCircle2, XCircle } from "lucide-react";
 import { Button } from "../ui";
 
 export function RenderingPanel() {
+  const { t } = useTranslation();
   const projectStore = useProjectStore();
   const { setPanel } = useProjectWorkspaceStore();
 
@@ -24,12 +26,12 @@ export function RenderingPanel() {
   return (
     <div className="flex h-full w-full max-w-5xl mx-auto flex-col justify-start px-6 py-5">
       <div className="w-full max-w-md space-y-6">
-        <h2 className="text-sm font-semibold text-foreground">Rendering final video</h2>
+        <h2 className="text-sm font-semibold text-foreground">{t("panels.rendering.title")}</h2>
 
         {!isFailed && (
           <div className="space-y-1">
             <div className="flex items-center justify-between text-xs text-muted">
-              <span>Progress</span>
+              <span>{t("panels.rendering.progress")}</span>
               <span>{progress}%</span>
             </div>
             <div className="h-1.5 w-full rounded-full bg-border overflow-hidden">
@@ -44,14 +46,14 @@ export function RenderingPanel() {
         {!isDone && !isFailed && (
           <div className="flex items-center gap-2 text-sm text-muted">
             <Loader2 className="h-4 w-4 animate-spin" />
-            <span>Assembling your video…</span>
+            <span>{t("panels.rendering.assembling")}</span>
           </div>
         )}
 
         {isDone && (
           <div className="flex items-center gap-2 text-sm text-green-400">
             <CheckCircle2 className="h-4 w-4" />
-            <span>Render complete!</span>
+            <span>{t("panels.rendering.complete")}</span>
           </div>
         )}
 

@@ -21,6 +21,6 @@ describe("Workspace", () => {
   it("shows DonePanel when panel is done", () => {
     useProjectWorkspaceStore.setState({ panel: "done", videoUrls: [] });
     render(<MemoryRouter><Workspace /></MemoryRouter>);
-    expect(screen.getByText(/Video ready/i)).toBeInTheDocument();
+    expect(screen.getByText(/Video listo/i)).toBeInTheDocument();
   });
 });

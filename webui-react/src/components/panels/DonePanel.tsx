@@ -1,9 +1,11 @@
 // webui-react/src/components/panels/DonePanel.tsx
 import { Download, RotateCcw, CheckCircle2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { Button } from "../ui";
 import { useProjectWorkspaceStore } from "../../store/useProjectWorkspaceStore";
 
 export function DonePanel() {
+  const { t } = useTranslation();
   const { videoUrls, reset, setPanel } = useProjectWorkspaceStore();
 
   const handleBack = () => {
@@ -20,11 +22,11 @@ export function DonePanel() {
       <div className="w-full max-w-xl space-y-4">
         <div className="flex items-center gap-2">
           <CheckCircle2 className="h-5 w-5 text-green-400" />
-          <h2 className="text-sm font-semibold text-foreground">Video ready</h2>
+          <h2 className="text-sm font-semibold text-foreground">{t("panels.done.ready")}</h2>
         </div>
 
         {videoUrls.length === 0 && (
-          <p className="text-xs text-muted">No videos were produced.</p>
+          <p className="text-xs text-muted">{t("panels.done.none")}</p>
         )}
 
         {videoUrls.map((url) => (

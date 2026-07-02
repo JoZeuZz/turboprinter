@@ -1,6 +1,7 @@
 // webui-react/src/components/panels/ScriptPanel.tsx
 import { useState } from "react";
 import { Wand2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { ApiError } from "../../api/client";
 import { projectsApi } from "../../api/projects";
@@ -12,6 +13,7 @@ import { useProjectWorkspaceStore } from "../../store/useProjectWorkspaceStore";
 import { llmApi } from "../../api/llm";
 
 export function ScriptPanel() {
+  const { t } = useTranslation();
   const store = useVideoStore();
   const workspaceStore = useProjectWorkspaceStore();
   const projectStore = useProjectStore();
@@ -74,11 +76,11 @@ export function ScriptPanel() {
     <section className="flex h-full w-full max-w-5xl mx-auto flex-col px-6 py-5">
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-2xl space-y-3">
-          <h2 className="text-base font-semibold text-foreground">Script</h2>
+          <h2 className="text-base font-semibold text-foreground">{t("panels.script.title")}</h2>
 
       <Input
         label="Topic"
-        placeholder="e.g. Benefits of morning exercise"
+        placeholder={t("panels.script.subjectPlaceholder")}
         value={store.video_subject}
         onChange={handleTopicChange}
       />
@@ -129,7 +131,7 @@ export function ScriptPanel() {
 
       <Textarea
         label="Script"
-        placeholder="Generated script will appear here, or paste your own..."
+        placeholder={t("panels.script.scriptPlaceholder")}
         value={store.video_script ?? ""}
         onChange={(e) => store.set("video_script", e.target.value)}
         rows={8}
@@ -137,23 +139,23 @@ export function ScriptPanel() {
 
       <Textarea
         label="Keywords"
-        placeholder="keyword1, keyword2, keyword3"
+        placeholder={t("panels.script.keywordsPlaceholder")}
         value={typeof store.video_terms === "string" ? store.video_terms : (store.video_terms ?? []).join(", ")}
         onChange={(e) => store.set("video_terms", e.target.value)}
         rows={2}
       />
 
-      <Collapsible title="Advanced Prompt">
+      <Collapsible title={t("panels.script.advancedPrompt")}>
         <Textarea
           label="Script Prompt"
-          placeholder="Additional instructions for script generation..."
+          placeholder={t("panels.script.extraInstructionsPlaceholder")}
           value={store.video_script_prompt ?? ""}
           onChange={(e) => store.set("video_script_prompt", e.target.value)}
           rows={3}
         />
         <Textarea
           label="System Prompt"
-          placeholder="Custom system prompt override..."
+          placeholder={t("panels.script.systemPromptPlaceholder")}
           value={store.custom_system_prompt ?? ""}
           onChange={(e) => store.set("custom_system_prompt", e.target.value)}
           rows={3}

@@ -29,7 +29,7 @@ function renderPanel() {
 describe("ScriptPanel", () => {
   it("renders topic input", () => {
     renderPanel();
-    expect(screen.getByPlaceholderText(/morning exercise/i)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/ejercicio matutino/i)).toBeInTheDocument();
   });
 
   it("generate button is disabled when topic is empty", () => {
@@ -39,13 +39,13 @@ describe("ScriptPanel", () => {
 
   it("generate button enables when topic is filled", async () => {
     renderPanel();
-    await userEvent.type(screen.getByPlaceholderText(/morning exercise/i), "cats");
+    await userEvent.type(screen.getByPlaceholderText(/ejercicio matutino/i), "cats");
     expect(screen.getByRole("button", { name: /generate script/i })).not.toBeDisabled();
   });
 
   it("updates store on script textarea change", async () => {
     renderPanel();
-    const textarea = screen.getByPlaceholderText(/generated script/i);
+    const textarea = screen.getByPlaceholderText(/guion generado/i);
     await userEvent.type(textarea, "Hello world");
     expect(useVideoStore.getState().video_script).toContain("Hello world");
   });

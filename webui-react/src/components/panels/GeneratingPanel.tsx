@@ -1,6 +1,7 @@
 // webui-react/src/components/panels/GeneratingPanel.tsx
 import { useEffect, useState } from "react";
 import { Check, Loader2, Circle, ChevronDown, ChevronUp } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useProjectWorkspaceStore } from "../../store/useProjectWorkspaceStore";
 import { TASK_STATE_COMPLETE, TASK_STATE_FAILED } from "../../api/types";
 
@@ -14,6 +15,7 @@ const STEPS = [
 ];
 
 export function GeneratingPanel() {
+  const { t } = useTranslation();
   const { taskStatus, error, setPanel } = useProjectWorkspaceStore();
   const [logsOpen, setLogsOpen] = useState(false);
   const progress = taskStatus?.progress ?? 0;
@@ -28,7 +30,7 @@ export function GeneratingPanel() {
   return (
     <div className="flex h-full w-full max-w-5xl mx-auto flex-col justify-start px-6 py-5">
       <div className="w-full max-w-md space-y-6">
-        <h2 className="text-sm font-semibold text-foreground">Generating your video</h2>
+        <h2 className="text-sm font-semibold text-foreground">{t("panels.generating.title")}</h2>
 
         {error && (
           <div className="rounded-md border border-red-800 bg-red-900/20 px-3 py-2 space-y-2">
@@ -44,7 +46,7 @@ export function GeneratingPanel() {
 
         {taskStatus?.state === TASK_STATE_FAILED && !error && (
           <div className="rounded-md border border-red-800 bg-red-900/20 px-3 py-2 space-y-2">
-            <p className="text-xs text-red-400">Task failed. Please try again.</p>
+            <p className="text-xs text-red-400">{t("panels.generating.failed")}</p>
             <button
               onClick={() => setPanel("config")}
               className="text-xs text-red-300 underline hover:text-red-100"
@@ -56,7 +58,7 @@ export function GeneratingPanel() {
 
         <div className="space-y-1">
           <div className="flex items-center justify-between text-xs text-muted">
-            <span>Progress</span>
+            <span>{t("panels.generating.progress")}</span>
             <span>{progress}%</span>
           </div>
           <div className="h-1.5 w-full rounded-full bg-border overflow-hidden">

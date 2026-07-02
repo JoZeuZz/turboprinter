@@ -63,7 +63,7 @@ describe("ReviewPanel", () => {
       makeStore({ mode: "disabled" }) as never
     );
     render(<ReviewPanel />);
-    expect(screen.getByText(/review not available/i)).toBeInTheDocument();
+    expect(screen.getByText(/revisión no disponible/i)).toBeInTheDocument();
   });
 
   it("on Render, calls applyTimelineCommands with move commands for all non-excluded clips", async () => {
