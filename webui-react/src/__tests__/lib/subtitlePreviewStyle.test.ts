@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import fixtures from "../../lib/__fixtures__/subtitlePreviewParity.json";
 import { resolvePreviewStyle, PREVIEW_DIMS } from "../../lib/subtitlePreviewStyle";
 
-function bandOf(anchor: string, offsetPct: number): "top" | "center" | "bottom" {
+function bandOf(anchor: string): "top" | "center" | "bottom" {
   if (anchor === "top") return "top";
   if (anchor === "center") return "center";
   return "bottom";
@@ -41,7 +41,7 @@ describe("resolvePreviewStyle", () => {
   it("agrees with every parity fixture on band and background presence", () => {
     for (const fx of fixtures as Array<{ style: any; band: string; hasBackground: boolean }>) {
       const s = resolvePreviewStyle(fx.style, PREVIEW_DIMS);
-      expect(bandOf(s.position.anchor, s.position.offsetPct)).toBe(fx.band);
+      expect(bandOf(s.position.anchor)).toBe(fx.band);
       expect(s.background !== null).toBe(fx.hasBackground);
     }
   });
