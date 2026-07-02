@@ -1095,6 +1095,176 @@ def _build_karaoke_clip(
     return CompositeVideoClip(layers, size=(max_w, clip_h))
 
 
+def _resolve_subtitle_background_color(subtitle_render):
+    # API `text_background_color` may be a bool or an actual color string.
+    # Normalize here so True/False never reach TextClip directly.
+    if isinstance(subtitle_render.background_color, bool):
+        return "#000000" if subtitle_render.background_color else None
+    return subtitle_render.background_color
+
+
+def build_subtitle_text_clip(
+    subtitle_render,
+    subtitle_item,
+    font_path,
+    video_width,
+    video_height,
+    karaoke_words=None,
+):
+    font_size = int(subtitle_render.font_size)
+    fore_color = _normalize_render_color(subtitle_render.fore_color, "#FFFFFF")
+    stroke_color = _normalize_render_color(subtitle_render.stroke_color, "#000000")
+    stroke_width = _resolve_render_stroke_width(
+        subtitle_render.stroke_width, font_size, stroke_color
+    )
+    phrase = subtitle_item[1]
+    if subtitle_render.normalize:
+        # Limpia puntuación/espaciado en español (¿¡, tildes, ñ) antes de
+        # medir y envolver; no toca el wrap por píxeles de wrap_text().
+        phrase = subtitle_text.normalize_spanish_subtitle(phrase)
+    max_width = video_width * 0.9
+    bg_color = _resolve_subtitle_background_color(subtitle_render)
+    rounded_bg_enabled = bool(
+        subtitle_render.rounded_background and bg_color
+    )
+    has_subtitle_background = bool(bg_color)
+    pad_x = int(font_size * 0.6) if has_subtitle_background else 0
+    # 字幕背景需要给文字左右留出明确内边距。先从可用宽度中扣除
+    # padding 再换行，避免长英文或大字号刚好撑满 90% 视频宽度后，
+    # 文字贴到背景框边缘，看起来像被裁切。普通矩形背景和圆角背景
+    # 都走这条逻辑；无背景字幕则保持原有最大宽度。
+    text_max_width = max(1, int(max_width) - 2 * pad_x)
+    wrapped_txt, txt_height = wrap_text(
+        phrase,
+        max_width=text_max_width,
+        font=font_path,
+        fontsize=font_size,
+    )
+    interline = int(font_size * 0.25)
+    line_count = wrapped_txt.count("\n") + 1
+    vertical_padding = int(font_size * 0.35)
+    text_clip_margin_y = max(
+        int(font_size * 0.3), int(stroke_width * 2)
+    )
+    # MoviePy 在 `method=label` 下会自动收缩文本框高度，遇到多行字幕、
+    # 描边或背景色时，容易把最后一行的下半部分裁掉。这里显式传入
+    # 一个更保守的高度，把行间距和额外上下留白一并算进去，保证字幕
+    # 背景框与文字本身都能完整渲染出来。
+    clip_h = int(txt_height + vertical_padding + (interline * line_count))
+
+    # Experimental karaoke: word-by-word highlight on a single line. Falls
+    # back to the normal render below if unavailable or multi-line.
+    if subtitle_render.word_highlight and karaoke_words:
+        try:
+            karaoke_clip = _build_karaoke_clip(
+                subtitle_item, phrase, font_path, font_size,
+                subtitle_render, karaoke_words, video_width, video_height,
+            )
+        except Exception as exc:
+            logger.warning(f"karaoke render failed for phrase, using normal subtitle: {exc!r}")
+            karaoke_clip = None
+        if karaoke_clip is not None:
+            return _position_subtitle_clip(
+                karaoke_clip, subtitle_item, subtitle_render, video_height
+            )
+
+    if rounded_bg_enabled:
+        # 圆角背景需要贴合文字宽度，而不是沿用 90% 视频宽度。这里先用
+        # PIL 测量最长一行文字，再加水平内边距，避免短字幕出现过宽底板。
+        try:
+            font = ImageFont.truetype(font_path, font_size)
+            text_w = max(
+                int(font.getbbox(line)[2] - font.getbbox(line)[0])
+                for line in wrapped_txt.split("\n")
+            )
+        except Exception as exc:
+            logger.warning(
+                f"failed to measure subtitle text width, fallback to max width: {str(exc)}"
+            )
+            text_w = int(max_width)
+
+        box_w = max(1, min(int(max_width), text_w + 2 * pad_x))
+        radius = max(8, int(font_size * 0.4))
+        text_clip = TextClip(
+            text=wrapped_txt,
+            font=font_path,
+            font_size=font_size,
+            color=fore_color,
+            bg_color=None,
+            stroke_color=stroke_color,
+            stroke_width=stroke_width,
+            interline=interline,
+            size=(box_w, None),
+            text_align="center",
+            margin=(0, text_clip_margin_y),
+        )
+        clip_h = max(clip_h, text_clip.h)
+        bg_clip = _rounded_subtitle_background_clip(
+            width=box_w,
+            height=clip_h,
+            color=bg_color,
+            alpha=140,
+            radius=radius,
+        )
+        text_position = _get_visible_center_position(text_clip, box_w, clip_h)
+        _clip = CompositeVideoClip(
+            [bg_clip, text_clip.with_position(text_position)],
+            size=(box_w, clip_h),
+        )
+    elif bg_color:
+        size = (
+            int(max_width),
+            clip_h,
+        )
+        text_clip = TextClip(
+            text=wrapped_txt,
+            font=font_path,
+            font_size=font_size,
+            color=fore_color,
+            bg_color=None,
+            stroke_color=stroke_color,
+            stroke_width=stroke_width,
+            interline=interline,
+            size=(int(max_width), None),
+            text_align="center",
+            margin=(0, text_clip_margin_y),
+        )
+        size = (size[0], max(size[1], text_clip.h))
+        bg_clip = _rounded_subtitle_background_clip(
+            width=size[0],
+            height=size[1],
+            color=bg_color,
+            alpha=255,
+            radius=0,
+        )
+        text_position = _get_visible_center_position(text_clip, size[0], size[1])
+        _clip = CompositeVideoClip(
+            [bg_clip, text_clip.with_position(text_position)],
+            size=size,
+        )
+    else:
+        size = (
+            int(max_width),
+            clip_h,
+        )
+        _clip = TextClip(
+            text=wrapped_txt,
+            font=font_path,
+            font_size=font_size,
+            color=fore_color,
+            bg_color=None,
+            stroke_color=stroke_color,
+            stroke_width=stroke_width,
+            interline=interline,
+            size=size,
+            text_align="center",
+            margin=(0, text_clip_margin_y),
+        )
+    return _position_subtitle_clip(
+        _clip, subtitle_item, subtitle_render, video_height
+    )
+
+
 def generate_video(
     video_path: str,
     audio_path: str,
@@ -1142,168 +1312,6 @@ def generate_video(
                     f"failed to load word_timestamps.json for karaoke: {exc}"
                 )
 
-    def resolve_subtitle_background_color():
-        # 兼容历史参数：API 里 `text_background_color` 既可能是布尔值，
-        # 也可能是实际颜色字符串。统一在这里归一化，避免把 True/False
-        # 直接传给 TextClip 后出现不可预期的渲染结果。
-        if isinstance(subtitle_render.background_color, bool):
-            return "#000000" if subtitle_render.background_color else None
-        return subtitle_render.background_color
-
-    def create_text_clip(subtitle_item):
-        font_size = int(subtitle_render.font_size)
-        fore_color = _normalize_render_color(subtitle_render.fore_color, "#FFFFFF")
-        stroke_color = _normalize_render_color(subtitle_render.stroke_color, "#000000")
-        stroke_width = _resolve_render_stroke_width(
-            subtitle_render.stroke_width, font_size, stroke_color
-        )
-        phrase = subtitle_item[1]
-        if subtitle_render.normalize:
-            # Limpia puntuación/espaciado en español (¿¡, tildes, ñ) antes de
-            # medir y envolver; no toca el wrap por píxeles de wrap_text().
-            phrase = subtitle_text.normalize_spanish_subtitle(phrase)
-        max_width = video_width * 0.9
-        bg_color = resolve_subtitle_background_color()
-        rounded_bg_enabled = bool(
-            subtitle_render.rounded_background and bg_color
-        )
-        has_subtitle_background = bool(bg_color)
-        pad_x = int(font_size * 0.6) if has_subtitle_background else 0
-        # 字幕背景需要给文字左右留出明确内边距。先从可用宽度中扣除
-        # padding 再换行，避免长英文或大字号刚好撑满 90% 视频宽度后，
-        # 文字贴到背景框边缘，看起来像被裁切。普通矩形背景和圆角背景
-        # 都走这条逻辑；无背景字幕则保持原有最大宽度。
-        text_max_width = max(1, int(max_width) - 2 * pad_x)
-        wrapped_txt, txt_height = wrap_text(
-            phrase,
-            max_width=text_max_width,
-            font=font_path,
-            fontsize=font_size,
-        )
-        interline = int(font_size * 0.25)
-        line_count = wrapped_txt.count("\n") + 1
-        vertical_padding = int(font_size * 0.35)
-        text_clip_margin_y = max(
-            int(font_size * 0.3), int(stroke_width * 2)
-        )
-        # MoviePy 在 `method=label` 下会自动收缩文本框高度，遇到多行字幕、
-        # 描边或背景色时，容易把最后一行的下半部分裁掉。这里显式传入
-        # 一个更保守的高度，把行间距和额外上下留白一并算进去，保证字幕
-        # 背景框与文字本身都能完整渲染出来。
-        clip_h = int(txt_height + vertical_padding + (interline * line_count))
-
-        # Experimental karaoke: word-by-word highlight on a single line. Falls
-        # back to the normal render below if unavailable or multi-line.
-        if subtitle_render.word_highlight and karaoke_words:
-            try:
-                karaoke_clip = _build_karaoke_clip(
-                    subtitle_item, phrase, font_path, font_size,
-                    subtitle_render, karaoke_words, video_width, video_height,
-                )
-            except Exception as exc:
-                logger.warning(f"karaoke render failed for phrase, using normal subtitle: {exc!r}")
-                karaoke_clip = None
-            if karaoke_clip is not None:
-                return _position_subtitle_clip(
-                    karaoke_clip, subtitle_item, subtitle_render, video_height
-                )
-
-        if rounded_bg_enabled:
-            # 圆角背景需要贴合文字宽度，而不是沿用 90% 视频宽度。这里先用
-            # PIL 测量最长一行文字，再加水平内边距，避免短字幕出现过宽底板。
-            try:
-                font = ImageFont.truetype(font_path, font_size)
-                text_w = max(
-                    int(font.getbbox(line)[2] - font.getbbox(line)[0])
-                    for line in wrapped_txt.split("\n")
-                )
-            except Exception as exc:
-                logger.warning(
-                    f"failed to measure subtitle text width, fallback to max width: {str(exc)}"
-                )
-                text_w = int(max_width)
-
-            box_w = max(1, min(int(max_width), text_w + 2 * pad_x))
-            radius = max(8, int(font_size * 0.4))
-            text_clip = TextClip(
-                text=wrapped_txt,
-                font=font_path,
-                font_size=font_size,
-                color=fore_color,
-                bg_color=None,
-                stroke_color=stroke_color,
-                stroke_width=stroke_width,
-                interline=interline,
-                size=(box_w, None),
-                text_align="center",
-                margin=(0, text_clip_margin_y),
-            )
-            clip_h = max(clip_h, text_clip.h)
-            bg_clip = _rounded_subtitle_background_clip(
-                width=box_w,
-                height=clip_h,
-                color=bg_color,
-                alpha=140,
-                radius=radius,
-            )
-            text_position = _get_visible_center_position(text_clip, box_w, clip_h)
-            _clip = CompositeVideoClip(
-                [bg_clip, text_clip.with_position(text_position)],
-                size=(box_w, clip_h),
-            )
-        elif bg_color:
-            size = (
-                int(max_width),
-                clip_h,
-            )
-            text_clip = TextClip(
-                text=wrapped_txt,
-                font=font_path,
-                font_size=font_size,
-                color=fore_color,
-                bg_color=None,
-                stroke_color=stroke_color,
-                stroke_width=stroke_width,
-                interline=interline,
-                size=(int(max_width), None),
-                text_align="center",
-                margin=(0, text_clip_margin_y),
-            )
-            size = (size[0], max(size[1], text_clip.h))
-            bg_clip = _rounded_subtitle_background_clip(
-                width=size[0],
-                height=size[1],
-                color=bg_color,
-                alpha=255,
-                radius=0,
-            )
-            text_position = _get_visible_center_position(text_clip, size[0], size[1])
-            _clip = CompositeVideoClip(
-                [bg_clip, text_clip.with_position(text_position)],
-                size=size,
-            )
-        else:
-            size = (
-                int(max_width),
-                clip_h,
-            )
-            _clip = TextClip(
-                text=wrapped_txt,
-                font=font_path,
-                font_size=font_size,
-                color=fore_color,
-                bg_color=None,
-                stroke_color=stroke_color,
-                stroke_width=stroke_width,
-                interline=interline,
-                size=size,
-                text_align="center",
-                margin=(0, text_clip_margin_y),
-            )
-        return _position_subtitle_clip(
-            _clip, subtitle_item, subtitle_render, video_height
-        )
-
     video_clip = _open_video_clip_quietly(video_path)
     audio_clip = AudioFileClip(audio_path).with_effects(
         [afx.MultiplyVolume(params.voice_volume)]
@@ -1322,7 +1330,9 @@ def generate_video(
         )
         text_clips = []
         for item in sub.subtitles:
-            clip = create_text_clip(subtitle_item=item)
+            clip = build_subtitle_text_clip(
+                subtitle_render, item, font_path, video_width, video_height, karaoke_words
+            )
             text_clips.append(clip)
         video_clip = CompositeVideoClip([video_clip, *text_clips])
 
