@@ -1,6 +1,7 @@
 // webui-react/src/components/ui/ClipPreviewModal.tsx
 import { useEffect } from "react";
 import { X } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import type { TimelineItem } from "../../api/types";
 
 interface ClipPreviewModalProps {
@@ -9,6 +10,7 @@ interface ClipPreviewModalProps {
 }
 
 export function ClipPreviewModal({ clip, onClose }: ClipPreviewModalProps) {
+  const { t } = useTranslation();
   useEffect(() => {
     if (!clip) return;
     const handler = (e: KeyboardEvent) => {
@@ -53,7 +55,7 @@ export function ClipPreviewModal({ clip, onClose }: ClipPreviewModalProps) {
           />
         ) : (
           <div className="flex h-48 w-80 items-center justify-center rounded-md bg-surface text-sm text-muted">
-            Preview no disponible
+            {t("clips.previewNotAvailable")}
           </div>
         )}
       </div>

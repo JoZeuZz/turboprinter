@@ -5,20 +5,20 @@ import { useTranslation } from "react-i18next";
 import { useProjectWorkspaceStore } from "../../store/useProjectWorkspaceStore";
 import { TASK_STATE_COMPLETE, TASK_STATE_FAILED } from "../../api/types";
 
-const STEPS = [
-  { label: "Script ready", threshold: 5 },
-  { label: "Audio (TTS) synthesized", threshold: 20 },
-  { label: "Word timestamps extracted", threshold: 30 },
-  { label: "Downloading Clips", threshold: 70 },
-  { label: "Assembling video", threshold: 90 },
-  { label: "Burning subtitles", threshold: 99 },
-];
-
 export function GeneratingPanel() {
   const { t } = useTranslation();
   const { taskStatus, error, setPanel } = useProjectWorkspaceStore();
   const [logsOpen, setLogsOpen] = useState(false);
   const progress = taskStatus?.progress ?? 0;
+
+  const STEPS = [
+    { label: t("panels.generating.steps.scriptReady"), threshold: 5 },
+    { label: t("panels.generating.steps.audioSynthesized"), threshold: 20 },
+    { label: t("panels.generating.steps.timestampsExtracted"), threshold: 30 },
+    { label: t("panels.generating.steps.downloadingClips"), threshold: 70 },
+    { label: t("panels.generating.steps.assemblingVideo"), threshold: 90 },
+    { label: t("panels.generating.steps.burningSubtitles"), threshold: 99 },
+  ];
 
   // Auto-transition on completion
   useEffect(() => {
@@ -39,7 +39,7 @@ export function GeneratingPanel() {
               onClick={() => setPanel("config")}
               className="text-xs text-red-300 underline hover:text-red-100"
             >
-              Try Again
+              {t("panels.generating.tryAgain")}
             </button>
           </div>
         )}
@@ -51,7 +51,7 @@ export function GeneratingPanel() {
               onClick={() => setPanel("config")}
               className="text-xs text-red-300 underline hover:text-red-100"
             >
-              Try Again
+              {t("panels.generating.tryAgain")}
             </button>
           </div>
         )}
@@ -103,11 +103,11 @@ export function GeneratingPanel() {
           className="flex items-center gap-1 text-xs text-muted hover:text-foreground"
         >
           {logsOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-          {logsOpen ? "Hide logs" : "Show logs"}
+          {logsOpen ? t("panels.generating.hideLogs") : t("panels.generating.showLogs")}
         </button>
         {logsOpen && (
           <div className="rounded-md border border-border bg-base p-3 font-mono text-xs text-muted h-28 overflow-y-auto">
-            <p>Polling task… progress {progress}%</p>
+            <p>{t("panels.generating.pollingTask", { progress })}</p>
           </div>
         )}
       </div>

@@ -5,11 +5,11 @@ import type { WorkspacePanel } from "../../types/workspace";
 describe("PipelineBar", () => {
   it("renders all five pipeline labels", () => {
     render(<PipelineBar currentPanel="script" completedPanels={[]} />);
-    expect(screen.getByText("Script")).toBeInTheDocument();
-    expect(screen.getByText("Settings")).toBeInTheDocument();
-    expect(screen.getByText("Generate")).toBeInTheDocument();
-    expect(screen.getByText("Review")).toBeInTheDocument();
-    expect(screen.getByText("Done")).toBeInTheDocument();
+    expect(screen.getByText("Guion")).toBeInTheDocument();
+    expect(screen.getByText("Configuración")).toBeInTheDocument();
+    expect(screen.getByText("Generar")).toBeInTheDocument();
+    expect(screen.getByText("Revisión")).toBeInTheDocument();
+    expect(screen.getByText("Listo")).toBeInTheDocument();
   });
 
   it("marks completed panels", () => {

@@ -12,7 +12,7 @@ export function ProgressArea() {
   return (
     <div className="rounded-md border border-border bg-surface p-4 flex flex-col gap-3">
       {error && (
-        <p className="text-sm text-red-400">Error: {error}</p>
+        <p className="text-sm text-red-400">{t("common.errorWithMessage", { error })}</p>
       )}
       {isRunning && status && status.state !== TASK_STATE_COMPLETE && status.state !== TASK_STATE_FAILED && (
         <>

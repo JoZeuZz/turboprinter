@@ -60,13 +60,13 @@ export function RenderingPanel() {
         {isFailed && (
           <div className="flex items-center gap-2 text-sm text-red-400">
             <XCircle className="h-4 w-4" />
-            <span>{status?.error ?? "Render failed"}</span>
+            <span>{status?.error ?? t("panels.rendering.failed")}</span>
           </div>
         )}
 
         {(isDone || isFailed) && (
           <Button onClick={() => setPanel(isDone ? "done" : "editor")} size="sm">
-            {isDone ? "View result →" : "← Back to Editor"}
+            {isDone ? t("panels.rendering.viewResult") : t("panels.rendering.backToEditor")}
           </Button>
         )}
       </div>

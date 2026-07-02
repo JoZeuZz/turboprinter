@@ -16,8 +16,8 @@ describe("GeneratingPanel", () => {
 
   it("renders all step labels", () => {
     render(<GeneratingPanel />);
-    expect(screen.getByText(/Script/i)).toBeInTheDocument();
+    expect(screen.getByText(/Guion/i)).toBeInTheDocument();
     expect(screen.getByText(/Audio/i)).toBeInTheDocument();
-    expect(screen.getByText(/Clips/i)).toBeInTheDocument();
+    expect(screen.getByText(/clips/i)).toBeInTheDocument();
   });
 });

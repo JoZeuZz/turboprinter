@@ -66,7 +66,7 @@ export function ScriptPanel() {
         }
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to generate script");
+      setError(e instanceof Error ? e.message : t("panels.script.failed"));
     } finally {
       setGenerating(false);
     }
@@ -79,17 +79,17 @@ export function ScriptPanel() {
           <h2 className="text-base font-semibold text-foreground">{t("panels.script.title")}</h2>
 
       <Input
-        label="Topic"
+        label={t("panels.script.topic")}
         placeholder={t("panels.script.subjectPlaceholder")}
         value={store.video_subject}
         onChange={handleTopicChange}
       />
 
       <Select
-        label="Language"
+        label={t("voice.language")}
         value={store.video_language ?? ""}
         options={[
-          { value: "", label: "Auto detect" },
+          { value: "", label: t("panels.script.autoDetect") },
           { value: "en", label: "English" },
           { value: "es", label: "Español" },
           { value: "zh", label: "中文" },
@@ -103,7 +103,7 @@ export function ScriptPanel() {
       />
 
       <Input
-        label="Paragraphs"
+        label={t("panels.script.paragraphs")}
         type="number"
         min={1}
         max={10}
@@ -120,7 +120,7 @@ export function ScriptPanel() {
         className="w-full"
       >
         <Wand2 className="mr-2 h-4 w-4" />
-        Generate Script
+        {t("panels.script.generate")}
       </Button>
 
       {error && (
@@ -130,7 +130,7 @@ export function ScriptPanel() {
       )}
 
       <Textarea
-        label="Script"
+        label={t("panels.script.scriptLabel")}
         placeholder={t("panels.script.scriptPlaceholder")}
         value={store.video_script ?? ""}
         onChange={(e) => store.set("video_script", e.target.value)}
@@ -138,7 +138,7 @@ export function ScriptPanel() {
       />
 
       <Textarea
-        label="Keywords"
+        label={t("panels.script.keywords")}
         placeholder={t("panels.script.keywordsPlaceholder")}
         value={typeof store.video_terms === "string" ? store.video_terms : (store.video_terms ?? []).join(", ")}
         onChange={(e) => store.set("video_terms", e.target.value)}
@@ -147,14 +147,14 @@ export function ScriptPanel() {
 
       <Collapsible title={t("panels.script.advancedPrompt")}>
         <Textarea
-          label="Script Prompt"
+          label={t("panels.script.scriptPromptLabel")}
           placeholder={t("panels.script.extraInstructionsPlaceholder")}
           value={store.video_script_prompt ?? ""}
           onChange={(e) => store.set("video_script_prompt", e.target.value)}
           rows={3}
         />
         <Textarea
-          label="System Prompt"
+          label={t("panels.script.systemPromptLabel")}
           placeholder={t("panels.script.systemPromptPlaceholder")}
           value={store.custom_system_prompt ?? ""}
           onChange={(e) => store.set("custom_system_prompt", e.target.value)}
@@ -170,7 +170,7 @@ export function ScriptPanel() {
           disabled={!store.video_subject.trim()}
           onClick={() => workspaceStore.setPanel("config")}
         >
-          Continue to Settings →
+          {t("panels.script.continueToSettings")}
         </Button>
       </div>
     </section>

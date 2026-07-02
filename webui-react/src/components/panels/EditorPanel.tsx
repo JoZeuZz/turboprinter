@@ -1,5 +1,6 @@
 // webui-react/src/components/panels/EditorPanel.tsx
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { VideoPreview } from "../editor/VideoPreview";
 import { ClipInspector } from "../editor/ClipInspector";
 import { Timeline } from "../editor/Timeline";
@@ -9,6 +10,7 @@ import { useProjectWorkspaceStore } from "../../store/useProjectWorkspaceStore";
 import type { TimelineItem } from "../../api/types";
 
 export function EditorPanel() {
+  const { t } = useTranslation();
   const projectStore = useProjectStore();
   const { setPanel } = useProjectWorkspaceStore();
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -17,7 +19,7 @@ export function EditorPanel() {
   if (projectStore.mode === "disabled") {
     return (
       <div className="flex items-center justify-center h-full text-muted text-sm p-8 text-center">
-        Editor not available — project mode is disabled or not supported by this server.
+        {t("editor.notAvailable")}
       </div>
     );
   }
@@ -82,10 +84,10 @@ export function EditorPanel() {
       {/* Footer actions */}
       <div className="flex items-center justify-between border-t border-border px-4 py-2">
         <Button variant="ghost" size="sm" onClick={() => setPanel("review")}>
-          ← Back to Review
+          {t("editor.backToReview")}
         </Button>
         <Button size="sm" onClick={handleRender}>
-          Render ▶
+          {t("editor.render")}
         </Button>
       </div>
     </div>

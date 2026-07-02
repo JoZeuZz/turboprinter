@@ -41,10 +41,10 @@ export function ReviewPanel() {
       <div className="flex h-full w-full max-w-5xl mx-auto flex-col items-start justify-center px-6 py-5 text-center">
         <p className="text-sm text-muted">{t("panels.review.notAvailable")}</p>
         <p className="text-xs text-muted mt-1">
-          Enable project mode on the server to use clip review.
+          {t("panels.review.enableProjectMode")}
         </p>
         <Button className="mt-4" onClick={() => setPanel("done")}>
-          Continue to Done
+          {t("panels.review.continueToDone")}
         </Button>
       </div>
     );
@@ -145,11 +145,11 @@ export function ReviewPanel() {
       <div className="flex gap-2 pt-2 border-t border-border">
         <Button variant="ghost" onClick={() => setPanel("script")}>
           <ArrowLeft className="mr-1.5 h-3.5 w-3.5" />
-          ← Back to Script
+          {t("panels.review.backToScript")}
         </Button>
         <Button onClick={handleRender} className="flex-1">
           <Clapperboard className="mr-1.5 h-3.5 w-3.5" />
-          Render Video →
+          {t("panels.review.renderVideo")}
         </Button>
       </div>
 

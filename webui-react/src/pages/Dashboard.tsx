@@ -52,7 +52,7 @@ export function Dashboard() {
           <h1 className="text-lg font-semibold text-foreground">{t("dashboard.projects")}</h1>
           <Button onClick={handleNew} size="sm">
             <PlusCircle className="mr-1.5 h-3.5 w-3.5" />
-            New Project
+            {t("sidebar.newProject")}
           </Button>
         </div>
 
@@ -60,7 +60,7 @@ export function Dashboard() {
 
         {!loading && !projectModeAvailable && (
           <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-300">
-            Project mode disabled on server. Videos will generate without timeline editing.
+            {t("dashboard.projectModeDisabled")}
           </div>
         )}
 
@@ -69,7 +69,7 @@ export function Dashboard() {
             <Film className="h-8 w-8 text-muted" />
             <p className="text-sm text-muted">{t("dashboard.noProjects")}</p>
             <Button onClick={handleNew} size="sm">
-              Create your first video
+              {t("dashboard.createFirst")}
             </Button>
           </div>
         )}

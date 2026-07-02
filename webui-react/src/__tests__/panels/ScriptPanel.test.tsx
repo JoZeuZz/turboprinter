@@ -34,13 +34,13 @@ describe("ScriptPanel", () => {
 
   it("generate button is disabled when topic is empty", () => {
     renderPanel();
-    expect(screen.getByRole("button", { name: /generate script/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /generar guion/i })).toBeDisabled();
   });
 
   it("generate button enables when topic is filled", async () => {
     renderPanel();
     await userEvent.type(screen.getByPlaceholderText(/ejercicio matutino/i), "cats");
-    expect(screen.getByRole("button", { name: /generate script/i })).not.toBeDisabled();
+    expect(screen.getByRole("button", { name: /generar guion/i })).not.toBeDisabled();
   });
 
   it("updates store on script textarea change", async () => {

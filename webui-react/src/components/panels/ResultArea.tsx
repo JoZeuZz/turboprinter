@@ -30,7 +30,7 @@ export function ResultArea() {
               download
               className="text-xs text-accent hover:text-accent-hover underline"
             >
-              Download
+              {t("common.download")}
             </a>
           </div>
         </div>

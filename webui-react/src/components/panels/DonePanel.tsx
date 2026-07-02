@@ -46,7 +46,7 @@ export function DonePanel() {
                 className="inline-flex items-center gap-1 text-xs text-accent hover:text-accent-hover"
               >
                 <Download className="h-3.5 w-3.5" />
-                Download
+                {t("common.download")}
               </a>
             </div>
           </div>
@@ -54,11 +54,11 @@ export function DonePanel() {
 
         <div className="flex gap-2 pt-2">
           <Button variant="ghost" onClick={handleBack} size="sm">
-            ← Back
+            {t("panels.done.back")}
           </Button>
           <Button onClick={handleMakeAnother} size="sm">
             <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
-            Make Another →
+            {t("panels.done.makeAnother")}
           </Button>
         </div>
       </div>
