@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { MoreVertical } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 interface SidebarRowMenuProps {
   label: string;
@@ -9,6 +10,7 @@ interface SidebarRowMenuProps {
 }
 
 export function SidebarRowMenu({ label, onRename, onDuplicate, onDelete }: SidebarRowMenuProps) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -45,7 +47,7 @@ export function SidebarRowMenu({ label, onRename, onDuplicate, onDelete }: Sideb
     <div ref={ref} className="relative">
       <button
         type="button"
-        aria-label={`Acciones de ${label}`}
+        aria-label={t("sidebar.rowActions", { name: label })}
         onClick={(e) => {
           e.stopPropagation();
           setOpen((v) => !v);
@@ -58,7 +60,7 @@ export function SidebarRowMenu({ label, onRename, onDuplicate, onDelete }: Sideb
         <div className="absolute right-0 z-10 mt-1 w-36 rounded-md border border-border bg-surface py-1 shadow-lg">
           {confirming ? (
             <div className="px-3 py-1 text-[11px] text-foreground/70">
-              <p className="mb-1">¿Eliminar «{label}»? No se puede deshacer.</p>
+              <p className="mb-1">{t("sidebar.deleteConfirm", { name: label })}</p>
               <button
                 type="button"
                 onClick={(e) => {
@@ -67,14 +69,14 @@ export function SidebarRowMenu({ label, onRename, onDuplicate, onDelete }: Sideb
                 }}
                 className="text-red-400 hover:underline"
               >
-                Confirmar
+                {t("common.confirm")}
               </button>
             </div>
           ) : (
             <>
-              <MenuItem onClick={(e) => { e.stopPropagation(); run(onRename); }}>Renombrar</MenuItem>
-              <MenuItem onClick={(e) => { e.stopPropagation(); run(onDuplicate); }}>Duplicar</MenuItem>
-              <MenuItem onClick={(e) => { e.stopPropagation(); setConfirming(true); }}>Eliminar</MenuItem>
+              <MenuItem onClick={(e) => { e.stopPropagation(); run(onRename); }}>{t("common.rename")}</MenuItem>
+              <MenuItem onClick={(e) => { e.stopPropagation(); run(onDuplicate); }}>{t("common.duplicate")}</MenuItem>
+              <MenuItem onClick={(e) => { e.stopPropagation(); setConfirming(true); }}>{t("common.delete")}</MenuItem>
             </>
           )}
         </div>

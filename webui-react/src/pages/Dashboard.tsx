@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { PlusCircle, Film } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { Button } from "../components/ui";
 import { projectsApi } from "../api/projects";
 import { useProjectStore } from "../store/useProjectStore";
@@ -16,6 +17,7 @@ interface ProjectRow {
 }
 
 export function Dashboard() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const reset = useProjectWorkspaceStore((s) => s.reset);
   const resetProject = useProjectStore((s) => s.reset);
@@ -47,14 +49,14 @@ export function Dashboard() {
     <div className="flex flex-col items-center justify-start min-h-full p-8">
       <div className="w-full max-w-xl space-y-6">
         <div className="flex items-center justify-between">
-          <h1 className="text-lg font-semibold text-foreground">Projects</h1>
+          <h1 className="text-lg font-semibold text-foreground">{t("dashboard.projects")}</h1>
           <Button onClick={handleNew} size="sm">
             <PlusCircle className="mr-1.5 h-3.5 w-3.5" />
             New Project
           </Button>
         </div>
 
-        {loading && <p className="text-sm text-muted">Loading…</p>}
+        {loading && <p className="text-sm text-muted">{t("common.loading")}</p>}
 
         {!loading && !projectModeAvailable && (
           <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-300">
@@ -65,7 +67,7 @@ export function Dashboard() {
         {!loading && projects.length === 0 && (
           <div className="flex flex-col items-center gap-3 rounded-lg border border-border bg-surface p-10 text-center">
             <Film className="h-8 w-8 text-muted" />
-            <p className="text-sm text-muted">No projects yet</p>
+            <p className="text-sm text-muted">{t("dashboard.noProjects")}</p>
             <Button onClick={handleNew} size="sm">
               Create your first video
             </Button>

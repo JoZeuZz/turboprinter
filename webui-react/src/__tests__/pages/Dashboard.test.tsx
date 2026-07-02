@@ -28,6 +28,6 @@ describe("Dashboard", () => {
       </MemoryRouter>
     );
     // Wait for async load
-    await screen.findByText(/no projects yet/i);
+    await screen.findByText(/aún no hay proyectos/i);
   });
 });

@@ -26,5 +26,12 @@
     "language": "Idioma",
     "languageEs": "Español",
     "languageEn": "English"
+  },
+  "topbar": {
+    "untitledProject": "Proyecto sin título"
+  },
+  "dashboard": {
+    "projects": "Proyectos",
+    "noProjects": "Aún no hay proyectos"
   }
 }

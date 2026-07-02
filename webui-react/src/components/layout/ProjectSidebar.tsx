@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Clock3, PlusCircle, Settings } from "lucide-react";
 import { NavLink, useLocation, useNavigate, useParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { ApiError } from "../../api/client";
 import { projectsApi } from "../../api/projects";
 import { useProjectHistoryStore } from "../../store/useProjectHistoryStore";
@@ -16,6 +17,7 @@ interface ProjectRow {
 }
 
 export function ProjectSidebar() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
   const { id: activeProjectId } = useParams();
@@ -168,7 +170,7 @@ export function ProjectSidebar() {
           className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-foreground hover:bg-surface-2 transition-colors"
         >
           <PlusCircle className="h-4 w-4 text-accent shrink-0" />
-          New Project
+          {t("sidebar.newProject")}
         </button>
 
         <div className="mt-2 space-y-0.5" id="recent-projects">
@@ -221,7 +223,7 @@ export function ProjectSidebar() {
                       <>
                         <span className="block truncate">{project.topic || project.project_id}</span>
                         <span className="mt-0.5 block text-[10px] text-foreground/40">
-                          {isDraft ? "Borrador" : new Date(project.updated_at).toLocaleDateString()}
+                          {isDraft ? t("sidebar.draft") : new Date(project.updated_at).toLocaleDateString()}
                         </span>
                       </>
                     )}
@@ -254,7 +256,7 @@ export function ProjectSidebar() {
           }
         >
           <Settings className="h-4 w-4 shrink-0" />
-          Settings
+          {t("nav.config")}
         </NavLink>
       </div>
     </nav>
