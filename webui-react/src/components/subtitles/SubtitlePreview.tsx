@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { getSubtitleFontFamily } from "./SubtitleFontGallery";
 
 interface SubtitlePreviewProps {
@@ -53,6 +54,7 @@ export function SubtitlePreview({
   roundedBackground,
   sampleText,
 }: SubtitlePreviewProps) {
+  const { t } = useTranslation();
   const resolvedPosition = resolvePosition(position, customPosition ?? 70);
   const previewFontSize = Math.max(16, Math.min(34, (fontSize ?? 60) * 0.44));
   const previewStroke = Math.max(0, Math.min(2.5, strokeWidth ?? 1.5));
@@ -64,9 +66,9 @@ export function SubtitlePreview({
     <aside className="rounded-xl border border-border bg-base p-3 lg:sticky lg:top-2">
       <div className="mb-3 flex items-center justify-between">
         <div>
-          <h3 className="text-xs font-semibold text-foreground">Vista previa</h3>
+          <h3 className="text-xs font-semibold text-foreground">{t("subtitles.preview")}</h3>
           <p className="mt-1 text-[11px] text-foreground/55">
-            Vista aproximada del subtitulo
+            {t("subtitles.previewApprox")}
           </p>
         </div>
         <span className="rounded-full border border-border px-2 py-0.5 text-[10px] text-foreground/60">

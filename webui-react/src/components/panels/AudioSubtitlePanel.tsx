@@ -1,5 +1,6 @@
 // webui-react/src/components/panels/AudioSubtitlePanel.tsx
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Select,
   Slider,
@@ -25,30 +26,31 @@ const VOICE_OPTIONS = [
   { value: "zh-CN-YunxiNeural", label: "zh-CN Yunxi (Male)" },
 ];
 
-const POSITION_OPTIONS = [
-  { value: "bottom", label: "Bottom" },
-  { value: "top", label: "Top" },
-  { value: "center", label: "Center" },
-  { value: "custom", label: "Custom %" },
-];
-
 export function AudioSubtitlePanel() {
+  const { t } = useTranslation();
   const store = useVideoStore();
   const [bgmFiles, setBgmFiles] = useState<BgmFile[]>([]);
+
+  const POSITION_OPTIONS = [
+    { value: "bottom", label: t("audioSubtitle.positionBottom") },
+    { value: "top", label: t("audioSubtitle.positionTop") },
+    { value: "center", label: t("audioSubtitle.positionCenter") },
+    { value: "custom", label: t("audioSubtitle.positionCustom") },
+  ];
 
   useEffect(() => {
     videoApi.getBgmList().then((r) => setBgmFiles(r.files)).catch(() => {});
   }, []);
 
   const bgmOptions = [
-    { value: "random", label: "Random" },
-    { value: "", label: "None" },
+    { value: "random", label: t("audioSubtitle.bgmRandom") },
+    { value: "", label: t("audioSubtitle.bgmNone") },
     ...bgmFiles.map((f) => ({ value: f.file, label: f.name })),
   ];
 
   return (
     <section className="flex flex-col gap-4">
-      <h2 className="text-sm font-semibold text-foreground">Audio & Subtitles</h2>
+      <h2 className="text-sm font-semibold text-foreground">{t("audioSubtitle.title")}</h2>
 
       {/* Voice */}
       <VoiceGallery
@@ -60,7 +62,7 @@ export function AudioSubtitlePanel() {
       />
 
       <Slider
-        label="Voice Volume"
+        label={t("audioSubtitle.voiceVolume")}
         value={store.voice_volume ?? 1.0}
         min={0}
         max={2}
@@ -70,7 +72,7 @@ export function AudioSubtitlePanel() {
       />
 
       <Slider
-        label="Voice Rate"
+        label={t("audioSubtitle.voiceRate")}
         value={store.voice_rate ?? 1.0}
         min={0.5}
         max={2.0}
@@ -81,7 +83,7 @@ export function AudioSubtitlePanel() {
 
       {/* BGM */}
       <Select
-        label="Background Music"
+        label={t("audioSubtitle.backgroundMusic")}
         value={store.bgm_file === "" && store.bgm_type === "random" ? "random" : (store.bgm_file ?? "")}
         options={bgmOptions}
         onChange={(e) => {
@@ -96,7 +98,7 @@ export function AudioSubtitlePanel() {
       />
 
       <Slider
-        label="BGM Volume"
+        label={t("audioSubtitle.bgmVolume")}
         value={store.bgm_volume ?? 0.2}
         min={0}
         max={1}
@@ -107,15 +109,15 @@ export function AudioSubtitlePanel() {
 
       {/* Subtitles */}
       <Checkbox
-        label="Enable subtitles"
+        label={t("audioSubtitle.enableSubtitles")}
         checked={store.subtitle_enabled ?? true}
         onChange={(v) => store.set("subtitle_enabled", v)}
       />
 
       {store.subtitle_enabled && (
-        <Collapsible title="Subtitle Style" defaultOpen>
+        <Collapsible title={t("audioSubtitle.subtitleStyle")} defaultOpen>
           <Select
-            label="Position"
+            label={t("audioSubtitle.position")}
             value={store.subtitle_position ?? "bottom"}
             options={POSITION_OPTIONS}
             onChange={(e) => store.set("subtitle_position", e.target.value)}
@@ -123,7 +125,7 @@ export function AudioSubtitlePanel() {
 
           {store.subtitle_position === "custom" && (
             <Slider
-              label="Custom Position %"
+              label={t("audioSubtitle.customPositionPercent")}
               value={store.custom_position ?? 70}
               min={0}
               max={100}
@@ -139,7 +141,7 @@ export function AudioSubtitlePanel() {
           />
 
           <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-muted">Font Size</label>
+            <label className="text-xs font-medium text-muted">{t("audioSubtitle.fontSize")}</label>
             <input
               type="number"
               min={20}
@@ -153,19 +155,19 @@ export function AudioSubtitlePanel() {
           </div>
 
           <ColorPicker
-            label="Text Color"
+            label={t("audioSubtitle.textColor")}
             value={store.text_fore_color ?? "#FFFFFF"}
             onChange={(v) => store.set("text_fore_color", v)}
           />
 
           <ColorPicker
-            label="Stroke Color"
+            label={t("audioSubtitle.strokeColor")}
             value={store.stroke_color ?? "#000000"}
             onChange={(v) => store.set("stroke_color", v)}
           />
 
           <Slider
-            label="Stroke Width"
+            label={t("audioSubtitle.strokeWidth")}
             value={store.stroke_width ?? 1.5}
             min={0}
             max={5}
@@ -175,7 +177,7 @@ export function AudioSubtitlePanel() {
           />
 
           <Checkbox
-            label="Rounded background"
+            label={t("audioSubtitle.roundedBackground")}
             checked={store.rounded_subtitle_background ?? false}
             onChange={(v) => store.set("rounded_subtitle_background", v)}
           />

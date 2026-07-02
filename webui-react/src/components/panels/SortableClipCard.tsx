@@ -2,6 +2,7 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Play, X, GripVertical } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import type { TimelineItem } from "../../api/types";
 
 interface SortableClipCardProps {
@@ -17,6 +18,7 @@ export function SortableClipCard({
   onExclude,
   onPreview,
 }: SortableClipCardProps) {
+  const { t } = useTranslation();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: clip.id });
 
@@ -61,7 +63,7 @@ export function SortableClipCard({
 
         {/* Play overlay */}
         <button
-          title="Preview"
+          title={t("clips.preview")}
           onClick={() => onPreview(clip)}
           className="absolute inset-0 flex items-center justify-center bg-black/0 hover:bg-black/50 transition-colors group"
         >
@@ -73,7 +75,7 @@ export function SortableClipCard({
       <div className="flex items-center justify-between px-2 py-1">
         <span className="text-xs text-muted">{clip.duration_sec.toFixed(1)}s</span>
         <button
-          title={excluded ? "Incluir" : "Excluir"}
+          title={excluded ? t("clips.include") : t("clips.excludeShort")}
           onClick={() => onExclude(clip.id)}
           className={`rounded p-0.5 text-xs transition-colors ${
             excluded

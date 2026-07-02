@@ -89,7 +89,7 @@ describe("SortableClipCard", () => {
         />
       </Wrapper>
     );
-    fireEvent.click(screen.getByTitle(/preview|previsualizar/i));
+    fireEvent.click(screen.getByTitle(/vista previa/i));
     expect(onPreview).toHaveBeenCalledWith(CLIP);
   });
 });

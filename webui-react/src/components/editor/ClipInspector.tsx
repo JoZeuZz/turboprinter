@@ -1,5 +1,6 @@
 // webui-react/src/components/editor/ClipInspector.tsx
 import { Trash2, RefreshCw } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import type { TimelineItem } from "../../api/types";
 
 interface ClipInspectorProps {
@@ -9,10 +10,12 @@ interface ClipInspectorProps {
 }
 
 export function ClipInspector({ clip, onTrimChange, onRemove }: ClipInspectorProps) {
+  const { t } = useTranslation();
+
   if (!clip) {
     return (
       <div className="flex items-center justify-center h-full text-sm text-muted p-4 text-center">
-        Select a clip on the timeline to inspect it.
+        {t("editor.selectClip")}
       </div>
     );
   }
@@ -20,19 +23,19 @@ export function ClipInspector({ clip, onTrimChange, onRemove }: ClipInspectorPro
   return (
     <div className="flex flex-col gap-4 p-4">
       <div>
-        <p className="text-[10px] uppercase tracking-widest text-muted mb-1">Clip</p>
+        <p className="text-[10px] uppercase tracking-widest text-muted mb-1">{t("editor.clip")}</p>
         <p className="text-sm font-mono text-foreground">{clip.id}</p>
       </div>
 
       <div>
-        <p className="text-[10px] uppercase tracking-widest text-muted mb-1">Duration</p>
+        <p className="text-[10px] uppercase tracking-widest text-muted mb-1">{t("editor.duration")}</p>
         <p className="text-sm text-foreground">{clip.duration_sec.toFixed(2)}s</p>
       </div>
 
       <div className="grid grid-cols-2 gap-2">
         <div>
           <label className="text-[10px] uppercase tracking-widest text-muted block mb-1">
-            Trim start (s)
+            {t("editor.trimStart")}
           </label>
           <input
             type="number"
@@ -48,7 +51,7 @@ export function ClipInspector({ clip, onTrimChange, onRemove }: ClipInspectorPro
         </div>
         <div>
           <label className="text-[10px] uppercase tracking-widest text-muted block mb-1">
-            Trim end (s)
+            {t("editor.trimEnd")}
           </label>
           <input
             type="number"
@@ -67,18 +70,18 @@ export function ClipInspector({ clip, onTrimChange, onRemove }: ClipInspectorPro
       <div className="flex flex-col gap-2 pt-2 border-t border-border">
         <button
           className="flex items-center gap-2 rounded-md border border-border px-3 py-1.5 text-xs text-muted hover:text-foreground hover:border-accent/50 transition-colors"
-          title="Replace clip (Phase 3)"
+          title={t("editor.replace")}
           disabled
         >
           <RefreshCw className="h-3.5 w-3.5" />
-          Replace clip
+          {t("editor.replaceClip")}
         </button>
         <button
           onClick={() => onRemove(clip.id)}
           className="flex items-center gap-2 rounded-md border border-red-800/50 px-3 py-1.5 text-xs text-red-400 hover:border-red-500 transition-colors"
         >
           <Trash2 className="h-3.5 w-3.5" />
-          Remove
+          {t("common.delete")}
         </button>
       </div>
     </div>
