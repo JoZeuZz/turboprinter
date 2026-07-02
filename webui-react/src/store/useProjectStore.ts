@@ -114,7 +114,6 @@ export const useProjectStore = create<ProjectStoreState>()(
             await refresh(projectId);
           } catch (error) {
             fail(error);
-            throw error;
           }
         },
         mediaSearch: async (params = {}) => {

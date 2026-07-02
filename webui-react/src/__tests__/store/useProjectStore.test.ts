@@ -114,8 +114,7 @@ describe("useProjectStore", () => {
   });
 
   it("surfaces the Spanish 'create a project first' error when no project is open", async () => {
-    await expect(useProjectStore.getState().plan()).rejects.toThrow(
-      "Crea un proyecto primero"
-    );
+    await useProjectStore.getState().plan();
+    expect(useProjectStore.getState().error).toBe("Crea un proyecto primero");
   });
 });

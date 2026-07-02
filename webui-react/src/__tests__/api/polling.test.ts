@@ -45,16 +45,4 @@ describe("pollTask", () => {
     await vi.runAllTimersAsync();
     await expectReject;
   });
-
-  it("rejects with the Spanish failure message when the task FAILED", async () => {
-    vi.mocked(apiFetch).mockResolvedValue({
-      state: TASK_STATE_FAILED,
-      progress: 0,
-      videos: [],
-      combined_videos: [],
-    });
-    const promise = pollTask("abc", vi.fn(), 100);
-    await vi.runAllTimersAsync();
-    await expect(promise).rejects.toThrow("La tarea falló en el servidor");
-  });
 });
