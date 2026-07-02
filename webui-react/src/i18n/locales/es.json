@@ -1,0 +1,25 @@
+{
+  "common": {
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "delete": "Eliminar",
+    "rename": "Renombrar",
+    "duplicate": "Duplicar",
+    "confirm": "Confirmar",
+    "loading": "Cargando…",
+    "back": "Atrás",
+    "next": "Siguiente",
+    "all": "Todos"
+  },
+  "nav": {
+    "home": "Inicio",
+    "workspace": "Espacio",
+    "config": "Config"
+  },
+  "sidebar": {
+    "newProject": "Nuevo proyecto",
+    "draft": "Borrador",
+    "rowActions": "Acciones de {{name}}",
+    "deleteConfirm": "¿Eliminar «{{name}}»? No se puede deshacer."
+  }
+}

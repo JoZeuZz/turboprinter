@@ -1,0 +1,25 @@
+{
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "rename": "Rename",
+    "duplicate": "Duplicate",
+    "confirm": "Confirm",
+    "loading": "Loading…",
+    "back": "Back",
+    "next": "Next",
+    "all": "All"
+  },
+  "nav": {
+    "home": "Home",
+    "workspace": "Workspace",
+    "config": "Config"
+  },
+  "sidebar": {
+    "newProject": "New Project",
+    "draft": "Draft",
+    "rowActions": "{{name}} actions",
+    "deleteConfirm": "Delete «{{name}}»? This can't be undone."
+  }
+}
