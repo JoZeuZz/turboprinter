@@ -1,9 +1,12 @@
 import { useState, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
+import { useParams } from "react-router-dom";
 import { StateBadge } from "../ui/StateBadge";
+import { OriginBadge } from "./OriginBadge";
 import { useProjectHistoryStore } from "../../store/useProjectHistoryStore";
 import { useProjectWorkspaceStore } from "../../store/useProjectWorkspaceStore";
 import { useProjectStore } from "../../store/useProjectStore";
+import { deriveVideoOrigin } from "../../lib/videoOrigin";
 
 const MODE_BADGE: Record<string, { label: string; className: string }> = {
   idle: { label: "idle", className: "text-muted" },
@@ -15,7 +18,15 @@ const MODE_BADGE: Record<string, { label: string; className: string }> = {
 
 export function TopicBar() {
   const { t } = useTranslation();
-  const { topic, setTopic, panel } = useProjectWorkspaceStore();
+  const { topic, setTopic, panel, taskId, taskStatus, videoUrls } = useProjectWorkspaceStore();
+  const { id: routeId } = useParams();
+  const origin = deriveVideoOrigin({
+    routeId,
+    taskId,
+    taskState: taskStatus?.state,
+    panel,
+    videoUrls,
+  });
   const { mode } = useProjectStore();
   const updateCurrentDraft = useProjectHistoryStore((s) => s.updateCurrentDraft);
   const [editing, setEditing] = useState(false);
@@ -37,6 +48,7 @@ export function TopicBar() {
 
   return (
     <div className="flex h-10 items-center justify-between border-b border-border bg-surface px-4 gap-3">
+      <OriginBadge origin={origin} />
       {editing ? (
         <input
           ref={inputRef}
