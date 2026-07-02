@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Clock3, PlusCircle, Settings } from "lucide-react";
 import { NavLink, useLocation, useNavigate, useParams } from "react-router-dom";
 import { ApiError } from "../../api/client";
@@ -32,6 +32,10 @@ export function ProjectSidebar() {
   const [projects, setProjects] = useState<ProjectRow[]>([]);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
+  // Tracks whether the in-progress rename has already been resolved (committed
+  // or cancelled) so that the Escape->setRenamingId(null)->onBlur chain and the
+  // Enter->commitRename->setRenamingId(null)->onBlur chain don't double-fire.
+  const renameResolutionRef = useRef<"idle" | "committed" | "cancelled">("idle");
 
   const refreshProjects = () => {
     projectsApi
@@ -80,6 +84,10 @@ export function ProjectSidebar() {
   );
 
   const commitRename = (id: string, isDraft: boolean) => {
+    // Guard against double-commit: Enter already resolved this rename and the
+    // blur that follows the resulting unmount should be a no-op.
+    if (renameResolutionRef.current !== "idle") return;
+    renameResolutionRef.current = "committed";
     const value = renameValue.trim();
     setRenamingId(null);
     if (!value) return;
@@ -88,6 +96,13 @@ export function ProjectSidebar() {
     } else {
       projectsApi.renameProject(id, value).then(refreshProjects).catch(() => {});
     }
+  };
+
+  const cancelRename = () => {
+    // Escape resolves the rename as cancelled so the blur triggered by the
+    // input unmounting skips commitRename entirely, discarding the edit.
+    renameResolutionRef.current = "cancelled";
+    setRenamingId(null);
   };
 
   const handleDuplicate = (id: string, isDraft: boolean) => {
@@ -109,16 +124,33 @@ export function ProjectSidebar() {
       ? currentDraftId === id
       : id === activeProjectId;
     if (isDraft) {
+      // Drafts are local-only; no API call, so the reset+navigate can stay
+      // synchronous.
       removeDraft(id);
-    } else {
-      projectsApi.deleteProject(id).then(refreshProjects).catch(() => {});
+      if (wasActive) {
+        workspaceReset();
+        projectReset();
+        videoReset();
+        navigate("/project/new");
+      }
+      return;
     }
-    if (wasActive) {
-      workspaceReset();
-      projectReset();
-      videoReset();
-      navigate("/project/new");
-    }
+    projectsApi
+      .deleteProject(id)
+      .then(() => {
+        refreshProjects();
+        if (wasActive) {
+          workspaceReset();
+          projectReset();
+          videoReset();
+          navigate("/project/new");
+        }
+      })
+      .catch(() => {
+        // Delete failed: re-sync the sidebar so the row reappears, and skip
+        // the reset+navigate so the user isn't bounced with no feedback.
+        refreshProjects();
+      });
   };
 
   return (
@@ -180,7 +212,7 @@ export function ProjectSidebar() {
                         onChange={(e) => setRenameValue(e.target.value)}
                         onKeyDown={(e) => {
                           if (e.key === "Enter") commitRename(project.project_id, isDraft);
-                          if (e.key === "Escape") setRenamingId(null);
+                          if (e.key === "Escape") cancelRename();
                         }}
                         onBlur={() => commitRename(project.project_id, isDraft)}
                         className="w-full rounded bg-surface-2 px-1 text-sm text-foreground outline-none"
@@ -197,6 +229,7 @@ export function ProjectSidebar() {
                   <SidebarRowMenu
                     label={project.topic || project.project_id}
                     onRename={() => {
+                      renameResolutionRef.current = "idle";
                       setRenameValue(project.topic || "");
                       setRenamingId(project.project_id);
                     }}

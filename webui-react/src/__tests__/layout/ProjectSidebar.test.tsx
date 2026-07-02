@@ -90,4 +90,61 @@ describe("ProjectSidebar actions", () => {
 
     await waitFor(() => expect(projectsApi.duplicateProject).toHaveBeenCalledWith("proj-aaa"));
   });
+
+  it("discards the edit and does not rename when Escape is pressed", async () => {
+    const user = userEvent.setup();
+    renderSidebar();
+    await screen.findByText("Mi video");
+
+    await user.click(screen.getByLabelText("Acciones de Mi video"));
+    await user.click(screen.getByText("Renombrar"));
+
+    const input = screen.getByDisplayValue("Mi video");
+    await user.clear(input);
+    await user.type(input, "Nombre descartado{Escape}");
+
+    // The row should fall back to displaying the original label, not the input.
+    await screen.findByText("Mi video");
+    expect(screen.queryByDisplayValue("Nombre descartado")).not.toBeInTheDocument();
+    expect(projectsApi.renameProject).not.toHaveBeenCalled();
+  });
+
+  it("commits exactly once when Enter is pressed", async () => {
+    const user = userEvent.setup();
+    renderSidebar();
+    await screen.findByText("Mi video");
+
+    await user.click(screen.getByLabelText("Acciones de Mi video"));
+    await user.click(screen.getByText("Renombrar"));
+
+    const input = screen.getByDisplayValue("Mi video");
+    await user.clear(input);
+    await user.type(input, "Nuevo{Enter}");
+
+    await waitFor(() =>
+      expect(projectsApi.renameProject).toHaveBeenCalledWith("proj-aaa", "Nuevo")
+    );
+    expect(projectsApi.renameProject).toHaveBeenCalledTimes(1);
+  });
+
+  it("allows renaming again after a previous commit (commit guard resets per session)", async () => {
+    const user = userEvent.setup();
+    renderSidebar();
+    await screen.findByText("Mi video");
+
+    await user.click(screen.getByLabelText("Acciones de Mi video"));
+    await user.click(screen.getByText("Renombrar"));
+    let input = screen.getByDisplayValue("Mi video");
+    await user.clear(input);
+    await user.type(input, "Primero{Enter}");
+    await waitFor(() => expect(projectsApi.renameProject).toHaveBeenCalledTimes(1));
+
+    await user.click(screen.getByLabelText("Acciones de Mi video"));
+    await user.click(screen.getByText("Renombrar"));
+    input = screen.getByDisplayValue("Mi video");
+    await user.clear(input);
+    await user.type(input, "Segundo{Enter}");
+    await waitFor(() => expect(projectsApi.renameProject).toHaveBeenCalledTimes(2));
+    expect(projectsApi.renameProject).toHaveBeenNthCalledWith(2, "proj-aaa", "Segundo");
+  });
 });
