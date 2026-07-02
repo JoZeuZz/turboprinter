@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Clock3, PlusCircle, Settings } from "lucide-react";
 import { NavLink, useLocation, useNavigate, useParams } from "react-router-dom";
 import { ApiError } from "../../api/client";
@@ -7,6 +7,7 @@ import { useProjectHistoryStore } from "../../store/useProjectHistoryStore";
 import { useProjectStore } from "../../store/useProjectStore";
 import { useProjectWorkspaceStore } from "../../store/useProjectWorkspaceStore";
 import { useVideoStore } from "../../store/useVideoStore";
+import { SidebarRowMenu } from "./SidebarRowMenu";
 
 interface ProjectRow {
   project_id: string;
@@ -18,7 +19,8 @@ export function ProjectSidebar() {
   const navigate = useNavigate();
   const location = useLocation();
   const { id: activeProjectId } = useParams();
-  const { drafts, currentDraftId, startDraft, selectDraft } = useProjectHistoryStore();
+  const { drafts, currentDraftId, startDraft, selectDraft, renameDraft, duplicateDraft, removeDraft } =
+    useProjectHistoryStore();
   const workspaceReset = useProjectWorkspaceStore((s) => s.reset);
   const setTopic = useProjectWorkspaceStore((s) => s.setTopic);
   const projectReset = useProjectStore((s) => s.reset);
@@ -28,26 +30,24 @@ export function ProjectSidebar() {
   const taskState = useProjectWorkspaceStore((s) => s.taskStatus?.state);
   const topic = useProjectWorkspaceStore((s) => s.topic);
   const [projects, setProjects] = useState<ProjectRow[]>([]);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  // Tracks whether the in-progress rename has already been resolved (committed
+  // or cancelled) so that the Escape->setRenamingId(null)->onBlur chain and the
+  // Enter->commitRename->setRenamingId(null)->onBlur chain don't double-fire.
+  const renameResolutionRef = useRef<"idle" | "committed" | "cancelled">("idle");
 
-  useEffect(() => {
-    let cancelled = false;
-
+  const refreshProjects = () => {
     projectsApi
       .listProjects(30)
-      .then((response) => {
-        if (!cancelled) {
-          setProjects(response.projects);
-        }
-      })
+      .then((response) => setProjects(response.projects))
       .catch((error) => {
-        if (!cancelled && error instanceof ApiError && error.status === 404) {
-          setProjects([]);
-        }
+        if (error instanceof ApiError && error.status === 404) setProjects([]);
       });
+  };
 
-    return () => {
-      cancelled = true;
-    };
+  useEffect(() => {
+    refreshProjects();
   }, [location.pathname, taskId, taskState, topic]);
 
   const handleNew = () => {
@@ -83,6 +83,76 @@ export function ProjectSidebar() {
       new Date(right.updated_at).getTime() - new Date(left.updated_at).getTime()
   );
 
+  const commitRename = (id: string, isDraft: boolean) => {
+    // Guard against double-commit: Enter already resolved this rename and the
+    // blur that follows the resulting unmount should be a no-op.
+    if (renameResolutionRef.current !== "idle") return;
+    renameResolutionRef.current = "committed";
+    const value = renameValue.trim();
+    setRenamingId(null);
+    if (!value) return;
+    if (isDraft) {
+      renameDraft(id, value);
+    } else {
+      projectsApi.renameProject(id, value).then(refreshProjects).catch(() => {});
+    }
+  };
+
+  const cancelRename = () => {
+    // Escape resolves the rename as cancelled so the blur triggered by the
+    // input unmounting skips commitRename entirely, discarding the edit.
+    renameResolutionRef.current = "cancelled";
+    setRenamingId(null);
+  };
+
+  const handleDuplicate = (id: string, isDraft: boolean) => {
+    if (isDraft) {
+      duplicateDraft(id);
+    } else {
+      projectsApi
+        .duplicateProject(id)
+        .then((res) => {
+          refreshProjects();
+          navigate(`/project/${res.project_id}`);
+        })
+        .catch(() => {});
+    }
+  };
+
+  const handleDelete = (id: string, isDraft: boolean) => {
+    const wasActive = isDraft
+      ? currentDraftId === id
+      : id === activeProjectId;
+    if (isDraft) {
+      // Drafts are local-only; no API call, so the reset+navigate can stay
+      // synchronous.
+      removeDraft(id);
+      if (wasActive) {
+        workspaceReset();
+        projectReset();
+        videoReset();
+        navigate("/project/new");
+      }
+      return;
+    }
+    projectsApi
+      .deleteProject(id)
+      .then(() => {
+        refreshProjects();
+        if (wasActive) {
+          workspaceReset();
+          projectReset();
+          videoReset();
+          navigate("/project/new");
+        }
+      })
+      .catch(() => {
+        // Delete failed: re-sync the sidebar so the row reappears, and skip
+        // the reset+navigate so the user isn't bounced with no feedback.
+        refreshProjects();
+      });
+  };
+
   return (
     <nav className="flex h-screen w-48 flex-col border-r border-border bg-surface">
       <div className="flex items-center gap-2 px-4 py-3 border-b border-border">
@@ -108,14 +178,23 @@ export function ProjectSidebar() {
                 ? location.pathname === "/project/new" &&
                   currentDraftId === project.project_id
                 : project.project_id === activeProjectId;
+              const openRow = () =>
+                isDraft
+                  ? handleOpenDraft(project.project_id)
+                  : navigate(`/project/${project.project_id}`);
               return (
-                <button
+                <div
                   key={project.project_id}
-                  onClick={() =>
-                    isDraft
-                      ? handleOpenDraft(project.project_id)
-                      : navigate(`/project/${project.project_id}`)
-                  }
+                  role="button"
+                  tabIndex={0}
+                  onClick={openRow}
+                  onKeyDown={(e) => {
+                    if (e.target !== e.currentTarget) return;
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      openRow();
+                    }
+                  }}
                   className={`group flex w-full items-start gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors ${
                     isActive
                       ? "bg-surface-2 text-foreground"
@@ -125,14 +204,39 @@ export function ProjectSidebar() {
                 >
                   <Clock3 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-foreground/45 group-hover:text-accent" />
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate">
-                      {project.topic || project.project_id}
-                    </span>
-                    <span className="mt-0.5 block text-[10px] text-foreground/40">
-                      {isDraft ? "Borrador" : new Date(project.updated_at).toLocaleDateString()}
-                    </span>
+                    {renamingId === project.project_id ? (
+                      <input
+                        autoFocus
+                        value={renameValue}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={(e) => setRenameValue(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") commitRename(project.project_id, isDraft);
+                          if (e.key === "Escape") cancelRename();
+                        }}
+                        onBlur={() => commitRename(project.project_id, isDraft)}
+                        className="w-full rounded bg-surface-2 px-1 text-sm text-foreground outline-none"
+                      />
+                    ) : (
+                      <>
+                        <span className="block truncate">{project.topic || project.project_id}</span>
+                        <span className="mt-0.5 block text-[10px] text-foreground/40">
+                          {isDraft ? "Borrador" : new Date(project.updated_at).toLocaleDateString()}
+                        </span>
+                      </>
+                    )}
                   </span>
-                </button>
+                  <SidebarRowMenu
+                    label={project.topic || project.project_id}
+                    onRename={() => {
+                      renameResolutionRef.current = "idle";
+                      setRenameValue(project.topic || "");
+                      setRenamingId(project.project_id);
+                    }}
+                    onDuplicate={() => handleDuplicate(project.project_id, isDraft)}
+                    onDelete={() => handleDelete(project.project_id, isDraft)}
+                  />
+                </div>
               );
             })}
         </div>

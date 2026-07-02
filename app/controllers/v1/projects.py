@@ -45,6 +45,7 @@ from app.models.project_schema import (
     MusicSelectRequest,
     PlanRequest,
     RenderRequest,
+    RenameProjectRequest,
     TimelineBuildRequest,
     TimelineCommandsRequest,
 )
@@ -404,6 +405,42 @@ def get_project(request: Request, project_id: str):
             for asset_id in sorted(_project_asset_registry(store, project_id))
         ],
     })
+
+
+@router.delete("/projects/{project_id}", response_model=BaseProjectResponse,
+               summary="Delete a project")
+def delete_project(request: Request, project_id: str):
+    _require_project_mode(request, project_id)
+    store = _store()
+    if not store.exists(project_id):
+        raise HttpException(task_id=project_id, status_code=404, message="project not found")
+    store.delete_project(project_id)
+    return _ok({"project_id": project_id, "deleted": True})
+
+
+@router.patch("/projects/{project_id}/metadata", response_model=BaseProjectResponse,
+              summary="Rename a project")
+def rename_project(request: Request, project_id: str, body: RenameProjectRequest):
+    _require_project_mode(request, project_id)
+    topic = body.topic.strip()
+    if not topic:
+        raise HttpException(task_id=project_id, status_code=400, message="topic is empty")
+    store = _store()
+    if not store.exists(project_id):
+        raise HttpException(task_id=project_id, status_code=404, message="project not found")
+    store.save_project_metadata(project_id, topic=topic)
+    return _ok({"project_id": project_id, "topic": topic})
+
+
+@router.post("/projects/{project_id}/duplicate", response_model=BaseProjectResponse,
+             summary="Duplicate a project's video config into a new project")
+def duplicate_project(request: Request, project_id: str):
+    _require_project_mode(request, project_id)
+    store = _store()
+    if not store.exists(project_id):
+        raise HttpException(task_id=project_id, status_code=404, message="project not found")
+    new_id = store.duplicate_video_config(project_id)
+    return _ok({"project_id": new_id})
 
 
 @router.post("/projects/{project_id}/plan", response_model=BaseProjectResponse,

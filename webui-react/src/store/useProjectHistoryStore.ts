@@ -16,6 +16,8 @@ interface ProjectHistoryStoreState {
   updateCurrentDraft: (topic: string) => void;
   removeDraft: (draftId: string | null) => void;
   resetCurrentDraft: () => void;
+  renameDraft: (draftId: string, topic: string) => void;
+  duplicateDraft: (draftId: string) => string | null;
 }
 
 function nowIso() {
@@ -78,6 +80,35 @@ export const useProjectHistoryStore = create<ProjectHistoryStoreState>()(
             state.currentDraftId === draftId ? null : state.currentDraftId,
           drafts: state.drafts.filter((draft) => draft.project_id !== draftId),
         }));
+      },
+
+      renameDraft: (draftId, topic) => {
+        const trimmed = topic.trim();
+        if (!draftId || !trimmed) {
+          return;
+        }
+        set((state) => ({
+          drafts: state.drafts.map((draft) =>
+            draft.project_id === draftId
+              ? { ...draft, topic: trimmed, updated_at: nowIso() }
+              : draft
+          ),
+        }));
+      },
+
+      duplicateDraft: (draftId) => {
+        const source = get().drafts.find((item) => item.project_id === draftId);
+        if (!source) {
+          return null;
+        }
+        const copy: DraftProject = {
+          project_id: `draft-${crypto.randomUUID()}`,
+          topic: `Copia de ${source.topic}`,
+          updated_at: nowIso(),
+          kind: "draft",
+        };
+        set((state) => ({ drafts: [copy, ...state.drafts] }));
+        return copy.project_id;
       },
 
       resetCurrentDraft: () => set({ currentDraftId: null }),
