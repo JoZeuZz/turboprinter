@@ -189,6 +189,8 @@ export function ProjectSidebar() {
                   key={project.project_id}
                   role="button"
                   tabIndex={0}
+                  data-testid="sidebar-row"
+                  aria-current={isActive ? "true" : undefined}
                   onClick={openRow}
                   onKeyDown={(e) => {
                     if (e.target !== e.currentTarget) return;
