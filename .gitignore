@@ -65,3 +65,6 @@ advisor-plans/
 .agents/
 skills-lock.json
 .pytest_cache/
+.superpowers/
+plans/
+specs/
