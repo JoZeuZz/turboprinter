@@ -4,6 +4,7 @@ import datetime
 import json as _json
 import logging
 import os
+import shutil
 
 from pydantic import TypeAdapter, ValidationError
 
@@ -97,6 +98,25 @@ class FilesystemProjectStore:
             os.path.exists(self._path(task_id, name))
             for name in (_PROJECT_META, _SHOT_PLAN, _TIMELINE, _SELECTED)
         )
+
+    def delete_project(self, task_id: str) -> None:
+        path = self._task_dir(task_id)
+        if os.path.isdir(path):
+            shutil.rmtree(path)
+
+    def duplicate_video_config(self, task_id: str) -> str:
+        from app.utils import utils
+
+        new_id = utils.get_uuid()
+        src_spec = self._path(task_id, _RENDER_SPEC)
+        if os.path.isfile(src_spec):
+            dst_spec = self._path(new_id, _RENDER_SPEC, make=True)
+            shutil.copyfile(src_spec, dst_spec)
+
+        origin = self.load_project_metadata(task_id) or {}
+        origin_topic = origin.get("topic") or "proyecto"
+        self.save_project_metadata(new_id, topic=f"Copia de {origin_topic}")
+        return new_id
 
     def _base_dir(self) -> str:
         """Return the base directory that contains all project subdirectories."""
