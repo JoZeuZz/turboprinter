@@ -1,5 +1,6 @@
 // webui-react/src/api/projects.ts
 import { ApiError, apiFetch } from "./client";
+import i18n from "../i18n";
 import type {
   CreateFromTopicRequest,
   CreateFromScriptRequest,
@@ -38,7 +39,7 @@ async function fetchAsset(projectId: string, assetId: string): Promise<Blob> {
   );
   if (!response.ok) {
     const json = await response.json().catch(() => ({}));
-    throw new ApiError(json.status ?? response.status, json.message ?? "Request failed");
+    throw new ApiError(json.status ?? response.status, json.message ?? i18n.t("errors.requestFailed"));
   }
   return response.blob();
 }

@@ -1,4 +1,6 @@
 // webui-react/src/api/client.ts
+import i18n from "../i18n";
+
 const API_BASE = "/api/v1";
 
 export class ApiError extends Error {
@@ -28,7 +30,7 @@ export async function apiFetch<T>(
   if (!response.ok || (json.status != null && json.status >= 400)) {
     throw new ApiError(
       json.status ?? response.status,
-      json.message ?? "Request failed"
+      json.message ?? i18n.t("errors.requestFailed")
     );
   }
 
@@ -48,7 +50,7 @@ export async function apiBlobFetch(
   });
 
   if (!response.ok) {
-    let message = "Request failed";
+    let message = i18n.t("errors.requestFailed");
     try {
       const json = await response.json();
       message = json.message ?? message;

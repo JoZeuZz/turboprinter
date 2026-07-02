@@ -1,5 +1,6 @@
 // webui-react/src/store/useProjectStore.ts
 import { create } from "zustand";
+import i18n from "../i18n";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { ApiError } from "../api/client";
 import { pollUntilComplete } from "../api/polling";
@@ -60,13 +61,13 @@ export const useProjectStore = create<ProjectStoreState>()(
           set({ mode: "disabled", error: error.message });
           return;
         }
-        set({ mode: "error", error: error instanceof Error ? error.message : "Project action failed" });
+        set({ mode: "error", error: error instanceof Error ? error.message : i18n.t("errors.projectAction") });
       };
 
       const requireProjectId = () => {
         const { projectId } = get();
         if (!projectId) {
-          throw new Error("Create a project first");
+          throw new Error(i18n.t("errors.createFirst"));
         }
         return projectId;
       };
@@ -156,7 +157,7 @@ export const useProjectStore = create<ProjectStoreState>()(
         render: async (params = {}) => {
           const { timelineValidation } = get();
           if (timelineValidation?.valid === false) {
-            set({ mode: "error", error: timelineValidation.errors[0] ?? "Timeline validation failed" });
+            set({ mode: "error", error: timelineValidation.errors[0] ?? i18n.t("errors.timelineInvalid") });
             return;
           }
           set({ mode: "loading", error: null });
@@ -182,7 +183,7 @@ export const useProjectStore = create<ProjectStoreState>()(
           );
 
           if (status.state === TASK_STATE_FAILED) {
-            set({ mode: "error", error: status.error ?? "Render failed" });
+            set({ mode: "error", error: status.error ?? i18n.t("errors.renderFailed") });
           } else {
             set({ mode: "ready", error: null });
           }
