@@ -277,9 +277,7 @@ def _validate_replace_candidates(
 @router.get("/projects", response_model=BaseProjectResponse,
             summary="List recent projects")
 def list_projects(request: Request, limit: int = 20):
-    if not getattr(config, "project_mode_enabled", False):
-        projects = _list_generated_video_tasks(limit=limit)
-        return _ok({"projects": projects})
+    _require_project_mode(request)
     store = _store()
     projects = store.list_projects(limit=limit)
     return _ok({"projects": projects})
