@@ -82,3 +82,5 @@ class PreviewRenderParityTest(unittest.TestCase):
             dark = int((frame.sum(axis=2) < 180).sum())
             if fx["hasBackground"]:
                 self.assertGreater(dark, 300, fx["name"])
+            else:
+                self.assertLess(dark, 1000, fx["name"])
