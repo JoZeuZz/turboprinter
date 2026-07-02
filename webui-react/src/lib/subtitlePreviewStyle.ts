@@ -40,12 +40,13 @@ function resolveBackground(
   backgroundColor: SubtitleStyleInput["backgroundColor"],
   rounded: boolean | null | undefined
 ): PreviewStyle["background"] {
-  if (backgroundColor === false) return null;
-  const color =
-    typeof backgroundColor === "string" && backgroundColor.trim()
-      ? backgroundColor
-      : "#000000";
-  return { color, rounded: Boolean(rounded) };
+  // Mirrors the render: bool true -> "#000000"; a real color string -> passthrough;
+  // false / null / undefined / "" -> no background (downstream `bool(bg_color)` is false).
+  if (backgroundColor === true) return { color: "#000000", rounded: Boolean(rounded) };
+  if (typeof backgroundColor === "string" && backgroundColor.trim()) {
+    return { color: backgroundColor, rounded: Boolean(rounded) };
+  }
+  return null;
 }
 
 function resolvePosition(
@@ -60,7 +61,8 @@ function resolvePosition(
 
 export function resolvePreviewStyle(style: SubtitleStyleInput, dims: PreviewDims): PreviewStyle {
   const scale = dims.height / RENDER_HEIGHT;
-  const strokeColor = style.strokeColor ?? "#000000";
+  // Normalize like the render's _normalize_render_color: empty/blank -> fallback (always a valid color).
+  const strokeColor = style.strokeColor?.trim() || "#000000";
   const renderStroke = renderStrokeWidth(style.strokeWidth, style.fontSize, Boolean(strokeColor));
   return {
     fontSizePx: style.fontSize * scale,

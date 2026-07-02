@@ -45,4 +45,15 @@ describe("resolvePreviewStyle", () => {
       expect(s.background !== null).toBe(fx.hasBackground);
     }
   });
+
+  it("treats null/empty background as no background (mirrors render)", () => {
+    expect(resolvePreviewStyle({ fontSize: 60, strokeWidth: 1, position: "bottom", backgroundColor: null }, PREVIEW_DIMS).background).toBeNull();
+    expect(resolvePreviewStyle({ fontSize: 60, strokeWidth: 1, position: "bottom", backgroundColor: "" }, PREVIEW_DIMS).background).toBeNull();
+  });
+
+  it("normalizes an empty stroke color to the fallback without zeroing the stroke", () => {
+    const s = resolvePreviewStyle({ fontSize: 60, strokeWidth: 1.5, position: "bottom", strokeColor: "" }, PREVIEW_DIMS);
+    expect(s.strokeColor).toBe("#000000");
+    expect(s.strokePx).toBeGreaterThan(0);
+  });
 });
