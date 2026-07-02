@@ -1,20 +1,12 @@
 import { useState, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useParams } from "react-router-dom";
-import { StateBadge } from "../ui/StateBadge";
+import { StatusBadge } from "../ui/StatusBadge";
 import { OriginBadge } from "./OriginBadge";
 import { useProjectHistoryStore } from "../../store/useProjectHistoryStore";
 import { useProjectWorkspaceStore } from "../../store/useProjectWorkspaceStore";
 import { useProjectStore } from "../../store/useProjectStore";
 import { deriveVideoOrigin } from "../../lib/videoOrigin";
-
-const MODE_BADGE: Record<string, { label: string; className: string }> = {
-  idle: { label: "idle", className: "text-muted" },
-  loading: { label: "loading…", className: "text-yellow-400 animate-pulse" },
-  ready: { label: "ready", className: "text-green-400" },
-  disabled: { label: "offline", className: "text-muted" },
-  error: { label: "error", className: "text-red-400" },
-};
 
 export function TopicBar() {
   const { t } = useTranslation();
@@ -43,8 +35,6 @@ export function TopicBar() {
     updateCurrentDraft(nextTopic);
     setEditing(false);
   };
-
-  const badge = MODE_BADGE[mode] ?? MODE_BADGE.idle;
 
   return (
     <div className="flex h-10 items-center justify-between border-b border-border bg-surface px-4 gap-3">
@@ -77,11 +67,7 @@ export function TopicBar() {
         </button>
       )}
 
-      <span className={`text-[10px] font-medium shrink-0 ${badge.className}`}>
-        {badge.label}
-      </span>
-
-      <StateBadge panel={panel} />
+      <StatusBadge mode={mode} panel={panel} />
     </div>
   );
 }
