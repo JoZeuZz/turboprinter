@@ -56,4 +56,9 @@ describe("resolvePreviewStyle", () => {
     expect(s.strokeColor).toBe("#000000");
     expect(s.strokePx).toBeGreaterThan(0);
   });
+
+  it("normalizes a blank text color to the render fallback", () => {
+    const s = resolvePreviewStyle({ fontSize: 60, strokeWidth: 1, position: "bottom", textColor: "   " }, PREVIEW_DIMS);
+    expect(s.color).toBe("#FFFFFF");
+  });
 });

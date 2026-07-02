@@ -16,6 +16,8 @@ describe("SubtitlePreview", () => {
     render(
       <SubtitlePreview enabled position="top" fontSize={60} textBackgroundColor={false} sampleText="Sin fondo" />
     );
-    expect(screen.getByText("Sin fondo")).toBeInTheDocument();
+    const text = screen.getByText("Sin fondo");
+    expect(text).toBeInTheDocument();
+    expect((text.parentElement as HTMLElement).style.backgroundColor).toBe("transparent");
   });
 });

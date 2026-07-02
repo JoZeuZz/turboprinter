@@ -62,12 +62,13 @@ function resolvePosition(
 export function resolvePreviewStyle(style: SubtitleStyleInput, dims: PreviewDims): PreviewStyle {
   const scale = dims.height / RENDER_HEIGHT;
   // Normalize like the render's _normalize_render_color: empty/blank -> fallback (always a valid color).
+  const textColor = style.textColor?.trim() || "#FFFFFF";
   const strokeColor = style.strokeColor?.trim() || "#000000";
   const renderStroke = renderStrokeWidth(style.strokeWidth, style.fontSize, Boolean(strokeColor));
   return {
     fontSizePx: style.fontSize * scale,
     strokePx: renderStroke * scale,
-    color: style.textColor ?? "#FFFFFF",
+    color: textColor,
     strokeColor,
     position: resolvePosition(style.position, style.customPosition),
     background: resolveBackground(style.backgroundColor, style.roundedBackground),
