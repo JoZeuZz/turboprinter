@@ -63,6 +63,23 @@ describe("ProjectSidebar actions", () => {
     );
   });
 
+  it("renames a project to a multi-word name without dropping spaces", async () => {
+    const user = userEvent.setup();
+    renderSidebar();
+    await screen.findByText("Mi video");
+
+    await user.click(screen.getByLabelText("Acciones de Mi video"));
+    await user.click(screen.getByText("Renombrar"));
+
+    const input = screen.getByDisplayValue("Mi video");
+    await user.clear(input);
+    await user.type(input, "Mi video nuevo{Enter}");
+
+    await waitFor(() =>
+      expect(projectsApi.renameProject).toHaveBeenCalledWith("proj-aaa", "Mi video nuevo")
+    );
+  });
+
   it("duplicates a project", async () => {
     const user = userEvent.setup();
     renderSidebar();
