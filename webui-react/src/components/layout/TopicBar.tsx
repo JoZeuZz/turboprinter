@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { StateBadge } from "../ui/StateBadge";
+import { useProjectHistoryStore } from "../../store/useProjectHistoryStore";
 import { useProjectWorkspaceStore } from "../../store/useProjectWorkspaceStore";
 import { useProjectStore } from "../../store/useProjectStore";
 
@@ -14,6 +15,7 @@ const MODE_BADGE: Record<string, { label: string; className: string }> = {
 export function TopicBar() {
   const { topic, setTopic, panel } = useProjectWorkspaceStore();
   const { mode } = useProjectStore();
+  const updateCurrentDraft = useProjectHistoryStore((s) => s.updateCurrentDraft);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(topic);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -23,7 +25,9 @@ export function TopicBar() {
   }, [editing]);
 
   const commit = () => {
-    setTopic(draft.trim() || topic);
+    const nextTopic = draft.trim() || topic;
+    setTopic(nextTopic);
+    updateCurrentDraft(nextTopic);
     setEditing(false);
   };
 

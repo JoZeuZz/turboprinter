@@ -22,7 +22,7 @@ export function RenderingPanel() {
   const isFailed = status?.state === TASK_STATE_FAILED;
 
   return (
-    <div className="flex flex-col items-center justify-start min-h-full p-8">
+    <div className="flex h-full w-full max-w-5xl mx-auto flex-col justify-start px-6 py-5">
       <div className="w-full max-w-md space-y-6">
         <h2 className="text-sm font-semibold text-foreground">Rendering final video</h2>
 

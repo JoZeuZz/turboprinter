@@ -13,7 +13,7 @@ interface SubtitleFontGalleryProps {
   onChange: (value: string) => void;
 }
 
-const FONTS: SubtitleFont[] = [
+export const SUBTITLE_FONTS: SubtitleFont[] = [
   {
     value: "STHeitiMedium.ttc",
     label: "STHeitiMedium",
@@ -58,6 +58,11 @@ const FONTS: SubtitleFont[] = [
 
 const PAGE_SIZE = 3;
 
+export function getSubtitleFontFamily(value: string | null | undefined) {
+  const selectedFont = SUBTITLE_FONTS.find((font) => font.value === value);
+  return selectedFont?.family ?? SUBTITLE_FONTS[0].family;
+}
+
 export function SubtitleFontGallery({
   value,
   onChange,
@@ -68,15 +73,15 @@ export function SubtitleFontGallery({
     Math.floor(
       Math.max(
         0,
-        FONTS.findIndex((font) => font.value === selectedValue)
+        SUBTITLE_FONTS.findIndex((font) => font.value === selectedValue)
       ) / PAGE_SIZE
     )
   );
   const [page, setPage] = useState(initialPage);
 
-  const totalPages = Math.ceil(FONTS.length / PAGE_SIZE);
+  const totalPages = Math.ceil(SUBTITLE_FONTS.length / PAGE_SIZE);
   const visibleFonts = useMemo(
-    () => FONTS.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE),
+    () => SUBTITLE_FONTS.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE),
     [page]
   );
 

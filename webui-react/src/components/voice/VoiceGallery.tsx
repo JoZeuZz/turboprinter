@@ -8,6 +8,7 @@ interface VoiceGalleryProps {
   selectedVoice: string;
   voiceRate: number;
   voiceVolume: number;
+  sampleText?: string;
   onSelect: (voice: string) => void;
 }
 
@@ -107,6 +108,7 @@ export function VoiceGallery({
   selectedVoice,
   voiceRate,
   voiceVolume,
+  sampleText,
   onSelect,
 }: VoiceGalleryProps) {
   const [page, setPage] = useState(0);
@@ -147,7 +149,7 @@ export function VoiceGallery({
       audioRef.current?.pause();
       const blob = await voiceApi.previewVoice({
         voice_name: card.value,
-        text: previewText(card.languageCode),
+        text: sampleText?.trim() || previewText(card.languageCode),
         voice_rate: voiceRate,
         voice_volume: voiceVolume,
       });
@@ -258,7 +260,7 @@ export function VoiceGallery({
                     {card.name}
                   </h3>
                   <p className="mt-2 line-clamp-2 min-h-[2.25rem] text-[11px] leading-4 text-foreground/65">
-                    {previewText(card.languageCode)}
+                    {sampleText?.trim() || previewText(card.languageCode)}
                   </p>
                   <div className="mt-2 flex flex-wrap gap-1">
                     <span className="rounded-full border border-border bg-surface-2 px-2 py-0.5 text-[10px] text-foreground/80">

@@ -443,6 +443,10 @@ export interface GetProjectResponse {
   selected_media?: MediaCandidate[];
   selected_music?: MusicTrack[];
   preview_assets?: ProjectAsset[];
+  topic?: string | null;
+  params?: Partial<VideoParams>;
+  videos?: string[];
+  combined_videos?: string[];
 }
 
 export interface PlanProjectResponse {

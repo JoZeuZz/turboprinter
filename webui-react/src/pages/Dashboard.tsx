@@ -4,7 +4,9 @@ import { useNavigate } from "react-router-dom";
 import { PlusCircle, Film } from "lucide-react";
 import { Button } from "../components/ui";
 import { projectsApi } from "../api/projects";
+import { useProjectStore } from "../store/useProjectStore";
 import { useProjectWorkspaceStore } from "../store/useProjectWorkspaceStore";
+import { useVideoStore } from "../store/useVideoStore";
 import { ApiError } from "../api/client";
 
 interface ProjectRow {
@@ -16,6 +18,8 @@ interface ProjectRow {
 export function Dashboard() {
   const navigate = useNavigate();
   const reset = useProjectWorkspaceStore((s) => s.reset);
+  const resetProject = useProjectStore((s) => s.reset);
+  const resetVideo = useVideoStore((s) => s.reset);
   const [projects, setProjects] = useState<ProjectRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [projectModeAvailable, setProjectModeAvailable] = useState(true);
@@ -34,6 +38,8 @@ export function Dashboard() {
 
   const handleNew = () => {
     reset();
+    resetProject();
+    resetVideo();
     navigate("/project/new");
   };
 

@@ -1,19 +1,13 @@
 // webui-react/src/components/panels/DonePanel.tsx
 import { Download, RotateCcw, CheckCircle2 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
 import { Button } from "../ui";
 import { useProjectWorkspaceStore } from "../../store/useProjectWorkspaceStore";
-import { useVideoStore } from "../../store/useVideoStore";
 
 export function DonePanel() {
   const { videoUrls, reset, setPanel } = useProjectWorkspaceStore();
-  const videoReset = useVideoStore((s) => s.reset);
-  const navigate = useNavigate();
 
-  const handleStartOver = () => {
-    reset();
-    videoReset();
-    navigate("/");
+  const handleBack = () => {
+    setPanel("config");
   };
 
   const handleMakeAnother = () => {
@@ -22,7 +16,7 @@ export function DonePanel() {
   };
 
   return (
-    <div className="flex flex-col items-center justify-start min-h-full p-8">
+    <div className="flex h-full w-full max-w-5xl mx-auto flex-col justify-start px-6 py-5">
       <div className="w-full max-w-xl space-y-4">
         <div className="flex items-center gap-2">
           <CheckCircle2 className="h-5 w-5 text-green-400" />
@@ -57,8 +51,8 @@ export function DonePanel() {
         ))}
 
         <div className="flex gap-2 pt-2">
-          <Button variant="ghost" onClick={handleStartOver} size="sm">
-            ← Start Over
+          <Button variant="ghost" onClick={handleBack} size="sm">
+            ← Back
           </Button>
           <Button onClick={handleMakeAnother} size="sm">
             <RotateCcw className="mr-1.5 h-3.5 w-3.5" />

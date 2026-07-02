@@ -1,7 +1,12 @@
 // webui-react/src/components/panels/ScriptPanel.tsx
 import { useState } from "react";
 import { Wand2 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { ApiError } from "../../api/client";
+import { projectsApi } from "../../api/projects";
 import { Button, Input, Select, Textarea, Collapsible } from "../ui";
+import { useProjectHistoryStore } from "../../store/useProjectHistoryStore";
+import { useProjectStore } from "../../store/useProjectStore";
 import { useVideoStore } from "../../store/useVideoStore";
 import { useProjectWorkspaceStore } from "../../store/useProjectWorkspaceStore";
 import { llmApi } from "../../api/llm";
@@ -9,12 +14,18 @@ import { llmApi } from "../../api/llm";
 export function ScriptPanel() {
   const store = useVideoStore();
   const workspaceStore = useProjectWorkspaceStore();
+  const projectStore = useProjectStore();
+  const updateCurrentDraft = useProjectHistoryStore((s) => s.updateCurrentDraft);
+  const removeDraft = useProjectHistoryStore((s) => s.removeDraft);
+  const currentDraftId = useProjectHistoryStore((s) => s.currentDraftId);
+  const navigate = useNavigate();
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleTopicChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     store.set("video_subject", e.target.value);
     workspaceStore.setTopic(e.target.value);
+    updateCurrentDraft(e.target.value);
   };
 
   const handleGenerateScript = async () => {
@@ -37,6 +48,21 @@ export function ScriptPanel() {
         amount: 5,
       });
       store.set("video_terms", video_terms.join(", "));
+
+      try {
+        const { project_id } = await projectsApi.createFromScript({
+          script: video_script,
+          language: store.video_language,
+          topic: store.video_subject,
+        });
+        await projectStore.open(project_id);
+        removeDraft(currentDraftId);
+        navigate(`/project/${project_id}`, { replace: true });
+      } catch (projectError) {
+        if (!(projectError instanceof ApiError && projectError.status === 404)) {
+          throw projectError;
+        }
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to generate script");
     } finally {
@@ -45,8 +71,10 @@ export function ScriptPanel() {
   };
 
   return (
-    <section className="flex flex-col gap-3 px-6 py-5 max-w-2xl mx-auto w-full">
-      <h2 className="text-base font-semibold text-foreground">Script</h2>
+    <section className="flex h-full w-full max-w-5xl mx-auto flex-col px-6 py-5">
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-2xl space-y-3">
+          <h2 className="text-base font-semibold text-foreground">Script</h2>
 
       <Input
         label="Topic"
@@ -132,7 +160,10 @@ export function ScriptPanel() {
         />
       </Collapsible>
 
-      <div className="pt-4 border-t border-border flex justify-end">
+        </div>
+      </div>
+
+      <div className="w-full max-w-2xl pt-4 border-t border-border flex justify-end">
         <Button
           disabled={!store.video_subject.trim()}
           onClick={() => workspaceStore.setPanel("config")}

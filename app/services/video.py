@@ -26,6 +26,7 @@ from moviepy import (
 )
 from moviepy.video.tools.subtitles import SubtitlesClip
 from PIL import Image, ImageDraw, ImageFont
+from PIL import ImageColor
 
 from app.config import config
 from app.models import const
@@ -114,6 +115,50 @@ def _resolve_effective_subtitle(params, video_width, video_height):
             f"position='{effective.position}', normalize={effective.normalize}"
         )
     return effective
+
+
+def _normalize_render_color(color, fallback="#FFFFFF"):
+    """Return a MoviePy/Pillow friendly color string.
+
+    The React color picker sends hex colours. Normalizing here keeps TextClip
+    from receiving empty/odd values and makes the final render follow the UI
+    preview more closely.
+    """
+    if color is None:
+        return fallback
+    text = str(color).strip()
+    if not text:
+        return fallback
+    try:
+        return ImageColor.getrgb(text)
+    except ValueError:
+        logger.warning(f"invalid subtitle color '{color}', using {fallback}")
+        return ImageColor.getrgb(fallback)
+
+
+def _resolve_render_stroke_width(stroke_width, font_size, stroke_color) -> int:
+    """Scale subtitle stroke so the final video matches the small UI preview.
+
+    MoviePy only accepts integer stroke widths. A direct ``int(1.0)`` is too
+    thin for many 9:16 renders, while the preview's 1px CSS stroke is shown on a
+    much smaller canvas. Keep zero as explicit "no stroke"; otherwise use a
+    small font-relative minimum.
+    """
+    try:
+        requested = float(stroke_width)
+    except (TypeError, ValueError):
+        requested = 0.0
+
+    if requested <= 0 or stroke_color is None:
+        return 0
+
+    try:
+        size = max(1, int(font_size))
+    except (TypeError, ValueError):
+        size = 60
+
+    proportional_minimum = max(1, int(round(size * 0.06)))
+    return max(int(round(requested)), proportional_minimum)
 
 
 def resolve_render_profile(params=None):
@@ -1010,9 +1055,11 @@ def _build_karaoke_clip(
 
     clip_h = int(font_size * 1.8)
     y = int((clip_h - font_size) / 2)
-    base_color = subtitle_render.fore_color
-    stroke_color = subtitle_render.stroke_color
-    stroke_width = int(subtitle_render.stroke_width)
+    base_color = _normalize_render_color(subtitle_render.fore_color, "#FFFFFF")
+    stroke_color = _normalize_render_color(subtitle_render.stroke_color, "#000000")
+    stroke_width = _resolve_render_stroke_width(
+        subtitle_render.stroke_width, font_size, stroke_color
+    )
     duration = max(0.05, end_t - start_t)
 
     layers = []
@@ -1105,7 +1152,11 @@ def generate_video(
 
     def create_text_clip(subtitle_item):
         font_size = int(subtitle_render.font_size)
-        stroke_width = int(subtitle_render.stroke_width)
+        fore_color = _normalize_render_color(subtitle_render.fore_color, "#FFFFFF")
+        stroke_color = _normalize_render_color(subtitle_render.stroke_color, "#000000")
+        stroke_width = _resolve_render_stroke_width(
+            subtitle_render.stroke_width, font_size, stroke_color
+        )
         phrase = subtitle_item[1]
         if subtitle_render.normalize:
             # Limpia puntuación/espaciado en español (¿¡, tildes, ñ) antes de
@@ -1178,9 +1229,9 @@ def generate_video(
                 text=wrapped_txt,
                 font=font_path,
                 font_size=font_size,
-                color=subtitle_render.fore_color,
+                color=fore_color,
                 bg_color=None,
-                stroke_color=subtitle_render.stroke_color,
+                stroke_color=stroke_color,
                 stroke_width=stroke_width,
                 interline=interline,
                 size=(box_w, None),
@@ -1209,9 +1260,9 @@ def generate_video(
                 text=wrapped_txt,
                 font=font_path,
                 font_size=font_size,
-                color=subtitle_render.fore_color,
+                color=fore_color,
                 bg_color=None,
-                stroke_color=subtitle_render.stroke_color,
+                stroke_color=stroke_color,
                 stroke_width=stroke_width,
                 interline=interline,
                 size=(int(max_width), None),
@@ -1240,13 +1291,14 @@ def generate_video(
                 text=wrapped_txt,
                 font=font_path,
                 font_size=font_size,
-                color=subtitle_render.fore_color,
+                color=fore_color,
                 bg_color=None,
-                stroke_color=subtitle_render.stroke_color,
+                stroke_color=stroke_color,
                 stroke_width=stroke_width,
                 interline=interline,
                 size=size,
                 text_align="center",
+                margin=(0, text_clip_margin_y),
             )
         return _position_subtitle_clip(
             _clip, subtitle_item, subtitle_render, video_height

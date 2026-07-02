@@ -10,6 +10,7 @@ import {
   ColorPicker,
   Collapsible,
   Input,
+  Textarea,
 } from "../ui";
 import { useVideoStore } from "../../store/useVideoStore";
 import { useConfigStore } from "../../store/useConfigStore";
@@ -17,6 +18,7 @@ import { useProjectWorkspaceStore } from "../../store/useProjectWorkspaceStore";
 import { videoApi } from "../../api/video";
 import { voiceApi } from "../../api/voice";
 import { SubtitleFontGallery } from "../subtitles/SubtitleFontGallery";
+import { SubtitlePreview } from "../subtitles/SubtitlePreview";
 import { VoiceGallery } from "../voice/VoiceGallery";
 import { TTS_PROVIDERS, type TtsProvider } from "../../api/types";
 import type {
@@ -98,7 +100,7 @@ export function VideoConfigPanel() {
   };
 
   return (
-    <section className="flex flex-col h-full max-w-xl mx-auto w-full px-6 py-4">
+    <section className="grid h-full min-h-0 w-full max-w-5xl mx-auto grid-rows-[auto_auto_minmax(0,1fr)_auto] px-6 py-4">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-sm font-semibold text-foreground">
           Configure your video
@@ -114,7 +116,10 @@ export function VideoConfigPanel() {
 
       <TabBar tabs={TABS} active={tab} onChange={setTab} />
 
-      <div className="flex-1 overflow-y-auto py-4 space-y-3">
+      <div className="min-h-0 overflow-hidden py-4">
+        <div className="grid h-full min-h-0 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(220px,260px)]">
+          <div className="h-full min-h-0 overflow-y-auto pr-1 pb-6">
+            <div className="min-w-0 space-y-3">
         {tab === "video" && (
           <>
             <Select
@@ -196,11 +201,19 @@ export function VideoConfigPanel() {
                 {voiceLoadError && (
                   <p className="text-xs text-red-400">{voiceLoadError}</p>
                 )}
+                <Textarea
+                  label="Texto de prueba"
+                  placeholder="Escribe el texto que quieres escuchar y ver en la preview..."
+                  value={store.preview_text ?? ""}
+                  onChange={(e) => store.set("preview_text", e.target.value)}
+                  rows={3}
+                />
                 <VoiceGallery
                   voices={voiceOptions}
                   selectedVoice={store.voice_name ?? ""}
                   voiceRate={store.voice_rate ?? 1.0}
                   voiceVolume={store.voice_volume ?? 1.0}
+                  sampleText={store.preview_text}
                   onSelect={(voiceName) => store.set("voice_name", voiceName)}
                 />
                 <Slider
@@ -256,77 +269,114 @@ export function VideoConfigPanel() {
 
         {tab === "subtitles" && (
           <>
-            <Checkbox
-              label="Enable subtitles"
-              checked={store.subtitle_enabled ?? true}
-              onChange={(v) => store.set("subtitle_enabled", v)}
-            />
-            {store.subtitle_enabled && (
-              <Collapsible title="Subtitle Style" defaultOpen>
-                <Select
-                  label="Position"
-                  value={store.subtitle_position ?? "bottom"}
-                  options={POSITION_OPTIONS}
-                  onChange={(e) =>
-                    store.set("subtitle_position", e.target.value)
-                  }
-                />
-                {store.subtitle_position === "custom" && (
-                  <Slider
-                    label="Custom Position %"
-                    value={store.custom_position ?? 70}
-                    min={0}
-                    max={100}
-                    step={1}
-                    onChange={(v) => store.set("custom_position", v)}
-                    displayValue={`${store.custom_position ?? 70}%`}
+              <Checkbox
+                label="Enable subtitles"
+                checked={store.subtitle_enabled ?? true}
+                onChange={(v) => store.set("subtitle_enabled", v)}
+              />
+              {store.subtitle_enabled && (
+                <Collapsible title="Subtitle Style" defaultOpen>
+                  <Select
+                    label="Position"
+                    value={store.subtitle_position ?? "bottom"}
+                    options={POSITION_OPTIONS}
+                    onChange={(e) =>
+                      store.set("subtitle_position", e.target.value)
+                    }
                   />
-                )}
-                <SubtitleFontGallery
-                  value={store.font_name ?? "STHeitiMedium.ttc"}
-                  onChange={(fontName) => store.set("font_name", fontName)}
-                />
-                <Input
-                  label="Font Size"
-                  type="number"
-                  min={20}
-                  max={120}
-                  value={store.font_size ?? 60}
-                  onChange={(e) =>
-                    store.set("font_size", parseInt(e.target.value, 10))
-                  }
-                />
-                <ColorPicker
-                  label="Text Color"
-                  value={store.text_fore_color ?? "#FFFFFF"}
-                  onChange={(v) => store.set("text_fore_color", v)}
-                />
-                <ColorPicker
-                  label="Stroke Color"
-                  value={store.stroke_color ?? "#000000"}
-                  onChange={(v) => store.set("stroke_color", v)}
-                />
-                <Slider
-                  label="Stroke Width"
-                  value={store.stroke_width ?? 1.5}
-                  min={0}
-                  max={5}
-                  step={0.5}
-                  onChange={(v) => store.set("stroke_width", v)}
-                  displayValue={(store.stroke_width ?? 1.5).toFixed(1)}
-                />
-                <Checkbox
-                  label="Rounded background"
-                  checked={store.rounded_subtitle_background ?? false}
-                  onChange={(v) => store.set("rounded_subtitle_background", v)}
-                />
-              </Collapsible>
-            )}
+                  {store.subtitle_position === "custom" && (
+                    <Slider
+                      label="Custom Position %"
+                      value={store.custom_position ?? 70}
+                      min={0}
+                      max={100}
+                      step={1}
+                      onChange={(v) => store.set("custom_position", v)}
+                      displayValue={`${store.custom_position ?? 70}%`}
+                    />
+                  )}
+                  <SubtitleFontGallery
+                    value={store.font_name ?? "STHeitiMedium.ttc"}
+                    onChange={(fontName) => store.set("font_name", fontName)}
+                  />
+                  <Input
+                    label="Font Size"
+                    type="number"
+                    min={20}
+                    max={120}
+                    value={store.font_size ?? 60}
+                    onChange={(e) =>
+                      store.set("font_size", parseInt(e.target.value, 10))
+                    }
+                  />
+                  <ColorPicker
+                    label="Text Color"
+                    value={store.text_fore_color ?? "#FFFFFF"}
+                    onChange={(v) => store.set("text_fore_color", v)}
+                  />
+                  <ColorPicker
+                    label="Stroke Color"
+                    value={store.stroke_color ?? "#000000"}
+                    onChange={(v) => store.set("stroke_color", v)}
+                  />
+                  <Slider
+                    label="Stroke Width"
+                    value={store.stroke_width ?? 1.5}
+                    min={0}
+                    max={5}
+                    step={0.5}
+                    onChange={(v) => store.set("stroke_width", v)}
+                    displayValue={(store.stroke_width ?? 1.5).toFixed(1)}
+                  />
+                  <Checkbox
+                    label="Subtitle background"
+                    checked={store.text_background_color !== false}
+                    onChange={(v) =>
+                      store.set("text_background_color", v ? "#000000" : false)
+                    }
+                  />
+                  {store.text_background_color !== false && (
+                    <ColorPicker
+                      label="Background Color"
+                      value={
+                        typeof store.text_background_color === "string"
+                          ? store.text_background_color
+                          : "#000000"
+                      }
+                      onChange={(v) => store.set("text_background_color", v)}
+                    />
+                  )}
+                  <Checkbox
+                    label="Rounded background"
+                    checked={store.rounded_subtitle_background ?? false}
+                    onChange={(v) => store.set("rounded_subtitle_background", v)}
+                  />
+                </Collapsible>
+              )}
           </>
         )}
+          </div>
+          </div>
+
+          <div className="hidden min-h-0 self-start lg:block">
+          <SubtitlePreview
+            enabled={store.subtitle_enabled ?? true}
+            position={store.subtitle_position ?? "bottom"}
+            customPosition={store.custom_position ?? 70}
+            fontName={store.font_name ?? "STHeitiMedium.ttc"}
+            fontSize={store.font_size ?? 60}
+            textColor={store.text_fore_color ?? "#FFFFFF"}
+            strokeColor={store.stroke_color ?? "#000000"}
+            strokeWidth={store.stroke_width ?? 1.5}
+            textBackgroundColor={store.text_background_color ?? true}
+            roundedBackground={store.rounded_subtitle_background ?? false}
+            sampleText={store.preview_text || store.video_script}
+          />
+          </div>
+          </div>
       </div>
 
-      <div className="border-t border-border pt-4">
+      <div className="shrink-0 border-t border-border pt-4">
         <Button
           className="w-full"
           size="lg"

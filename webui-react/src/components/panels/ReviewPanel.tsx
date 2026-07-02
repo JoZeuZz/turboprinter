@@ -36,7 +36,7 @@ export function ReviewPanel() {
 
   if (projectStore.mode === "disabled") {
     return (
-      <div className="flex flex-col items-center justify-center min-h-full p-8 text-center">
+      <div className="flex h-full w-full max-w-5xl mx-auto flex-col items-start justify-center px-6 py-5 text-center">
         <p className="text-sm text-muted">Review not available — rendering directly</p>
         <p className="text-xs text-muted mt-1">
           Enable project mode on the server to use clip review.
@@ -104,7 +104,7 @@ export function ReviewPanel() {
   };
 
   return (
-    <div className="flex flex-col min-h-full p-6 gap-4">
+    <div className="flex h-full w-full max-w-5xl mx-auto flex-col gap-4 px-6 py-5">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-sm font-semibold text-foreground">Review clips</h2>

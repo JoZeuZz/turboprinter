@@ -20,6 +20,7 @@ _MEDIA_ADAPTER: TypeAdapter[list[MediaCandidate]] = TypeAdapter(list[MediaCandid
 _MUSIC_ADAPTER: TypeAdapter[list[MusicTrack]] = TypeAdapter(list[MusicTrack])
 
 _SCRIPT = "script.txt"
+_PROJECT_META = "project.json"
 _SHOT_PLAN = "shot_plan.json"
 _TIMELINE = "timeline_project.json"
 _RENDER_SPEC = "render_spec.json"
@@ -74,10 +75,27 @@ class FilesystemProjectStore:
     def load_script(self, task_id: str) -> str | None:
         return self._read(task_id, _SCRIPT)
 
+    def save_project_metadata(self, task_id: str, *, topic: str | None = None) -> None:
+        payload = {
+            "project_id": task_id,
+            "topic": topic,
+            "updated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        }
+        self._write(task_id, _PROJECT_META, _json.dumps(payload, ensure_ascii=False, indent=2))
+
+    def load_project_metadata(self, task_id: str) -> dict | None:
+        raw = self._read(task_id, _PROJECT_META)
+        if raw is None:
+            return None
+        try:
+            return _json.loads(raw)
+        except ValueError as exc:
+            raise ProjectStoreError(self._path(task_id, _PROJECT_META), exc) from exc
+
     def exists(self, task_id: str) -> bool:
         return os.path.exists(self._path(task_id, _SCRIPT)) or any(
             os.path.exists(self._path(task_id, name))
-            for name in (_SHOT_PLAN, _TIMELINE, _SELECTED)
+            for name in (_PROJECT_META, _SHOT_PLAN, _TIMELINE, _SELECTED)
         )
 
     def _base_dir(self) -> str:
@@ -94,16 +112,31 @@ class FilesystemProjectStore:
             return []
         entries: list[dict] = []
         for name in os.listdir(base):
+            project_path = os.path.join(base, name)
+            if not os.path.isdir(project_path):
+                continue
             timeline_path = os.path.join(base, name, _TIMELINE)
-            if not os.path.isfile(timeline_path):
+            script_path = os.path.join(base, name, _SCRIPT)
+            meta_path = os.path.join(base, name, _PROJECT_META)
+            if not any(os.path.isfile(path) for path in (timeline_path, script_path, meta_path)):
                 continue
             try:
-                mtime = os.path.getmtime(timeline_path)
-                with open(timeline_path, encoding="utf-8") as fh:
-                    data = _json.load(fh)
-                topic = data.get("title") or (
-                    (data.get("shot_plan") or {}).get("topic")
-                )
+                paths = [path for path in (timeline_path, script_path, meta_path) if os.path.isfile(path)]
+                mtime = max(os.path.getmtime(path) for path in paths)
+                topic = None
+                if os.path.isfile(timeline_path):
+                    with open(timeline_path, encoding="utf-8") as fh:
+                        data = _json.load(fh)
+                    topic = data.get("title") or (
+                        (data.get("shot_plan") or {}).get("topic")
+                    )
+                if topic is None and os.path.isfile(meta_path):
+                    with open(meta_path, encoding="utf-8") as fh:
+                        meta = _json.load(fh)
+                    topic = meta.get("topic")
+                if topic is None and os.path.isfile(script_path):
+                    with open(script_path, encoding="utf-8") as fh:
+                        topic = fh.read(80).strip()
                 entries.append({
                     "project_id": name,
                     "topic": topic,
