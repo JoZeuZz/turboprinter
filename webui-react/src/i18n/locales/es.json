@@ -306,6 +306,12 @@
     "rendering": "Renderizando…",
     "done": "Terminado"
   },
+  "origin": {
+    "draft": "Sin guardar",
+    "history": "Desde historial",
+    "generating": "Generando",
+    "finished": "Generado"
+  },
   "pipeline": {
     "script": "Guion",
     "config": "Configuración",
