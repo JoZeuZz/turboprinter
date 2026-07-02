@@ -1,0 +1,5 @@
+[
+  { "name": "bottom-solid", "style": { "fontSize": 60, "strokeWidth": 1.5, "position": "bottom", "backgroundColor": true, "roundedBackground": false }, "band": "bottom", "hasBackground": true },
+  { "name": "top-none", "style": { "fontSize": 60, "strokeWidth": 1.5, "position": "top", "backgroundColor": false, "roundedBackground": false }, "band": "top", "hasBackground": false },
+  { "name": "center-rounded", "style": { "fontSize": 60, "strokeWidth": 2.0, "position": "center", "backgroundColor": true, "roundedBackground": true }, "band": "center", "hasBackground": true }
+]
