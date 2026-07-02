@@ -68,6 +68,99 @@ export interface UiConfig {
   video_sources: string[];
   subtitle_position_default: string;
   custom_position_default: number;
+  settings: EditableConfig;
+  options: ConfigOptions;
+}
+
+export interface ConfigOptions {
+  video_sources: string[];
+  video_codecs: string[];
+  llm_providers: string[];
+  quality_profiles: string[];
+  subtitle_positions: string[];
+  whisper_devices: string[];
+}
+
+export interface EditableConfig {
+  app: {
+    video_source: string;
+    tls_verify: boolean;
+    pexels_api_keys: string[];
+    pixabay_api_keys: string[];
+    coverr_api_keys: string[];
+    llm_provider: string;
+    llm_fallback_providers: string[];
+    llm_request_timeout_seconds: number;
+    llm_connect_timeout_seconds: number;
+    gemini_api_key: string;
+    gemini_model_name: string;
+    subtitle_provider: string;
+    endpoint: string;
+    material_directory: string;
+    enable_redis: boolean;
+    redis_host: string;
+    redis_port: number;
+    redis_db: number;
+    redis_password: string;
+    max_concurrent_tasks: number;
+    max_queued_tasks: number;
+    max_upload_size_mb: number;
+    video_codec: string;
+    match_materials_to_script: boolean;
+    upload_post_enabled: boolean;
+    upload_post_api_key: string;
+    upload_post_username: string;
+    upload_post_platforms: string[];
+    upload_post_auto_upload: boolean;
+    n_threads: number;
+    custom_system_prompt: string;
+  };
+  whisper: {
+    model_size: string;
+    device: string;
+    compute_type: string;
+  };
+  azure: {
+    speech_key: string;
+    speech_region: string;
+  };
+  siliconflow: {
+    api_key: string;
+  };
+  ui: {
+    hide_log: boolean;
+    language: string;
+    subtitle_position: string;
+    custom_position: number;
+    layout_mode: string;
+    bgm_type: string;
+    tts_server: string;
+    voice_name: string;
+    font_name: string;
+    text_fore_color: string;
+    font_size: number;
+    subtitle_background_enabled: boolean;
+    subtitle_background_color: string;
+    rounded_subtitle_background: boolean;
+    stroke_width: number;
+    stroke_color: string;
+    text_background_color: string;
+  };
+  quality: {
+    enabled: boolean;
+    profile: string;
+    target_platform: string;
+    language: string;
+    prefer_local_assets: boolean;
+    prefer_licensed_assets: boolean;
+    avoid_reencode_intermediates: boolean;
+    normalize_audio: boolean;
+    subtitle_style: string;
+    word_highlight: boolean;
+    safe_area_enabled: boolean;
+    content_package: boolean;
+    use_two_pass: boolean;
+  };
 }
 
 export interface BgmFile {
