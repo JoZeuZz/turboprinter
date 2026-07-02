@@ -306,6 +306,11 @@
     "rendering": "Renderizando…",
     "done": "Terminado"
   },
+  "status": {
+    "loading": "Cargando…",
+    "offline": "Sin conexión",
+    "error": "Error"
+  },
   "origin": {
     "draft": "Sin guardar",
     "history": "Desde historial",

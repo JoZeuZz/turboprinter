@@ -8,6 +8,7 @@ export { Checkbox } from "./Checkbox";
 export { Collapsible } from "./Collapsible";
 export { ColorPicker } from "./ColorPicker";
 export { StateBadge } from "./StateBadge";
+export { StatusBadge } from "./StatusBadge";
 export { TabBar } from "./TabBar";
 export { ApiKeyInput } from "./ApiKeyInput";
 export { ClipPreviewModal } from "./ClipPreviewModal";
