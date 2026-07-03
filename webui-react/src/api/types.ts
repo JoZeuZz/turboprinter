@@ -322,6 +322,7 @@ export interface TimelineItem {
   id: string;
   media_id?: string | null;
   local_path?: string | null;
+  asset_url?: string | null;
   thumbnail_url?: string | null;
   source_url?: string | null;
   start_sec: number;

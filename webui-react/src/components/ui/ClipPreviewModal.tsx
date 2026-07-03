@@ -22,7 +22,7 @@ export function ClipPreviewModal({ clip, onClose }: ClipPreviewModalProps) {
 
   if (!clip) return null;
 
-  const src = clip.source_url ?? clip.local_path ?? null;
+  const src = clip.asset_url ?? null;
 
   return (
     <div

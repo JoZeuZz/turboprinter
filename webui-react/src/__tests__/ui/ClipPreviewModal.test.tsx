@@ -7,7 +7,7 @@ const CLIP: TimelineItem = {
   id: "clip-1",
   start_sec: 0,
   duration_sec: 5,
-  source_url: "http://example.com/video.mp4",
+  asset_url: "http://example.com/video.mp4",
   text: "Scene 1",
 };
 
@@ -19,13 +19,13 @@ describe("ClipPreviewModal", () => {
     expect(container.firstChild).toBeNull();
   });
 
-  it("renders video element with source_url", () => {
+  it("renders video element with asset_url", () => {
     render(<ClipPreviewModal clip={CLIP} onClose={vi.fn()} />);
     const video = screen.getByTestId("preview-video") as HTMLVideoElement;
     expect(video.src).toContain("video.mp4");
   });
 
-  it("shows 'Preview no disponible' when no source_url or local_path", () => {
+  it("shows 'Preview no disponible' when no asset_url", () => {
     const noSource: TimelineItem = { id: "x", start_sec: 0, duration_sec: 3 };
     render(<ClipPreviewModal clip={noSource} onClose={vi.fn()} />);
     expect(screen.getByText(/preview no disponible/i)).toBeInTheDocument();
