@@ -44,14 +44,17 @@ from app.models.project_schema import (
     CreateFromRedditRequest,
     MediaSearchRequest,
     MusicSelectRequest,
+    NarrationRequest,
     PlanRequest,
     RenderRequest,
     RenameProjectRequest,
     TimelineBuildRequest,
     TimelineCommandsRequest,
 )
+from app.models.schema import VideoParams
 from app.services import llm
 from app.services import state as sm
+from app.services import task as legacy_task
 from app.services.quality.observability import phase_timer
 from app.utils import utils
 
@@ -610,6 +613,40 @@ def media_search(request: Request, project_id: str, body: MediaSearchRequest):
             plan, orientation=body.orientation, prefer_local=body.prefer_local, task_id=project_id,
         )
     return _ok({"project_id": project_id, "selected_count": len(selection)})
+
+
+@router.post("/projects/{project_id}/narration", response_model=BaseProjectResponse,
+             summary="Synthesize narration audio and subtitles from the script")
+def narration_synthesize(request: Request, project_id: str, body: NarrationRequest):
+    _require_project_mode(request, project_id)
+    store = _store()
+    script = store.load_script(project_id) or ""
+    if not script.strip():
+        raise HttpException(task_id=project_id, status_code=400, message="project has no script")
+    params = VideoParams(
+        video_subject=project_id,
+        video_script=script,
+        voice_name=body.voice_name,
+        voice_rate=body.voice_rate,
+        subtitle_enabled=body.subtitle_enabled,
+    )
+    with phase_timer("narration", project_id=project_id):
+        audio_file, audio_duration, sub_maker = legacy_task.generate_audio(
+            project_id, params, script
+        )
+        if not audio_file:
+            raise HttpException(
+                task_id=project_id, status_code=500, message="failed to generate narration audio"
+            )
+        subtitle_path = legacy_task.generate_subtitle(
+            project_id, params, script, sub_maker, audio_file
+        )
+    return _ok({
+        "project_id": project_id,
+        "narration_audio_path": audio_file,
+        "audio_duration_sec": audio_duration,
+        "subtitle_path": subtitle_path or None,
+    })
 
 
 @router.post("/projects/{project_id}/timeline/build", response_model=BaseProjectResponse,

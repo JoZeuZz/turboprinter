@@ -80,3 +80,9 @@ class RenderRequest(BaseModel):
 
 class RenameProjectRequest(BaseModel):
     topic: str
+
+
+class NarrationRequest(BaseModel):
+    voice_name: str = ""
+    voice_rate: float = 1.0
+    subtitle_enabled: bool = True

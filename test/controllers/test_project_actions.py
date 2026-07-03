@@ -171,3 +171,81 @@ def test_get_project_asset_url_none_for_missing_file(tmp_path, monkeypatch):
 
     item = resp.json()["data"]["timeline"]["tracks"][0]["items"][0]
     assert item["asset_url"] is None
+
+
+def test_narration_synthesizes_audio_and_subtitle(tmp_path, monkeypatch):
+    monkeypatch.setattr(app_config, "project_mode_enabled", True, raising=False)
+    monkeypatch.setattr(
+        FilesystemProjectStore,
+        "_task_dir",
+        lambda self, task_id, make=False: _make_dir(str(tmp_path), task_id, make),
+        raising=False,
+    )
+    store = FilesystemProjectStore()
+    store.save_script("proj-voice", "Este es el guion de prueba.")
+
+    from app.controllers.v1 import projects as projects_controller
+
+    def fake_generate_audio(task_id, params, video_script, **kwargs):
+        assert task_id == "proj-voice"
+        assert video_script == "Este es el guion de prueba."
+        assert params.voice_name == "es-MX-DaliaNeural"
+        return "/fake/audio.mp3", 12, object()
+
+    def fake_generate_subtitle(task_id, params, video_script, sub_maker, audio_file):
+        assert audio_file == "/fake/audio.mp3"
+        return "/fake/subtitle.srt"
+
+    monkeypatch.setattr(projects_controller.legacy_task, "generate_audio", fake_generate_audio)
+    monkeypatch.setattr(projects_controller.legacy_task, "generate_subtitle", fake_generate_subtitle)
+
+    client = TestClient(app)
+    resp = client.post(
+        "/api/v1/projects/proj-voice/narration",
+        json={"voice_name": "es-MX-DaliaNeural", "voice_rate": 1.1, "subtitle_enabled": True},
+    )
+
+    assert resp.status_code == 200
+    data = resp.json()["data"]
+    assert data == {
+        "project_id": "proj-voice",
+        "narration_audio_path": "/fake/audio.mp3",
+        "audio_duration_sec": 12,
+        "subtitle_path": "/fake/subtitle.srt",
+    }
+
+
+def test_narration_requires_script(tmp_path, monkeypatch):
+    monkeypatch.setattr(app_config, "project_mode_enabled", True, raising=False)
+    monkeypatch.setattr(
+        FilesystemProjectStore,
+        "_task_dir",
+        lambda self, task_id, make=False: _make_dir(str(tmp_path), task_id, make),
+        raising=False,
+    )
+    client = TestClient(app)
+    resp = client.post("/api/v1/projects/proj-no-script/narration", json={})
+    assert resp.status_code == 400
+
+
+def test_narration_returns_500_when_audio_generation_fails(tmp_path, monkeypatch):
+    monkeypatch.setattr(app_config, "project_mode_enabled", True, raising=False)
+    monkeypatch.setattr(
+        FilesystemProjectStore,
+        "_task_dir",
+        lambda self, task_id, make=False: _make_dir(str(tmp_path), task_id, make),
+        raising=False,
+    )
+    store = FilesystemProjectStore()
+    store.save_script("proj-fail", "guion")
+
+    from app.controllers.v1 import projects as projects_controller
+
+    monkeypatch.setattr(
+        projects_controller.legacy_task, "generate_audio",
+        lambda task_id, params, video_script, **kwargs: (None, None, None),
+    )
+
+    client = TestClient(app)
+    resp = client.post("/api/v1/projects/proj-fail/narration", json={})
+    assert resp.status_code == 500
