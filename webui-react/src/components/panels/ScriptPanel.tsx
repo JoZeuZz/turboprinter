@@ -64,6 +64,7 @@ export function ScriptPanel() {
         if (!(projectError instanceof ApiError && projectError.status === 404)) {
           throw projectError;
         }
+        useProjectStore.setState({ mode: "disabled" });
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : t("panels.script.failed"));
