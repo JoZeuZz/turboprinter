@@ -66,12 +66,14 @@ class TimelineBuilder:
             if duration <= 0:
                 raise ValueError(f"segment {segment.id!r} has non-positive duration")
             candidate = selection.get(segment.id)
+            item_text = segment.narration_text
+            item_keywords = list(segment.search_queries)
             if candidate is None:
                 missing_segments.append(segment.id)
                 items.append(TimelineItem(
                     id=f"item_{segment.id}", media_id=None, local_path=None,
                     start_sec=cursor, duration_sec=duration, segment_id=segment.id,
-                    provider="placeholder",
+                    provider="placeholder", text=item_text, keywords=item_keywords,
                 ))
             elif (
                 candidate.duration_sec is not None
@@ -85,7 +87,7 @@ class TimelineBuilder:
                 items.append(TimelineItem(
                     id=f"item_{segment.id}", media_id=None, local_path=None,
                     start_sec=cursor, duration_sec=duration, segment_id=segment.id,
-                    provider="placeholder",
+                    provider="placeholder", text=item_text, keywords=item_keywords,
                 ))
             elif (
                 candidate.duration_sec is not None
@@ -104,6 +106,8 @@ class TimelineBuilder:
                         duration_sec=part_duration, trim_start_sec=0.0,
                         trim_end_sec=part_duration,
                         segment_id=segment.id, provider=candidate.provider,
+                        thumbnail_url=candidate.thumbnail_url,
+                        text=item_text, keywords=item_keywords,
                     ))
                     part_start += part_duration
                     remaining -= part_duration
@@ -122,6 +126,8 @@ class TimelineBuilder:
                     trim_end_sec=min(candidate.duration_sec, duration)
                     if candidate.duration_sec is not None else None,
                     segment_id=segment.id, provider=candidate.provider,
+                    thumbnail_url=candidate.thumbnail_url,
+                    text=item_text, keywords=item_keywords,
                 ))
             cursor += duration
 

@@ -350,3 +350,46 @@ def test_build_without_music_has_no_music_track():
         task_id="task-1",
     )
     assert all(t.id != "music_1" for t in project.tracks)
+
+
+def test_build_populates_thumbnail_text_and_keywords_for_matched_segment():
+    plan = ShotPlan(
+        task_id="task-1", language="es", topic="demo", script="Uno.",
+        segments=[_segment("seg_001", 1, 3.0)],
+    )
+    candidate = _candidate("seg_001", "mc-1").model_copy(
+        update={"thumbnail_url": "https://example.com/thumb.jpg"}
+    )
+    project = TimelineBuilder().build(plan, {"seg_001": candidate}, task_id="task-1")
+
+    item = project.tracks[0].items[0]
+    assert item.thumbnail_url == "https://example.com/thumb.jpg"
+    assert item.text == "Narration 1"
+    assert item.keywords == ["query 1"]
+
+
+def test_build_populates_text_and_keywords_but_not_thumbnail_for_missing_segment():
+    project = TimelineBuilder().build(
+        _plan(), {"seg_001": _candidate("seg_001", "mc-1")}, task_id="task-1"
+    )
+    missing_item = project.tracks[0].items[1]  # seg_002 has no candidate in selection
+    assert missing_item.thumbnail_url is None
+    assert missing_item.text == "Narration 2"
+    assert missing_item.keywords == ["query 2"]
+
+
+def test_build_repeated_parts_all_carry_same_thumbnail_text_keywords():
+    plan = ShotPlan(
+        task_id="task-1", language="es", topic="demo", script="Uno.",
+        segments=[_segment("seg_short", 1, 5.0)],
+    )
+    candidate = _candidate("seg_short", "mc-short", duration=2.0).model_copy(
+        update={"thumbnail_url": "https://example.com/short.jpg"}
+    )
+    project = TimelineBuilder().build(plan, {"seg_short": candidate}, task_id="task-1")
+
+    items = project.tracks[0].items
+    assert len(items) == 3
+    assert all(item.thumbnail_url == "https://example.com/short.jpg" for item in items)
+    assert all(item.text == "Narration 1" for item in items)
+    assert all(item.keywords == ["query 1"] for item in items)
