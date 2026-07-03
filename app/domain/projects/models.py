@@ -26,6 +26,7 @@ class TimelineItem(BaseModel):
     id: str
     media_id: str | None = None
     local_path: str | None = None
+    thumbnail_url: str | None = None
     start_sec: float
     duration_sec: float
     trim_start_sec: float = 0.0
@@ -35,6 +36,8 @@ class TimelineItem(BaseModel):
     transition_in: str | None = None
     transition_out: str | None = None
     volume: float | None = None
+    text: str | None = None
+    keywords: list[str] = Field(default_factory=list)
 
 
 class TimelineTrack(BaseModel):

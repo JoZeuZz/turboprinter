@@ -186,3 +186,22 @@ def test_replace_missing_local_path_rejects_when_verifiable():
         )
 
     assert p.tracks[0].items[0].media_id is None
+
+
+def test_timeline_item_defaults_thumbnail_text_keywords_to_empty():
+    item = TimelineItem(id="i1", local_path="/a.mp4", start_sec=0.0, duration_sec=5.0)
+    assert item.thumbnail_url is None
+    assert item.text is None
+    assert item.keywords == []
+
+
+def test_timeline_item_accepts_thumbnail_text_keywords():
+    item = TimelineItem(
+        id="i1", local_path="/a.mp4", start_sec=0.0, duration_sec=5.0,
+        thumbnail_url="https://example.com/thumb.jpg",
+        text="Narración del segmento",
+        keywords=["gatos", "playa"],
+    )
+    assert item.thumbnail_url == "https://example.com/thumb.jpg"
+    assert item.text == "Narración del segmento"
+    assert item.keywords == ["gatos", "playa"]
