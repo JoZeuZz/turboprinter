@@ -7,7 +7,7 @@ import { Timeline } from "../editor/Timeline";
 import { Button } from "../ui";
 import { useProjectStore } from "../../store/useProjectStore";
 import { useProjectWorkspaceStore } from "../../store/useProjectWorkspaceStore";
-import type { TimelineItem } from "../../api/types";
+import type { EditCommand, TimelineItem } from "../../api/types";
 
 export function EditorPanel() {
   const { t } = useTranslation();
@@ -25,6 +25,8 @@ export function EditorPanel() {
   }
 
   const videoTrack = projectStore.project?.tracks.find((t) => t.type === "video");
+  const audioTrack = projectStore.project?.tracks.find((t) => t.type === "audio");
+  const subtitleTrack = projectStore.project?.tracks.find((t) => t.type === "subtitle");
   const items: TimelineItem[] = videoTrack?.items ?? [];
 
   const selectedClip = items.find((c) => c.id === selectedId) ?? null;
@@ -57,6 +59,10 @@ export function EditorPanel() {
     if (selectedId === id) setSelectedId(null);
   };
 
+  const handleReorder = (commands: EditCommand[]) => {
+    void projectStore.applyTimelineCommands({ commands });
+  };
+
   const handleRender = () => {
     void projectStore.render();
     setPanel("rendering");
@@ -79,7 +85,14 @@ export function EditorPanel() {
       </div>
 
       {/* Bottom: timeline */}
-      <Timeline items={items} selectedId={selectedId} onSelect={setSelectedId} />
+      <Timeline
+        videoTrack={videoTrack}
+        audioTrack={audioTrack}
+        subtitleTrack={subtitleTrack}
+        selectedId={selectedId}
+        onSelect={setSelectedId}
+        onReorder={handleReorder}
+      />
 
       {/* Footer actions */}
       <div className="flex items-center justify-between border-t border-border px-4 py-2">
