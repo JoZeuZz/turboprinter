@@ -144,7 +144,7 @@ describe("VideoConfigPanel generate dispatch", () => {
       generateVideo, setPanel, videoUrls: [],
     } as never);
     vi.mocked(useProjectStore).mockReturnValue({
-      mode: "ready", generateViaProjectMode,
+      mode: "ready", generateViaProjectMode, projectId: "project-1",
     } as never);
 
     act(() => useVideoStore.getState().set("video_subject", "Dogs"));
@@ -154,5 +154,23 @@ describe("VideoConfigPanel generate dispatch", () => {
     expect(generateViaProjectMode).toHaveBeenCalled();
     expect(generateVideo).not.toHaveBeenCalled();
     expect(setPanel).toHaveBeenCalledWith("generating");
+  });
+
+  it("calls generateVideo (legacy) when project mode is enabled but no project is open", async () => {
+    const generateVideo = vi.fn();
+    const generateViaProjectMode = vi.fn();
+    vi.mocked(useProjectWorkspaceStore).mockReturnValue({
+      generateVideo, setPanel: vi.fn(), videoUrls: [],
+    } as never);
+    vi.mocked(useProjectStore).mockReturnValue({
+      mode: "ready", generateViaProjectMode, projectId: null,
+    } as never);
+
+    act(() => useVideoStore.getState().set("video_subject", "Dogs"));
+    render(<VideoConfigPanel />);
+    await userEvent.click(screen.getByText(/Generar video/i));
+
+    expect(generateVideo).toHaveBeenCalled();
+    expect(generateViaProjectMode).not.toHaveBeenCalled();
   });
 });

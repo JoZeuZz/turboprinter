@@ -44,6 +44,17 @@ describe("GeneratingPanel", () => {
     expect(screen.getByRole("button", { name: /reintentar/i })).toBeInTheDocument();
   });
 
+  it("shows retry button and error when project mode becomes disabled mid-orchestration", async () => {
+    useProjectStore.setState({
+      orchestrationStep: "plan",
+      mode: "disabled",
+      error: "project mode disabled",
+    });
+    render(<GeneratingPanel />);
+    expect(screen.getByText("project mode disabled")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /reintentar/i })).toBeInTheDocument();
+  });
+
   it("retry button calls generateViaProjectMode again", async () => {
     const generateViaProjectMode = vi.fn();
     useProjectStore.setState({

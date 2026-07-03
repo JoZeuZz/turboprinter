@@ -34,6 +34,7 @@ export function GeneratingPanel() {
     { key: "timeline", label: t("panels.generating.projectSteps.timeline") },
   ];
   const currentStepIndex = PROJECT_STEPS.findIndex((s) => s.key === projectStore.orchestrationStep);
+  const hasFailed = projectStore.mode === "error" || projectStore.mode === "disabled";
   const handleRetry = () => {
     void projectStore.generateViaProjectMode(useVideoStore.getState().toParams());
   };
@@ -57,7 +58,7 @@ export function GeneratingPanel() {
         <div className="w-full max-w-md space-y-6">
           <h2 className="text-sm font-semibold text-foreground">{t("panels.generating.title")}</h2>
 
-          {projectStore.mode === "error" && (
+          {hasFailed && (
             <div className="rounded-md border border-red-800 bg-red-900/20 px-3 py-2 space-y-2">
               <p className="text-xs text-red-400">{projectStore.error}</p>
               <button
@@ -72,8 +73,8 @@ export function GeneratingPanel() {
           <ul className="space-y-2">
             {PROJECT_STEPS.map((step, idx) => {
               const done = idx < currentStepIndex;
-              const failed = idx === currentStepIndex && projectStore.mode === "error";
-              const active = idx === currentStepIndex && projectStore.mode !== "error";
+              const failed = idx === currentStepIndex && hasFailed;
+              const active = idx === currentStepIndex && !hasFailed;
               return (
                 <li key={step.key} className="flex items-center gap-3 text-sm">
                   {done ? (

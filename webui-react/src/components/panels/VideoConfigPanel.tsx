@@ -100,7 +100,7 @@ export function VideoConfigPanel() {
   ];
 
   const handleGenerate = () => {
-    if (projectStore.mode !== "disabled") {
+    if (projectStore.mode !== "disabled" && projectStore.projectId) {
       void projectStore.generateViaProjectMode(store.toParams());
       workspaceStore.setPanel("generating");
     } else {
