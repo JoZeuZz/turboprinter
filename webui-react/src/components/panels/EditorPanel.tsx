@@ -73,7 +73,7 @@ export function EditorPanel() {
       {/* Top: preview + inspector */}
       <div className="flex flex-1 overflow-hidden">
         <div className="flex-[3] p-4">
-          <VideoPreview src={selectedClip?.local_path ?? undefined} />
+          <VideoPreview items={items} selectedId={selectedId} />
         </div>
         <div className="flex-[2] border-l border-border overflow-y-auto">
           <ClipInspector

@@ -17,7 +17,7 @@ const PROJECT: TimelineProject = {
     {
       id: "video_1", type: "video", name: "Video",
       items: [
-        { id: "c1", start_sec: 0, duration_sec: 5, text: "One" },
+        { id: "c1", start_sec: 0, duration_sec: 5, text: "One", asset_url: "https://example.com/c1.mp4" },
         { id: "c2", start_sec: 5, duration_sec: 3, text: "Two" },
       ],
     },
@@ -58,5 +58,13 @@ describe("EditorPanel", () => {
     vi.mocked(useProjectStore).mockReturnValue(makeStore({ mode: "disabled" }) as never);
     render(<EditorPanel />);
     expect(screen.getByText(/editor no disponible/i)).toBeInTheDocument();
+  });
+
+  it("passes the video track items and selection to VideoPreview", () => {
+    render(<EditorPanel />);
+    // No clip selected yet: VideoPreview defaults to the first item, which
+    // now carries an asset_url in this fixture, so the video element renders it.
+    const video = screen.getByTestId("video-preview") as HTMLVideoElement;
+    expect(video.src).toContain("c1.mp4");
   });
 });

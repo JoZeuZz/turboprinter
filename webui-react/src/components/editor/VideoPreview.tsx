@@ -1,16 +1,31 @@
 // webui-react/src/components/editor/VideoPreview.tsx
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Play, Pause, SkipBack, SkipForward } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import type { TimelineItem } from "../../api/types";
 
 interface VideoPreviewProps {
-  src?: string;
+  items: TimelineItem[];
+  selectedId: string | null;
 }
 
-export function VideoPreview({ src }: VideoPreviewProps) {
+export function VideoPreview({ items, selectedId }: VideoPreviewProps) {
   const { t } = useTranslation();
   const videoRef = useRef<HTMLVideoElement>(null);
   const [playing, setPlaying] = useState(false);
+  const [playingId, setPlayingId] = useState<string | null>(selectedId ?? items[0]?.id ?? null);
+
+  useEffect(() => {
+    if (selectedId) setPlayingId(selectedId);
+  }, [selectedId]);
+
+  useEffect(() => {
+    if (playing) void videoRef.current?.play();
+  }, [playingId]);
+
+  const currentIndex = items.findIndex((item) => item.id === playingId);
+  const currentItem = currentIndex >= 0 ? items[currentIndex] : null;
+  const src = currentItem?.asset_url ?? undefined;
 
   const toggle = () => {
     if (!videoRef.current) return;
@@ -22,14 +37,24 @@ export function VideoPreview({ src }: VideoPreviewProps) {
     setPlaying(!playing);
   };
 
+  const handleEnded = () => {
+    const nextItem = items[currentIndex + 1];
+    if (nextItem) {
+      setPlayingId(nextItem.id);
+    } else {
+      setPlaying(false);
+    }
+  };
+
   return (
     <div className="flex flex-col bg-black rounded-lg overflow-hidden">
       {src ? (
         <video
           ref={videoRef}
+          data-testid="video-preview"
           src={src}
           className="w-full max-h-64 object-contain"
-          onEnded={() => setPlaying(false)}
+          onEnded={handleEnded}
         />
       ) : (
         <div className="w-full h-40 flex items-center justify-center bg-surface text-muted text-sm">
