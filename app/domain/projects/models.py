@@ -97,6 +97,7 @@ class TimelineProject(BaseModel):
             item.media_id = cand.id
             item.local_path = cand.local_path or cand.download_url or cand.source_url
             item.provider = cand.provider
+            item.thumbnail_url = cand.thumbnail_url
         elif isinstance(command, SetClipTimingCommand):
             item.duration_sec = command.duration_sec
         elif isinstance(command, SetClipVolumeCommand):

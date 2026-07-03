@@ -205,3 +205,14 @@ def test_timeline_item_accepts_thumbnail_text_keywords():
     assert item.thumbnail_url == "https://example.com/thumb.jpg"
     assert item.text == "Narración del segmento"
     assert item.keywords == ["gatos", "playa"]
+
+
+def test_apply_replace_updates_thumbnail_url():
+    p = _project()
+    cand = MediaCandidate(
+        id="m9", provider="pixabay", local_path="/new.mp4",
+        thumbnail_url="https://example.com/new-thumb.jpg",
+    )
+    p.apply(ReplaceClipCommand(track_id="t1", item_id="i1", new_candidate=cand))
+    item = p.tracks[0].items[0]
+    assert item.thumbnail_url == "https://example.com/new-thumb.jpg"
