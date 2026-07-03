@@ -142,14 +142,18 @@
       "voiceLoadError": "No se pudieron cargar las voces",
       "subtitleBackground": "Fondo de subtítulos",
       "backgroundColor": "Color de fondo",
-      "generate": "Generar video"
+      "generate": "Generar video",
+      "backToReview": "Volver a revisión"
     },
     "review": {
       "notAvailable": "Revisión no disponible — renderizando directamente",
       "reviewClips": "Revisar clips",
+      "taskReviewTitle": "Revisar video final",
+      "taskReviewDescription": "Este es el video con subtítulos aplicado. Puedes volver a configuración para ajustar la voz, clips o subtítulos y generar otra versión.",
       "noClips": "No se encontraron clips. Construye una línea de tiempo primero.",
       "enableProjectMode": "Habilita el modo de proyecto en el servidor para usar la revisión de clips.",
       "continueToDone": "Continuar a Finalizado",
+      "editSettings": "Editar configuración",
       "backToScript": "← Volver al guion",
       "renderVideo": "Renderizar video →"
     },
@@ -160,7 +164,7 @@
       "tryAgain": "Reintentar",
       "hideLogs": "Ocultar logs",
       "showLogs": "Mostrar logs",
-      "pollingTask": "Consultando tarea… progreso {{progress}}%",
+      "waitingLogs": "Esperando logs del backend... progreso {{progress}}%",
       "steps": {
         "scriptReady": "Guion listo",
         "audioSynthesized": "Audio (TTS) sintetizado",

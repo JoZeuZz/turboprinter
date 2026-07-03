@@ -52,6 +52,7 @@ export interface TaskStatus {
   progress: number;
   videos: string[];
   combined_videos: string[];
+  logs?: string[];
 }
 
 export interface ApiResponse<T> {

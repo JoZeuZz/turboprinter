@@ -58,7 +58,7 @@ describe("useProjectWorkspaceStore", () => {
     expect(state.videoUrls).toEqual([]);
   });
 
-  it("generateVideo transitions to generating, calls createTask, then done on success", async () => {
+  it("generateVideo transitions to generating, calls createTask, then review on success", async () => {
     vi.mocked(videoApi.createTask).mockResolvedValue({ task_id: "task-123" });
     vi.mocked(pollTask).mockImplementation(async (_id, onUpdate) => {
       onUpdate({ state: 1, progress: 100, videos: ["/dl/video.mp4"], combined_videos: [] });
@@ -74,7 +74,7 @@ describe("useProjectWorkspaceStore", () => {
 
     const state = useProjectWorkspaceStore.getState();
     expect(state.taskId).toBe("task-123");
-    expect(state.panel).toBe("done");
+    expect(state.panel).toBe("review");
     expect(state.videoUrls).toContain("/dl/video.mp4");
     expect(state.error).toBeNull();
   });
@@ -125,7 +125,7 @@ describe("useProjectWorkspaceStore", () => {
     expect(state.taskStatus?.progress).toBe(100);
   });
 
-  it("generateVideo deduplicates combined_videos and videos", async () => {
+  it("generateVideo prefers final videos over combined videos", async () => {
     vi.mocked(videoApi.createTask).mockResolvedValue({ task_id: "task-dedup" });
     vi.mocked(pollTask).mockImplementation(async (_id, onUpdate) => {
       onUpdate({
@@ -143,7 +143,5 @@ describe("useProjectWorkspaceStore", () => {
 
     const state = useProjectWorkspaceStore.getState();
     expect(state.videoUrls).toEqual(["/a.mp4", "/b.mp4"]);
-    // No duplicates
-    expect(new Set(state.videoUrls).size).toBe(state.videoUrls.length);
   });
 });

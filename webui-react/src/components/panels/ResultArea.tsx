@@ -9,7 +9,7 @@ export function ResultArea() {
 
   if (status?.state !== TASK_STATE_COMPLETE) return null;
 
-  const videos = [...(status.combined_videos ?? []), ...(status.videos ?? [])];
+  const videos = status.videos?.length ? status.videos : status.combined_videos ?? [];
   const unique = [...new Set(videos)];
 
   if (unique.length === 0) return null;

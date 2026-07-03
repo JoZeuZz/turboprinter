@@ -4,6 +4,7 @@ import glob
 import json
 import os
 import datetime
+import shutil
 
 from fastapi import BackgroundTasks, Query, Request
 from fastapi.responses import FileResponse
@@ -86,8 +87,16 @@ def _ok(data) -> BaseProjectResponse:
     return BaseProjectResponse(data=data)
 
 
+def _generated_task_path(task_id: str) -> str:
+    return os.path.join(utils.task_dir(), task_id)
+
+
 def _task_meta_path(task_id: str) -> str:
-    return os.path.join(utils.task_dir(task_id), "_meta", "script.json")
+    return os.path.join(_generated_task_path(task_id), "_meta", "script.json")
+
+
+def _task_deleted_marker_path(task_id: str) -> str:
+    return os.path.join(_generated_task_path(task_id), "_meta", "deleted.json")
 
 
 def _load_task_script_meta(task_id: str) -> dict | None:
@@ -99,6 +108,76 @@ def _load_task_script_meta(task_id: str) -> dict | None:
             return json.load(fh)
     except (OSError, ValueError):
         return None
+
+
+def _save_task_script_meta(task_id: str, meta: dict) -> None:
+    meta_path = _task_meta_path(task_id)
+    os.makedirs(os.path.dirname(meta_path), exist_ok=True)
+    with open(meta_path, "w", encoding="utf-8") as fh:
+        json.dump(meta, fh, ensure_ascii=False, indent=4)
+
+
+def _is_generated_task_deleted(task_id: str) -> bool:
+    return os.path.isfile(_task_deleted_marker_path(task_id))
+
+
+def _mark_generated_task_deleted(task_id: str) -> None:
+    marker_path = _task_deleted_marker_path(task_id)
+    os.makedirs(os.path.dirname(marker_path), exist_ok=True)
+    with open(marker_path, "w", encoding="utf-8") as fh:
+        json.dump(
+            {
+                "deleted": True,
+                "deleted_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            },
+            fh,
+            ensure_ascii=False,
+            indent=4,
+        )
+
+
+def _remove_generated_task_dir(task_id: str) -> bool:
+    task_path = _safe_generated_task_dir(task_id)
+    if not os.path.isdir(task_path):
+        return True
+    try:
+        shutil.rmtree(task_path)
+        return True
+    except OSError:
+        _mark_generated_task_deleted(task_id)
+        return False
+
+
+def _safe_generated_task_dir(task_id: str) -> str:
+    _validate_project_id(task_id)
+    tasks_root = os.path.realpath(utils.task_dir())
+    task_path = os.path.realpath(_generated_task_path(task_id))
+    try:
+        if os.path.commonpath([tasks_root, task_path]) != tasks_root:
+            raise ValueError("task path is outside storage/tasks")
+    except ValueError as exc:
+        raise HttpException(task_id=task_id, status_code=400, message="invalid project path") from exc
+    return task_path
+
+
+def _task_topic_from_meta(meta: dict, fallback: str = "") -> str:
+    params = meta.get("params") or {}
+    script = meta.get("script") or ""
+    return (params.get("video_subject") or script[:80].strip() or fallback).strip()
+
+
+def _copy_generated_task_config(project_id: str) -> str:
+    meta = _load_task_script_meta(project_id)
+    if meta is None:
+        raise HttpException(task_id=project_id, status_code=404, message="project not found")
+
+    new_id = utils.get_uuid()
+    copied_meta = json.loads(json.dumps(meta, ensure_ascii=False))
+    params = copied_meta.setdefault("params", {})
+    topic = _task_topic_from_meta(copied_meta, project_id)
+    params["video_subject"] = f"Copia de {topic}"[:120]
+    _save_task_script_meta(new_id, copied_meta)
+    return new_id
 
 
 def _list_generated_video_tasks(limit: int = 20) -> list[dict]:
@@ -115,6 +194,8 @@ def _list_generated_video_tasks(limit: int = 20) -> list[dict]:
         meta = _load_task_script_meta(task_id)
         if meta is None:
             continue
+        if _is_generated_task_deleted(task_id):
+            continue
 
         video_files = [
             os.path.join(task_path, name)
@@ -125,7 +206,7 @@ def _list_generated_video_tasks(limit: int = 20) -> list[dict]:
         paths.append(_task_meta_path(task_id))
         mtime = max(os.path.getmtime(path) for path in paths if os.path.isfile(path))
         params = meta.get("params") or {}
-        topic = params.get("video_subject") or meta.get("script", "")[:80].strip()
+        topic = _task_topic_from_meta(meta, task_id)
         entries.append({
             "project_id": task_id,
             "topic": topic,
@@ -277,6 +358,9 @@ def _validate_replace_candidates(
 @router.get("/projects", response_model=BaseProjectResponse,
             summary="List recent projects")
 def list_projects(request: Request, limit: int = 20):
+    if not getattr(config, "project_mode_enabled", False):
+        return _ok({"projects": _list_generated_video_tasks(limit=limit)})
+
     _require_project_mode(request)
     store = _store()
     projects = store.list_projects(limit=limit)
@@ -343,11 +427,13 @@ def create_from_reddit(request: Request, body: CreateFromRedditRequest):
 def get_project(request: Request, project_id: str):
     if not getattr(config, "project_mode_enabled", False):
         _validate_project_id(project_id)
+        if _is_generated_task_deleted(project_id):
+            raise HttpException(task_id=project_id, status_code=404, message="project not found")
         meta = _load_task_script_meta(project_id)
         if meta is None:
             raise HttpException(task_id=project_id, status_code=404, message="project not found")
         params = meta.get("params") or {}
-        task_path = utils.task_dir(project_id)
+        task_path = _generated_task_path(project_id)
         final_videos = sorted(
             f"/api/v1/stream/{project_id}/{name}"
             for name in os.listdir(task_path)
@@ -408,6 +494,14 @@ def get_project(request: Request, project_id: str):
 @router.delete("/projects/{project_id}", response_model=BaseProjectResponse,
                summary="Delete a project")
 def delete_project(request: Request, project_id: str):
+    if not getattr(config, "project_mode_enabled", False):
+        if _load_task_script_meta(project_id) is None:
+            raise HttpException(task_id=project_id, status_code=404, message="project not found")
+
+        removed = _remove_generated_task_dir(project_id)
+        sm.state.delete_task(project_id)
+        return _ok({"project_id": project_id, "deleted": True, "pending_cleanup": not removed})
+
     _require_project_mode(request, project_id)
     store = _store()
     if not store.exists(project_id):
@@ -419,10 +513,21 @@ def delete_project(request: Request, project_id: str):
 @router.patch("/projects/{project_id}/metadata", response_model=BaseProjectResponse,
               summary="Rename a project")
 def rename_project(request: Request, project_id: str, body: RenameProjectRequest):
-    _require_project_mode(request, project_id)
     topic = body.topic.strip()
     if not topic:
         raise HttpException(task_id=project_id, status_code=400, message="topic is empty")
+
+    if not getattr(config, "project_mode_enabled", False):
+        _safe_generated_task_dir(project_id)
+        meta = _load_task_script_meta(project_id)
+        if meta is None:
+            raise HttpException(task_id=project_id, status_code=404, message="project not found")
+        params = meta.setdefault("params", {})
+        params["video_subject"] = topic
+        _save_task_script_meta(project_id, meta)
+        return _ok({"project_id": project_id, "topic": topic})
+
+    _require_project_mode(request, project_id)
     store = _store()
     if not store.exists(project_id):
         raise HttpException(task_id=project_id, status_code=404, message="project not found")
@@ -433,6 +538,11 @@ def rename_project(request: Request, project_id: str, body: RenameProjectRequest
 @router.post("/projects/{project_id}/duplicate", response_model=BaseProjectResponse,
              summary="Duplicate a project's video config into a new project")
 def duplicate_project(request: Request, project_id: str):
+    if not getattr(config, "project_mode_enabled", False):
+        _safe_generated_task_dir(project_id)
+        new_id = _copy_generated_task_config(project_id)
+        return _ok({"project_id": new_id})
+
     _require_project_mode(request, project_id)
     store = _store()
     if not store.exists(project_id):

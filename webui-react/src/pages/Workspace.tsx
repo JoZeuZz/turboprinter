@@ -63,14 +63,13 @@ export function Workspace() {
           setVideo("video_script", state.script ?? state.timeline?.script ?? "");
         }
 
-        const videoUrls = [
-          ...(state.videos ?? []),
-          ...(state.combined_videos ?? []),
-        ];
+        const videoUrls = state.videos?.length
+          ? state.videos
+          : state.combined_videos ?? [];
         if (videoUrls.length > 0) {
           useProjectWorkspaceStore.setState({
             videoUrls: [...new Set(videoUrls)],
-            panel: "done",
+            panel: "review",
           });
         } else {
           setPanel(state.has_timeline ? "review" : "script");

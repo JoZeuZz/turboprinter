@@ -15,6 +15,20 @@ from app.services.quality.observability import phase_timer
 from app.utils import file_security, utils
 
 
+def append_task_log(task_id: str, message: str, *, level: str = "info"):
+    if level == "error":
+        logger.error(message)
+    elif level == "warning":
+        logger.warning(message)
+    else:
+        logger.info(message)
+
+    try:
+        sm.state.append_task_log(task_id, message)
+    except Exception as exc:  # pragma: no cover - defensive logging only
+        logger.debug(f"failed to append task log for {task_id}: {exc}")
+
+
 def generate_script(task_id, params):
     logger.info("\n\n## generating video script")
     video_script = params.video_script.strip()
@@ -389,7 +403,7 @@ def generate_final_videos(
         combined_video_path = path.join(
             utils.task_dir(task_id), f"combined-{index}.mp4"
         )
-        logger.info(f"\n\n## combining video: {index} => {combined_video_path}")
+        append_task_log(task_id, f"Combining video {index}/{params.video_count}")
         with phase_timer("video_combine"):
             video.combine_videos(
                 combined_video_path=combined_video_path,
@@ -408,7 +422,7 @@ def generate_final_videos(
 
         final_video_path = path.join(utils.task_dir(task_id), f"final-{index}.mp4")
 
-        logger.info(f"\n\n## generating video: {index} => {final_video_path}")
+        append_task_log(task_id, f"Applying audio and subtitles {index}/{params.video_count}")
         with phase_timer("video_final"):
             video.generate_video(
                 video_path=combined_video_path,
@@ -580,13 +594,15 @@ def save_render_manifest(task_id, params, artifacts):
 
 
 def start(task_id, params: VideoParams, stop_at: str = "video", *, restrict_custom_audio: bool = False):
-    logger.info(f"start task: {task_id}, stop_at: {stop_at}")
+    append_task_log(task_id, f"Task started ({task_id})")
     sm.state.update_task(task_id, state=const.TASK_STATE_PROCESSING, progress=5)
 
     # 1. Generate script
+    append_task_log(task_id, "Generating script")
     with phase_timer("script_gen"):
         video_script = generate_script(task_id, params)
     if not video_script or "Error: " in video_script:
+        append_task_log(task_id, "Script generation failed", level="error")
         sm.state.update_task(task_id, state=const.TASK_STATE_FAILED)
         return
 
@@ -601,12 +617,15 @@ def start(task_id, params: VideoParams, stop_at: str = "video", *, restrict_cust
     # 2. Generate terms
     video_terms = ""
     if params.video_source != "local":
+        append_task_log(task_id, "Generating search terms")
         video_terms = generate_terms(task_id, params, video_script)
         if not video_terms:
+            append_task_log(task_id, "Search term generation failed", level="error")
             sm.state.update_task(task_id, state=const.TASK_STATE_FAILED)
             return
 
     save_script_data(task_id, video_script, video_terms, params)
+    append_task_log(task_id, "Script metadata saved")
 
     # Optional Spanish Content Package sidecar (deterministic, no LLM required).
     content_package_path = generate_content_package(
@@ -622,13 +641,16 @@ def start(task_id, params: VideoParams, stop_at: str = "video", *, restrict_cust
     sm.state.update_task(task_id, state=const.TASK_STATE_PROCESSING, progress=20)
 
     # 3. Generate audio
+    append_task_log(task_id, "Generating narration audio")
     with phase_timer("audio_gen"):
         audio_file, audio_duration, sub_maker = generate_audio(
             task_id, params, video_script, restrict_custom_audio=restrict_custom_audio
         )
     if not audio_file:
+        append_task_log(task_id, "Audio generation failed", level="error")
         sm.state.update_task(task_id, state=const.TASK_STATE_FAILED)
         return
+    append_task_log(task_id, f"Audio ready ({audio_duration}s)")
 
     sm.state.update_task(task_id, state=const.TASK_STATE_PROCESSING, progress=30)
 
@@ -646,12 +668,16 @@ def start(task_id, params: VideoParams, stop_at: str = "video", *, restrict_cust
     word_timestamps_path = maybe_save_word_timestamps(
         task_id, params, audio_file, sub_maker
     )
+    if word_timestamps_path:
+        append_task_log(task_id, "Word timestamps saved")
 
     # 4. Generate subtitle
+    append_task_log(task_id, "Generating subtitles")
     with phase_timer("subtitle_gen"):
         subtitle_path = generate_subtitle(
             task_id, params, video_script, sub_maker, audio_file
         )
+    append_task_log(task_id, "Subtitles ready" if subtitle_path else "Subtitles skipped")
 
     if stop_at == "subtitle":
         sm.state.update_task(
@@ -665,13 +691,16 @@ def start(task_id, params: VideoParams, stop_at: str = "video", *, restrict_cust
     sm.state.update_task(task_id, state=const.TASK_STATE_PROCESSING, progress=40)
 
     # 5. Get video materials
+    append_task_log(task_id, "Collecting video materials")
     with phase_timer("material_fetch"):
         downloaded_videos = get_video_materials(
             task_id, params, video_terms, audio_duration
         )
     if not downloaded_videos:
+        append_task_log(task_id, "Video material collection failed", level="error")
         sm.state.update_task(task_id, state=const.TASK_STATE_FAILED)
         return
+    append_task_log(task_id, f"Collected {len(downloaded_videos)} video materials")
 
     if stop_at == "materials":
         sm.state.update_task(
@@ -691,21 +720,21 @@ def start(task_id, params: VideoParams, stop_at: str = "video", *, restrict_cust
 
     # 6. Generate final videos
     try:
+        append_task_log(task_id, "Rendering final video")
         final_video_paths, combined_video_paths = generate_final_videos(
             task_id, params, downloaded_videos, audio_file, subtitle_path
         )
     except Exception as exc:
-        logger.error(f"render failed for task {task_id}: {str(exc)}")
+        append_task_log(task_id, f"Render failed: {str(exc)}", level="error")
         sm.state.update_task(task_id, state=const.TASK_STATE_FAILED)
         return
 
     if not final_video_paths:
+        append_task_log(task_id, "Render finished without output videos", level="error")
         sm.state.update_task(task_id, state=const.TASK_STATE_FAILED)
         return
 
-    logger.success(
-        f"task {task_id} finished, generated {len(final_video_paths)} videos."
-    )
+    append_task_log(task_id, f"Generated {len(final_video_paths)} final video(s)")
 
     # 7. Cross-post to TikTok/Instagram (if enabled)
     cross_post_results = []

@@ -6,7 +6,7 @@ import { useProjectStore } from "../../store/useProjectStore";
 import type { TimelineProject } from "../../api/types";
 
 vi.mock("../../store/useProjectWorkspaceStore", () => ({
-  useProjectWorkspaceStore: () => ({ setPanel: vi.fn() }),
+  useProjectWorkspaceStore: () => ({ setPanel: vi.fn(), videoUrls: ["/final.mp4"] }),
 }));
 
 vi.mock("../../store/useProjectStore", () => ({
@@ -58,12 +58,13 @@ describe("ReviewPanel", () => {
     expect(screen.getByText(/12s/i)).toBeInTheDocument();
   });
 
-  it("renders 'disabled' message when mode is disabled", () => {
+  it("renders task review when project mode is disabled", () => {
     vi.mocked(useProjectStore).mockReturnValue(
       makeStore({ mode: "disabled" }) as never
     );
     render(<ReviewPanel />);
-    expect(screen.getByText(/revisión no disponible/i)).toBeInTheDocument();
+    expect(screen.getByText(/revisar video final/i)).toBeInTheDocument();
+    expect(screen.getByText(/editar configuraci/i)).toBeInTheDocument();
   });
 
   it("on Render, calls applyTimelineCommands with move commands for all non-excluded clips", async () => {

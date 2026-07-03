@@ -1,6 +1,6 @@
 // webui-react/src/components/panels/ReviewPanel.tsx
 import { useState, useEffect } from "react";
-import { ArrowLeft, Clapperboard } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Clapperboard, SlidersHorizontal } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import {
   DndContext,
@@ -22,7 +22,7 @@ import type { TimelineItem, EditCommand } from "../../api/types";
 export function ReviewPanel() {
   const { t } = useTranslation();
   const projectStore = useProjectStore();
-  const { setPanel } = useProjectWorkspaceStore();
+  const { setPanel, videoUrls } = useProjectWorkspaceStore();
 
   const videoTrack = projectStore.project?.tracks.find((t) => t.type === "video");
   const sourceClips = videoTrack?.items ?? [];
@@ -36,16 +36,36 @@ export function ReviewPanel() {
     setOrderedClips(sourceClips);
   }, [sourceClips.length]);
 
-  if (projectStore.mode === "disabled") {
+  if (projectStore.mode === "disabled" || !projectStore.project) {
+    const finalVideo = videoUrls[0];
+
     return (
-      <div className="flex h-full w-full max-w-5xl mx-auto flex-col items-start justify-center px-6 py-5 text-center">
-        <p className="text-sm text-muted">{t("panels.review.notAvailable")}</p>
-        <p className="text-xs text-muted mt-1">
-          {t("panels.review.enableProjectMode")}
-        </p>
-        <Button className="mt-4" onClick={() => setPanel("done")}>
-          {t("panels.review.continueToDone")}
-        </Button>
+      <div className="flex h-full w-full max-w-5xl mx-auto flex-col gap-4 px-6 py-5">
+        <div>
+          <h2 className="text-sm font-semibold text-foreground">{t("panels.review.taskReviewTitle")}</h2>
+          <p className="text-xs text-muted mt-1">{t("panels.review.taskReviewDescription")}</p>
+        </div>
+
+        {finalVideo ? (
+          <div className="w-full max-w-xl rounded-lg overflow-hidden border border-border bg-surface">
+            <video src={finalVideo} controls className="w-full max-h-[520px] object-contain" />
+          </div>
+        ) : (
+          <div className="flex min-h-48 items-center justify-center rounded-lg border border-border bg-surface text-sm text-muted">
+            {t("panels.done.none")}
+          </div>
+        )}
+
+        <div className="flex flex-wrap gap-2 pt-2 border-t border-border">
+          <Button variant="ghost" onClick={() => setPanel("config")}>
+            <SlidersHorizontal className="mr-1.5 h-3.5 w-3.5" />
+            {t("panels.review.editSettings")}
+          </Button>
+          <Button onClick={() => setPanel("done")} className="flex-1 min-w-40">
+            <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
+            {t("panels.review.continueToDone")}
+          </Button>
+        </div>
       </div>
     );
   }

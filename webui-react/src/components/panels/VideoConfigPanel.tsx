@@ -1,6 +1,6 @@
 // webui-react/src/components/panels/VideoConfigPanel.tsx
 import { useState, useEffect } from "react";
-import { Wand2 } from "lucide-react";
+import { Eye, Wand2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import {
   TabBar,
@@ -38,6 +38,7 @@ export function VideoConfigPanel() {
   const store = useVideoStore();
   const { config } = useConfigStore();
   const workspaceStore = useProjectWorkspaceStore();
+  const hasReviewVideo = workspaceStore.videoUrls.length > 0;
 
   const TABS = [
     { key: "video", label: t("panels.videoConfig.tabs.video") },
@@ -100,6 +101,10 @@ export function VideoConfigPanel() {
     void workspaceStore.generateVideo(store.toParams());
   };
 
+  const handleBack = () => {
+    workspaceStore.setPanel("script");
+  };
+
   return (
     <section className="grid h-full min-h-0 w-full max-w-5xl mx-auto grid-rows-[auto_auto_minmax(0,1fr)_auto] px-6 py-4">
       <div className="flex items-center justify-between mb-4">
@@ -109,7 +114,7 @@ export function VideoConfigPanel() {
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => workspaceStore.setPanel("script")}
+          onClick={handleBack}
         >
           {t("panels.videoConfig.back")}
         </Button>
@@ -378,6 +383,17 @@ export function VideoConfigPanel() {
       </div>
 
       <div className="shrink-0 border-t border-border pt-4">
+        <div className={hasReviewVideo ? "grid gap-2 sm:grid-cols-[auto_minmax(0,1fr)]" : ""}>
+        {hasReviewVideo && (
+          <Button
+            variant="ghost"
+            size="lg"
+            onClick={() => workspaceStore.setPanel("review")}
+          >
+            <Eye className="mr-2 h-4 w-4" />
+            {t("panels.videoConfig.backToReview")}
+          </Button>
+        )}
         <Button
           className="w-full"
           size="lg"
@@ -387,6 +403,7 @@ export function VideoConfigPanel() {
           <Wand2 className="mr-2 h-4 w-4" />
           {t("panels.videoConfig.generate")}
         </Button>
+        </div>
       </div>
     </section>
   );

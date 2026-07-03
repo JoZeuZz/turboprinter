@@ -1,5 +1,5 @@
 // webui-react/src/components/panels/GeneratingPanel.tsx
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Check, Loader2, Circle, ChevronDown, ChevronUp } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useProjectWorkspaceStore } from "../../store/useProjectWorkspaceStore";
@@ -9,7 +9,9 @@ export function GeneratingPanel() {
   const { t } = useTranslation();
   const { taskStatus, error, setPanel } = useProjectWorkspaceStore();
   const [logsOpen, setLogsOpen] = useState(false);
+  const logsRef = useRef<HTMLDivElement | null>(null);
   const progress = taskStatus?.progress ?? 0;
+  const logs = taskStatus?.logs ?? [];
 
   const STEPS = [
     { label: t("panels.generating.steps.scriptReady"), threshold: 5 },
@@ -23,9 +25,15 @@ export function GeneratingPanel() {
   // Auto-transition on completion
   useEffect(() => {
     if (taskStatus?.state === TASK_STATE_COMPLETE) {
-      setPanel("done");
+      setPanel("review");
     }
   }, [taskStatus?.state, setPanel]);
+
+  useEffect(() => {
+    if (logsOpen && logsRef.current) {
+      logsRef.current.scrollTop = logsRef.current.scrollHeight;
+    }
+  }, [logsOpen, logs]);
 
   return (
     <div className="flex h-full w-full max-w-5xl mx-auto flex-col justify-start px-6 py-5">
@@ -106,8 +114,19 @@ export function GeneratingPanel() {
           {logsOpen ? t("panels.generating.hideLogs") : t("panels.generating.showLogs")}
         </button>
         {logsOpen && (
-          <div className="rounded-md border border-border bg-base p-3 font-mono text-xs text-muted h-28 overflow-y-auto">
-            <p>{t("panels.generating.pollingTask", { progress })}</p>
+          <div
+            ref={logsRef}
+            className="rounded-md border border-border bg-base p-3 font-mono text-xs text-muted h-36 overflow-y-auto"
+          >
+            {logs.length > 0 ? (
+              logs.map((line, index) => (
+                <p key={`${index}-${line}`} className="whitespace-pre-wrap leading-relaxed">
+                  {line}
+                </p>
+              ))
+            ) : (
+              <p>{t("panels.generating.waitingLogs", { progress })}</p>
+            )}
           </div>
         )}
       </div>

@@ -14,6 +14,10 @@ class BaseState(ABC):
         pass
 
     @abstractmethod
+    def append_task_log(self, task_id: str, message: str):
+        pass
+
+    @abstractmethod
     def get_task(self, task_id: str):
         pass
 
@@ -48,12 +52,30 @@ class MemoryState(BaseState):
             progress = 100
 
         with self._lock:
+            existing = self._tasks.get(task_id, {})
+            logs = kwargs.pop("logs", existing.get("logs", []))
             self._tasks[task_id] = {
                 "task_id": task_id,
                 "state": state,
                 "progress": progress,
+                "logs": logs,
                 **kwargs,
             }
+
+    def append_task_log(self, task_id: str, message: str):
+        with self._lock:
+            task = self._tasks.setdefault(
+                task_id,
+                {
+                    "task_id": task_id,
+                    "state": const.TASK_STATE_PROCESSING,
+                    "progress": 0,
+                    "logs": [],
+                },
+            )
+            logs = list(task.get("logs") or [])
+            logs.append(str(message))
+            task["logs"] = logs[-200:]
 
     def get_task(self, task_id: str):
         with self._lock:
@@ -134,6 +156,12 @@ class RedisState(BaseState):
 
         for field, value in fields.items():
             self._redis.hset(task_id, field, str(value))
+
+    def append_task_log(self, task_id: str, message: str):
+        task = self.get_task(task_id) or {}
+        logs = list(task.get("logs") or [])
+        logs.append(str(message))
+        self._redis.hset(task_id, "logs", str(logs[-200:]))
 
     def get_task(self, task_id: str):
         task_data = self._redis.hgetall(task_id)

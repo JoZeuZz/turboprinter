@@ -142,14 +142,18 @@
       "voiceLoadError": "Could not load voices",
       "subtitleBackground": "Subtitle background",
       "backgroundColor": "Background Color",
-      "generate": "Generate Video"
+      "generate": "Generate Video",
+      "backToReview": "Back to review"
     },
     "review": {
       "notAvailable": "Review not available — rendering directly",
       "reviewClips": "Review clips",
+      "taskReviewTitle": "Review final video",
+      "taskReviewDescription": "This is the video with subtitles applied. You can go back to settings to adjust voice, clips, or subtitles and generate another version.",
       "noClips": "No clips found. Build a timeline first.",
       "enableProjectMode": "Enable project mode on the server to use clip review.",
       "continueToDone": "Continue to Done",
+      "editSettings": "Edit settings",
       "backToScript": "← Back to Script",
       "renderVideo": "Render Video →"
     },
@@ -160,7 +164,7 @@
       "tryAgain": "Try Again",
       "hideLogs": "Hide logs",
       "showLogs": "Show logs",
-      "pollingTask": "Polling task… progress {{progress}}%",
+      "waitingLogs": "Waiting for backend logs... progress {{progress}}%",
       "steps": {
         "scriptReady": "Script ready",
         "audioSynthesized": "Audio (TTS) synthesized",

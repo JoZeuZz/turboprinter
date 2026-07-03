@@ -8,6 +8,11 @@ import { useProjectHistoryStore } from "./useProjectHistoryStore";
 import type { TaskStatus, VideoParams } from "../api/types";
 import type { WorkspacePanel } from "../types/workspace";
 
+function finalVideoUrls(status: TaskStatus | null): string[] {
+  const urls = status?.videos?.length ? status.videos : status?.combined_videos ?? [];
+  return [...new Set(urls)];
+}
+
 interface WorkspaceStoreState {
   panel: WorkspacePanel;
   topic: string;
@@ -56,11 +61,7 @@ export const useProjectWorkspaceStore = create<WorkspaceStoreState>()(
           // After successful completion, retrieve final taskStatus to get video URLs
           set((state) => {
             const status = state.taskStatus;
-            const urls = [
-              ...(status?.combined_videos ?? []),
-              ...(status?.videos ?? []),
-            ];
-            return { panel: "done", videoUrls: [...new Set(urls)] };
+            return { panel: "review", videoUrls: finalVideoUrls(status) };
           });
         } catch (e) {
           set({
