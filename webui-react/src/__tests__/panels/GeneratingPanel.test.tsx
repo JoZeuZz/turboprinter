@@ -4,7 +4,6 @@ import userEvent from "@testing-library/user-event";
 import { GeneratingPanel } from "../../components/panels/GeneratingPanel";
 import { useProjectWorkspaceStore } from "../../store/useProjectWorkspaceStore";
 import { useProjectStore } from "../../store/useProjectStore";
-import { useVideoStore } from "../../store/useVideoStore";
 
 beforeEach(() => {
   useProjectWorkspaceStore.getState().reset();
