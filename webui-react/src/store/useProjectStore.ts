@@ -17,9 +17,13 @@ import {
   type TimelineCommandsRequest,
   type TimelineBuildRequest,
   type TimelineProject,
+  type VideoParams,
 } from "../api/types";
+import { orientationForAspect } from "../lib/mediaOrientation";
+import { useProjectWorkspaceStore } from "./useProjectWorkspaceStore";
 
 type ProjectMode = "idle" | "loading" | "ready" | "disabled" | "error";
+type OrchestrationStep = "plan" | "media" | "narration" | "timeline" | null;
 
 interface TimelineValidationState {
   valid: boolean;
@@ -33,6 +37,7 @@ interface ProjectStoreState {
   error: string | null;
   renderStatus: RenderStatusResponse | null;
   timelineValidation: TimelineValidationState | null;
+  orchestrationStep: OrchestrationStep;
   open: (projectId: string) => Promise<GetProjectResponse>;
   create: (params: CreateFromTopicRequest) => Promise<void>;
   plan: (params?: PlanRequest) => Promise<void>;
@@ -41,6 +46,7 @@ interface ProjectStoreState {
   applyTimelineCommands: (params: TimelineCommandsRequest) => Promise<void>;
   render: (params?: RenderRequest) => Promise<void>;
   pollRenderStatus: (intervalMs?: number) => Promise<RenderStatusResponse>;
+  generateViaProjectMode: (params: VideoParams) => Promise<void>;
   reset: () => void;
 }
 
@@ -51,6 +57,7 @@ const initialState = {
   error: null,
   renderStatus: null,
   timelineValidation: null,
+  orchestrationStep: null as OrchestrationStep,
 };
 
 export const useProjectStore = create<ProjectStoreState>()(
@@ -189,6 +196,34 @@ export const useProjectStore = create<ProjectStoreState>()(
           }
 
           return status;
+        },
+        generateViaProjectMode: async (params) => {
+          set({ mode: "loading", error: null, orchestrationStep: "plan" });
+          try {
+            const projectId = requireProjectId();
+            await projectsApi.planProject(projectId, {});
+            set({ orchestrationStep: "media" });
+            await projectsApi.mediaSearch(projectId, {
+              orientation: orientationForAspect(params.video_aspect),
+              prefer_local: false,
+            });
+            set({ orchestrationStep: "narration" });
+            const narration = await projectsApi.synthesizeNarration(projectId, {
+              voice_name: params.voice_name,
+              voice_rate: params.voice_rate,
+              subtitle_enabled: params.subtitle_enabled,
+            });
+            set({ orchestrationStep: "timeline" });
+            await projectsApi.buildTimeline(projectId, {
+              narration_audio_path: narration.narration_audio_path,
+              subtitle_path: narration.subtitle_path ?? undefined,
+            });
+            await refresh(projectId);
+            useProjectWorkspaceStore.setState({ panel: "editor" });
+            set({ orchestrationStep: null });
+          } catch (error) {
+            fail(error);
+          }
         },
         reset: () => set({ ...initialState }),
       };

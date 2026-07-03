@@ -2,8 +2,9 @@
 import { act } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { projectsApi } from "../../api/projects";
-import type { GetProjectResponse } from "../../api/types";
+import type { GetProjectResponse, VideoParams } from "../../api/types";
 import { useProjectStore } from "../../store/useProjectStore";
+import { useProjectWorkspaceStore } from "../../store/useProjectWorkspaceStore";
 
 vi.mock("../../api/projects", () => ({
   projectsApi: {
@@ -11,6 +12,7 @@ vi.mock("../../api/projects", () => ({
     getProject: vi.fn(),
     planProject: vi.fn(),
     mediaSearch: vi.fn(),
+    synthesizeNarration: vi.fn(),
     buildTimeline: vi.fn(),
     applyTimelineCommands: vi.fn(),
     startRender: vi.fn(),
@@ -116,5 +118,62 @@ describe("useProjectStore", () => {
   it("surfaces the Spanish 'create a project first' error when no project is open", async () => {
     await useProjectStore.getState().plan();
     expect(useProjectStore.getState().error).toBe("Crea un proyecto primero");
+  });
+
+  it("generateViaProjectMode runs plan, media, narration, timeline in order and lands on editor panel", async () => {
+    useProjectStore.setState({ projectId: "project-1" });
+    vi.mocked(projectsApi.planProject).mockResolvedValue({ project_id: "project-1", segment_count: 3 });
+    vi.mocked(projectsApi.mediaSearch).mockResolvedValue({ project_id: "project-1", selected_count: 3 });
+    vi.mocked(projectsApi.synthesizeNarration).mockResolvedValue({
+      project_id: "project-1",
+      narration_audio_path: "/tasks/project-1/audio.mp3",
+      audio_duration_sec: 12,
+      subtitle_path: "/tasks/project-1/_meta/subtitle.srt",
+    });
+    vi.mocked(projectsApi.buildTimeline).mockResolvedValue({ project_id: "project-1", track_count: 1 });
+    vi.mocked(projectsApi.getProject).mockResolvedValue(projectWithTimeline);
+    useProjectWorkspaceStore.setState({ panel: "generating" });
+
+    const params: VideoParams = {
+      video_subject: "cats", video_aspect: "16:9",
+      voice_name: "es-MX-DaliaNeural", voice_rate: 1.1, subtitle_enabled: true,
+    };
+
+    await act(async () => {
+      await useProjectStore.getState().generateViaProjectMode(params);
+    });
+
+    expect(projectsApi.planProject).toHaveBeenCalledWith("project-1", {});
+    expect(projectsApi.mediaSearch).toHaveBeenCalledWith("project-1", {
+      orientation: "landscape", prefer_local: false,
+    });
+    expect(projectsApi.synthesizeNarration).toHaveBeenCalledWith("project-1", {
+      voice_name: "es-MX-DaliaNeural", voice_rate: 1.1, subtitle_enabled: true,
+    });
+    expect(projectsApi.buildTimeline).toHaveBeenCalledWith("project-1", {
+      narration_audio_path: "/tasks/project-1/audio.mp3",
+      subtitle_path: "/tasks/project-1/_meta/subtitle.srt",
+    });
+    expect(useProjectStore.getState().orchestrationStep).toBeNull();
+    expect(useProjectStore.getState().mode).toBe("ready");
+    expect(useProjectWorkspaceStore.getState().panel).toBe("editor");
+  });
+
+  it("generateViaProjectMode leaves orchestrationStep pointing at the failed step", async () => {
+    useProjectStore.setState({ projectId: "project-1" });
+    vi.mocked(projectsApi.planProject).mockResolvedValue({ project_id: "project-1", segment_count: 3 });
+    vi.mocked(projectsApi.mediaSearch).mockRejectedValue(new Error("no clips found"));
+
+    await act(async () => {
+      await useProjectStore.getState().generateViaProjectMode({
+        video_subject: "cats", video_aspect: "9:16",
+      });
+    });
+
+    expect(useProjectStore.getState().orchestrationStep).toBe("media");
+    expect(useProjectStore.getState().mode).toBe("error");
+    expect(useProjectStore.getState().error).toBe("no clips found");
+    expect(projectsApi.synthesizeNarration).not.toHaveBeenCalled();
+    expect(projectsApi.buildTimeline).not.toHaveBeenCalled();
   });
 });
