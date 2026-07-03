@@ -13,6 +13,8 @@ import type {
   MediaSearchResponse,
   TimelineBuildRequest,
   TimelineBuildResponse,
+  NarrationRequest,
+  NarrationResponse,
   TimelineCommandsRequest,
   TimelineCommandsResponse,
   TimelineValidateResponse,
@@ -80,6 +82,12 @@ export const projectsApi = {
 
   buildTimeline: (projectId: string, params: TimelineBuildRequest = {}) =>
     apiFetch<TimelineBuildResponse>(`/projects/${projectId}/timeline/build`, {
+      method: "POST",
+      body: JSON.stringify(params),
+    }),
+
+  synthesizeNarration: (projectId: string, params: NarrationRequest = {}) =>
+    apiFetch<NarrationResponse>(`/projects/${projectId}/narration`, {
       method: "POST",
       body: JSON.stringify(params),
     }),

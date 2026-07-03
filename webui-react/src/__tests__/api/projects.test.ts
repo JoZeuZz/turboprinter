@@ -153,6 +153,18 @@ describe("projectsApi", () => {
       method: "GET",
     },
     {
+      name: "synthesizeNarration",
+      call: () =>
+        projectsApi.synthesizeNarration("project-1", {
+          voice_name: "es-MX-DaliaNeural",
+          voice_rate: 1.1,
+          subtitle_enabled: true,
+        }),
+      path: "/api/v1/projects/project-1/narration",
+      method: "POST",
+      body: { voice_name: "es-MX-DaliaNeural", voice_rate: 1.1, subtitle_enabled: true },
+    },
+    {
       name: "listAssets",
       call: () => projectsApi.listAssets("project-1"),
       path: "/api/v1/projects/project-1/assets",

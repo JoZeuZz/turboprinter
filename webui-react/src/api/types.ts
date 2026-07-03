@@ -465,6 +465,19 @@ export interface TimelineBuildResponse {
   track_count: number;
 }
 
+export interface NarrationRequest {
+  voice_name?: string;
+  voice_rate?: number;
+  subtitle_enabled?: boolean;
+}
+
+export interface NarrationResponse {
+  project_id: string;
+  narration_audio_path: string;
+  audio_duration_sec: number;
+  subtitle_path?: string | null;
+}
+
 export interface TimelineCommandsResponse {
   project_id: string;
   applied: number;
