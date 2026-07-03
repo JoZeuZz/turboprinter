@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { DndContext } from "@dnd-kit/core";
+import { DndContext, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { SortableContext, horizontalListSortingStrategy } from "@dnd-kit/sortable";
 import { TimelineVideoCard } from "../../components/editor/TimelineVideoCard";
 import type { TimelineItem } from "../../api/types";
@@ -13,14 +13,25 @@ const ITEM: TimelineItem = {
   text: "Scene 1",
 };
 
+function TestDndWrapper({ children, itemId }: { children: React.ReactNode; itemId: string }) {
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
+  );
+  return (
+    <DndContext sensors={sensors}>
+      <SortableContext items={[itemId]} strategy={horizontalListSortingStrategy}>
+        {children}
+      </SortableContext>
+    </DndContext>
+  );
+}
+
 function renderCard(overrides: Partial<{ item: TimelineItem; isSelected: boolean; onSelect: (id: string) => void }> = {}) {
   const props = { item: ITEM, isSelected: false, onSelect: () => {}, ...overrides };
   return render(
-    <DndContext>
-      <SortableContext items={[props.item.id]} strategy={horizontalListSortingStrategy}>
-        <TimelineVideoCard {...props} />
-      </SortableContext>
-    </DndContext>
+    <TestDndWrapper itemId={props.item.id}>
+      <TimelineVideoCard {...props} />
+    </TestDndWrapper>
   );
 }
 
