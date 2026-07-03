@@ -16,8 +16,8 @@ export function VideoPreview({ items, selectedId }: VideoPreviewProps) {
   const [playingId, setPlayingId] = useState<string | null>(selectedId ?? items[0]?.id ?? null);
 
   useEffect(() => {
-    if (selectedId) setPlayingId(selectedId);
-  }, [selectedId]);
+    setPlayingId(selectedId ?? items[0]?.id ?? null);
+  }, [selectedId, items]);
 
   useEffect(() => {
     if (playing) void videoRef.current?.play();

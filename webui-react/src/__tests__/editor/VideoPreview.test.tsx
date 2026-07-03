@@ -38,4 +38,13 @@ describe("VideoPreview", () => {
     fireEvent.ended(video);
     expect(video.src).toContain("c2.mp4");
   });
+
+  it("falls back to items[0] when selectedId transitions from a value to null", () => {
+    const { rerender } = render(<VideoPreview items={ITEMS} selectedId="c2" />);
+    const video = screen.getByTestId("video-preview") as HTMLVideoElement;
+    expect(video.src).toContain("c2.mp4");
+
+    rerender(<VideoPreview items={ITEMS} selectedId={null} />);
+    expect(video.src).toContain("c1.mp4");
+  });
 });
