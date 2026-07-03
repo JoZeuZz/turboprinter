@@ -1,8 +1,10 @@
 // webui-react/src/components/panels/GeneratingPanel.tsx
 import { useEffect, useRef, useState } from "react";
-import { Check, Loader2, Circle, ChevronDown, ChevronUp } from "lucide-react";
+import { Check, Loader2, Circle, ChevronDown, ChevronUp, XCircle } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useProjectWorkspaceStore } from "../../store/useProjectWorkspaceStore";
+import { useProjectStore } from "../../store/useProjectStore";
+import { useVideoStore } from "../../store/useVideoStore";
 import { TASK_STATE_COMPLETE, TASK_STATE_FAILED } from "../../api/types";
 
 export function GeneratingPanel() {
@@ -22,6 +24,20 @@ export function GeneratingPanel() {
     { label: t("panels.generating.steps.burningSubtitles"), threshold: 99 },
   ];
 
+  const projectStore = useProjectStore();
+  const isProjectMode = projectStore.orchestrationStep !== null;
+
+  const PROJECT_STEPS: { key: "plan" | "media" | "narration" | "timeline"; label: string }[] = [
+    { key: "plan", label: t("panels.generating.projectSteps.plan") },
+    { key: "media", label: t("panels.generating.projectSteps.media") },
+    { key: "narration", label: t("panels.generating.projectSteps.narration") },
+    { key: "timeline", label: t("panels.generating.projectSteps.timeline") },
+  ];
+  const currentStepIndex = PROJECT_STEPS.findIndex((s) => s.key === projectStore.orchestrationStep);
+  const handleRetry = () => {
+    void projectStore.generateViaProjectMode(useVideoStore.getState().toParams());
+  };
+
   // Auto-transition on completion
   useEffect(() => {
     if (taskStatus?.state === TASK_STATE_COMPLETE) {
@@ -34,6 +50,52 @@ export function GeneratingPanel() {
       logsRef.current.scrollTop = logsRef.current.scrollHeight;
     }
   }, [logsOpen, logs]);
+
+  if (isProjectMode) {
+    return (
+      <div className="flex h-full w-full max-w-5xl mx-auto flex-col justify-start px-6 py-5">
+        <div className="w-full max-w-md space-y-6">
+          <h2 className="text-sm font-semibold text-foreground">{t("panels.generating.title")}</h2>
+
+          {projectStore.mode === "error" && (
+            <div className="rounded-md border border-red-800 bg-red-900/20 px-3 py-2 space-y-2">
+              <p className="text-xs text-red-400">{projectStore.error}</p>
+              <button
+                onClick={handleRetry}
+                className="text-xs text-red-300 underline hover:text-red-100"
+              >
+                {t("panels.generating.tryAgain")}
+              </button>
+            </div>
+          )}
+
+          <ul className="space-y-2">
+            {PROJECT_STEPS.map((step, idx) => {
+              const done = idx < currentStepIndex;
+              const failed = idx === currentStepIndex && projectStore.mode === "error";
+              const active = idx === currentStepIndex && projectStore.mode !== "error";
+              return (
+                <li key={step.key} className="flex items-center gap-3 text-sm">
+                  {done ? (
+                    <Check className="h-4 w-4 shrink-0 text-green-400" />
+                  ) : failed ? (
+                    <XCircle className="h-4 w-4 shrink-0 text-red-400" />
+                  ) : active ? (
+                    <Loader2 className="h-4 w-4 shrink-0 animate-spin text-accent" />
+                  ) : (
+                    <Circle className="h-4 w-4 shrink-0 text-border" />
+                  )}
+                  <span className={done ? "text-muted line-through" : failed ? "text-red-400" : active ? "text-foreground" : "text-muted"}>
+                    {step.label}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-full w-full max-w-5xl mx-auto flex-col justify-start px-6 py-5">

@@ -172,6 +172,12 @@
         "downloadingClips": "Downloading Clips",
         "assemblingVideo": "Assembling video",
         "burningSubtitles": "Burning subtitles"
+      },
+      "projectSteps": {
+        "plan": "Planning scenes",
+        "media": "Searching clips",
+        "narration": "Generating narration",
+        "timeline": "Building timeline"
       }
     },
     "rendering": {
