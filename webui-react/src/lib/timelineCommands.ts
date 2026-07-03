@@ -1,5 +1,16 @@
 import type { EditCommand, TimelineItem } from "../api/types";
 
+export function findItemAtTime(
+  items: TimelineItem[],
+  time: number
+): TimelineItem | null {
+  if (items.length === 0) return null;
+  for (const item of items) {
+    if (time < item.start_sec + item.duration_sec) return item;
+  }
+  return items[items.length - 1];
+}
+
 export function moveCommandsForOrder(
   trackId: string,
   items: TimelineItem[]

@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Timeline } from "../../components/editor/Timeline";
 import type { TimelineTrack } from "../../api/types";
@@ -75,5 +75,48 @@ describe("Timeline", () => {
   it("renders nothing in the video row when there is no video track", () => {
     renderTimeline({ videoTrack: undefined });
     expect(screen.queryByTestId("clip-c1")).not.toBeInTheDocument();
+  });
+
+  it("sizes clip cards proportionally to their duration", () => {
+    renderTimeline();
+    const c1Width = parseFloat(screen.getByTestId("clip-c1").style.width);
+    const c3Width = parseFloat(screen.getByTestId("clip-c3").style.width);
+    // c1 is 5s, c3 is 6s: c3 must render wider.
+    expect(c3Width).toBeGreaterThan(c1Width);
+  });
+
+  it("positions the playhead according to currentTime", () => {
+    const atZero = renderTimeline({ currentTime: 0 });
+    const leftAt0 = parseFloat(
+      (atZero.container.querySelector('[data-testid="timeline-playhead"]') as HTMLElement).style
+        .left
+    );
+    atZero.unmount();
+
+    const atFive = renderTimeline({ currentTime: 5 });
+    const leftAt5 = parseFloat(
+      (atFive.container.querySelector('[data-testid="timeline-playhead"]') as HTMLElement).style
+        .left
+    );
+
+    expect(leftAt5).toBeGreaterThan(leftAt0);
+  });
+
+  it("selects the clip covering the clicked ruler position", async () => {
+    const onSelect = vi.fn();
+    renderTimeline({ onSelect });
+    const ruler = screen.getByTestId("timeline-ruler");
+    ruler.getBoundingClientRect = () =>
+      ({ left: 0, right: 500, top: 0, bottom: 0, width: 500, height: 20 }) as DOMRect;
+    fireEvent.click(ruler, { clientX: 10 }); // well within c1's span at default zoom
+    expect(onSelect).toHaveBeenCalledWith("c1");
+  });
+
+  it("zoom-in increases clip card width", () => {
+    renderTimeline();
+    const before = parseFloat(screen.getByTestId("clip-c1").style.width);
+    fireEvent.click(screen.getByTestId("timeline-zoom-in"));
+    const after = parseFloat(screen.getByTestId("clip-c1").style.width);
+    expect(after).toBeGreaterThan(before);
   });
 });

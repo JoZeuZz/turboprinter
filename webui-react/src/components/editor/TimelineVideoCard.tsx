@@ -6,9 +6,18 @@ interface TimelineVideoCardProps {
   item: TimelineItem;
   isSelected: boolean;
   onSelect: (id: string) => void;
+  widthPx?: number;
 }
 
-export function TimelineVideoCard({ item, isSelected, onSelect }: TimelineVideoCardProps) {
+const MIN_WIDTH_PX = 56;
+const DEFAULT_WIDTH_PX = 96;
+
+export function TimelineVideoCard({
+  item,
+  isSelected,
+  onSelect,
+  widthPx = DEFAULT_WIDTH_PX,
+}: TimelineVideoCardProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: item.id });
 
@@ -16,6 +25,7 @@ export function TimelineVideoCard({ item, isSelected, onSelect }: TimelineVideoC
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.4 : 1,
+    width: `${Math.max(widthPx, MIN_WIDTH_PX)}px`,
   };
 
   return (
@@ -27,8 +37,10 @@ export function TimelineVideoCard({ item, isSelected, onSelect }: TimelineVideoC
       {...listeners}
       onClick={() => onSelect(item.id)}
       data-testid={`clip-${item.id}`}
-      className={`relative h-14 w-24 shrink-0 overflow-hidden rounded border transition-colors ${
-        isSelected ? "border-accent bg-accent/20" : "border-border bg-surface hover:border-accent/50"
+      className={`group relative h-14 shrink-0 overflow-hidden rounded border transition-all ${
+        isSelected
+          ? "border-accent bg-accent/20 ring-1 ring-accent shadow-[0_0_0_1px_rgba(99,102,241,0.4)]"
+          : "border-border bg-surface hover:border-accent/50 hover:brightness-110"
       }`}
     >
       {item.thumbnail_url ? (
@@ -42,6 +54,7 @@ export function TimelineVideoCard({ item, isSelected, onSelect }: TimelineVideoC
           {item.text ?? item.id}
         </div>
       )}
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-4 bg-gradient-to-t from-black/70 to-transparent" />
       <span className="absolute bottom-0 right-0 rounded-tl bg-black/60 px-1 text-[9px] text-white">
         {item.duration_sec.toFixed(1)}s
       </span>

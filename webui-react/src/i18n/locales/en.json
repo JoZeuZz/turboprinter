@@ -253,8 +253,7 @@
   "editor": {
     "clip": "Clip",
     "duration": "Duration",
-    "replace": "Replace clip (Phase 3)",
-    "replaceClip": "Replace clip",
+    "source": "Source",
     "selectClip": "Select a clip on the timeline to inspect it.",
     "trimStart": "Trim start (s)",
     "trimEnd": "Trim end (s)",

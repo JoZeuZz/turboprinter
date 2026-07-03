@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { moveCommandsForOrder } from "../../lib/timelineCommands";
+import { moveCommandsForOrder, findItemAtTime } from "../../lib/timelineCommands";
 import type { TimelineItem } from "../../api/types";
 
 const ITEMS: TimelineItem[] = [
@@ -30,5 +30,22 @@ describe("moveCommandsForOrder", () => {
 
   it("returns an empty array for an empty input", () => {
     expect(moveCommandsForOrder("video_1", [])).toEqual([]);
+  });
+});
+
+describe("findItemAtTime", () => {
+  it("returns the item covering the given time", () => {
+    expect(findItemAtTime(ITEMS, 0)?.id).toBe("c1");
+    expect(findItemAtTime(ITEMS, 4.9)?.id).toBe("c1");
+    expect(findItemAtTime(ITEMS, 5)?.id).toBe("c2");
+    expect(findItemAtTime(ITEMS, 9.5)?.id).toBe("c3");
+  });
+
+  it("falls back to the last item when time is past the end", () => {
+    expect(findItemAtTime(ITEMS, 999)?.id).toBe("c3");
+  });
+
+  it("returns null for an empty list", () => {
+    expect(findItemAtTime([], 0)).toBeNull();
   });
 });

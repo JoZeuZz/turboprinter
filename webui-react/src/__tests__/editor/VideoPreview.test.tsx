@@ -47,4 +47,22 @@ describe("VideoPreview", () => {
     rerender(<VideoPreview items={ITEMS} selectedId={null} />);
     expect(video.src).toContain("c1.mp4");
   });
+
+  it("renders a seek bar that updates the displayed clip time", () => {
+    render(<VideoPreview items={ITEMS} selectedId="c1" />);
+    const seek = screen.getByTestId("video-seek") as HTMLInputElement;
+    fireEvent.change(seek, { target: { value: "2" } });
+    expect(seek.value).toBe("2");
+    expect(screen.getByText("0:02")).toBeInTheDocument();
+  });
+
+  it("reports global timeline time on playback via onTimeUpdate", () => {
+    const onTimeUpdate = vi.fn();
+    render(<VideoPreview items={ITEMS} selectedId="c2" onTimeUpdate={onTimeUpdate} />);
+    const video = screen.getByTestId("video-preview") as HTMLVideoElement;
+    Object.defineProperty(video, "currentTime", { value: 1.5, configurable: true });
+    fireEvent.timeUpdate(video);
+    // c2 starts at start_sec 5, so global time is 5 + 1.5.
+    expect(onTimeUpdate).toHaveBeenCalledWith(6.5);
+  });
 });

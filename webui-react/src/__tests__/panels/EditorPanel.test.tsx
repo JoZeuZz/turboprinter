@@ -1,4 +1,5 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { EditorPanel } from "../../components/panels/EditorPanel";
 import { useProjectStore } from "../../store/useProjectStore";
 import type { TimelineProject } from "../../api/types";
@@ -66,5 +67,29 @@ describe("EditorPanel", () => {
     // now carries an asset_url in this fixture, so the video element renders it.
     const video = screen.getByTestId("video-preview") as HTMLVideoElement;
     expect(video.src).toContain("c1.mp4");
+  });
+
+  it("removes the selected clip when Delete is pressed", async () => {
+    const store = makeStore();
+    vi.mocked(useProjectStore).mockReturnValue(store as never);
+    render(<EditorPanel />);
+    await userEvent.click(screen.getByTestId("clip-c1"));
+    fireEvent.keyDown(window, { key: "Delete" });
+    expect(store.applyTimelineCommands).toHaveBeenCalledWith({
+      commands: [{ type: "move", track_id: "video_1", item_id: "c1", new_start_sec: -1 }],
+    });
+  });
+
+  it("ignores Delete while typing in an input", async () => {
+    const store = makeStore();
+    vi.mocked(useProjectStore).mockReturnValue(store as never);
+    render(<EditorPanel />);
+    await userEvent.click(screen.getByTestId("clip-c1"));
+    const input = document.createElement("input");
+    document.body.appendChild(input);
+    input.focus();
+    fireEvent.keyDown(input, { key: "Delete" });
+    expect(store.applyTimelineCommands).not.toHaveBeenCalled();
+    document.body.removeChild(input);
   });
 });

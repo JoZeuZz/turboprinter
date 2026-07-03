@@ -1,5 +1,5 @@
 // webui-react/src/components/panels/EditorPanel.tsx
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { VideoPreview } from "../editor/VideoPreview";
 import { ClipInspector } from "../editor/ClipInspector";
@@ -9,20 +9,19 @@ import { useProjectStore } from "../../store/useProjectStore";
 import { useProjectWorkspaceStore } from "../../store/useProjectWorkspaceStore";
 import type { EditCommand, TimelineItem } from "../../api/types";
 
+function isTypingTarget(target: EventTarget | null): boolean {
+  const el = target as HTMLElement | null;
+  if (!el) return false;
+  const tag = el.tagName;
+  return tag === "INPUT" || tag === "TEXTAREA" || el.isContentEditable;
+}
+
 export function EditorPanel() {
   const { t } = useTranslation();
   const projectStore = useProjectStore();
   const { setPanel } = useProjectWorkspaceStore();
   const [selectedId, setSelectedId] = useState<string | null>(null);
-
-  // Project mode disabled fallback
-  if (projectStore.mode === "disabled") {
-    return (
-      <div className="flex items-center justify-center h-full text-muted text-sm p-8 text-center">
-        {t("editor.notAvailable")}
-      </div>
-    );
-  }
+  const [currentTime, setCurrentTime] = useState(0);
 
   const videoTrack = projectStore.project?.tracks.find((t) => t.type === "video");
   const audioTrack = projectStore.project?.tracks.find((t) => t.type === "audio");
@@ -68,12 +67,33 @@ export function EditorPanel() {
     setPanel("rendering");
   };
 
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (isTypingTarget(e.target)) return;
+      if ((e.key === "Delete" || e.key === "Backspace") && selectedId) {
+        e.preventDefault();
+        handleRemove(selectedId);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId, videoTrack?.id]);
+
+  if (projectStore.mode === "disabled") {
+    return (
+      <div className="flex items-center justify-center h-full text-muted text-sm p-8 text-center">
+        {t("editor.notAvailable")}
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col h-full">
       {/* Top: preview + inspector */}
       <div className="flex flex-1 overflow-hidden">
         <div className="flex-[3] p-4">
-          <VideoPreview items={items} selectedId={selectedId} />
+          <VideoPreview items={items} selectedId={selectedId} onTimeUpdate={setCurrentTime} />
         </div>
         <div className="flex-[2] border-l border-border overflow-y-auto">
           <ClipInspector
@@ -92,6 +112,7 @@ export function EditorPanel() {
         selectedId={selectedId}
         onSelect={setSelectedId}
         onReorder={handleReorder}
+        currentTime={currentTime}
       />
 
       {/* Footer actions */}

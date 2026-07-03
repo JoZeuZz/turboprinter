@@ -253,8 +253,7 @@
   "editor": {
     "clip": "Clip",
     "duration": "Duración",
-    "replace": "Reemplazar clip (Fase 3)",
-    "replaceClip": "Reemplazar clip",
+    "source": "Fuente",
     "selectClip": "Selecciona un clip en la línea de tiempo para inspeccionarlo.",
     "trimStart": "Inicio de recorte (s)",
     "trimEnd": "Fin de recorte (s)",
