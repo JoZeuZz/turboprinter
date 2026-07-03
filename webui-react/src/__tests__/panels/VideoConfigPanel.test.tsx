@@ -5,6 +5,8 @@ import userEvent from "@testing-library/user-event";
 import { act } from "@testing-library/react";
 import { VideoConfigPanel } from "../../components/panels/VideoConfigPanel";
 import { useVideoStore } from "../../store/useVideoStore";
+import { useProjectWorkspaceStore } from "../../store/useProjectWorkspaceStore";
+import { useProjectStore } from "../../store/useProjectStore";
 import { voiceApi } from "../../api/voice";
 import { videoApi } from "../../api/video";
 
@@ -20,10 +22,11 @@ vi.mock("../../api/video", () => ({
 }));
 
 vi.mock("../../store/useProjectWorkspaceStore", () => ({
-  useProjectWorkspaceStore: () => ({
-    generateVideo: vi.fn(),
-    setPanel: vi.fn(),
-  }),
+  useProjectWorkspaceStore: vi.fn(),
+}));
+
+vi.mock("../../store/useProjectStore", () => ({
+  useProjectStore: vi.fn(),
 }));
 
 vi.mock("../../store/useConfigStore", () => ({
@@ -39,6 +42,15 @@ beforeEach(() => {
     { value: "es-ES-ElviraNeural-Female", label: "es-ES ElviraNeural (Female)" },
   ]);
   act(() => useVideoStore.getState().reset());
+  vi.mocked(useProjectWorkspaceStore).mockReturnValue({
+    generateVideo: vi.fn(),
+    setPanel: vi.fn(),
+    videoUrls: [],
+  } as never);
+  vi.mocked(useProjectStore).mockReturnValue({
+    mode: "disabled",
+    generateViaProjectMode: vi.fn(),
+  } as never);
 });
 
 describe("VideoConfigPanel", () => {
@@ -104,5 +116,43 @@ describe("VideoConfigPanel TTS", () => {
     await waitFor(() =>
       expect(screen.queryByText("Buscar voz")).not.toBeInTheDocument()
     );
+  });
+});
+
+describe("VideoConfigPanel generate dispatch", () => {
+  it("calls generateVideo (legacy) when project mode is disabled", async () => {
+    const generateVideo = vi.fn();
+    vi.mocked(useProjectWorkspaceStore).mockReturnValue({
+      generateVideo, setPanel: vi.fn(), videoUrls: [],
+    } as never);
+    vi.mocked(useProjectStore).mockReturnValue({
+      mode: "disabled", generateViaProjectMode: vi.fn(),
+    } as never);
+
+    act(() => useVideoStore.getState().set("video_subject", "Dogs"));
+    render(<VideoConfigPanel />);
+    await userEvent.click(screen.getByText(/Generar video/i));
+
+    expect(generateVideo).toHaveBeenCalled();
+  });
+
+  it("calls generateViaProjectMode when project mode is ready", async () => {
+    const generateViaProjectMode = vi.fn();
+    const generateVideo = vi.fn();
+    const setPanel = vi.fn();
+    vi.mocked(useProjectWorkspaceStore).mockReturnValue({
+      generateVideo, setPanel, videoUrls: [],
+    } as never);
+    vi.mocked(useProjectStore).mockReturnValue({
+      mode: "ready", generateViaProjectMode,
+    } as never);
+
+    act(() => useVideoStore.getState().set("video_subject", "Dogs"));
+    render(<VideoConfigPanel />);
+    await userEvent.click(screen.getByText(/Generar video/i));
+
+    expect(generateViaProjectMode).toHaveBeenCalled();
+    expect(generateVideo).not.toHaveBeenCalled();
+    expect(setPanel).toHaveBeenCalledWith("generating");
   });
 });

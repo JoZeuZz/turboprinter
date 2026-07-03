@@ -16,6 +16,7 @@ import {
 import { useVideoStore } from "../../store/useVideoStore";
 import { useConfigStore } from "../../store/useConfigStore";
 import { useProjectWorkspaceStore } from "../../store/useProjectWorkspaceStore";
+import { useProjectStore } from "../../store/useProjectStore";
 import { videoApi } from "../../api/video";
 import { voiceApi } from "../../api/voice";
 import { SubtitleFontGallery } from "../subtitles/SubtitleFontGallery";
@@ -38,6 +39,7 @@ export function VideoConfigPanel() {
   const store = useVideoStore();
   const { config } = useConfigStore();
   const workspaceStore = useProjectWorkspaceStore();
+  const projectStore = useProjectStore();
   const hasReviewVideo = workspaceStore.videoUrls.length > 0;
 
   const TABS = [
@@ -98,7 +100,12 @@ export function VideoConfigPanel() {
   ];
 
   const handleGenerate = () => {
-    void workspaceStore.generateVideo(store.toParams());
+    if (projectStore.mode !== "disabled") {
+      void projectStore.generateViaProjectMode(store.toParams());
+      workspaceStore.setPanel("generating");
+    } else {
+      void workspaceStore.generateVideo(store.toParams());
+    }
   };
 
   const handleBack = () => {
