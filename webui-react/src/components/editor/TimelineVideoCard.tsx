@@ -25,13 +25,8 @@ export function TimelineVideoCard({ item, isSelected, onSelect }: TimelineVideoC
       style={style}
       {...attributes}
       {...listeners}
-      data-testid={`clip-${item.id}`}
       onClick={() => onSelect(item.id)}
-      onMouseDown={(e) => {
-        if (e.button === 0) {
-          onSelect(item.id);
-        }
-      }}
+      data-testid={`clip-${item.id}`}
       className={`relative h-14 w-24 shrink-0 overflow-hidden rounded border transition-colors ${
         isSelected ? "border-accent bg-accent/20" : "border-border bg-surface hover:border-accent/50"
       }`}
