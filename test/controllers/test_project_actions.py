@@ -86,3 +86,88 @@ def test_duplicate_missing_returns_404(project_dir):
     client = TestClient(app)
     resp = client.post("/api/v1/projects/nope/duplicate")
     assert resp.status_code == 404
+
+
+from app.domain.projects.models import TimelineItem, TimelineProject, TimelineTrack
+
+
+def test_get_project_exposes_asset_url_for_local_clip(tmp_path, monkeypatch):
+    monkeypatch.setattr(app_config, "project_mode_enabled", True, raising=False)
+    monkeypatch.setattr(
+        FilesystemProjectStore,
+        "_task_dir",
+        lambda self, task_id, make=False: _make_dir(str(tmp_path), task_id, make),
+        raising=False,
+    )
+    store = FilesystemProjectStore()
+    store.save_script("proj-clip", "guion")
+    project_dir = tmp_path / "proj-clip"
+    project_dir.mkdir(exist_ok=True)
+    (project_dir / "clip.mp4").write_bytes(b"fake-video")
+    project = TimelineProject(
+        project_id="proj-clip", task_id="proj-clip",
+        tracks=[TimelineTrack(id="video_1", type="video", name="Video", items=[
+            TimelineItem(id="item_1", local_path="clip.mp4", start_sec=0.0, duration_sec=3.0),
+        ])],
+    )
+    store.save_timeline("proj-clip", project)
+
+    client = TestClient(app)
+    resp = client.get("/api/v1/projects/proj-clip")
+
+    assert resp.status_code == 200
+    item = resp.json()["data"]["timeline"]["tracks"][0]["items"][0]
+    assert item["asset_url"] == "/api/v1/projects/proj-clip/assets/clip.mp4"
+
+
+def test_get_project_asset_url_passthrough_for_remote_candidate(tmp_path, monkeypatch):
+    monkeypatch.setattr(app_config, "project_mode_enabled", True, raising=False)
+    monkeypatch.setattr(
+        FilesystemProjectStore,
+        "_task_dir",
+        lambda self, task_id, make=False: _make_dir(str(tmp_path), task_id, make),
+        raising=False,
+    )
+    store = FilesystemProjectStore()
+    store.save_script("proj-remote", "guion")
+    project = TimelineProject(
+        project_id="proj-remote", task_id="proj-remote",
+        tracks=[TimelineTrack(id="video_1", type="video", name="Video", items=[
+            TimelineItem(
+                id="item_1", local_path="https://cdn.example.com/clip.mp4",
+                start_sec=0.0, duration_sec=3.0,
+            ),
+        ])],
+    )
+    store.save_timeline("proj-remote", project)
+
+    client = TestClient(app)
+    resp = client.get("/api/v1/projects/proj-remote")
+
+    item = resp.json()["data"]["timeline"]["tracks"][0]["items"][0]
+    assert item["asset_url"] == "https://cdn.example.com/clip.mp4"
+
+
+def test_get_project_asset_url_none_for_missing_file(tmp_path, monkeypatch):
+    monkeypatch.setattr(app_config, "project_mode_enabled", True, raising=False)
+    monkeypatch.setattr(
+        FilesystemProjectStore,
+        "_task_dir",
+        lambda self, task_id, make=False: _make_dir(str(tmp_path), task_id, make),
+        raising=False,
+    )
+    store = FilesystemProjectStore()
+    store.save_script("proj-missing", "guion")
+    project = TimelineProject(
+        project_id="proj-missing", task_id="proj-missing",
+        tracks=[TimelineTrack(id="video_1", type="video", name="Video", items=[
+            TimelineItem(id="item_1", local_path="gone.mp4", start_sec=0.0, duration_sec=3.0),
+        ])],
+    )
+    store.save_timeline("proj-missing", project)
+
+    client = TestClient(app)
+    resp = client.get("/api/v1/projects/proj-missing")
+
+    item = resp.json()["data"]["timeline"]["tracks"][0]["items"][0]
+    assert item["asset_url"] is None

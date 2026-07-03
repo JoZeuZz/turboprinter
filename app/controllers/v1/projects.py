@@ -310,6 +310,33 @@ def _project_asset_registry(store: FilesystemProjectStore, project_id: str) -> d
     return assets
 
 
+def _resolve_asset_url(
+    project_dir: str, registry: dict[str, str], project_id: str, local_path: str | None,
+) -> str | None:
+    if not local_path:
+        return None
+    if local_path.startswith("http://") or local_path.startswith("https://"):
+        return local_path
+    candidate = local_path if os.path.isabs(local_path) else os.path.join(project_dir, local_path)
+    resolved = os.path.realpath(candidate)
+    for asset_id, asset_path in registry.items():
+        if asset_path == resolved:
+            return f"/api/v1/projects/{project_id}/assets/{asset_id}"
+    return None
+
+
+def _inject_asset_urls(store: FilesystemProjectStore, project_id: str, timeline_dict: dict | None) -> None:
+    if timeline_dict is None:
+        return
+    project_dir = store.project_dir(project_id)
+    registry = _project_asset_registry(store, project_id)
+    for track in timeline_dict.get("tracks", []):
+        for item in track.get("items", []):
+            item["asset_url"] = _resolve_asset_url(
+                project_dir, registry, project_id, item.get("local_path")
+            )
+
+
 def _validate_replace_candidates(
     store: FilesystemProjectStore, project_id: str, commands: list
 ) -> None:
@@ -472,6 +499,8 @@ def get_project(request: Request, project_id: str):
     selected_media = store.load_selected_media(project_id)
     media_candidates = store.load_media_candidates(project_id)
     selected_music = store.load_selected_music(project_id)
+    timeline_dict = _dump_model(timeline)
+    _inject_asset_urls(store, project_id, timeline_dict)
     return _ok({
         "project_id": project_id,
         "has_script": script is not None,
@@ -480,7 +509,7 @@ def get_project(request: Request, project_id: str):
         "has_timeline": timeline is not None,
         "script": script,
         "shot_plan": _dump_model(shot_plan),
-        "timeline": _dump_model(timeline),
+        "timeline": timeline_dict,
         "media_candidates": _dump_models(media_candidates),
         "selected_media": _dump_models(selected_media),
         "selected_music": _dump_models(selected_music),
