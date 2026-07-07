@@ -17,6 +17,7 @@ from app.application.services.reddit_ingest import (
     RedditThreadNormalizer,
 )
 from app.application.services.timeline_builder import TimelineBuilder
+from app.application.services.project_preflight import ProjectPreflightService
 from app.application.workflows import render_project as rp
 from app.config import config
 from app.controllers import base
@@ -829,6 +830,17 @@ def render_status(request: Request, project_id: str):
     if task is None:
         raise HttpException(task_id=project_id, status_code=404, message="no render started")
     return _ok(task)
+
+
+@router.get("/projects/{project_id}/preflight", response_model=BaseProjectResponse,
+            summary="Run pre-render readiness checks")
+def preflight_check(request: Request, project_id: str):
+    _require_project_mode(request, project_id)
+    store = _store()
+    if store.load_timeline(project_id) is None:
+        raise HttpException(task_id=project_id, status_code=400, message="build timeline first")
+    result = ProjectPreflightService(store).run(project_id)
+    return _ok(result.model_dump(mode="json"))
 
 
 @router.get("/projects/{project_id}/assets", response_model=BaseProjectResponse,
