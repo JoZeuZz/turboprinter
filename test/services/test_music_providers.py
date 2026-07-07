@@ -32,3 +32,15 @@ def test_jamendo_stub_not_configured_without_key():
     provider = JamendoProvider(api_key="")
     assert provider.is_configured() is False
     assert provider.search(_intent(), max_results=5) == []
+
+
+def test_jamendo_stub_returns_no_results_even_when_configured():
+    """Guard-rail: search() is a no-op stub regardless of api_key.
+
+    A future implementer wiring the real Jamendo API call must update this
+    test; until then it documents that a configured key does NOT make the
+    provider functional.
+    """
+    provider = JamendoProvider(api_key="a-real-looking-key")
+    assert provider.is_configured() is True
+    assert provider.search(_intent(), max_results=5) == []

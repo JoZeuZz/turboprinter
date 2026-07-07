@@ -111,8 +111,9 @@ def test_list_projects_has_updated_at(project_store_dir):
 
 
 def test_list_projects_project_mode_disabled(monkeypatch):
-    """When project mode is disabled, endpoint returns 404."""
+    """When project mode is disabled, endpoint falls back to legacy task listing (200), not 404."""
     monkeypatch.setattr(app_config, "project_mode_enabled", False, raising=False)
     client = TestClient(app)
     resp = client.get("/api/v1/projects")
-    assert resp.status_code == 404
+    assert resp.status_code == 200
+    assert "projects" in resp.json()["data"]
