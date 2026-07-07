@@ -63,12 +63,16 @@ export function EditorPanel() {
   };
 
   const handleRender = async () => {
-    const result = await projectStore.runPreflight();
-    if (!result.valid) return;
-    void projectStore.render({
-      allow_preflight_warnings: result.warnings.length > 0,
-    });
-    setPanel("rendering");
+    try {
+      const result = await projectStore.runPreflight();
+      if (!result.valid) return;
+      void projectStore.render({
+        allow_preflight_warnings: result.warnings.length > 0,
+      });
+      setPanel("rendering");
+    } catch {
+      // projectStore.runPreflight already recorded the error via fail()
+    }
   };
 
   useEffect(() => {
@@ -86,7 +90,7 @@ export function EditorPanel() {
 
   useEffect(() => {
     if (projectStore.project) {
-      void projectStore.runPreflight();
+      void projectStore.runPreflight().catch(() => {});
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectStore.project]);

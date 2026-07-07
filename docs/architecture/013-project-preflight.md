@@ -64,6 +64,15 @@ mid-render.
   these two specific checks may go stale. This is a known, accepted
   limitation for this fase (no full editor yet); revisit if manual editing
   grows more powerful.
+- **Asset-existence is enforced for every track, regardless of that track's
+  own presence-check severity.** `subtitles_present`/`music_present` are
+  warnings when the track is missing entirely, but if a subtitle or music
+  track *does* exist and points at a `local_path` that isn't on disk, the
+  generic `asset:*` check (error severity, same one used for video clips)
+  fires instead — so "no subtitles" is an overridable warning, while "a
+  subtitle file that was referenced but got deleted" is a hard error. This
+  is intentional (a referenced-but-missing file is a worse signal than an
+  absent optional feature) but is an asymmetry worth knowing about.
 
 ## Frontend
 
@@ -84,7 +93,7 @@ mid-render.
 ## Testing
 
 Backend: `test/domain/test_preflight.py`, `test/services/test_project_preflight.py`
-(15 cases covering valid timeline, no timeline, missing asset, placeholder,
+(14 cases covering valid timeline, no timeline, missing asset, placeholder,
 gap, overlap, missing narration, missing subtitles, missing music, invalid
 export settings, missing/present license metadata, path traversal),
 `test/controllers/test_project_preflight_endpoint.py` (endpoint + render
