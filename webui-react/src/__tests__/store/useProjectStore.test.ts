@@ -17,6 +17,7 @@ vi.mock("../../api/projects", () => ({
     applyTimelineCommands: vi.fn(),
     startRender: vi.fn(),
     getRenderStatus: vi.fn(),
+    preflight: vi.fn(),
   },
 }));
 
@@ -175,5 +176,26 @@ describe("useProjectStore", () => {
     expect(useProjectStore.getState().error).toBe("no clips found");
     expect(projectsApi.synthesizeNarration).not.toHaveBeenCalled();
     expect(projectsApi.buildTimeline).not.toHaveBeenCalled();
+  });
+
+  it("runPreflight stores the result and returns it", async () => {
+    useProjectStore.setState({ projectId: "project-1" });
+    vi.mocked(projectsApi.preflight).mockResolvedValue({
+      project_id: "project-1",
+      valid: false,
+      errors: ["video track has placeholder/missing clips: item_1"],
+      warnings: [],
+      summary: "1 error(s), 0 warning(s).",
+      checks: [],
+    });
+
+    let result;
+    await act(async () => {
+      result = await useProjectStore.getState().runPreflight();
+    });
+
+    expect(projectsApi.preflight).toHaveBeenCalledWith("project-1");
+    expect(useProjectStore.getState().preflightResult?.valid).toBe(false);
+    expect(result).toEqual(useProjectStore.getState().preflightResult);
   });
 });

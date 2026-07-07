@@ -12,6 +12,7 @@ import {
   type GetProjectResponse,
   type MediaSearchRequest,
   type PlanRequest,
+  type PreflightResult,
   type RenderRequest,
   type RenderStatusResponse,
   type TimelineCommandsRequest,
@@ -37,6 +38,7 @@ interface ProjectStoreState {
   error: string | null;
   renderStatus: RenderStatusResponse | null;
   timelineValidation: TimelineValidationState | null;
+  preflightResult: PreflightResult | null;
   orchestrationStep: OrchestrationStep;
   open: (projectId: string) => Promise<GetProjectResponse>;
   create: (params: CreateFromTopicRequest) => Promise<void>;
@@ -44,6 +46,7 @@ interface ProjectStoreState {
   mediaSearch: (params?: MediaSearchRequest) => Promise<void>;
   buildTimeline: (params?: TimelineBuildRequest) => Promise<void>;
   applyTimelineCommands: (params: TimelineCommandsRequest) => Promise<void>;
+  runPreflight: () => Promise<PreflightResult>;
   render: (params?: RenderRequest) => Promise<void>;
   pollRenderStatus: (intervalMs?: number) => Promise<RenderStatusResponse>;
   generateViaProjectMode: (params: VideoParams) => Promise<void>;
@@ -57,6 +60,7 @@ const initialState = {
   error: null,
   renderStatus: null,
   timelineValidation: null,
+  preflightResult: null as PreflightResult | null,
   orchestrationStep: null as OrchestrationStep,
 };
 
@@ -159,6 +163,17 @@ export const useProjectStore = create<ProjectStoreState>()(
             await refresh(projectId);
           } catch (error) {
             fail(error);
+          }
+        },
+        runPreflight: async () => {
+          try {
+            const projectId = requireProjectId();
+            const result = await projectsApi.preflight(projectId);
+            set({ preflightResult: result });
+            return result;
+          } catch (error) {
+            fail(error);
+            throw error;
           }
         },
         render: async (params = {}) => {
