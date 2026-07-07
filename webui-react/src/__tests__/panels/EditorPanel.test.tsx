@@ -131,4 +131,29 @@ describe("EditorPanel", () => {
     });
     expect(store.render).not.toHaveBeenCalled();
   });
+
+  it("renders and switches to the rendering panel when preflight is valid, forwarding allow_preflight_warnings", async () => {
+    const preflight = {
+      project_id: "proj-1",
+      valid: true,
+      errors: [],
+      warnings: ["subtitles are expected but no subtitle track/asset was found"],
+      summary: "0 error(s), 1 warning(s).",
+      checks: [],
+    };
+    const store = makeStore({
+      runPreflight: vi.fn().mockResolvedValue(preflight),
+    });
+    vi.mocked(useProjectStore).mockReturnValue(store as never);
+
+    render(<EditorPanel />);
+
+    const renderButton = screen.getByRole("button", { name: /renderizar/i });
+    fireEvent.click(renderButton);
+
+    await waitFor(() => {
+      expect(store.render).toHaveBeenCalledWith({ allow_preflight_warnings: true });
+    });
+    expect(mockSetPanel).toHaveBeenCalledWith("rendering");
+  });
 });
