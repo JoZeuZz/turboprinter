@@ -9,6 +9,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from loguru import logger
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.types import Scope
 
 from app.config import config
 from app.models.exception import HttpException
@@ -88,9 +90,28 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+class _PrivateMetaStaticFiles(StaticFiles):
+    """StaticFiles that blocks direct access to task `_meta/` files.
+
+    `_meta/` holds scripts, render manifests and word timestamps that must
+    stay private even though they live under the same on-disk task directory
+    as public assets (video, audio, thumbnails). Excluding them here (rather
+    than only omitting them from a listing endpoint) closes the gap where
+    `/tasks/<id>/_meta/<file>` was directly fetchable by anyone who could
+    reach the mount and guess/know the filename.
+    """
+
+    async def get_response(self, path: str, scope: Scope):
+        if "_meta" in path.replace("\\", "/").split("/"):
+            raise StarletteHTTPException(status_code=404)
+        return await super().get_response(path, scope)
+
+
 task_dir = utils.task_dir()
 app.mount(
-    "/tasks", StaticFiles(directory=task_dir, html=True, follow_symlink=False), name=""
+    "/tasks",
+    _PrivateMetaStaticFiles(directory=task_dir, html=True, follow_symlink=False),
+    name="",
 )
 
 public_dir = utils.public_dir()
