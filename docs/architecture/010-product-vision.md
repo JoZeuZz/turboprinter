@@ -1,6 +1,7 @@
 # 010 — TurboPrinter Product Vision
 
 **Persisted**: 2026-06-24
+**Superseded**: 2026-07-07 — strategic vision superseded by `docs/design/context.md` ("Content Automation Lab"). This doc's "Two Flows" architecture and tactical UI/render phases (AI Orchestration, Editor Timeline, OpenCut, Expansions) remain a useful reference for what's already shipped, but its "Fase N" numbering does NOT align with the roadmap in `docs/design/context.md` — do not merge the two numbering schemes. See `docs/architecture/011-fase0-consolidation.md` for the reconciliation decision.
 **Purpose**: Anchor document for future agent iterations. Defines what this fork is trying to be, the two-flow architecture, and the agentic AI goal.
 
 ---

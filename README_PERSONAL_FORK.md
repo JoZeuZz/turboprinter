@@ -242,9 +242,32 @@ uv run python cli.py --video-subject "..." --llm-provider gemini --llm-model gem
 
 ### LLM Provider Registry (Plan 011a)
 
-`app/services/quality/llm_providers/` defines `OpenAICompatProvider`, `GeminiProvider`, and a `get_provider()` dispatcher. Currently, `_generate_response_single` in `llm.py` keeps known providers inline (openai, groq, deepseek, etc.) to preserve `test_llm.py` test patches on `llm.OpenAI`. The registry routes only unknown/custom provider names.
+`app/services/quality/llm_providers/` defines `OpenAICompatProvider`, `GeminiProvider`, and a `get_provider()` dispatcher. Currently, `_generate_response_single` in `llm.py` keeps every known provider inline to preserve `test_llm.py` test patches on `llm.OpenAI`. The registry routes only unknown/custom provider names.
 
-To complete the migration: update `test_llm.py` to patch `openai_compat.OpenAI` instead of `llm.OpenAI`, then remove the `_inline` set from `_generate_response_single`.
+**Correction (2026-07-07, Fase 0 audit):** the `_inline` set is not uniform —
+it mixes two different kinds of providers:
+
+- **Genuinely OpenAI-wire-compatible** (safe to route through the registry
+  once tests are re-pointed): `openai`, `groq`, `deepseek`, `ollama`,
+  `moonshot`, `aihubmix`, `aimlapi`, `oneapi`, `azure`, `gemini`, `grok`,
+  `minimax`, `mimo`, `modelscope`. `get_provider()` already maps each to the
+  correct class (`OpenAICompatProvider` or `GeminiProvider`).
+- **Genuinely custom-protocol** (must stay inline — routing them through
+  `get_provider()` would silently fall back to `OpenAICompatProvider`, the
+  wrong wire protocol, and break them): `g4f` (uses the `g4f` library),
+  `qwen`/`cloudflare`/`ernie` (their inline blocks use a literal
+  `base_url = "***"` placeholder — a distinct, not-yet-standard protocol,
+  `cloudflare` also needs an `account_id`, `ernie` needs a `secret_key`),
+  `pollinations` (hand-rolled `requests.post` payload shape), `litellm`
+  (delegates to the `litellm` library).
+
+To complete the migration safely: update `test_llm.py` to patch
+`openai_compat.OpenAI` for the first group's provider tests, then remove
+**only those 14 provider names** from the `_inline` set — leave `g4f`, `qwen`,
+`cloudflare`, `ernie`, `pollinations`, `litellm` inline permanently (or give
+them real registry provider classes first, which is a larger task). This is
+scoped as its own TDD task, not a drive-by fix, because it touches ~14
+per-provider test patch targets in `test_llm.py`.
 
 ---
 
@@ -331,15 +354,16 @@ This fork keeps upstream behaviour but documents and provides safer knobs.
   cross‑post) so a hung provider cannot stall a task indefinitely.
 - **Upload limits.** Set `max_upload_size_mb` in `config.toml` (0 = unlimited)
   and/or enforce `client_max_body_size` at the reverse proxy.
-- **Task `_meta/` is listing-private, not access-controlled.** Private task
-  artifacts (`script.json`, `params`, `manifest.json`, `word_timestamps.json`,
-  `subtitle.srt`) live under `storage/tasks/<id>/_meta/` so they no longer appear
-  in the `/tasks/<id>/` directory listing. However, the `/tasks` static mount
-  still serves the whole task tree, so `/tasks/<id>/_meta/<file>` remains
-  fetchable by anyone who can reach the mount (the WebUI sidecar links point
-  there by design). These files may contain your pasted script and effective
-  render config — do **not** expose the API/WebUI publicly without the reverse
-  proxy + auth boundary described below.
+- **Task `_meta/` is blocked at the static mount.** Private task artifacts
+  (`script.json`, `params`, `manifest.json`, `word_timestamps.json`,
+  `subtitle.srt`) live under `storage/tasks/<id>/_meta/`. The `/tasks` static
+  mount (`app/asgi.py`, `_PrivateMetaStaticFiles`) returns `404` for any path
+  containing a `_meta` segment, so `/tasks/<id>/_meta/<file>` is not fetchable
+  even by someone who knows the exact filename. This is defense at the mount
+  level, not just hidden from a listing. Still do **not** expose the
+  API/WebUI publicly without the reverse proxy + auth boundary described
+  below — public assets (video/audio/subtitles) under `/tasks/<id>/` remain
+  intentionally fetchable by design.
 - **Redis** (optional, `enable_redis`) is for task state only — keep it private,
   bound to localhost, with a password; do not expose it.
 - **No `chmod 777`.** Run as a non‑root user inside the LXC; keep `storage/`
