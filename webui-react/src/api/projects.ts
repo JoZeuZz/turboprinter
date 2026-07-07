@@ -18,6 +18,7 @@ import type {
   TimelineCommandsRequest,
   TimelineCommandsResponse,
   TimelineValidateResponse,
+  PreflightResult,
   MusicSelectRequest,
   MusicSelectResponse,
   MusicGetResponse,
@@ -110,6 +111,9 @@ export const projectsApi = {
       `/projects/${projectId}/timeline/validate`,
       { method: "POST" }
     ),
+
+  preflight: (projectId: string) =>
+    apiFetch<PreflightResult>(`/projects/${projectId}/preflight`),
 
   selectMusic: (projectId: string, params: MusicSelectRequest = {}) =>
     apiFetch<MusicSelectResponse>(`/projects/${projectId}/music/select`, {

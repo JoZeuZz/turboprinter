@@ -315,6 +315,7 @@ export interface RenderRequest {
   include_background_music?: boolean;
   subtitle_style?: string | null;
   font_name?: string | null;
+  allow_preflight_warnings?: boolean;
 }
 
 // Domain models
@@ -490,6 +491,22 @@ export interface TimelineValidateResponse {
   project_id: string;
   valid: boolean;
   errors?: string[];
+}
+
+export interface PreflightCheck {
+  id: string;
+  passed: boolean;
+  severity: "error" | "warning";
+  message: string;
+}
+
+export interface PreflightResult {
+  project_id: string;
+  valid: boolean;
+  errors: string[];
+  warnings: string[];
+  summary: string;
+  checks: PreflightCheck[];
 }
 
 export interface MusicSelectResponse {
