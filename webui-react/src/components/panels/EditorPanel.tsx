@@ -62,8 +62,12 @@ export function EditorPanel() {
     void projectStore.applyTimelineCommands({ commands });
   };
 
-  const handleRender = () => {
-    void projectStore.render();
+  const handleRender = async () => {
+    const result = await projectStore.runPreflight();
+    if (!result.valid) return;
+    void projectStore.render({
+      allow_preflight_warnings: result.warnings.length > 0,
+    });
     setPanel("rendering");
   };
 
@@ -79,6 +83,13 @@ export function EditorPanel() {
     return () => window.removeEventListener("keydown", handler);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId, videoTrack?.id]);
+
+  useEffect(() => {
+    if (projectStore.project) {
+      void projectStore.runPreflight();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectStore.project]);
 
   if (projectStore.mode === "disabled") {
     return (
@@ -114,6 +125,27 @@ export function EditorPanel() {
         onReorder={handleReorder}
         currentTime={currentTime}
       />
+
+      {projectStore.preflightResult && !projectStore.preflightResult.valid && (
+        <div className="border-t border-border bg-red-950/40 px-4 py-2 text-xs text-red-300">
+          <p className="font-semibold">{t("editor.preflightErrorsTitle")}</p>
+          <ul className="list-disc pl-4">
+            {projectStore.preflightResult.errors.map((e) => (
+              <li key={e}>{e}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {projectStore.preflightResult?.valid && projectStore.preflightResult.warnings.length > 0 && (
+        <div className="border-t border-border bg-amber-950/40 px-4 py-2 text-xs text-amber-300">
+          <p className="font-semibold">{t("editor.preflightWarningsTitle")}</p>
+          <ul className="list-disc pl-4">
+            {projectStore.preflightResult.warnings.map((w) => (
+              <li key={w}>{w}</li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* Footer actions */}
       <div className="flex items-center justify-between border-t border-border px-4 py-2">

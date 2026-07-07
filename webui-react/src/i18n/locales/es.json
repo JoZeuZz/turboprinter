@@ -260,7 +260,9 @@
     "previewEmpty": "Selecciona un clip para previsualizar",
     "notAvailable": "Editor no disponible — el modo de proyecto está deshabilitado o no es compatible con este servidor.",
     "backToReview": "← Volver a Revisión",
-    "render": "Renderizar ▶"
+    "render": "Renderizar ▶",
+    "preflightErrorsTitle": "No se puede renderizar:",
+    "preflightWarningsTitle": "Advertencias antes de renderizar:"
   },
   "subtitles": {
     "preview": "Vista previa",

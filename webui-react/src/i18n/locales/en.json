@@ -260,7 +260,9 @@
     "previewEmpty": "Select a clip to preview",
     "notAvailable": "Editor not available — project mode is disabled or not supported by this server.",
     "backToReview": "← Back to Review",
-    "render": "Render ▶"
+    "render": "Render ▶",
+    "preflightErrorsTitle": "Cannot render:",
+    "preflightWarningsTitle": "Warnings before rendering:"
   },
   "subtitles": {
     "preview": "Preview",

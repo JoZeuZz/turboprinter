@@ -1,11 +1,13 @@
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { EditorPanel } from "../../components/panels/EditorPanel";
 import { useProjectStore } from "../../store/useProjectStore";
 import type { TimelineProject } from "../../api/types";
 
+const mockSetPanel = vi.hoisted(() => vi.fn());
+
 vi.mock("../../store/useProjectWorkspaceStore", () => ({
-  useProjectWorkspaceStore: () => ({ setPanel: vi.fn() }),
+  useProjectWorkspaceStore: () => ({ setPanel: mockSetPanel }),
 }));
 
 vi.mock("../../store/useProjectStore", () => ({
@@ -33,13 +35,23 @@ function makeStore(overrides = {}) {
   return {
     mode: "ready",
     project: PROJECT,
+    preflightResult: null,
     applyTimelineCommands: vi.fn().mockResolvedValue(undefined),
     render: vi.fn().mockResolvedValue(undefined),
+    runPreflight: vi.fn().mockResolvedValue({
+      project_id: "proj-1",
+      valid: true,
+      errors: [],
+      warnings: [],
+      summary: "0 error(s), 0 warning(s).",
+      checks: [],
+    }),
     ...overrides,
   };
 }
 
 beforeEach(() => {
+  mockSetPanel.mockClear();
   vi.mocked(useProjectStore).mockReturnValue(makeStore() as never);
 });
 
@@ -91,5 +103,32 @@ describe("EditorPanel", () => {
     fireEvent.keyDown(input, { key: "Delete" });
     expect(store.applyTimelineCommands).not.toHaveBeenCalled();
     document.body.removeChild(input);
+  });
+
+  it("shows preflight errors and does not switch to the rendering panel", async () => {
+    const preflight = {
+      project_id: "proj-1",
+      valid: false,
+      errors: ["video track has placeholder/missing clips: item_1"],
+      warnings: [],
+      summary: "1 error(s), 0 warning(s).",
+      checks: [],
+    };
+    const store = makeStore({
+      preflightResult: preflight,
+      runPreflight: vi.fn().mockResolvedValue(preflight),
+    });
+    vi.mocked(useProjectStore).mockReturnValue(store as never);
+
+    render(<EditorPanel />);
+    expect(screen.getByText(/no se puede renderizar/i)).toBeInTheDocument();
+
+    const renderButton = screen.getByRole("button", { name: /renderizar/i });
+    fireEvent.click(renderButton);
+
+    await waitFor(() => {
+      expect(mockSetPanel).not.toHaveBeenCalledWith("rendering");
+    });
+    expect(store.render).not.toHaveBeenCalled();
   });
 });
