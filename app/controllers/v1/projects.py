@@ -799,6 +799,20 @@ def render_project_endpoint(request: Request, project_id: str, body: RenderReque
     project = store.load_timeline(project_id)
     if project is None:
         raise HttpException(task_id=project_id, status_code=400, message="build timeline first")
+    preflight = ProjectPreflightService(store).run(project_id)
+    if not preflight.valid:
+        raise HttpException(
+            task_id=project_id, status_code=400,
+            message="preflight failed: " + "; ".join(preflight.errors),
+        )
+    if preflight.warnings and not body.allow_preflight_warnings:
+        raise HttpException(
+            task_id=project_id, status_code=400,
+            message=(
+                "preflight has warnings; set allow_preflight_warnings=true to proceed: "
+                + "; ".join(preflight.warnings)
+            ),
+        )
     existing_spec = store.load_render_spec(project_id)
     renderer_name = body.renderer
     if renderer_name is None and existing_spec is not None:

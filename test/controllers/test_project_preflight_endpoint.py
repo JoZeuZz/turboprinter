@@ -80,3 +80,33 @@ def test_preflight_endpoint_returns_structured_result(project_mode, tmp_path):
     assert "errors" in data
     assert "warnings" in data
     assert "checks" in data
+
+
+def test_render_blocked_when_preflight_has_errors(project_mode, tmp_path):
+    _write_timeline(tmp_path, "task-2", str(tmp_path / "missing-clip.mp4"))
+    client = TestClient(app)
+    resp = client.post("/api/v1/projects/task-2/render", json={})
+    assert resp.status_code == 400
+    assert "preflight" in resp.json()["message"].lower()
+
+
+def test_render_blocked_on_warnings_without_override(project_mode, tmp_path):
+    clip = tmp_path / "clip.mp4"
+    clip.write_bytes(b"x")
+    _write_timeline(tmp_path, "task-3", str(clip))
+    client = TestClient(app)
+    resp = client.post("/api/v1/projects/task-3/render", json={})
+    assert resp.status_code == 400
+    assert "warning" in resp.json()["message"].lower()
+
+
+def test_render_proceeds_with_allow_preflight_warnings(project_mode, tmp_path):
+    clip = tmp_path / "clip.mp4"
+    clip.write_bytes(b"x")
+    _write_timeline(tmp_path, "task-4", str(clip))
+    client = TestClient(app)
+    resp = client.post(
+        "/api/v1/projects/task-4/render",
+        json={"allow_preflight_warnings": True},
+    )
+    assert resp.status_code == 202
