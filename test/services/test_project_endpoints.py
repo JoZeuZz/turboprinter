@@ -518,18 +518,25 @@ def test_render_endpoint_background_and_status(client, monkeypatch):
     from app.domain.rendering.models import RenderResult
     from app.application.workflows import render_project as rp
 
+    Path("/tmp/a.mp4").write_bytes(b"x")
+    Path("/tmp/b.mp4").write_bytes(b"x")
+    Path("/tmp/narration.mp3").write_bytes(b"x")
+
     pid = client.post(
         "/api/v1/projects/from-script", json={"script": "Uno. Dos.", "language": "es"}
     ).json()["data"]["project_id"]
     _seed_plan_and_media(pid)
-    client.post(f"/api/v1/projects/{pid}/timeline/build", json={})
+    client.post(
+        f"/api/v1/projects/{pid}/timeline/build",
+        json={"narration_audio_path": "/tmp/narration.mp3"},
+    )
 
     def fake_render(task_id, store, renderer=None, output_dir=None):
         return RenderResult(project_id=task_id, output_path="/tmp/final.mp4",
                             renderer_used="moviepy", success=True, duration_sec=5.0)
 
     monkeypatch.setattr(rp, "render_project_from_store", fake_render)
-    r = client.post(f"/api/v1/projects/{pid}/render", json={})
+    r = client.post(f"/api/v1/projects/{pid}/render", json={"allow_preflight_warnings": True})
     assert r.status_code == 202
 
     s = client.get(f"/api/v1/projects/{pid}/render")
@@ -543,12 +550,19 @@ def test_render_endpoint_preserves_existing_renderer_when_request_omits_renderer
     from app.domain.rendering.models import RenderResult, RenderSpec
     from app.application.workflows import render_project as rp
 
+    Path("/tmp/a.mp4").write_bytes(b"x")
+    Path("/tmp/b.mp4").write_bytes(b"x")
+    Path("/tmp/narration.mp3").write_bytes(b"x")
+
     pid = client.post(
         "/api/v1/projects/from-script", json={"script": "Uno. Dos.", "language": "es"}
     ).json()["data"]["project_id"]
     monkeypatch.setattr(pj.config, "timeline_renderer", "moviepy")
     _seed_plan_and_media(pid)
-    client.post(f"/api/v1/projects/{pid}/timeline/build", json={})
+    client.post(
+        f"/api/v1/projects/{pid}/timeline/build",
+        json={"narration_audio_path": "/tmp/narration.mp3"},
+    )
     pj._store().save_render_spec(
         pid,
         RenderSpec(
@@ -565,7 +579,7 @@ def test_render_endpoint_preserves_existing_renderer_when_request_omits_renderer
 
     monkeypatch.setattr(rp, "render_project_from_store", fake_render)
 
-    r = client.post(f"/api/v1/projects/{pid}/render", json={})
+    r = client.post(f"/api/v1/projects/{pid}/render", json={"allow_preflight_warnings": True})
 
     assert r.status_code == 202
     assert captured["renderer"] == "opencut"
@@ -594,11 +608,18 @@ def test_render_falls_back_when_config_renderer_is_invalid(client, monkeypatch):
     from app.domain.rendering.models import RenderResult
     from app.application.workflows import render_project as rp
 
+    Path("/tmp/a.mp4").write_bytes(b"x")
+    Path("/tmp/b.mp4").write_bytes(b"x")
+    Path("/tmp/narration.mp3").write_bytes(b"x")
+
     pid = client.post(
         "/api/v1/projects/from-script", json={"script": "Uno. Dos.", "language": "es"}
     ).json()["data"]["project_id"]
     _seed_plan_and_media(pid)
-    client.post(f"/api/v1/projects/{pid}/timeline/build", json={})
+    client.post(
+        f"/api/v1/projects/{pid}/timeline/build",
+        json={"narration_audio_path": "/tmp/narration.mp3"},
+    )
     monkeypatch.setattr(pj.config, "timeline_renderer", "bad-renderer")
     captured = {}
 
@@ -609,7 +630,7 @@ def test_render_falls_back_when_config_renderer_is_invalid(client, monkeypatch):
 
     monkeypatch.setattr(rp, "render_project_from_store", fake_render)
 
-    r = client.post(f"/api/v1/projects/{pid}/render", json={})
+    r = client.post(f"/api/v1/projects/{pid}/render", json={"allow_preflight_warnings": True})
 
     assert r.status_code == 202
     assert captured["renderer"] == "moviepy"
