@@ -12,6 +12,7 @@ from fastapi.responses import FileResponse
 
 from app.application.services.media_aggregator import MediaAggregator
 from app.application.services.music_selector import MusicSelector
+from app.application.services.project_lifecycle import create_project
 from app.application.services.shot_planner import ShotPlanner
 from app.application.services.reddit_ingest import (
     RedditIngestService,
@@ -491,11 +492,9 @@ def create_from_script(request: Request, body: CreateFromScriptRequest):
     _require_project_mode(request)
     if not body.script.strip():
         raise HttpException(task_id="", status_code=400, message="script is empty")
-    task_id = utils.get_uuid()
     store = _store()
-    store.save_script(task_id, body.script)
-    store.save_project_metadata(
-        task_id, topic=body.topic, workspace_id=body.workspace_id,
+    task_id = create_project(
+        store, topic=body.topic, script=body.script, workspace_id=body.workspace_id,
         prompt_template_id=body.prompt_template_id, prompt_version_id=body.prompt_version_id,
     )
     _register_project_run(
