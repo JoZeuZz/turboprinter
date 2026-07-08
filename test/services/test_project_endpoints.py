@@ -781,3 +781,87 @@ def test_from_reddit_requires_payload(client, monkeypatch):
     monkeypatch.setattr(pj.config, "reddit_ingest_enabled", True)
     r = client.post("/api/v1/projects/from-reddit", json={})
     assert r.status_code == 400
+
+
+def test_create_from_topic_with_prompt_template_renders_and_generates(client, monkeypatch, tmp_path):
+    from app.domain.prompts.models import PromptTemplate, PromptVersion
+    from app.infrastructure.storage.prompt_template_store import PromptTemplateStore
+
+    monkeypatch.setattr(pj.config, "prompt_templates_enabled", True, raising=False)
+    template_store = PromptTemplateStore(base_dir=str(tmp_path / "prompt_templates"))
+    template = PromptTemplate(
+        name="Curiosidades ES", content_type="curiosidades", language="es",
+        system_prompt="Sistema: {{topic}}", user_prompt_template="Usuario quiere {{topic}}.",
+    )
+    version = PromptVersion(
+        template_id=template.id, version=1, system_prompt=template.system_prompt,
+        user_prompt_template=template.user_prompt_template, active=True, model_hint="gpt-4o-mini",
+    )
+    template.active_version_id = version.id
+    template_store.save_template(template)
+    template_store.save_version(version)
+    monkeypatch.setattr(pj, "_prompt_template_store", lambda: template_store)
+
+    captured = {}
+
+    def fake_generate_script(**kwargs):
+        captured.update(kwargs)
+        return "Guion generado con template."
+
+    monkeypatch.setattr(pj.llm, "generate_script", fake_generate_script)
+
+    r = client.post("/api/v1/projects/from-topic", json={
+        "topic": "gatos", "language": "es", "generate_script": True,
+        "prompt_template_id": template.id,
+    })
+    assert r.status_code == 200
+    assert captured["custom_system_prompt"] == "Sistema: gatos"
+    assert captured["video_script_prompt"] == "Usuario quiere gatos."
+
+    project_id = r.json()["data"]["project_id"]
+    detail = client.get(f"/api/v1/projects/{project_id}").json()["data"]
+    assert detail["prompt_template_id"] == template.id
+    assert detail["prompt_version_id"] == version.id
+    assert detail["model"] == "gpt-4o-mini"
+
+
+def test_create_from_topic_unknown_prompt_template_400(client, monkeypatch):
+    monkeypatch.setattr(pj.config, "prompt_templates_enabled", True, raising=False)
+    r = client.post("/api/v1/projects/from-topic", json={
+        "topic": "gatos", "language": "es", "generate_script": True,
+        "prompt_template_id": "ghost",
+    })
+    assert r.status_code == 400
+
+
+def test_create_from_topic_prompt_template_disabled_flag_400(client, monkeypatch):
+    monkeypatch.setattr(pj.config, "prompt_templates_enabled", False, raising=False)
+    r = client.post("/api/v1/projects/from-topic", json={
+        "topic": "gatos", "language": "es", "generate_script": True,
+        "prompt_template_id": "any-id",
+    })
+    assert r.status_code == 400
+
+
+def test_create_from_topic_without_prompt_template_unchanged(client, monkeypatch):
+    monkeypatch.setattr(pj.llm, "generate_script", lambda **kw: "Guion sin template.")
+    r = client.post("/api/v1/projects/from-topic", json={
+        "topic": "gatos", "language": "es", "generate_script": True,
+    })
+    assert r.status_code == 200
+    project_id = r.json()["data"]["project_id"]
+    detail = client.get(f"/api/v1/projects/{project_id}").json()["data"]
+    assert detail["prompt_template_id"] is None
+    assert detail["prompt_version_id"] is None
+
+
+def test_create_from_script_stores_prompt_template_id_for_trace_only(client):
+    r = client.post("/api/v1/projects/from-script", json={
+        "script": "Guion pegado a mano.", "language": "es",
+        "prompt_template_id": "tmpl-123", "prompt_version_id": "ver-456",
+    })
+    assert r.status_code == 200
+    project_id = r.json()["data"]["project_id"]
+    detail = client.get(f"/api/v1/projects/{project_id}").json()["data"]
+    assert detail["prompt_template_id"] == "tmpl-123"
+    assert detail["prompt_version_id"] == "ver-456"

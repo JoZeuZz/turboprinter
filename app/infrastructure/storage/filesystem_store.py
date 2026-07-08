@@ -77,12 +77,26 @@ class FilesystemProjectStore:
         return self._read(task_id, _SCRIPT)
 
     def save_project_metadata(
-        self, task_id: str, *, topic: str | None = None, workspace_id: str | None = None
+        self,
+        task_id: str,
+        *,
+        topic: str | None = None,
+        workspace_id: str | None = None,
+        prompt_template_id: str | None = None,
+        prompt_version_id: str | None = None,
+        provider: str | None = None,
+        model: str | None = None,
+        rendered_prompt: dict[str, str] | None = None,
     ) -> None:
         payload = {
             "project_id": task_id,
             "topic": topic,
             "workspace_id": workspace_id,
+            "prompt_template_id": prompt_template_id,
+            "prompt_version_id": prompt_version_id,
+            "provider": provider,
+            "model": model,
+            "rendered_prompt": rendered_prompt,
             "updated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         }
         self._write(task_id, _PROJECT_META, _json.dumps(payload, ensure_ascii=False, indent=2))

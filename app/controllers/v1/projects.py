@@ -32,10 +32,13 @@ from app.infrastructure.media_providers.stock_providers import (
 from app.domain.projects.models import TimelineProject
 from app.domain.projects.validators import validate_timeline_project
 from app.domain.planning.models import MusicIntent
+from app.domain.prompts.renderer import PromptRenderError, render_template_pair
 from app.domain.rendering.models import RenderSpec
 from app.infrastructure.music_providers.jamendo_provider import JamendoProvider
 from app.infrastructure.music_providers.local_music_provider import LocalMusicProvider
 from app.infrastructure.storage.filesystem_store import FilesystemProjectStore
+from app.infrastructure.storage.prompt_template_store import PromptTemplateStore
+from app.infrastructure.storage.workspace_store import WorkspaceStore
 from app.models import const
 from app.models.exception import HttpException
 from app.models.project_schema import (
@@ -405,13 +408,39 @@ def create_from_topic(request: Request, body: CreateFromTopicRequest):
     task_id = utils.get_uuid()
     store = _store()
     script = ""
+    resolved_version_id = body.prompt_version_id
+    provider = None
+    model_hint = None
+    rendered_prompt = None
     if body.generate_script:
-        script = llm.generate_script(
-            video_subject=body.topic, language=body.language,
-            paragraph_number=body.paragraph_number,
-        )
+        if body.prompt_template_id:
+            variables = _resolve_prompt_variables(
+                topic=body.topic, language=body.language, duration=body.target_duration_sec,
+                style=body.global_visual_style, workspace_id=body.workspace_id,
+            )
+            rendered_system, rendered_user, resolved_version_id, model_hint = _render_prompt_template(
+                prompt_template_id=body.prompt_template_id,
+                prompt_version_id=body.prompt_version_id,
+                variables=variables,
+            )
+            rendered_prompt = {"system_prompt": rendered_system, "user_prompt": rendered_user}
+            provider = config.app.get("llm_provider", "")
+            script = llm.generate_script(
+                video_subject=body.topic, language=body.language,
+                paragraph_number=body.paragraph_number,
+                video_script_prompt=rendered_user, custom_system_prompt=rendered_system,
+            )
+        else:
+            script = llm.generate_script(
+                video_subject=body.topic, language=body.language,
+                paragraph_number=body.paragraph_number,
+            )
     store.save_script(task_id, script)
-    store.save_project_metadata(task_id, topic=body.topic, workspace_id=body.workspace_id)
+    store.save_project_metadata(
+        task_id, topic=body.topic, workspace_id=body.workspace_id,
+        prompt_template_id=body.prompt_template_id, prompt_version_id=resolved_version_id,
+        provider=provider, model=model_hint, rendered_prompt=rendered_prompt,
+    )
     return _ok({"project_id": task_id, "has_script": bool(script)})
 
 
@@ -424,12 +453,64 @@ def create_from_script(request: Request, body: CreateFromScriptRequest):
     task_id = utils.get_uuid()
     store = _store()
     store.save_script(task_id, body.script)
-    store.save_project_metadata(task_id, topic=body.topic, workspace_id=body.workspace_id)
+    store.save_project_metadata(
+        task_id, topic=body.topic, workspace_id=body.workspace_id,
+        prompt_template_id=body.prompt_template_id, prompt_version_id=body.prompt_version_id,
+    )
     return _ok({"project_id": task_id, "has_script": True})
 
 
 def _reddit_service():
     return RedditIngestService()
+
+
+def _prompt_template_store() -> PromptTemplateStore:
+    return PromptTemplateStore()
+
+
+def _resolve_prompt_variables(
+    *, topic: str, language: str, duration: float | None, style: str | None, workspace_id: str | None,
+) -> dict[str, str]:
+    platform = ""
+    workspace_name = ""
+    if workspace_id:
+        workspace = WorkspaceStore().load(workspace_id)
+        if workspace is not None:
+            platform = workspace.platform or ""
+            workspace_name = workspace.name
+    return {
+        "topic": topic or "",
+        "language": language or "",
+        "duration": str(int(duration)) if duration else "",
+        "platform": platform,
+        "workspace": workspace_name,
+        "style": style or "",
+    }
+
+
+def _render_prompt_template(
+    *, prompt_template_id: str, prompt_version_id: str | None, variables: dict[str, str],
+):
+    """Returns (rendered_system_prompt, rendered_user_prompt, resolved_version_id, model_hint)."""
+    if not getattr(config, "prompt_templates_enabled", False):
+        raise HttpException(task_id="", status_code=400, message="prompt templates disabled")
+    store = _prompt_template_store()
+    template = store.load_template(prompt_template_id)
+    if template is None:
+        raise HttpException(task_id="", status_code=400, message="prompt template not found")
+    version_id = prompt_version_id or template.active_version_id
+    if not version_id:
+        raise HttpException(task_id="", status_code=400, message="prompt template has no active version")
+    version = store.load_version(prompt_template_id, version_id)
+    if version is None:
+        raise HttpException(task_id="", status_code=400, message="prompt version not found")
+    try:
+        rendered_system, rendered_user = render_template_pair(
+            version.system_prompt, version.user_prompt_template, variables
+        )
+    except PromptRenderError as exc:
+        raise HttpException(task_id="", status_code=400, message=f"prompt render failed: {exc}") from exc
+    return rendered_system, rendered_user, version.id, version.model_hint
 
 
 @router.post("/projects/from-reddit", response_model=BaseProjectResponse,
@@ -513,6 +594,10 @@ def get_project(request: Request, project_id: str):
     return _ok({
         "project_id": project_id,
         "workspace_id": project_meta.get("workspace_id"),
+        "prompt_template_id": project_meta.get("prompt_template_id"),
+        "prompt_version_id": project_meta.get("prompt_version_id"),
+        "provider": project_meta.get("provider"),
+        "model": project_meta.get("model"),
         "has_script": script is not None,
         "has_shot_plan": shot_plan is not None,
         "has_selected_media": bool(selected_media),

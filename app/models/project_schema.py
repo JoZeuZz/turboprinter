@@ -21,6 +21,8 @@ class CreateFromTopicRequest(BaseModel):
     global_visual_style: str | None = None
     target_duration_sec: float | None = None
     workspace_id: str | None = None
+    prompt_template_id: str | None = None
+    prompt_version_id: str | None = None
 
 
 class CreateFromScriptRequest(BaseModel):
@@ -30,6 +32,8 @@ class CreateFromScriptRequest(BaseModel):
     global_visual_style: str | None = None
     target_duration_sec: float | None = None
     workspace_id: str | None = None
+    prompt_template_id: str | None = None
+    prompt_version_id: str | None = None
 
 
 class CreateFromRedditRequest(BaseModel):
