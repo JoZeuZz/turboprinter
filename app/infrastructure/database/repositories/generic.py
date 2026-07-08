@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Generic, TypeVar
 
 from pydantic import BaseModel
@@ -21,6 +22,13 @@ class Repository(Generic[ModelT]):
             raise RuntimeError("database is disabled ([database].enabled = false)")
         return engine
 
+    def _from_row(self, row) -> ModelT:
+        data = dict(row._mapping)
+        for key, value in data.items():
+            if isinstance(value, datetime) and value.tzinfo is None:
+                data[key] = value.replace(tzinfo=timezone.utc)
+        return self._model(**data)
+
     def create(self, **fields) -> ModelT:
         instance = self._model(**fields)
         with self._engine().begin() as connection:
@@ -34,7 +42,7 @@ class Repository(Generic[ModelT]):
             ).fetchone()
         if row is None:
             return None
-        return self._model(**dict(row._mapping))
+        return self._from_row(row)
 
     def list(self, **filters) -> list[ModelT]:
         query = self._table.select()
@@ -42,4 +50,4 @@ class Repository(Generic[ModelT]):
             query = query.where(self._table.c[key] == value)
         with self._engine().connect() as connection:
             rows = connection.execute(query).fetchall()
-        return [self._model(**dict(row._mapping)) for row in rows]
+        return [self._from_row(row) for row in rows]

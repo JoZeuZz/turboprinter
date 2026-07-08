@@ -36,3 +36,14 @@ def test_create_get_list_decision_rules():
 def test_get_returns_none_when_missing():
     repo = Repository(schema.experiments, Experiment)
     assert repo.get("does-not-exist") is None
+
+
+def test_create_then_get_preserves_timezone_aware_datetime():
+    repo = Repository(schema.experiments, Experiment)
+
+    created = repo.create(name="exp-tz")
+
+    fetched = repo.get(created.id)
+    assert fetched is not None
+    assert fetched.created_at.tzinfo is not None
+    assert fetched.created_at == created.created_at
