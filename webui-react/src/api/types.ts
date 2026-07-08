@@ -181,6 +181,8 @@ export interface CreateFromTopicRequest {
   global_visual_style?: string | null;
   target_duration_sec?: number | null;
   workspace_id?: string | null;
+  prompt_template_id?: string | null;
+  prompt_version_id?: string | null;
 }
 
 export interface CreateFromScriptRequest {
@@ -190,6 +192,8 @@ export interface CreateFromScriptRequest {
   global_visual_style?: string | null;
   target_duration_sec?: number | null;
   workspace_id?: string | null;
+  prompt_template_id?: string | null;
+  prompt_version_id?: string | null;
 }
 
 export interface CreateFromRedditRequest {
@@ -473,6 +477,58 @@ export interface WorkspaceUpsertRequest {
   metadata?: Record<string, unknown>;
 }
 
+export interface PromptVersion {
+  id: string;
+  template_id: string;
+  version: number;
+  system_prompt: string;
+  user_prompt_template: string;
+  expected_schema?: Record<string, unknown> | null;
+  model_hint?: string | null;
+  created_at: string;
+  change_notes?: string | null;
+  active: boolean;
+}
+
+export interface PromptTemplate {
+  id: string;
+  name: string;
+  content_type: string;
+  language: string;
+  system_prompt: string;
+  user_prompt_template: string;
+  expected_schema?: Record<string, unknown> | null;
+  active_version_id?: string | null;
+  created_at: string;
+  updated_at: string;
+  metadata: Record<string, unknown>;
+}
+
+export interface PromptTemplateCreateRequest {
+  name: string;
+  content_type: string;
+  language?: string;
+  system_prompt: string;
+  user_prompt_template: string;
+  expected_schema?: Record<string, unknown> | null;
+  metadata?: Record<string, unknown>;
+}
+
+export interface PromptTemplateUpdateRequest {
+  name: string;
+  content_type: string;
+  language?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface PromptVersionCreateRequest {
+  system_prompt: string;
+  user_prompt_template: string;
+  expected_schema?: Record<string, unknown> | null;
+  model_hint?: string | null;
+  change_notes?: string | null;
+}
+
 export interface CreateProjectResponse {
   project_id: string;
   has_script: boolean;
@@ -486,6 +542,10 @@ export interface GetProjectResponse {
   has_selected_media: boolean;
   has_timeline: boolean;
   workspace_id?: string | null;
+  prompt_template_id?: string | null;
+  prompt_version_id?: string | null;
+  provider?: string | null;
+  model?: string | null;
   script?: string | null;
   shot_plan?: ShotPlan | null;
   timeline?: TimelineProject | null;
