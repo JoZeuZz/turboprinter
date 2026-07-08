@@ -180,6 +180,7 @@ export interface CreateFromTopicRequest {
   paragraph_number?: number;
   global_visual_style?: string | null;
   target_duration_sec?: number | null;
+  workspace_id?: string | null;
 }
 
 export interface CreateFromScriptRequest {
@@ -188,6 +189,7 @@ export interface CreateFromScriptRequest {
   topic?: string | null;
   global_visual_style?: string | null;
   target_duration_sec?: number | null;
+  workspace_id?: string | null;
 }
 
 export interface CreateFromRedditRequest {
@@ -197,6 +199,7 @@ export interface CreateFromRedditRequest {
   comments?: string[];
   language?: string;
   topic?: string | null;
+  workspace_id?: string | null;
 }
 
 export interface PlanRequest {
@@ -427,6 +430,49 @@ export interface ProjectAsset {
 }
 
 // Response shapes
+export interface Workspace {
+  id: string;
+  name: string;
+  description?: string | null;
+  platform?: string | null;
+  channel_ref?: string | null;
+  language: string;
+  target_format?: string | null;
+  default_voice?: string | null;
+  voice_rate: number;
+  subtitle_style?: string | null;
+  visual_style?: string | null;
+  music_profile?: string | null;
+  prompt_template_id?: string | null;
+  upload_schedule?: string | null;
+  enabled: boolean;
+  safety_rules: Record<string, unknown>;
+  monetization_policy?: string | null;
+  created_at: string;
+  updated_at: string;
+  metadata: Record<string, unknown>;
+}
+
+export interface WorkspaceUpsertRequest {
+  name: string;
+  description?: string | null;
+  platform?: string | null;
+  channel_ref?: string | null;
+  language?: string;
+  target_format?: string | null;
+  default_voice?: string | null;
+  voice_rate?: number;
+  subtitle_style?: string | null;
+  visual_style?: string | null;
+  music_profile?: string | null;
+  prompt_template_id?: string | null;
+  upload_schedule?: string | null;
+  enabled?: boolean;
+  safety_rules?: Record<string, unknown>;
+  monetization_policy?: string | null;
+  metadata?: Record<string, unknown>;
+}
+
 export interface CreateProjectResponse {
   project_id: string;
   has_script: boolean;
@@ -439,6 +485,7 @@ export interface GetProjectResponse {
   has_shot_plan: boolean;
   has_selected_media: boolean;
   has_timeline: boolean;
+  workspace_id?: string | null;
   script?: string | null;
   shot_plan?: ShotPlan | null;
   timeline?: TimelineProject | null;
