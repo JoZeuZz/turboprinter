@@ -251,6 +251,15 @@ workspaces_enabled = _env_bool_or_config(
     "TURBOPRINTER_WORKSPACES_ENABLED", project_mode.get("workspaces_enabled", False)
 )
 
+# Prompt templates & versioning (Fase 3, business layer). Opt-in, default
+# off. When false or unset, /api/v1/prompt-templates/* 404s and project
+# creation behaves identically to before this flag existed (no template
+# rendering, no trace fields beyond what Fase 2 already stores).
+prompt_templates_enabled = _env_bool_or_config(
+    "TURBOPRINTER_PROMPT_TEMPLATES_ENABLED",
+    project_mode.get("prompt_templates_enabled", False),
+)
+
 # Vision ranking (Fase 4). Opt-in, default off.
 vision_ranking_enabled = _env_bool_or_config(
     "TURBOPRINTER_VISION_RANKING_ENABLED",
