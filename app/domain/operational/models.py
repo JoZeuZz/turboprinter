@@ -92,3 +92,20 @@ class DecisionEvent(BaseModel):
     context_json: str | None = None
     outcome: str | None = None
     created_at: datetime = Field(default_factory=_utcnow)
+
+
+class Job(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    type: str
+    status: str = "pending"
+    workspace_id: str | None = None
+    project_id: str | None = None
+    payload_json: str = "{}"
+    scheduled_at: datetime = Field(default_factory=_utcnow)
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    attempts: int = 0
+    max_attempts: int = 3
+    last_error: str | None = None
+    created_at: datetime = Field(default_factory=_utcnow)
+    updated_at: datetime = Field(default_factory=_utcnow)

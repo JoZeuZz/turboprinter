@@ -5,6 +5,7 @@ from app.domain.operational.models import (
     DecisionRule,
     Experiment,
     ExperimentVariant,
+    Job,
     MetricsSnapshot,
     Publication,
     ProjectRun,
@@ -33,3 +34,18 @@ def test_all_operational_models_instantiate_with_minimal_fields():
     ExperimentVariant(experiment_id="e", name="v")
     DecisionRule(name="r", condition_json="{}", action_json="{}")
     DecisionEvent()
+
+
+def test_job_defaults():
+    job = Job(type="render_project")
+    assert job.status == "pending"
+    assert job.attempts == 0
+    assert job.max_attempts == 3
+    assert job.payload_json == "{}"
+    assert job.workspace_id is None
+    assert job.project_id is None
+    assert job.started_at is None
+    assert job.completed_at is None
+    assert job.last_error is None
+    assert job.id
+    assert job.scheduled_at is not None
