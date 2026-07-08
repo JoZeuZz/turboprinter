@@ -90,3 +90,10 @@ def test_delete_existing_and_missing(workspaces_enabled):
 
     assert client.get(f"/api/v1/workspaces/{workspace_id}").status_code == 404
     assert client.delete(f"/api/v1/workspaces/{workspace_id}").status_code == 404
+
+
+def test_backslash_traversal_id_rejected(workspaces_enabled):
+    client = TestClient(app)
+    assert client.get("/api/v1/workspaces/..\\escape").status_code == 400
+    assert client.put("/api/v1/workspaces/..\\escape", json={"name": "x"}).status_code == 400
+    assert client.delete("/api/v1/workspaces/..\\escape").status_code == 400

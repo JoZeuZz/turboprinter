@@ -18,6 +18,17 @@ def _require_workspaces_enabled() -> None:
         raise HttpException(task_id="", status_code=404, message="workspaces disabled")
 
 
+def _validate_workspace_id(workspace_id: str) -> None:
+    normalized = workspace_id.replace("\\", "/")
+    parts = normalized.split("/")
+    if (
+        not normalized
+        or normalized.startswith("/")
+        or any(part in ("", ".", "..") for part in parts)
+    ):
+        raise HttpException(task_id="", status_code=400, message="invalid workspace id")
+
+
 def _store() -> WorkspaceStore:
     return WorkspaceStore()
 
@@ -46,6 +57,7 @@ def create_workspace(request: Request, body: WorkspaceUpsertRequest):
 @router.get("/workspaces/{workspace_id}", response_model=BaseProjectResponse, summary="Get a workspace")
 def get_workspace(request: Request, workspace_id: str):
     _require_workspaces_enabled()
+    _validate_workspace_id(workspace_id)
     workspace = _store().load(workspace_id)
     if workspace is None:
         raise HttpException(task_id="", status_code=404, message="workspace not found")
@@ -55,6 +67,7 @@ def get_workspace(request: Request, workspace_id: str):
 @router.put("/workspaces/{workspace_id}", response_model=BaseProjectResponse, summary="Replace a workspace")
 def update_workspace(request: Request, workspace_id: str, body: WorkspaceUpsertRequest):
     _require_workspaces_enabled()
+    _validate_workspace_id(workspace_id)
     existing = _store().load(workspace_id)
     if existing is None:
         raise HttpException(task_id="", status_code=404, message="workspace not found")
@@ -68,6 +81,7 @@ def update_workspace(request: Request, workspace_id: str, body: WorkspaceUpsertR
 @router.delete("/workspaces/{workspace_id}", response_model=BaseProjectResponse, summary="Delete a workspace")
 def delete_workspace(request: Request, workspace_id: str):
     _require_workspaces_enabled()
+    _validate_workspace_id(workspace_id)
     deleted = _store().delete(workspace_id)
     if not deleted:
         raise HttpException(task_id="", status_code=404, message="workspace not found")
