@@ -281,7 +281,8 @@
     "backToReview": "← Volver a Revisión",
     "render": "Renderizar ▶",
     "preflightErrorsTitle": "No se puede renderizar:",
-    "preflightWarningsTitle": "Advertencias antes de renderizar:"
+    "preflightWarningsTitle": "Advertencias antes de renderizar:",
+    "promptTemplateUsed": "Formula: {{name}} (v{{version}})"
   },
   "subtitles": {
     "preview": "Vista previa",

@@ -178,6 +178,58 @@ describe("useProjectStore", () => {
     expect(projectsApi.buildTimeline).not.toHaveBeenCalled();
   });
 
+  it("populates projectMeta from getProject after open", async () => {
+    vi.mocked(projectsApi.getProject).mockResolvedValue({
+      project_id: "project-1",
+      has_script: true,
+      has_shot_plan: true,
+      has_selected_media: true,
+      has_timeline: true,
+      topic: "cats in space",
+      workspace_id: "workspace-1",
+      prompt_template_id: "template-1",
+      prompt_version_id: "version-1",
+      provider: "openai",
+      model: "gpt-4o",
+    });
+
+    await act(async () => {
+      await useProjectStore.getState().open("project-1");
+    });
+
+    expect(useProjectStore.getState().projectMeta).toEqual({
+      topic: "cats in space",
+      workspace_id: "workspace-1",
+      prompt_template_id: "template-1",
+      prompt_version_id: "version-1",
+      provider: "openai",
+      model: "gpt-4o",
+    });
+  });
+
+  it("defaults projectMeta fields to null when getProject omits them", async () => {
+    vi.mocked(projectsApi.getProject).mockResolvedValue({
+      project_id: "project-1",
+      has_script: false,
+      has_shot_plan: false,
+      has_selected_media: false,
+      has_timeline: false,
+    });
+
+    await act(async () => {
+      await useProjectStore.getState().open("project-1");
+    });
+
+    expect(useProjectStore.getState().projectMeta).toEqual({
+      topic: null,
+      workspace_id: null,
+      prompt_template_id: null,
+      prompt_version_id: null,
+      provider: null,
+      model: null,
+    });
+  });
+
   it("runPreflight stores the result and returns it", async () => {
     useProjectStore.setState({ projectId: "project-1" });
     vi.mocked(projectsApi.preflight).mockResolvedValue({

@@ -7,6 +7,7 @@ import { Timeline } from "../editor/Timeline";
 import { Button } from "../ui";
 import { useProjectStore } from "../../store/useProjectStore";
 import { useProjectWorkspaceStore } from "../../store/useProjectWorkspaceStore";
+import { promptTemplatesApi } from "../../api/promptTemplates";
 import type { EditCommand, TimelineItem } from "../../api/types";
 
 function isTypingTarget(target: EventTarget | null): boolean {
@@ -22,6 +23,7 @@ export function EditorPanel() {
   const { setPanel } = useProjectWorkspaceStore();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
+  const [templateInfo, setTemplateInfo] = useState<{ name: string; version: number } | null>(null);
 
   const videoTrack = projectStore.project?.tracks.find((t) => t.type === "video");
   const audioTrack = projectStore.project?.tracks.find((t) => t.type === "audio");
@@ -95,6 +97,33 @@ export function EditorPanel() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectStore.project]);
 
+  useEffect(() => {
+    const templateId = projectStore.projectMeta?.prompt_template_id;
+    const versionId = projectStore.projectMeta?.prompt_version_id;
+    if (!templateId) {
+      setTemplateInfo(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const [{ template }, { versions }] = await Promise.all([
+          promptTemplatesApi.get(templateId),
+          promptTemplatesApi.listVersions(templateId),
+        ]);
+        const version = versions.find((v) => v.id === versionId);
+        if (!cancelled) {
+          setTemplateInfo({ name: template.name, version: version?.version ?? 0 });
+        }
+      } catch {
+        if (!cancelled) setTemplateInfo(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [projectStore.projectMeta?.prompt_template_id, projectStore.projectMeta?.prompt_version_id]);
+
   if (projectStore.mode === "disabled") {
     return (
       <div className="flex items-center justify-center h-full text-muted text-sm p-8 text-center">
@@ -105,6 +134,11 @@ export function EditorPanel() {
 
   return (
     <div className="flex flex-col h-full">
+      {templateInfo && (
+        <p className="px-4 py-1 text-[11px] text-muted border-b border-border">
+          {t("editor.promptTemplateUsed", { name: templateInfo.name, version: templateInfo.version })}
+        </p>
+      )}
       {/* Top: preview + inspector */}
       <div className="flex flex-1 overflow-hidden">
         <div className="flex-[3] p-4">

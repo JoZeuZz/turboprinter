@@ -281,7 +281,8 @@
     "backToReview": "← Back to Review",
     "render": "Render ▶",
     "preflightErrorsTitle": "Cannot render:",
-    "preflightWarningsTitle": "Warnings before rendering:"
+    "preflightWarningsTitle": "Warnings before rendering:",
+    "promptTemplateUsed": "Template: {{name}} (v{{version}})"
   },
   "subtitles": {
     "preview": "Preview",

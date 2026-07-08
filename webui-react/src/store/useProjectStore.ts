@@ -31,6 +31,15 @@ interface TimelineValidationState {
   errors: string[];
 }
 
+interface ProjectMeta {
+  topic: string | null;
+  workspace_id: string | null;
+  prompt_template_id: string | null;
+  prompt_version_id: string | null;
+  provider: string | null;
+  model: string | null;
+}
+
 interface ProjectStoreState {
   projectId: string | null;
   project: TimelineProject | null;
@@ -40,6 +49,7 @@ interface ProjectStoreState {
   timelineValidation: TimelineValidationState | null;
   preflightResult: PreflightResult | null;
   orchestrationStep: OrchestrationStep;
+  projectMeta: ProjectMeta | null;
   open: (projectId: string) => Promise<GetProjectResponse>;
   create: (params: CreateFromTopicRequest) => Promise<void>;
   plan: (params?: PlanRequest) => Promise<void>;
@@ -62,7 +72,19 @@ const initialState = {
   timelineValidation: null,
   preflightResult: null as PreflightResult | null,
   orchestrationStep: null as OrchestrationStep,
+  projectMeta: null as ProjectMeta | null,
 };
+
+function toProjectMeta(state: GetProjectResponse): ProjectMeta {
+  return {
+    topic: state.topic ?? null,
+    workspace_id: state.workspace_id ?? null,
+    prompt_template_id: state.prompt_template_id ?? null,
+    prompt_version_id: state.prompt_version_id ?? null,
+    provider: state.provider ?? null,
+    model: state.model ?? null,
+  };
+}
 
 export const useProjectStore = create<ProjectStoreState>()(
   persist(
@@ -85,7 +107,7 @@ export const useProjectStore = create<ProjectStoreState>()(
 
       const refresh = async (projectId: string) => {
         const state = await projectsApi.getProject(projectId);
-        set({ project: state.timeline ?? null, mode: "ready", error: null });
+        set({ project: state.timeline ?? null, projectMeta: toProjectMeta(state), mode: "ready", error: null });
       };
 
       return {
@@ -97,6 +119,7 @@ export const useProjectStore = create<ProjectStoreState>()(
             set({
               projectId,
               project: state.timeline ?? null,
+              projectMeta: toProjectMeta(state),
               mode: "ready",
               error: null,
               timelineValidation: null,
