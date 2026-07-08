@@ -43,6 +43,27 @@ def test_create_from_script_and_get(client):
     assert data["has_shot_plan"] is False
 
 
+def test_create_from_script_with_workspace_id(client):
+    r = client.post(
+        "/api/v1/projects/from-script",
+        json={"script": "Uno.", "language": "es", "workspace_id": "ws-abc"},
+    )
+    assert r.status_code == 200
+    pid = r.json()["data"]["project_id"]
+    g = client.get(f"/api/v1/projects/{pid}")
+    assert g.json()["data"]["workspace_id"] == "ws-abc"
+
+
+def test_create_from_script_without_workspace_id(client):
+    r = client.post(
+        "/api/v1/projects/from-script", json={"script": "Uno.", "language": "es"},
+    )
+    assert r.status_code == 200
+    pid = r.json()["data"]["project_id"]
+    g = client.get(f"/api/v1/projects/{pid}")
+    assert g.json()["data"]["workspace_id"] is None
+
+
 def test_create_from_topic_generates_script(client, monkeypatch):
     monkeypatch.setattr(pj.llm, "generate_script", lambda **kw: "Guion generado.")
     r = client.post(

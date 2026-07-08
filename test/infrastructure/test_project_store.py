@@ -91,6 +91,24 @@ def test_corrupt_json_raises(tmp_path):
         store.load_shot_plan("task1")
 
 
+def test_save_project_metadata_persists_workspace_id(tmp_path):
+    from app.infrastructure.storage.filesystem_store import FilesystemProjectStore
+
+    store = FilesystemProjectStore(base_tasks_dir=str(tmp_path))
+    store.save_project_metadata("task-1", topic="demo", workspace_id="ws-123")
+    meta = store.load_project_metadata("task-1")
+    assert meta["workspace_id"] == "ws-123"
+
+
+def test_save_project_metadata_workspace_id_defaults_to_none(tmp_path):
+    from app.infrastructure.storage.filesystem_store import FilesystemProjectStore
+
+    store = FilesystemProjectStore(base_tasks_dir=str(tmp_path))
+    store.save_project_metadata("task-1", topic="demo")
+    meta = store.load_project_metadata("task-1")
+    assert meta["workspace_id"] is None
+
+
 def test_render_manifest_and_result_roundtrip(tmp_path):
     from app.domain.rendering.models import RenderManifest, RenderResult
     from app.infrastructure.storage.filesystem_store import FilesystemProjectStore

@@ -76,10 +76,13 @@ class FilesystemProjectStore:
     def load_script(self, task_id: str) -> str | None:
         return self._read(task_id, _SCRIPT)
 
-    def save_project_metadata(self, task_id: str, *, topic: str | None = None) -> None:
+    def save_project_metadata(
+        self, task_id: str, *, topic: str | None = None, workspace_id: str | None = None
+    ) -> None:
         payload = {
             "project_id": task_id,
             "topic": topic,
+            "workspace_id": workspace_id,
             "updated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         }
         self._write(task_id, _PROJECT_META, _json.dumps(payload, ensure_ascii=False, indent=2))

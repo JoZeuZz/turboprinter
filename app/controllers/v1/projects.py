@@ -411,7 +411,7 @@ def create_from_topic(request: Request, body: CreateFromTopicRequest):
             paragraph_number=body.paragraph_number,
         )
     store.save_script(task_id, script)
-    store.save_project_metadata(task_id, topic=body.topic)
+    store.save_project_metadata(task_id, topic=body.topic, workspace_id=body.workspace_id)
     return _ok({"project_id": task_id, "has_script": bool(script)})
 
 
@@ -424,7 +424,7 @@ def create_from_script(request: Request, body: CreateFromScriptRequest):
     task_id = utils.get_uuid()
     store = _store()
     store.save_script(task_id, body.script)
-    store.save_project_metadata(task_id, topic=body.topic)
+    store.save_project_metadata(task_id, topic=body.topic, workspace_id=body.workspace_id)
     return _ok({"project_id": task_id, "has_script": True})
 
 
@@ -449,7 +449,11 @@ def create_from_reddit(request: Request, body: CreateFromRedditRequest):
     task_id = utils.get_uuid()
     store = _store()
     store.save_script(task_id, script)
-    store.save_project_metadata(task_id, topic=body.topic or body.title or getattr(source, "title", None))
+    store.save_project_metadata(
+        task_id,
+        topic=body.topic or body.title or getattr(source, "title", None),
+        workspace_id=body.workspace_id,
+    )
     return _ok({"project_id": task_id, "has_script": bool(script), "source_kind": source.kind})
 
 
@@ -505,8 +509,10 @@ def get_project(request: Request, project_id: str):
     selected_music = store.load_selected_music(project_id)
     timeline_dict = _dump_model(timeline)
     _inject_asset_urls(store, project_id, timeline_dict)
+    project_meta = store.load_project_metadata(project_id) or {}
     return _ok({
         "project_id": project_id,
+        "workspace_id": project_meta.get("workspace_id"),
         "has_script": script is not None,
         "has_shot_plan": shot_plan is not None,
         "has_selected_media": bool(selected_media),

@@ -20,6 +20,7 @@ class CreateFromTopicRequest(BaseModel):
     paragraph_number: int = 1
     global_visual_style: str | None = None
     target_duration_sec: float | None = None
+    workspace_id: str | None = None
 
 
 class CreateFromScriptRequest(BaseModel):
@@ -28,6 +29,7 @@ class CreateFromScriptRequest(BaseModel):
     topic: str | None = None
     global_visual_style: str | None = None
     target_duration_sec: float | None = None
+    workspace_id: str | None = None
 
 
 class CreateFromRedditRequest(BaseModel):
@@ -37,6 +39,7 @@ class CreateFromRedditRequest(BaseModel):
     comments: list[str] = []
     language: str = "es"
     topic: str | None = None
+    workspace_id: str | None = None
 
 
 class PlanRequest(BaseModel):
