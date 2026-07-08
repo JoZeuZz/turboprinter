@@ -894,3 +894,50 @@ def test_create_from_script_stores_prompt_template_id_for_trace_only(client):
     detail = client.get(f"/api/v1/projects/{project_id}").json()["data"]
     assert detail["prompt_template_id"] == "tmpl-123"
     assert detail["prompt_version_id"] == "ver-456"
+
+
+def test_create_from_topic_registers_project_run(client):
+    r = client.post(
+        "/api/v1/projects/from-topic",
+        json={"topic": "gatos", "language": "es", "generate_script": False},
+    )
+    assert r.status_code == 200
+    project_id = r.json()["data"]["project_id"]
+
+    from app.infrastructure.database.repositories.project_runs import ProjectRunRepository
+
+    run = ProjectRunRepository().get_by_project_id(project_id)
+    assert run is not None
+    assert run.source == "topic"
+    assert run.status == "created"
+
+
+def test_create_from_script_registers_project_run(client):
+    r = client.post(
+        "/api/v1/projects/from-script",
+        json={"script": "Uno. Dos.", "language": "es", "topic": "perros"},
+    )
+    assert r.status_code == 200
+    project_id = r.json()["data"]["project_id"]
+
+    from app.infrastructure.database.repositories.project_runs import ProjectRunRepository
+
+    run = ProjectRunRepository().get_by_project_id(project_id)
+    assert run is not None
+    assert run.source == "script"
+    assert run.topic == "perros"
+
+
+def test_create_from_script_survives_project_run_repository_failure(client, monkeypatch):
+    from app.infrastructure.database.repositories.project_runs import ProjectRunRepository
+
+    def _boom(self, **kwargs):
+        raise RuntimeError("db exploded")
+
+    monkeypatch.setattr(ProjectRunRepository, "create", _boom)
+
+    r = client.post(
+        "/api/v1/projects/from-script",
+        json={"script": "Uno.", "language": "es"},
+    )
+    assert r.status_code == 200

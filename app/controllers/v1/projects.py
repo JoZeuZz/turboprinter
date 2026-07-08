@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import glob
 import json
+import logging
 import os
 import datetime
 import shutil
@@ -66,10 +67,42 @@ from app.services.quality.observability import phase_timer
 from app.utils import utils
 
 router = new_router()
+logger = logging.getLogger(__name__)
 
 
 def _store() -> FilesystemProjectStore:
     return FilesystemProjectStore()
+
+
+def _register_project_run(
+    *,
+    task_id: str,
+    workspace_id: str | None,
+    source: str,
+    topic: str | None,
+    prompt_template_id: str | None,
+    prompt_version_id: str | None,
+    provider: str | None = None,
+    model: str | None = None,
+) -> None:
+    try:
+        from app.infrastructure.database.repositories.project_runs import (
+            ProjectRunRepository,
+        )
+
+        ProjectRunRepository().create(
+            project_id=task_id,
+            task_id=task_id,
+            workspace_id=workspace_id,
+            source=source,
+            topic=topic,
+            prompt_template_id=prompt_template_id,
+            prompt_version_id=prompt_version_id,
+            provider=provider,
+            model=model,
+        )
+    except Exception:
+        logger.warning("project_run registration failed for %s", task_id, exc_info=True)
 
 
 def _validate_project_id(project_id: str) -> None:
@@ -444,6 +477,11 @@ def create_from_topic(request: Request, body: CreateFromTopicRequest):
         prompt_template_id=body.prompt_template_id, prompt_version_id=resolved_version_id,
         provider=provider, model=model_hint, rendered_prompt=rendered_prompt,
     )
+    _register_project_run(
+        task_id=task_id, workspace_id=body.workspace_id, source="topic", topic=body.topic,
+        prompt_template_id=body.prompt_template_id, prompt_version_id=resolved_version_id,
+        provider=provider, model=model_hint,
+    )
     return _ok({"project_id": task_id, "has_script": bool(script)})
 
 
@@ -458,6 +496,10 @@ def create_from_script(request: Request, body: CreateFromScriptRequest):
     store.save_script(task_id, body.script)
     store.save_project_metadata(
         task_id, topic=body.topic, workspace_id=body.workspace_id,
+        prompt_template_id=body.prompt_template_id, prompt_version_id=body.prompt_version_id,
+    )
+    _register_project_run(
+        task_id=task_id, workspace_id=body.workspace_id, source="script", topic=body.topic,
         prompt_template_id=body.prompt_template_id, prompt_version_id=body.prompt_version_id,
     )
     return _ok({"project_id": task_id, "has_script": True})
