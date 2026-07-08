@@ -64,3 +64,15 @@ def test_save_overwrites_existing(store):
     store.save(ws)
     assert store.load(ws.id).name == "Renamed"
     assert len(store.list()) == 1
+
+
+def test_list_skips_corrupted_entries(store, tmp_path):
+    ws = Workspace(name="Valid Workspace")
+    store.save(ws)
+
+    corrupted_path = tmp_path / "corrupted.json"
+    corrupted_path.write_text("{not valid json", encoding="utf-8")
+
+    result = store.list()
+
+    assert [w.id for w in result] == [ws.id]

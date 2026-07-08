@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import logging
 import os
 
 from pydantic import ValidationError
 
 from app.domain.workspaces.models import Workspace
+
+logger = logging.getLogger(__name__)
 
 
 class WorkspaceStoreError(Exception):
@@ -63,7 +66,11 @@ class WorkspaceStore:
             if not name.endswith(".json"):
                 continue
             workspace_id = name[: -len(".json")]
-            workspace = self.load(workspace_id)
+            try:
+                workspace = self.load(workspace_id)
+            except WorkspaceStoreError as exc:
+                logger.warning("list: skipping %s — %s", name, exc)
+                continue
             if workspace is not None:
                 workspaces.append(workspace)
         workspaces.sort(key=lambda w: w.updated_at, reverse=True)
