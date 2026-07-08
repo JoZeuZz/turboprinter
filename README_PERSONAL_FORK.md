@@ -271,6 +271,28 @@ per-provider test patch targets in `test_llm.py`.
 
 ---
 
+## 3c. Operational database (SQLite)
+
+An optional lightweight SQLite database stores analytics, run history, publications, metrics and future experiment tracking — **without breaking the filesystem-based workflow**.
+
+```toml
+[database]
+enabled = true
+backend = "sqlite"       # only "sqlite" supported at this phase
+sqlite_path = "storage/app.db"
+```
+
+**Key points:**
+
+- **Opt-in:** Set `enabled = false` to disable the entire database layer with zero behaviour change elsewhere. When disabled, the system behaves identically to upstream.
+- **Default path:** `storage/app.db` (under the project's persistent mount).
+- **Environment variables:** `TURBOPRINTER_DATABASE_ENABLED`, `TURBOPRINTER_DATABASE_BACKEND`.
+- **Health check:** `GET /api/v1/system/storage` returns database status (backend, path, initialization state, schema version, table count) and filesystem state. Useful for debugging setup or monitoring.
+
+The database schema includes tables for `project_runs`, `video_outputs`, `publications`, `metrics_snapshots`, `experiments` and more. Design is portable: swapping `backend = "postgres"` with appropriate credentials will work for future deployments. See `docs/architecture/016-operational-database.md` for full architecture details.
+
+---
+
 ## 4. Persistent storage (Proxmox)
 
 The app writes only under the project's `storage/` (tasks, cache, local videos,
