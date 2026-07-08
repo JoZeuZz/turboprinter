@@ -156,6 +156,25 @@ decision_events = Table(
     Column("created_at", DateTime, nullable=False),
 )
 
+jobs = Table(
+    "jobs",
+    metadata,
+    Column("id", String, primary_key=True),
+    Column("type", String, nullable=False),
+    Column("status", String, nullable=False, server_default="pending"),
+    Column("workspace_id", String, nullable=True),
+    Column("project_id", String, nullable=True),
+    Column("payload_json", Text, nullable=False, server_default="{}"),
+    Column("scheduled_at", DateTime, nullable=False),
+    Column("started_at", DateTime, nullable=True),
+    Column("completed_at", DateTime, nullable=True),
+    Column("attempts", Integer, nullable=False, server_default="0"),
+    Column("max_attempts", Integer, nullable=False, server_default="3"),
+    Column("last_error", Text, nullable=True),
+    Column("created_at", DateTime, nullable=False),
+    Column("updated_at", DateTime, nullable=False),
+)
+
 ALL_TABLES = (
     schema_migrations,
     workspaces,
@@ -169,4 +188,5 @@ ALL_TABLES = (
     experiment_variants,
     decision_rules,
     decision_events,
+    jobs,
 )

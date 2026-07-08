@@ -24,5 +24,13 @@ def test_apply_pending_is_idempotent(tmp_path):
 
     with engine.connect() as connection:
         rows = connection.execute(schema.schema_migrations.select()).fetchall()
-    assert len(rows) == 1
-    assert rows[0].version == 1
+    assert {row.version for row in rows} == {1, 2}
+
+
+def test_apply_pending_applies_jobs_migration(tmp_path):
+    engine = create_engine(f"sqlite:///{tmp_path / 'migrations2.db'}")
+
+    apply_pending(engine)
+
+    inspector = inspect(engine)
+    assert "jobs" in inspector.get_table_names()
