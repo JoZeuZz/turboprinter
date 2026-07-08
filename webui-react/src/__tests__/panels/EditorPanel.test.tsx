@@ -2,7 +2,8 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { EditorPanel } from "../../components/panels/EditorPanel";
 import { useProjectStore } from "../../store/useProjectStore";
-import type { TimelineProject } from "../../api/types";
+import { promptTemplatesApi } from "../../api/promptTemplates";
+import type { TimelineProject, PromptTemplate, PromptVersion } from "../../api/types";
 
 const mockSetPanel = vi.hoisted(() => vi.fn());
 
@@ -12,6 +13,18 @@ vi.mock("../../store/useProjectWorkspaceStore", () => ({
 
 vi.mock("../../store/useProjectStore", () => ({
   useProjectStore: vi.fn(),
+}));
+
+vi.mock("../../api/promptTemplates", () => ({
+  promptTemplatesApi: {
+    list: vi.fn(),
+    create: vi.fn(),
+    update: vi.fn(),
+    get: vi.fn(),
+    addVersion: vi.fn(),
+    listVersions: vi.fn(),
+    activateVersion: vi.fn(),
+  },
 }));
 
 const PROJECT: TimelineProject = {
@@ -35,6 +48,7 @@ function makeStore(overrides = {}) {
   return {
     mode: "ready",
     project: PROJECT,
+    projectMeta: null,
     preflightResult: null,
     applyTimelineCommands: vi.fn().mockResolvedValue(undefined),
     render: vi.fn().mockResolvedValue(undefined),
@@ -50,9 +64,43 @@ function makeStore(overrides = {}) {
   };
 }
 
+const TEMPLATE: PromptTemplate = {
+  id: "tmpl-1",
+  name: "Curiosidades ES",
+  content_type: "curiosidades",
+  language: "es",
+  system_prompt: "s",
+  user_prompt_template: "u",
+  active_version_id: "ver-1",
+  created_at: "2026-01-01T00:00:00Z",
+  updated_at: "2026-01-01T00:00:00Z",
+  metadata: {},
+};
+
+const VERSION: PromptVersion = {
+  id: "ver-1",
+  template_id: "tmpl-1",
+  version: 1,
+  system_prompt: "s",
+  user_prompt_template: "u",
+  created_at: "2026-01-01T00:00:00Z",
+  active: true,
+};
+
+const PROJECT_META_WITH_TEMPLATE = {
+  topic: "topic",
+  workspace_id: null,
+  prompt_template_id: "tmpl-1",
+  prompt_version_id: "ver-1",
+  provider: null,
+  model: null,
+};
+
 beforeEach(() => {
   mockSetPanel.mockClear();
   vi.mocked(useProjectStore).mockReturnValue(makeStore() as never);
+  vi.mocked(promptTemplatesApi.get).mockReset();
+  vi.mocked(promptTemplatesApi.listVersions).mockReset();
 });
 
 describe("EditorPanel", () => {
@@ -155,5 +203,48 @@ describe("EditorPanel", () => {
       expect(store.render).toHaveBeenCalledWith({ allow_preflight_warnings: true });
     });
     expect(mockSetPanel).toHaveBeenCalledWith("rendering");
+  });
+
+  it("shows the prompt template name and version once fetched", async () => {
+    vi.mocked(promptTemplatesApi.get).mockResolvedValue({ template: TEMPLATE });
+    vi.mocked(promptTemplatesApi.listVersions).mockResolvedValue({ versions: [VERSION] });
+    vi.mocked(useProjectStore).mockReturnValue(
+      makeStore({ projectMeta: PROJECT_META_WITH_TEMPLATE }) as never,
+    );
+
+    render(<EditorPanel />);
+
+    expect(await screen.findByText("Formula: Curiosidades ES (v1)")).toBeInTheDocument();
+    expect(promptTemplatesApi.get).toHaveBeenCalledWith("tmpl-1");
+    expect(promptTemplatesApi.listVersions).toHaveBeenCalledWith("tmpl-1");
+  });
+
+  it("falls back to version 0 when the active version id is not in the version list", async () => {
+    vi.mocked(promptTemplatesApi.get).mockResolvedValue({ template: TEMPLATE });
+    vi.mocked(promptTemplatesApi.listVersions).mockResolvedValue({
+      versions: [{ ...VERSION, id: "ver-other" }],
+    });
+    vi.mocked(useProjectStore).mockReturnValue(
+      makeStore({ projectMeta: PROJECT_META_WITH_TEMPLATE }) as never,
+    );
+
+    render(<EditorPanel />);
+
+    expect(await screen.findByText("Formula: Curiosidades ES (v0)")).toBeInTheDocument();
+  });
+
+  it("swallows errors from the prompt template lookup without crashing", async () => {
+    vi.mocked(promptTemplatesApi.get).mockRejectedValue(new Error("boom"));
+    vi.mocked(promptTemplatesApi.listVersions).mockResolvedValue({ versions: [VERSION] });
+    vi.mocked(useProjectStore).mockReturnValue(
+      makeStore({ projectMeta: PROJECT_META_WITH_TEMPLATE }) as never,
+    );
+
+    render(<EditorPanel />);
+
+    await waitFor(() => expect(promptTemplatesApi.get).toHaveBeenCalled());
+    expect(screen.queryByText(/Formula:/)).not.toBeInTheDocument();
+    // The rest of the panel still renders normally.
+    expect(screen.getByTestId("clip-c1")).toBeInTheDocument();
   });
 });
