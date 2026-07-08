@@ -14,8 +14,8 @@ def test_storage_status_reports_database_initialized():
     data = r.json()["data"]
     assert data["database"]["initialized"] is True
     assert data["database"]["backend"] == "sqlite"
-    assert data["database"]["tables"] == 12
-    assert data["database"]["schema_version"] == 1
+    assert data["database"]["tables"] == 13
+    assert data["database"]["schema_version"] == 2
     assert "storage_dir" in data["filesystem"]
 
 
