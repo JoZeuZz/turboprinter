@@ -4,6 +4,7 @@ import { Layout } from "./components/layout/Layout";
 import { WorkspaceLayout } from "./components/layout/WorkspaceLayout";
 import { Dashboard } from "./pages/Dashboard";
 import { Workspace } from "./pages/Workspace";
+import { Workspaces } from "./pages/Workspaces";
 import { Settings } from "./pages/Settings";
 
 export default function App() {
@@ -17,6 +18,7 @@ export default function App() {
         </Route>
         <Route element={<Layout />}>
           <Route path="settings" element={<Settings />} />
+          <Route path="workspaces" element={<Workspaces />} />
         </Route>
         {/* Legacy redirects */}
         <Route path="auto" element={<Navigate to="/" replace />} />

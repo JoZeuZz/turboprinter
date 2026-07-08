@@ -17,7 +17,22 @@
   "nav": {
     "home": "Inicio",
     "workspace": "Espacio",
+    "channels": "Canales",
     "config": "Config"
+  },
+  "channels": {
+    "title": "Canales",
+    "empty": "Todavía no creaste ningún canal.",
+    "createNew": "Nuevo canal",
+    "name": "Nombre",
+    "language": "Idioma",
+    "targetFormat": "Formato",
+    "defaultVoice": "Voz por defecto",
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "edit": "Editar",
+    "delete": "Eliminar",
+    "nameRequired": "El nombre es obligatorio"
   },
   "sidebar": {
     "newProject": "Nuevo proyecto",
