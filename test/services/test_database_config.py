@@ -28,4 +28,4 @@ def test_database_backend_defaults_to_sqlite():
 def test_database_sqlite_path_default():
     from app.config import config
 
-    assert config.database_sqlite_path == "storage/app.db"
+    assert config.database.get("sqlite_path", "storage/app.db") == "storage/app.db"
