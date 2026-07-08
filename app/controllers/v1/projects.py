@@ -37,7 +37,10 @@ from app.domain.rendering.models import RenderSpec
 from app.infrastructure.music_providers.jamendo_provider import JamendoProvider
 from app.infrastructure.music_providers.local_music_provider import LocalMusicProvider
 from app.infrastructure.storage.filesystem_store import FilesystemProjectStore
-from app.infrastructure.storage.prompt_template_store import PromptTemplateStore
+from app.infrastructure.storage.prompt_template_store import (
+    PromptTemplateStore,
+    PromptTemplateStoreError,
+)
 from app.infrastructure.storage.workspace_store import WorkspaceStore
 from app.models import const
 from app.models.exception import HttpException
@@ -488,20 +491,40 @@ def _resolve_prompt_variables(
     }
 
 
+def _validate_prompt_id(value: str) -> None:
+    normalized = value.replace("\\", "/")
+    parts = normalized.split("/")
+    if (
+        not normalized
+        or normalized.startswith("/")
+        or any(part in ("", ".", "..") for part in parts)
+    ):
+        raise HttpException(task_id="", status_code=400, message="invalid prompt template id")
+
+
 def _render_prompt_template(
     *, prompt_template_id: str, prompt_version_id: str | None, variables: dict[str, str],
 ):
     """Returns (rendered_system_prompt, rendered_user_prompt, resolved_version_id, model_hint)."""
     if not getattr(config, "prompt_templates_enabled", False):
         raise HttpException(task_id="", status_code=400, message="prompt templates disabled")
+    _validate_prompt_id(prompt_template_id)
+    if prompt_version_id:
+        _validate_prompt_id(prompt_version_id)
     store = _prompt_template_store()
-    template = store.load_template(prompt_template_id)
+    try:
+        template = store.load_template(prompt_template_id)
+    except PromptTemplateStoreError as exc:
+        raise HttpException(task_id="", status_code=400, message="prompt template not found") from exc
     if template is None:
         raise HttpException(task_id="", status_code=400, message="prompt template not found")
     version_id = prompt_version_id or template.active_version_id
     if not version_id:
         raise HttpException(task_id="", status_code=400, message="prompt template has no active version")
-    version = store.load_version(prompt_template_id, version_id)
+    try:
+        version = store.load_version(prompt_template_id, version_id)
+    except PromptTemplateStoreError as exc:
+        raise HttpException(task_id="", status_code=400, message="prompt version not found") from exc
     if version is None:
         raise HttpException(task_id="", status_code=400, message="prompt version not found")
     try:

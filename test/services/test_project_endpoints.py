@@ -843,6 +843,35 @@ def test_create_from_topic_prompt_template_disabled_flag_400(client, monkeypatch
     assert r.status_code == 400
 
 
+def test_create_from_topic_traversal_prompt_template_id_400(client, monkeypatch):
+    monkeypatch.setattr(pj.config, "prompt_templates_enabled", True, raising=False)
+    r = client.post("/api/v1/projects/from-topic", json={
+        "topic": "gatos", "language": "es", "generate_script": True,
+        "prompt_template_id": "..\\escape",
+    })
+    assert r.status_code == 400
+
+
+def test_create_from_topic_traversal_prompt_version_id_400(client, monkeypatch, tmp_path):
+    from app.domain.prompts.models import PromptTemplate
+    from app.infrastructure.storage.prompt_template_store import PromptTemplateStore
+
+    monkeypatch.setattr(pj.config, "prompt_templates_enabled", True, raising=False)
+    template_store = PromptTemplateStore(base_dir=str(tmp_path / "prompt_templates"))
+    template = PromptTemplate(
+        name="T", content_type="x", language="es",
+        system_prompt="s", user_prompt_template="u",
+    )
+    template_store.save_template(template)
+    monkeypatch.setattr(pj, "_prompt_template_store", lambda: template_store)
+
+    r = client.post("/api/v1/projects/from-topic", json={
+        "topic": "gatos", "language": "es", "generate_script": True,
+        "prompt_template_id": template.id, "prompt_version_id": "..\\escape",
+    })
+    assert r.status_code == 400
+
+
 def test_create_from_topic_without_prompt_template_unchanged(client, monkeypatch):
     monkeypatch.setattr(pj.llm, "generate_script", lambda **kw: "Guion sin template.")
     r = client.post("/api/v1/projects/from-topic", json={
