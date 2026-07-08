@@ -38,52 +38,67 @@ class JobRepository(Repository[Job]):
         return [self._from_row(row) for row in rows]
 
     def claim_next(self, job_types: set[str] | None = None) -> Job | None:
+        # No `.returning()`: this project's Dockerfile ships SQLite 3.34.1
+        # (python:3.11-slim-bullseye), and RETURNING requires SQLite >= 3.35.
+        # Instead: SELECT a candidate id, then UPDATE it guarded by
+        # `status='pending'` and check rowcount. If another worker claimed
+        # it first, rowcount is 0 and we return None (next poll picks a
+        # different job) -- same exclusivity guarantee as a single atomic
+        # UPDATE...RETURNING, just without the syntax this SQLite lacks.
         now = datetime.now(timezone.utc)
-        subq = select(schema.jobs.c.id).where(
+        query = select(schema.jobs.c.id).where(
             schema.jobs.c.status == "pending",
             schema.jobs.c.scheduled_at <= now,
         )
         if job_types:
-            subq = subq.where(schema.jobs.c.type.in_(job_types))
-        subq = subq.order_by(schema.jobs.c.scheduled_at).limit(1)
-        stmt = (
-            schema.jobs.update()
-            .where(schema.jobs.c.id == subq.scalar_subquery())
-            .values(
-                status="running",
-                started_at=now,
-                attempts=schema.jobs.c.attempts + 1,
-                updated_at=now,
-            )
-            .returning(*schema.jobs.c)
-        )
+            query = query.where(schema.jobs.c.type.in_(job_types))
+        query = query.order_by(schema.jobs.c.scheduled_at).limit(1)
         with self._engine().begin() as connection:
-            row = connection.execute(stmt).fetchone()
+            candidate = connection.execute(query).fetchone()
+            if candidate is None:
+                return None
+            job_id = candidate.id
+            result = connection.execute(
+                schema.jobs.update()
+                .where(schema.jobs.c.id == job_id, schema.jobs.c.status == "pending")
+                .values(
+                    status="running",
+                    started_at=now,
+                    attempts=schema.jobs.c.attempts + 1,
+                    updated_at=now,
+                )
+            )
+            if result.rowcount != 1:
+                return None
+            row = connection.execute(
+                schema.jobs.select().where(schema.jobs.c.id == job_id)
+            ).fetchone()
         return self._from_row(row) if row is not None else None
 
     def cancel(self, job_id: str) -> Job | None:
         now = datetime.now(timezone.utc)
-        stmt = (
-            schema.jobs.update()
-            .where(schema.jobs.c.id == job_id, schema.jobs.c.status == "pending")
-            .values(status="cancelled", updated_at=now)
-            .returning(*schema.jobs.c)
-        )
         with self._engine().begin() as connection:
-            row = connection.execute(stmt).fetchone()
+            result = connection.execute(
+                schema.jobs.update()
+                .where(schema.jobs.c.id == job_id, schema.jobs.c.status == "pending")
+                .values(status="cancelled", updated_at=now)
+            )
+            if result.rowcount != 1:
+                return None
+            row = connection.execute(
+                schema.jobs.select().where(schema.jobs.c.id == job_id)
+            ).fetchone()
         return self._from_row(row) if row is not None else None
 
     def mark_completed(self, job_id: str) -> Job | None:
         now = datetime.now(timezone.utc)
-        stmt = (
-            schema.jobs.update()
-            .where(schema.jobs.c.id == job_id)
-            .values(status="completed", completed_at=now, updated_at=now)
-            .returning(*schema.jobs.c)
-        )
         with self._engine().begin() as connection:
-            row = connection.execute(stmt).fetchone()
-        return self._from_row(row) if row is not None else None
+            connection.execute(
+                schema.jobs.update()
+                .where(schema.jobs.c.id == job_id)
+                .values(status="completed", completed_at=now, updated_at=now)
+            )
+        return self.get(job_id)
 
     def mark_failed_or_retry(
         self, job_id: str, *, error: str, backoff_seconds: int
