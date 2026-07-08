@@ -31,3 +31,20 @@ def test_storage_status_reports_disabled_database(monkeypatch):
     data = r.json()["data"]
     assert data["database"]["initialized"] is False
     assert "error" in data["database"]
+
+
+def test_storage_status_reports_genuine_database_error(monkeypatch):
+    from app.controllers.v1 import system as system_module
+
+    def _boom():
+        raise RuntimeError("connection exploded")
+
+    monkeypatch.setattr(system_module.db_engine, "get_engine", _boom)
+    client = TestClient(app)
+
+    r = client.get("/api/v1/system/storage")
+
+    assert r.status_code == 200
+    data = r.json()["data"]
+    assert data["database"]["initialized"] is False
+    assert "connection exploded" in data["database"]["error"]
