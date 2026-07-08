@@ -169,6 +169,10 @@ siliconflow = _cfg.get("siliconflow", {})
 # is identical to upstream. See app/services/quality/.
 quality = _cfg.get("quality", {})
 project_mode = _cfg.get("project_mode", {})
+# Optional operational database layer. Tolerant by design: a missing
+# [database] table yields {} and the flags below fall back to their
+# defaults (enabled, sqlite, storage/app.db). See app/infrastructure/database/.
+database = _cfg.get("database", {})
 # Optional per-intent LLM profiles. Tolerant by design: a missing [llm_profiles]
 # table yields {} and llm.get_llm_profile() falls back to built-in defaults, so
 # behaviour is identical to upstream. See app/services/llm.py LLM_PROFILES.
@@ -276,6 +280,17 @@ vision_top_n: int = int(project_mode.get("vision_top_n", 3))
 phase_timing_enabled = _env_bool_or_config(
     "TURBOPRINTER_PHASE_TIMING", quality.get("phase_timing", False)
 )
+
+# Operational database (SQLite by default). Additive infrastructure: when
+# disabled, get_engine() returns None and repositories raise on use, but no
+# existing filesystem-backed flow is affected. See app/infrastructure/database/.
+database_enabled = _env_bool_or_config(
+    "TURBOPRINTER_DATABASE_ENABLED", database.get("enabled", True)
+)
+database_backend = _env_str_or_config(
+    "TURBOPRINTER_DATABASE_BACKEND", database.get("backend", "sqlite"), "sqlite"
+)
+database_sqlite_path = str(database.get("sqlite_path", "storage/app.db"))
 
 app["redis_host"] = os.getenv(
     "MPT_APP_REDIS_HOST",

@@ -437,6 +437,15 @@ contextual_music = false
 timeline_renderer = "moviepy" # "moviepy" or "opencut" (stub, fails cleanly)
 reddit_ingest = false
 
+[database]
+# Capa de base de datos operacional (opcional, aditiva). Tolerante a
+# ausencia: si falta esta sección se usan los valores por defecto de abajo.
+# Optional, additive operational database layer. Tolerant to absence: a
+# missing section uses the defaults below.
+enabled = true
+backend = "sqlite"       # solo "sqlite" por ahora / only "sqlite" for now
+sqlite_path = "storage/app.db"
+
 
 ##############################################################################
 # Personal Quality Stack (optional)
