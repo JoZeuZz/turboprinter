@@ -244,6 +244,13 @@ reddit_ingest_enabled = _env_bool_or_config(
     "TURBOPRINTER_REDDIT_INGEST", project_mode.get("reddit_ingest", False)
 )
 
+# Persistent Workspaces (Fase 2, business layer). Opt-in, default off. When
+# false or unset, /api/v1/workspaces/* 404s and project creation behaves
+# identically to before this flag existed.
+workspaces_enabled = _env_bool_or_config(
+    "TURBOPRINTER_WORKSPACES_ENABLED", project_mode.get("workspaces_enabled", False)
+)
+
 # Vision ranking (Fase 4). Opt-in, default off.
 vision_ranking_enabled = _env_bool_or_config(
     "TURBOPRINTER_VISION_RANKING_ENABLED",
