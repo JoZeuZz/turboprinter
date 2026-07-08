@@ -20,8 +20,8 @@ def _resolve_sqlite_path(sqlite_path: str) -> str:
 def _build_engine(sqlite_path: str) -> Engine:
     resolved = _resolve_sqlite_path(sqlite_path)
     parent = os.path.dirname(resolved)
-    if parent and not os.path.exists(parent):
-        os.makedirs(parent)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
     engine = create_engine(f"sqlite:///{resolved}", future=True)
 
     @event.listens_for(engine, "connect")

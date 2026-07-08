@@ -23,6 +23,9 @@ class Repository(Generic[ModelT]):
         return engine
 
     def _from_row(self, row) -> ModelT:
+        # SQLite strips tzinfo on read; every datetime this app persists is
+        # UTC (see app/domain/operational/models.py's _utcnow() default), so
+        # naive values read back here are re-labeled UTC, not converted.
         data = dict(row._mapping)
         for key, value in data.items():
             if isinstance(value, datetime) and value.tzinfo is None:
