@@ -446,6 +446,15 @@ enabled = true
 backend = "sqlite"       # solo "sqlite" por ahora / only "sqlite" for now
 sqlite_path = "storage/app.db"
 
+[jobs]
+# Cola durable de jobs + worker CLI (opcional, aditiva). Tolerante a
+# ausencia: si falta esta sección se usan los valores por defecto de abajo.
+# Durable job queue + CLI worker (optional, additive). Tolerant to absence:
+# a missing section uses the defaults below.
+enabled = false
+poll_interval_sec = 5
+default_max_attempts = 3
+
 
 ##############################################################################
 # Personal Quality Stack (optional)

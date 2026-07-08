@@ -173,6 +173,10 @@ project_mode = _cfg.get("project_mode", {})
 # [database] table yields {} and the flags below fall back to their
 # defaults (enabled, sqlite, storage/app.db). See app/infrastructure/database/.
 database = _cfg.get("database", {})
+# Durable job queue + CLI worker config. Tolerant by design: a missing
+# [jobs] table yields {} and the flags below fall back to their defaults
+# (disabled). See app/infrastructure (Job model/repository) and Task 7/10.
+jobs = _cfg.get("jobs", {})
 # Optional per-intent LLM profiles. Tolerant by design: a missing [llm_profiles]
 # table yields {} and llm.get_llm_profile() falls back to built-in defaults, so
 # behaviour is identical to upstream. See app/services/llm.py LLM_PROFILES.
@@ -291,6 +295,13 @@ database_backend = _env_str_or_config(
     "TURBOPRINTER_DATABASE_BACKEND", database.get("backend", "sqlite"), "sqlite"
 )
 database_sqlite_path = str(database.get("sqlite_path", "storage/app.db"))
+
+# Durable job queue + CLI worker. Opt-in, default off. When disabled,
+# /api/v1/jobs* and /api/v1/workspaces/{id}/run-full-pipeline 404, and no
+# existing BackgroundTasks-based flow is affected.
+jobs_enabled = _env_bool_or_config("TURBOPRINTER_JOBS_ENABLED", jobs.get("enabled", False))
+jobs_poll_interval_sec = int(jobs.get("poll_interval_sec", 5))
+jobs_default_max_attempts = int(jobs.get("default_max_attempts", 3))
 
 app["redis_host"] = os.getenv(
     "MPT_APP_REDIS_HOST",
