@@ -137,6 +137,7 @@
       "scriptPromptLabel": "Script Prompt",
       "systemPromptLabel": "System Prompt",
       "autoDetect": "Auto detect",
+      "noWorkspace": "No channel",
       "generate": "Generate Script",
       "continueToSettings": "Continue to Settings →",
       "failed": "Failed to generate script"

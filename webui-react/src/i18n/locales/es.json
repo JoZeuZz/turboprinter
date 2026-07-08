@@ -137,6 +137,7 @@
       "scriptPromptLabel": "Prompt de guion",
       "systemPromptLabel": "System prompt",
       "autoDetect": "Detección automática",
+      "noWorkspace": "Sin canal",
       "generate": "Generar guion",
       "continueToSettings": "Continuar a Configuración →",
       "failed": "No se pudo generar el guion"

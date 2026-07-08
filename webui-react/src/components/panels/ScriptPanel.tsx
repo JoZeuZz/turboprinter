@@ -1,5 +1,5 @@
 // webui-react/src/components/panels/ScriptPanel.tsx
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Wand2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
@@ -10,6 +10,7 @@ import { useProjectHistoryStore } from "../../store/useProjectHistoryStore";
 import { useProjectStore } from "../../store/useProjectStore";
 import { useVideoStore } from "../../store/useVideoStore";
 import { useProjectWorkspaceStore } from "../../store/useProjectWorkspaceStore";
+import { useWorkspacesStore } from "../../store/useWorkspacesStore";
 import { llmApi } from "../../api/llm";
 
 export function ScriptPanel() {
@@ -23,6 +24,22 @@ export function ScriptPanel() {
   const navigate = useNavigate();
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { workspaces, fetchAll: fetchWorkspaces } = useWorkspacesStore();
+  const [workspaceId, setWorkspaceId] = useState<string>("");
+
+  useEffect(() => {
+    void fetchWorkspaces();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleWorkspaceChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const id = e.target.value;
+    setWorkspaceId(id);
+    const workspace = workspaces.find((w) => w.id === id);
+    if (workspace) {
+      store.set("video_language", workspace.language);
+    }
+  };
 
   const handleTopicChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     store.set("video_subject", e.target.value);
@@ -56,6 +73,7 @@ export function ScriptPanel() {
           script: video_script,
           language: store.video_language,
           topic: store.video_subject,
+          workspace_id: workspaceId || undefined,
         });
         await projectStore.open(project_id);
         removeDraft(currentDraftId);
@@ -85,6 +103,18 @@ export function ScriptPanel() {
         value={store.video_subject}
         onChange={handleTopicChange}
       />
+
+      {workspaces.length > 0 && (
+        <Select
+          label={t("channels.title")}
+          value={workspaceId}
+          onChange={handleWorkspaceChange}
+          options={[
+            { value: "", label: t("panels.script.noWorkspace") },
+            ...workspaces.map((w) => ({ value: w.id, label: w.name })),
+          ]}
+        />
+      )}
 
       <Select
         label={t("voice.language")}

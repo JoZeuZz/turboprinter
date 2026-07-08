@@ -9,6 +9,8 @@ import { useVideoStore } from "../../store/useVideoStore";
 import { ApiError } from "../../api/client";
 import { projectsApi } from "../../api/projects";
 import { useProjectStore } from "../../store/useProjectStore";
+import { useWorkspacesStore } from "../../store/useWorkspacesStore";
+import type { Workspace } from "../../api/types";
 
 vi.mock("../../api/llm", () => ({
   llmApi: {
@@ -23,8 +25,29 @@ vi.mock("../../api/projects", () => ({
   },
 }));
 
+const ws1: Workspace = {
+  id: "ws-1",
+  name: "Canal EN",
+  language: "en",
+  voice_rate: 1.0,
+  enabled: true,
+  safety_rules: {},
+  metadata: {},
+  created_at: "2026-01-01T00:00:00Z",
+  updated_at: "2026-01-01T00:00:00Z",
+};
+
 beforeEach(() => {
   act(() => useVideoStore.getState().reset());
+  useWorkspacesStore.setState({
+    workspaces: [],
+    loading: false,
+    error: null,
+    fetchAll: vi.fn().mockResolvedValue(undefined),
+    create: vi.fn(),
+    update: vi.fn(),
+    remove: vi.fn(),
+  });
 });
 
 function renderPanel() {
@@ -71,6 +94,50 @@ describe("ScriptPanel", () => {
 
     await waitFor(() => {
       expect(useProjectStore.getState().mode).toBe("disabled");
+    });
+  });
+
+  it("selecting a workspace updates the video language to the workspace's language", async () => {
+    useWorkspacesStore.setState({ workspaces: [ws1] });
+    renderPanel();
+
+    await userEvent.selectOptions(screen.getByLabelText(/canales/i), "ws-1");
+
+    expect(useVideoStore.getState().video_language).toBe("en");
+  });
+
+  it("passes the selected workspace's id as workspace_id when generating", async () => {
+    useWorkspacesStore.setState({ workspaces: [ws1] });
+    vi.mocked(projectsApi.createFromScript).mockResolvedValue({ project_id: "proj-1", has_script: true });
+    act(() => useProjectStore.getState().reset());
+    useProjectStore.setState({ open: vi.fn().mockResolvedValue({} as never) });
+
+    renderPanel();
+    await userEvent.type(screen.getByPlaceholderText(/ejercicio matutino/i), "cats");
+    await userEvent.selectOptions(screen.getByLabelText(/canales/i), "ws-1");
+    await userEvent.click(screen.getByRole("button", { name: /generar guion/i }));
+
+    await waitFor(() => {
+      expect(projectsApi.createFromScript).toHaveBeenCalledWith(
+        expect.objectContaining({ workspace_id: "ws-1" })
+      );
+    });
+  });
+
+  it("passes workspace_id: undefined when no workspace is selected", async () => {
+    useWorkspacesStore.setState({ workspaces: [ws1] });
+    vi.mocked(projectsApi.createFromScript).mockResolvedValue({ project_id: "proj-1", has_script: true });
+    act(() => useProjectStore.getState().reset());
+    useProjectStore.setState({ open: vi.fn().mockResolvedValue({} as never) });
+
+    renderPanel();
+    await userEvent.type(screen.getByPlaceholderText(/ejercicio matutino/i), "cats");
+    await userEvent.click(screen.getByRole("button", { name: /generar guion/i }));
+
+    await waitFor(() => {
+      expect(projectsApi.createFromScript).toHaveBeenCalledWith(
+        expect.objectContaining({ workspace_id: undefined })
+      );
     });
   });
 });
