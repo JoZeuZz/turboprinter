@@ -138,6 +138,9 @@
       "systemPromptLabel": "System prompt",
       "autoDetect": "Detección automática",
       "noWorkspace": "Sin canal",
+      "promptTemplate": "Formula narrativa",
+      "noPromptTemplate": "Sin formula",
+      "promptVersion": "Versión del prompt",
       "generate": "Generar guion",
       "continueToSettings": "Continuar a Configuración →",
       "failed": "No se pudo generar el guion"

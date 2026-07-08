@@ -138,6 +138,9 @@
       "systemPromptLabel": "System Prompt",
       "autoDetect": "Auto detect",
       "noWorkspace": "No channel",
+      "promptTemplate": "Narrative template",
+      "noPromptTemplate": "No template",
+      "promptVersion": "Prompt version",
       "generate": "Generate Script",
       "continueToSettings": "Continue to Settings →",
       "failed": "Failed to generate script"

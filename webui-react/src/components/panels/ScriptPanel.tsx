@@ -11,6 +11,7 @@ import { useProjectStore } from "../../store/useProjectStore";
 import { useVideoStore } from "../../store/useVideoStore";
 import { useProjectWorkspaceStore } from "../../store/useProjectWorkspaceStore";
 import { useWorkspacesStore } from "../../store/useWorkspacesStore";
+import { usePromptTemplatesStore } from "../../store/usePromptTemplatesStore";
 import { llmApi } from "../../api/llm";
 
 export function ScriptPanel() {
@@ -26,9 +27,18 @@ export function ScriptPanel() {
   const [error, setError] = useState<string | null>(null);
   const { workspaces, fetchAll: fetchWorkspaces } = useWorkspacesStore();
   const [workspaceId, setWorkspaceId] = useState<string>("");
+  const { templates, fetchAll: fetchTemplates, listVersions } = usePromptTemplatesStore();
+  const [templateId, setTemplateId] = useState<string>("");
+  const [templateVersionId, setTemplateVersionId] = useState<string>("");
+  const [templateVersions, setTemplateVersions] = useState<{ id: string; version: number }[]>([]);
 
   useEffect(() => {
     void fetchWorkspaces();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    void fetchTemplates();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -38,6 +48,22 @@ export function ScriptPanel() {
     const workspace = workspaces.find((w) => w.id === id);
     if (workspace) {
       store.set("video_language", workspace.language);
+    }
+  };
+
+  const handleTemplateChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const id = e.target.value;
+    setTemplateId(id);
+    setTemplateVersionId("");
+    if (!id) {
+      setTemplateVersions([]);
+      return;
+    }
+    const versions = await listVersions(id);
+    setTemplateVersions(versions.map((v) => ({ id: v.id, version: v.version })));
+    const template = templates.find((t) => t.id === id);
+    if (template?.active_version_id) {
+      setTemplateVersionId(template.active_version_id);
     }
   };
 
@@ -74,6 +100,8 @@ export function ScriptPanel() {
           language: store.video_language,
           topic: store.video_subject,
           workspace_id: workspaceId || undefined,
+          prompt_template_id: templateId || undefined,
+          prompt_version_id: templateVersionId || undefined,
         });
         await projectStore.open(project_id);
         removeDraft(currentDraftId);
@@ -113,6 +141,30 @@ export function ScriptPanel() {
             { value: "", label: t("panels.script.noWorkspace") },
             ...workspaces.map((w) => ({ value: w.id, label: w.name })),
           ]}
+        />
+      )}
+
+      {templates.length > 0 && (
+        <Select
+          label={t("panels.script.promptTemplate")}
+          value={templateId}
+          onChange={handleTemplateChange}
+          options={[
+            { value: "", label: t("panels.script.noPromptTemplate") },
+            ...templates.map((tmpl) => ({ value: tmpl.id, label: tmpl.name })),
+          ]}
+        />
+      )}
+
+      {templateId && templateVersions.length > 0 && (
+        <Select
+          label={t("panels.script.promptVersion")}
+          value={templateVersionId}
+          onChange={(e) => setTemplateVersionId(e.target.value)}
+          options={templateVersions.map((v) => ({
+            value: v.id,
+            label: `v${v.version}`,
+          }))}
         />
       )}
 

@@ -10,7 +10,8 @@ import { ApiError } from "../../api/client";
 import { projectsApi } from "../../api/projects";
 import { useProjectStore } from "../../store/useProjectStore";
 import { useWorkspacesStore } from "../../store/useWorkspacesStore";
-import type { Workspace } from "../../api/types";
+import { usePromptTemplatesStore } from "../../store/usePromptTemplatesStore";
+import type { PromptTemplate, PromptVersion, Workspace } from "../../api/types";
 
 vi.mock("../../api/llm", () => ({
   llmApi: {
@@ -37,6 +38,39 @@ const ws1: Workspace = {
   updated_at: "2026-01-01T00:00:00Z",
 };
 
+const tmpl1: PromptTemplate = {
+  id: "tmpl-1",
+  name: "Educational Hook",
+  content_type: "script",
+  language: "es",
+  system_prompt: "system",
+  user_prompt_template: "user",
+  active_version_id: null,
+  created_at: "2026-01-01T00:00:00Z",
+  updated_at: "2026-01-01T00:00:00Z",
+  metadata: {},
+};
+
+const version1: PromptVersion = {
+  id: "v1",
+  template_id: "tmpl-1",
+  version: 1,
+  system_prompt: "system",
+  user_prompt_template: "user",
+  created_at: "2026-01-01T00:00:00Z",
+  active: true,
+};
+
+const version2: PromptVersion = {
+  id: "v2",
+  template_id: "tmpl-1",
+  version: 2,
+  system_prompt: "system",
+  user_prompt_template: "user",
+  created_at: "2026-01-02T00:00:00Z",
+  active: false,
+};
+
 beforeEach(() => {
   act(() => useVideoStore.getState().reset());
   useWorkspacesStore.setState({
@@ -47,6 +81,17 @@ beforeEach(() => {
     create: vi.fn(),
     update: vi.fn(),
     remove: vi.fn(),
+  });
+  usePromptTemplatesStore.setState({
+    templates: [],
+    loading: false,
+    error: null,
+    fetchAll: vi.fn().mockResolvedValue(undefined),
+    create: vi.fn(),
+    update: vi.fn(),
+    addVersion: vi.fn(),
+    listVersions: vi.fn().mockResolvedValue([]),
+    activateVersion: vi.fn(),
   });
 });
 
@@ -137,6 +182,57 @@ describe("ScriptPanel", () => {
     await waitFor(() => {
       expect(projectsApi.createFromScript).toHaveBeenCalledWith(
         expect.objectContaining({ workspace_id: undefined })
+      );
+    });
+  });
+
+  it("passes prompt_template_id/prompt_version_id: undefined when no template is selected", async () => {
+    vi.mocked(projectsApi.createFromScript).mockResolvedValue({ project_id: "proj-1", has_script: true });
+    act(() => useProjectStore.getState().reset());
+    useProjectStore.setState({ open: vi.fn().mockResolvedValue({} as never) });
+
+    renderPanel();
+    await userEvent.type(screen.getByPlaceholderText(/ejercicio matutino/i), "cats");
+    await userEvent.click(screen.getByRole("button", { name: /generar guion/i }));
+
+    await waitFor(() => {
+      expect(projectsApi.createFromScript).toHaveBeenCalledWith(
+        expect.objectContaining({ prompt_template_id: undefined, prompt_version_id: undefined })
+      );
+    });
+  });
+
+  it("selecting a template populates the version select", async () => {
+    usePromptTemplatesStore.setState({
+      templates: [tmpl1],
+      listVersions: vi.fn().mockResolvedValue([version1, version2]),
+    });
+
+    renderPanel();
+    await userEvent.selectOptions(screen.getByLabelText(/formula narrativa/i), "tmpl-1");
+
+    expect(await screen.findByLabelText(/versión del prompt/i)).toBeInTheDocument();
+  });
+
+  it("passes the selected template and version ids when generating", async () => {
+    usePromptTemplatesStore.setState({
+      templates: [tmpl1],
+      listVersions: vi.fn().mockResolvedValue([version1, version2]),
+    });
+    vi.mocked(projectsApi.createFromScript).mockResolvedValue({ project_id: "proj-1", has_script: true });
+    act(() => useProjectStore.getState().reset());
+    useProjectStore.setState({ open: vi.fn().mockResolvedValue({} as never) });
+
+    renderPanel();
+    await userEvent.type(screen.getByPlaceholderText(/ejercicio matutino/i), "cats");
+    await userEvent.selectOptions(screen.getByLabelText(/formula narrativa/i), "tmpl-1");
+    const versionSelect = await screen.findByLabelText(/versión del prompt/i);
+    await userEvent.selectOptions(versionSelect, "v2");
+    await userEvent.click(screen.getByRole("button", { name: /generar guion/i }));
+
+    await waitFor(() => {
+      expect(projectsApi.createFromScript).toHaveBeenCalledWith(
+        expect.objectContaining({ prompt_template_id: "tmpl-1", prompt_version_id: "v2" })
       );
     });
   });
