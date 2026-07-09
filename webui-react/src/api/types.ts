@@ -671,3 +671,52 @@ export interface VoiceOption {
 export interface VoicesResponse {
   voices: VoiceOption[];
 }
+
+// ─── Jobs ──────────────────────────────────────────────────────────────────
+
+export type JobStatus = "pending" | "running" | "completed" | "failed" | "cancelled";
+
+export interface Job {
+  id: string;
+  type: string;
+  status: JobStatus;
+  workspace_id: string | null;
+  project_id: string | null;
+  payload: Record<string, unknown>;
+  scheduled_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+  attempts: number;
+  max_attempts: number;
+  last_error: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface JobCreateRequest {
+  type: string;
+  workspace_id?: string | null;
+  project_id?: string | null;
+  payload?: Record<string, unknown>;
+  scheduled_at?: string | null;
+  max_attempts?: number;
+}
+
+export interface RunFullPipelineRequest {
+  project_id?: string | null;
+  topic?: string | null;
+  script?: string | null;
+  language?: string;
+  voice_name?: string;
+  voice_rate?: number;
+  subtitle_enabled?: boolean;
+  visual_style?: string | null;
+  orientation?: string | null;
+  allow_preflight_warnings?: boolean;
+  scheduled_at?: string | null;
+}
+
+export interface RunFullPipelineResponse {
+  job_id: string;
+  project_id: string;
+}
