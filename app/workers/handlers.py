@@ -1,0 +1,131 @@
+from __future__ import annotations
+
+import json
+from typing import Callable
+
+from app.application.services.media_aggregator import MediaAggregator
+from app.application.services.project_lifecycle import create_project
+from app.application.services.project_preflight import ProjectPreflightService
+from app.application.services.shot_planner import ShotPlanner
+from app.application.services.timeline_builder import TimelineBuilder
+from app.application.workflows.render_project import render_project_from_store
+from app.domain.operational.models import Job
+from app.infrastructure.llm.structured_output import LiteLLMStructuredProvider
+from app.infrastructure.media_providers.local_provider import LocalLibraryProvider
+from app.infrastructure.media_providers.stock_providers import (
+    CoverrProvider,
+    PexelsProvider,
+    PixabayProvider,
+)
+from app.infrastructure.storage.filesystem_store import FilesystemProjectStore
+from app.models.schema import VideoParams
+from app.services import task as legacy_task
+
+
+def _payload(job: Job) -> dict:
+    return json.loads(job.payload_json or "{}")
+
+
+def _store() -> FilesystemProjectStore:
+    return FilesystemProjectStore()
+
+
+def _media_providers() -> list:
+    providers = [PexelsProvider(), PixabayProvider(), CoverrProvider(), LocalLibraryProvider()]
+    return [p for p in providers if p.is_configured()]
+
+
+def _video_params(payload: dict, project_id: str, script: str) -> VideoParams:
+    return VideoParams(
+        video_subject=project_id,
+        video_script=script,
+        voice_name=payload.get("voice_name", ""),
+        voice_rate=payload.get("voice_rate", 1.0),
+        subtitle_enabled=payload.get("subtitle_enabled", True),
+    )
+
+
+def handle_generate_project(job: Job) -> None:
+    payload = _payload(job)
+    create_project(
+        _store(), topic=payload.get("topic"), script=payload.get("script"),
+        workspace_id=job.workspace_id,
+    )
+
+
+def handle_plan_project(job: Job) -> None:
+    payload = _payload(job)
+    store = _store()
+    script = store.load_script(job.project_id) or ""
+    if not script.strip():
+        raise ValueError(f"project {job.project_id!r} has no script")
+    ShotPlanner(LiteLLMStructuredProvider(), store=store).plan(
+        script=script,
+        language=payload.get("language", "es"),
+        target_duration_sec=payload.get("target_duration_sec"),
+        visual_style=payload.get("visual_style"),
+        task_id=job.project_id,
+    )
+
+
+def handle_search_media(job: Job) -> None:
+    payload = _payload(job)
+    store = _store()
+    plan = store.load_shot_plan(job.project_id)
+    if plan is None:
+        raise ValueError(f"project {job.project_id!r} has no shot plan; run plan_project first")
+    MediaAggregator(_media_providers(), store=store).select_for_plan(
+        plan,
+        orientation=payload.get("orientation"),
+        prefer_local=payload.get("prefer_local", False),
+        task_id=job.project_id,
+    )
+
+
+def handle_synthesize_narration(job: Job) -> None:
+    payload = _payload(job)
+    store = _store()
+    script = store.load_script(job.project_id) or ""
+    if not script.strip():
+        raise ValueError(f"project {job.project_id!r} has no script")
+    params = _video_params(payload, job.project_id, script)
+    audio_file, _duration, sub_maker = legacy_task.generate_audio(job.project_id, params, script)
+    if not audio_file:
+        raise RuntimeError(f"narration synthesis failed for project {job.project_id!r}")
+    legacy_task.generate_subtitle(job.project_id, params, script, sub_maker, audio_file)
+
+
+def handle_build_timeline(job: Job) -> None:
+    payload = _payload(job)
+    store = _store()
+    if store.load_shot_plan(job.project_id) is None:
+        raise ValueError(f"project {job.project_id!r} has no shot plan; run plan_project first")
+    TimelineBuilder(store=store).build_from_store(
+        job.project_id,
+        title=payload.get("title"),
+        narration_audio_path=payload.get("narration_audio_path"),
+        subtitle_path=payload.get("subtitle_path"),
+    )
+
+
+def handle_render_project(job: Job) -> None:
+    store = _store()
+    project = store.load_timeline(job.project_id)
+    if project is None:
+        raise ValueError(f"project {job.project_id!r} has no timeline; run build_timeline first")
+    preflight = ProjectPreflightService(store).run(job.project_id)
+    if not preflight.valid:
+        raise RuntimeError(f"preflight failed for {job.project_id!r}: {preflight.errors}")
+    result = render_project_from_store(job.project_id, store)
+    if not result.success:
+        raise RuntimeError(f"render failed for {job.project_id!r}: {result.error}")
+
+
+HANDLERS: dict[str, Callable[[Job], None]] = {
+    "generate_project": handle_generate_project,
+    "plan_project": handle_plan_project,
+    "search_media": handle_search_media,
+    "synthesize_narration": handle_synthesize_narration,
+    "build_timeline": handle_build_timeline,
+    "render_project": handle_render_project,
+}
