@@ -121,6 +121,54 @@ def handle_render_project(job: Job) -> None:
         raise RuntimeError(f"render failed for {job.project_id!r}: {result.error}")
 
 
+def handle_full_project_pipeline(job: Job) -> None:
+    payload = _payload(job)
+    store = _store()
+    project_id = job.project_id
+    if not project_id:
+        raise ValueError("full_project_pipeline job requires project_id")
+
+    script = store.load_script(project_id) or ""
+    if not script.strip():
+        raise ValueError(f"project {project_id!r} has no script")
+
+    ShotPlanner(LiteLLMStructuredProvider(), store=store).plan(
+        script=script,
+        language=payload.get("language", "es"),
+        target_duration_sec=payload.get("target_duration_sec"),
+        visual_style=payload.get("visual_style"),
+        task_id=project_id,
+    )
+
+    shot_plan = store.load_shot_plan(project_id)
+    MediaAggregator(_media_providers(), store=store).select_for_plan(
+        shot_plan,
+        orientation=payload.get("orientation"),
+        prefer_local=payload.get("prefer_local", False),
+        task_id=project_id,
+    )
+
+    params = _video_params(payload, project_id, script)
+    audio_file, _duration, sub_maker = legacy_task.generate_audio(project_id, params, script)
+    if not audio_file:
+        raise RuntimeError(f"narration synthesis failed for project {project_id!r}")
+    subtitle_path = legacy_task.generate_subtitle(project_id, params, script, sub_maker, audio_file)
+
+    TimelineBuilder(store=store).build_from_store(
+        project_id, narration_audio_path=audio_file, subtitle_path=subtitle_path,
+    )
+
+    preflight = ProjectPreflightService(store).run(project_id)
+    if not preflight.valid:
+        raise RuntimeError(f"preflight failed for {project_id!r}: {preflight.errors}")
+    if preflight.warnings and not payload.get("allow_preflight_warnings", False):
+        raise RuntimeError(f"preflight warnings for {project_id!r}: {preflight.warnings}")
+
+    result = render_project_from_store(project_id, store)
+    if not result.success:
+        raise RuntimeError(f"render failed for {project_id!r}: {result.error}")
+
+
 HANDLERS: dict[str, Callable[[Job], None]] = {
     "generate_project": handle_generate_project,
     "plan_project": handle_plan_project,
@@ -128,4 +176,5 @@ HANDLERS: dict[str, Callable[[Job], None]] = {
     "synthesize_narration": handle_synthesize_narration,
     "build_timeline": handle_build_timeline,
     "render_project": handle_render_project,
+    "full_project_pipeline": handle_full_project_pipeline,
 }
