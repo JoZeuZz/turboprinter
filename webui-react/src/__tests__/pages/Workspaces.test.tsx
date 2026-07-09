@@ -4,7 +4,17 @@ import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Workspaces } from "../../pages/Workspaces";
 import { useWorkspacesStore } from "../../store/useWorkspacesStore";
+import { useJobsStore } from "../../store/useJobsStore";
 import type { Workspace } from "../../api/types";
+
+const navigateMock = vi.fn();
+
+vi.mock("react-router-dom", async () => {
+  const actual = await vi.importActual<typeof import("react-router-dom")>(
+    "react-router-dom"
+  );
+  return { ...actual, useNavigate: () => navigateMock };
+});
 
 const ws1: Workspace = {
   id: "ws-1", name: "Canal Curiosidades", language: "es", voice_rate: 1.0,
@@ -13,6 +23,7 @@ const ws1: Workspace = {
 };
 
 beforeEach(() => {
+  navigateMock.mockReset();
   useWorkspacesStore.setState({
     workspaces: [],
     loading: false,
@@ -21,6 +32,14 @@ beforeEach(() => {
     create: vi.fn(),
     update: vi.fn(),
     remove: vi.fn(),
+  });
+  useJobsStore.setState({
+    jobs: [],
+    loading: false,
+    error: null,
+    refresh: vi.fn().mockResolvedValue(undefined),
+    cancel: vi.fn().mockResolvedValue(undefined),
+    runFullPipeline: vi.fn().mockResolvedValue({ job_id: "job-1", project_id: "p-1" }),
   });
 });
 
@@ -53,5 +72,23 @@ describe("Workspaces page", () => {
         expect.objectContaining({ name: "Misterio Shorts" })
       );
     });
+  });
+
+  it("running the full pipeline calls the jobs store and navigates to /jobs", async () => {
+    useWorkspacesStore.setState({ workspaces: [ws1] });
+    render(<MemoryRouter><Workspaces /></MemoryRouter>);
+
+    fireEvent.change(screen.getByLabelText(/run full pipeline|ejecutar pipeline/i), {
+      target: { value: "gatos" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /run full pipeline|ejecutar pipeline/i }));
+
+    await waitFor(() => {
+      expect(useJobsStore.getState().runFullPipeline).toHaveBeenCalledWith("ws-1", {
+        topic: "gatos",
+        language: "es",
+      });
+    });
+    expect(navigateMock).toHaveBeenCalledWith("/jobs");
   });
 });

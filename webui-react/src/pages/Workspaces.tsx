@@ -1,9 +1,11 @@
 // webui-react/src/pages/Workspaces.tsx
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router-dom";
 import { PlusCircle } from "lucide-react";
 import { Button, Input, Select } from "../components/ui";
 import { useWorkspacesStore } from "../store/useWorkspacesStore";
+import { useJobsStore } from "../store/useJobsStore";
 import type { Workspace, WorkspaceUpsertRequest } from "../api/types";
 
 const LANGUAGE_OPTIONS = [
@@ -35,11 +37,13 @@ function toFormState(workspace?: Workspace): FormState {
 
 export function Workspaces() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { workspaces, fetchAll, create, update, remove } = useWorkspacesStore();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<FormState>(toFormState());
   const [formError, setFormError] = useState<string | null>(null);
+  const [pipelineTopics, setPipelineTopics] = useState<Record<string, string>>({});
 
   useEffect(() => {
     void fetchAll();
@@ -79,6 +83,16 @@ export function Workspaces() {
     setShowForm(false);
   };
 
+  const handleRunPipeline = async (workspace: Workspace) => {
+    const topic = pipelineTopics[workspace.id]?.trim();
+    if (!topic) return;
+    await useJobsStore.getState().runFullPipeline(workspace.id, {
+      topic,
+      language: workspace.language,
+    });
+    navigate("/jobs");
+  };
+
   return (
     <div className="flex flex-col items-center justify-start min-h-full p-8">
       <div className="w-full max-w-xl space-y-6">
@@ -99,10 +113,21 @@ export function Workspaces() {
             {workspaces.map((w) => (
               <li
                 key={w.id}
-                className="flex items-center justify-between rounded-md border border-border bg-surface px-4 py-3"
+                className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-surface px-4 py-3"
               >
                 <span className="text-sm text-foreground">{w.name}</span>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Input
+                    aria-label={t("channels.runPipeline")}
+                    placeholder={t("channels.runPipelineTopicPlaceholder")}
+                    value={pipelineTopics[w.id] ?? ""}
+                    onChange={(e) =>
+                      setPipelineTopics({ ...pipelineTopics, [w.id]: e.target.value })
+                    }
+                  />
+                  <Button variant="ghost" size="sm" onClick={() => void handleRunPipeline(w)}>
+                    {t("channels.runPipeline")}
+                  </Button>
                   <Button variant="ghost" size="sm" onClick={() => openEditForm(w)}>
                     {t("channels.edit")}
                   </Button>

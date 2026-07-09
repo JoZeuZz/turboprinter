@@ -33,7 +33,9 @@
     "cancel": "Cancel",
     "edit": "Edit",
     "delete": "Delete",
-    "nameRequired": "Name is required"
+    "nameRequired": "Name is required",
+    "runPipeline": "Run full pipeline",
+    "runPipelineTopicPlaceholder": "Topic"
   },
   "jobs": {
     "title": "Job Queue",

@@ -33,7 +33,9 @@
     "cancel": "Cancelar",
     "edit": "Editar",
     "delete": "Eliminar",
-    "nameRequired": "El nombre es obligatorio"
+    "nameRequired": "El nombre es obligatorio",
+    "runPipeline": "Ejecutar pipeline completo",
+    "runPipelineTopicPlaceholder": "Tema"
   },
   "jobs": {
     "title": "Cola de Jobs",
