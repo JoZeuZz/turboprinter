@@ -293,6 +293,29 @@ The database schema includes tables for `project_runs`, `video_outputs`, `public
 
 ---
 
+## 3d. Job scheduler (jobs)
+
+An optional durable job queue (SQLite-backed) lets you enqueue project generation, planning, media search, narration, timeline build, render, and the full pipeline end-to-end — without keeping an HTTP request alive.
+
+```toml
+[jobs]
+enabled = false
+poll_interval_sec = 5
+default_max_attempts = 3
+```
+
+**Key points:**
+
+- **Opt-in:** `enabled = false` by default — `/api/v1/jobs*` and `/api/v1/workspaces/{id}/run-full-pipeline` 404 when off, and the existing `BackgroundTasks`-based render flow keeps working unchanged.
+- **Worker is a separate process:** run it alongside the API (`uv run python -m app.workers.jobs`), not embedded in the Uvicorn process.
+- **Locking:** an atomic claim (`SELECT` candidate + guarded `UPDATE ... WHERE status='pending'` in one transaction), safe for multiple worker processes on SQLite — no Redis, no Celery.
+- **Retries:** exponential backoff (30s → 60s → ... capped at 600s) up to `max_attempts`; `full_project_pipeline` retries the whole pipeline from the top, not per sub-step.
+- **Queue panel:** `webui-react` `/jobs` page shows pending/running/completed/failed.
+
+See `docs/architecture/017-job-scheduler.md` for full architecture details.
+
+---
+
 ## 4. Persistent storage (Proxmox)
 
 The app writes only under the project's `storage/` (tasks, cache, local videos,
@@ -456,9 +479,27 @@ Restart=on-failure
 WantedBy=multi-user.target
 ```
 
+`/etc/systemd/system/turboprinter-worker.service`:
+
+```ini
+[Unit]
+Description=Turboprinter Job Worker
+After=network.target
+
+[Service]
+User=turboprinter
+WorkingDirectory=/opt/turboprinter
+ExecStart=/root/.local/bin/uv run python -m app.workers.jobs
+Restart=on-failure
+Environment=TURBOPRINTER_JOBS_ENABLED=true
+
+[Install]
+WantedBy=multi-user.target
+```
+
 ```bash
 systemctl daemon-reload
-systemctl enable --now turboprinter-api turboprinter-webui
+systemctl enable --now turboprinter-api turboprinter-webui turboprinter-worker
 ```
 
 ---
