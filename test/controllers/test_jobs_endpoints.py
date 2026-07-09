@@ -82,8 +82,9 @@ def test_cancel_missing_job_404(client):
     assert c.post("/api/v1/jobs/does-not-exist/cancel").status_code == 404
 
 
-def test_run_full_pipeline_creates_project_and_enqueues_job(client):
+def test_run_full_pipeline_creates_project_and_enqueues_job(client, monkeypatch):
     c, _store = client
+    monkeypatch.setattr(jc.llm, "generate_script", lambda **kw: "Guion generado.")
     r = c.post(
         "/api/v1/workspaces/ws-1/run-full-pipeline",
         json={"topic": "cats", "language": "es"},
@@ -97,6 +98,61 @@ def test_run_full_pipeline_creates_project_and_enqueues_job(client):
     assert job["type"] == "full_project_pipeline"
     assert job["project_id"] == body["project_id"]
     assert job["workspace_id"] == "ws-1"
+
+
+def test_run_full_pipeline_generates_script_from_topic(client, monkeypatch):
+    c, store = client
+    monkeypatch.setattr(jc.llm, "generate_script", lambda **kw: "Guion fijo de prueba.")
+    r = c.post(
+        "/api/v1/workspaces/ws-1/run-full-pipeline",
+        json={"topic": "cats", "language": "es"},
+    )
+    assert r.status_code == 200
+    project_id = r.json()["data"]["project_id"]
+    assert store.load_script(project_id) == "Guion fijo de prueba."
+
+
+def test_run_full_pipeline_registers_project_run_for_new_project(client, monkeypatch):
+    c, _store = client
+    monkeypatch.setattr(jc.llm, "generate_script", lambda **kw: "Guion generado.")
+    r = c.post(
+        "/api/v1/workspaces/ws-1/run-full-pipeline",
+        json={"topic": "cats", "language": "es"},
+    )
+    assert r.status_code == 200
+    project_id = r.json()["data"]["project_id"]
+
+    from app.infrastructure.database.repositories.project_runs import ProjectRunRepository
+
+    run = ProjectRunRepository().get_by_project_id(project_id)
+    assert run is not None
+    assert run.source == "pipeline"
+    assert run.topic == "cats"
+
+
+def test_run_full_pipeline_with_existing_project_id_does_not_duplicate_run(client, monkeypatch):
+    c, store = client
+    monkeypatch.setattr(jc.llm, "generate_script", lambda **kw: "Guion generado.")
+    created = c.post(
+        "/api/v1/workspaces/ws-1/run-full-pipeline",
+        json={"topic": "cats", "language": "es"},
+    )
+    project_id = created.json()["data"]["project_id"]
+
+    from app.infrastructure.database.repositories.project_runs import ProjectRunRepository
+
+    repo = ProjectRunRepository()
+    count_before = len(repo.list(project_id=project_id))
+    assert count_before == 1
+
+    r = c.post(
+        "/api/v1/workspaces/ws-1/run-full-pipeline",
+        json={"project_id": project_id, "language": "es"},
+    )
+    assert r.status_code == 200
+
+    count_after = len(repo.list(project_id=project_id))
+    assert count_after == count_before
 
 
 def test_run_full_pipeline_requires_project_id_or_topic_or_script(client):

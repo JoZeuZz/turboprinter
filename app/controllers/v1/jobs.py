@@ -8,12 +8,14 @@ from fastapi import Request
 from app.application.services.project_lifecycle import create_project
 from app.config import config
 from app.controllers.v1.base import new_router
+from app.controllers.v1.projects import _register_project_run
 from app.domain.operational.models import Job
 from app.infrastructure.database.repositories.jobs import JobRepository
 from app.infrastructure.storage.filesystem_store import FilesystemProjectStore
 from app.models.exception import HttpException
 from app.models.job_schema import JOB_TYPES, JobCreateRequest, RunFullPipelineRequest
 from app.models.project_schema import BaseProjectResponse
+from app.services import llm
 
 router = new_router()
 
@@ -112,8 +114,15 @@ def run_full_pipeline(request: Request, workspace_id: str, body: RunFullPipeline
             raise HttpException(
                 task_id="", status_code=400, message="project_id or topic/script is required",
             )
+        script = body.script
+        if not script and body.topic:
+            script = llm.generate_script(video_subject=body.topic, language=body.language)
         project_id = create_project(
-            store, topic=body.topic, script=body.script, workspace_id=workspace_id,
+            store, topic=body.topic, script=script, workspace_id=workspace_id,
+        )
+        _register_project_run(
+            task_id=project_id, workspace_id=workspace_id, source="pipeline", topic=body.topic,
+            prompt_template_id=None, prompt_version_id=None,
         )
     payload = {
         "language": body.language,
