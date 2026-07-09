@@ -6,6 +6,7 @@ import { Dashboard } from "./pages/Dashboard";
 import { Workspace } from "./pages/Workspace";
 import { Workspaces } from "./pages/Workspaces";
 import { Settings } from "./pages/Settings";
+import { Jobs } from "./pages/Jobs";
 
 export default function App() {
   return (
@@ -19,6 +20,7 @@ export default function App() {
         <Route element={<Layout />}>
           <Route path="settings" element={<Settings />} />
           <Route path="workspaces" element={<Workspaces />} />
+          <Route path="jobs" element={<Jobs />} />
         </Route>
         {/* Legacy redirects */}
         <Route path="auto" element={<Navigate to="/" replace />} />

@@ -18,7 +18,8 @@
     "home": "Home",
     "workspace": "Workspace",
     "channels": "Channels",
-    "config": "Config"
+    "config": "Config",
+    "jobs": "Jobs"
   },
   "channels": {
     "title": "Channels",
@@ -33,6 +34,15 @@
     "edit": "Edit",
     "delete": "Delete",
     "nameRequired": "Name is required"
+  },
+  "jobs": {
+    "title": "Job Queue",
+    "empty": "No jobs yet.",
+    "cancel": "Cancel",
+    "pending": "Pending",
+    "running": "Running",
+    "completed": "Completed",
+    "failed": "Failed"
   },
   "sidebar": {
     "newProject": "New Project",

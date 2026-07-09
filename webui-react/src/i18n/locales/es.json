@@ -18,7 +18,8 @@
     "home": "Inicio",
     "workspace": "Espacio",
     "channels": "Canales",
-    "config": "Config"
+    "config": "Config",
+    "jobs": "Cola"
   },
   "channels": {
     "title": "Canales",
@@ -33,6 +34,15 @@
     "edit": "Editar",
     "delete": "Eliminar",
     "nameRequired": "El nombre es obligatorio"
+  },
+  "jobs": {
+    "title": "Cola de Jobs",
+    "empty": "Todavía no hay jobs.",
+    "cancel": "Cancelar",
+    "pending": "Pendientes",
+    "running": "Corriendo",
+    "completed": "Completados",
+    "failed": "Fallidos"
   },
   "sidebar": {
     "newProject": "Nuevo proyecto",
