@@ -11,6 +11,7 @@ from fastapi import APIRouter
 
 from app.controllers.v1 import (
     config,
+    jobs,
     llm,
     projects,
     prompt_templates,
@@ -28,3 +29,4 @@ root_api_router.include_router(config.router)
 root_api_router.include_router(workspaces.router)
 root_api_router.include_router(prompt_templates.router)
 root_api_router.include_router(system.router)
+root_api_router.include_router(jobs.router)
