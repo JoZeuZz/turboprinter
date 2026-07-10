@@ -11,6 +11,7 @@ export type VideoAspect = "16:9" | "9:16" | "1:1";
 
 export interface VideoParams {
   video_subject: string;
+  project_id?: string;
   video_script?: string;
   video_terms?: string | string[] | null;
   video_aspect?: VideoAspect;
@@ -53,6 +54,20 @@ export interface TaskStatus {
   videos: string[];
   combined_videos: string[];
   logs?: string[];
+}
+
+export interface TaskSummary {
+  task_id: string;
+  state: number;
+  progress: number;
+  logs?: string[];
+}
+
+export interface TaskListResponse {
+  tasks: TaskSummary[];
+  total: number;
+  page: number;
+  page_size: number;
 }
 
 export interface ApiResponse<T> {
@@ -537,6 +552,7 @@ export interface CreateProjectResponse {
 
 export interface GetProjectResponse {
   project_id: string;
+  project_mode_enabled?: boolean;
   has_script: boolean;
   has_shot_plan: boolean;
   has_selected_media: boolean;

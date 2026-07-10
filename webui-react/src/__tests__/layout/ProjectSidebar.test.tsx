@@ -4,8 +4,11 @@ import { MemoryRouter, Routes, Route } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ProjectSidebar } from "../../components/layout/ProjectSidebar";
 import { projectsApi } from "../../api/projects";
+import { jobsApi } from "../../api/jobs";
+import { videoApi } from "../../api/video";
 import { useProjectHistoryStore } from "../../store/useProjectHistoryStore";
 import { useProjectWorkspaceStore } from "../../store/useProjectWorkspaceStore";
+import { useJobsStore } from "../../store/useJobsStore";
 import type { TaskStatus } from "../../api/types";
 
 vi.mock("../../api/projects", () => ({
@@ -14,6 +17,19 @@ vi.mock("../../api/projects", () => ({
     deleteProject: vi.fn(),
     renameProject: vi.fn(),
     duplicateProject: vi.fn(),
+  },
+}));
+
+vi.mock("../../api/jobs", () => ({
+  jobsApi: {
+    list: vi.fn(),
+    cancel: vi.fn(),
+  },
+}));
+
+vi.mock("../../api/video", () => ({
+  videoApi: {
+    listTasks: vi.fn(),
   },
 }));
 
@@ -34,6 +50,9 @@ describe("ProjectSidebar actions", () => {
     (projectsApi.deleteProject as any).mockResolvedValue({ project_id: "proj-aaa", deleted: true });
     (projectsApi.renameProject as any).mockResolvedValue({ project_id: "proj-aaa", topic: "Nuevo" });
     (projectsApi.duplicateProject as any).mockResolvedValue({ project_id: "proj-new" });
+    (jobsApi.list as any).mockResolvedValue({ jobs: [] });
+    (videoApi.listTasks as any).mockResolvedValue({ tasks: [], total: 0, page: 1, page_size: 10 });
+    useJobsStore.setState({ jobs: [], loading: false, error: null });
   });
 
   it("opens the row menu and deletes a project after confirm", async () => {
@@ -159,6 +178,9 @@ describe("ProjectSidebar listing", () => {
     useProjectHistoryStore.setState({ drafts: [], currentDraftId: null });
     useProjectWorkspaceStore.setState({ topic: "", taskId: null, taskStatus: null });
     (projectsApi.listProjects as any).mockResolvedValue({ projects: [] });
+    (jobsApi.list as any).mockResolvedValue({ jobs: [] });
+    (videoApi.listTasks as any).mockResolvedValue({ tasks: [], total: 0, page: 1, page_size: 10 });
+    useJobsStore.setState({ jobs: [], loading: false, error: null });
   });
 
   function renderAtRoute(id: string) {
@@ -275,5 +297,76 @@ describe("ProjectSidebar listing", () => {
     const inactiveRow = screen.getByText("Proyecto inactivo").closest('[data-testid="sidebar-row"]');
     expect(activeRow).toHaveAttribute("aria-current", "true");
     expect(inactiveRow).not.toHaveAttribute("aria-current");
+  });
+
+  it("shows the active queue position and loading state for each project", async () => {
+    (projectsApi.listProjects as any).mockResolvedValue({
+      projects: [
+        { project_id: "p-running", topic: "Generando ahora", updated_at: "2026-07-02T00:00:00Z" },
+        { project_id: "p-queued", topic: "Siguiente video", updated_at: "2026-07-01T00:00:00Z" },
+      ],
+    });
+    (jobsApi.list as any).mockResolvedValue({
+      jobs: [
+        {
+          id: "job-queued",
+          type: "full_project_pipeline",
+          status: "pending",
+          project_id: "p-queued",
+          scheduled_at: "2026-07-02T10:05:00Z",
+          created_at: "2026-07-02T10:00:00Z",
+        },
+        {
+          id: "job-running",
+          type: "full_project_pipeline",
+          status: "running",
+          project_id: "p-running",
+          scheduled_at: "2026-07-02T10:00:00Z",
+          created_at: "2026-07-02T09:59:00Z",
+        },
+        {
+          id: "job-finished",
+          type: "full_project_pipeline",
+          status: "completed",
+          project_id: "p-ignored",
+          scheduled_at: "2026-07-02T09:00:00Z",
+          created_at: "2026-07-02T08:59:00Z",
+        },
+      ],
+    });
+
+    renderSidebar();
+
+    expect(
+      await screen.findByLabelText("Generando · puesto 1 de la cola")
+    ).toHaveTextContent("#1");
+    expect(screen.getByLabelText("En cola · puesto 2")).toHaveTextContent("#2");
+    expect(screen.queryByText("#3")).not.toBeInTheDocument();
+  });
+
+  it("shows an active legacy task when the durable jobs API is unavailable", async () => {
+    (projectsApi.listProjects as any).mockResolvedValue({
+      projects: [
+        { project_id: "legacy-active", topic: "Render clásico", updated_at: "2026-07-02T00:00:00Z" },
+        { project_id: "legacy-failed", topic: "Render fallido", updated_at: "2026-07-01T00:00:00Z" },
+      ],
+    });
+    (jobsApi.list as any).mockRejectedValue(new Error("jobs disabled"));
+    (videoApi.listTasks as any).mockResolvedValue({
+      tasks: [
+        { task_id: "legacy-active", state: 4, progress: 75 },
+        { task_id: "legacy-failed", state: -1, progress: 0 },
+      ],
+      total: 2,
+      page: 1,
+      page_size: 10,
+    });
+
+    renderSidebar();
+
+    expect(
+      await screen.findByLabelText("Generando · puesto 1 de la cola")
+    ).toHaveTextContent("#1");
+    expect(screen.queryByText("#2")).not.toBeInTheDocument();
   });
 });

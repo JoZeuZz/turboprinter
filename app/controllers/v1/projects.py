@@ -210,6 +210,26 @@ def _task_topic_from_meta(meta: dict, fallback: str = "") -> str:
     return (params.get("video_subject") or script[:80].strip() or fallback).strip()
 
 
+def _generated_output_video_names(task_path: str, prefix: str) -> list[str]:
+    """Return only completed, non-empty task output videos for a given prefix."""
+    if not os.path.isdir(task_path):
+        return []
+    names: list[str] = []
+    for name in os.listdir(task_path):
+        if not (name.startswith(prefix) and name.endswith(".mp4")):
+            continue
+        sequence = name[len(prefix):-4]
+        if not sequence.isdigit():
+            continue
+        output_path = os.path.join(task_path, name)
+        try:
+            if os.path.isfile(output_path) and os.path.getsize(output_path) > 0:
+                names.append(name)
+        except OSError:
+            continue
+    return sorted(names)
+
+
 def _copy_generated_task_config(project_id: str) -> str:
     meta = _load_task_script_meta(project_id)
     if meta is None:
@@ -243,8 +263,8 @@ def _list_generated_video_tasks(limit: int = 20) -> list[dict]:
 
         video_files = [
             os.path.join(task_path, name)
-            for name in os.listdir(task_path)
-            if name.startswith(("final-", "combined-")) and name.endswith(".mp4")
+            for prefix in ("final-", "combined-")
+            for name in _generated_output_video_names(task_path, prefix)
         ]
         paths = [path for path in video_files if os.path.isfile(path)]
         paths.append(_task_meta_path(task_id))
@@ -614,18 +634,17 @@ def get_project(request: Request, project_id: str):
             raise HttpException(task_id=project_id, status_code=404, message="project not found")
         params = meta.get("params") or {}
         task_path = _generated_task_path(project_id)
-        final_videos = sorted(
+        final_videos = [
             f"/api/v1/stream/{project_id}/{name}"
-            for name in os.listdir(task_path)
-            if name.startswith("final-") and name.endswith(".mp4")
-        ) if os.path.isdir(task_path) else []
-        combined_videos = sorted(
+            for name in _generated_output_video_names(task_path, "final-")
+        ]
+        combined_videos = [
             f"/api/v1/stream/{project_id}/{name}"
-            for name in os.listdir(task_path)
-            if name.startswith("combined-") and name.endswith(".mp4")
-        ) if os.path.isdir(task_path) else []
+            for name in _generated_output_video_names(task_path, "combined-")
+        ]
         return _ok({
             "project_id": project_id,
+            "project_mode_enabled": False,
             "has_script": bool(meta.get("script")),
             "has_shot_plan": False,
             "has_selected_media": False,
@@ -657,6 +676,7 @@ def get_project(request: Request, project_id: str):
     project_meta = store.load_project_metadata(project_id) or {}
     return _ok({
         "project_id": project_id,
+        "project_mode_enabled": True,
         "workspace_id": project_meta.get("workspace_id"),
         "prompt_template_id": project_meta.get("prompt_template_id"),
         "prompt_version_id": project_meta.get("prompt_version_id"),

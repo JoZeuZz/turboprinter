@@ -275,6 +275,21 @@ class TestVideoService(unittest.TestCase):
 
         self.assertNotIn("h264_nvenc", vd._runtime_disabled_video_codecs)
 
+    def test_windows_temp_audio_dirs_are_isolated_per_task_output_directory(self):
+        """Concurrent renders must not share MoviePy's TEMP_MPY audio filename."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with patch.object(vd.sys, "platform", "win32"), patch.object(
+                vd.tempfile, "gettempdir", return_value=temp_dir
+            ):
+                first = vd._get_temp_audio_dir(os.path.join(temp_dir, "task-a"))
+                second = vd._get_temp_audio_dir(os.path.join(temp_dir, "task-b"))
+
+            self.assertNotEqual(first, second)
+            self.assertTrue(os.path.isdir(first))
+            self.assertTrue(os.path.isdir(second))
+            self.assertTrue(first.startswith(temp_dir))
+            self.assertTrue(second.startswith(temp_dir))
+
     def test_format_ffmpeg_concat_path_normalizes_windows_path(self):
         """
         concat demuxer 的文件列表对 Windows 反斜杠较敏感，写入 list 前统一
@@ -562,10 +577,12 @@ class TestVideoService(unittest.TestCase):
         finally:
             clip.close()
 
-    def test_get_temp_audio_dir_returns_system_temp_on_windows(self):
+    def test_get_temp_audio_dir_returns_isolated_system_temp_subdirectory_on_windows(self):
         with patch("sys.platform", "win32"):
             result = vd._get_temp_audio_dir("/some/output/dir")
-            self.assertEqual(result, tempfile.gettempdir())
+            self.assertTrue(result.startswith(tempfile.gettempdir()))
+            self.assertIn("moneyprinterturbo", result)
+            self.assertTrue(os.path.isdir(result))
 
     def test_get_temp_audio_dir_returns_output_dir_on_non_windows(self):
         for platform in ("linux", "darwin"):

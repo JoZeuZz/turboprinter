@@ -1,19 +1,79 @@
 import { useEffect, useRef, useState } from "react";
-import { Clock3, PlusCircle, Settings } from "lucide-react";
+import { Clock3, LoaderCircle, PlusCircle, Settings } from "lucide-react";
 import { NavLink, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { ApiError } from "../../api/client";
 import { projectsApi } from "../../api/projects";
+import { videoApi } from "../../api/video";
 import { useProjectHistoryStore } from "../../store/useProjectHistoryStore";
 import { useProjectStore } from "../../store/useProjectStore";
 import { useProjectWorkspaceStore } from "../../store/useProjectWorkspaceStore";
 import { useVideoStore } from "../../store/useVideoStore";
+import { useJobsStore } from "../../store/useJobsStore";
+import {
+  TASK_STATE_COMPLETE,
+  TASK_STATE_FAILED,
+  type Job,
+  type TaskSummary,
+} from "../../api/types";
 import { SidebarRowMenu } from "./SidebarRowMenu";
 
 interface ProjectRow {
   project_id: string;
   topic: string | null;
   updated_at: string;
+}
+
+type ActiveJobStatus = "pending" | "running";
+
+interface JobQueueIndicator {
+  position: number;
+  status: ActiveJobStatus;
+}
+
+const JOB_REFRESH_INTERVAL_MS = 3000;
+
+function isActiveProjectJob(job: Job): job is Job & { project_id: string; status: ActiveJobStatus } {
+  return Boolean(job.project_id) && (job.status === "pending" || job.status === "running");
+}
+
+function jobTime(value: string): number {
+  const timestamp = new Date(value).getTime();
+  return Number.isNaN(timestamp) ? 0 : timestamp;
+}
+
+function queueIndicatorsByProject(
+  jobs: Job[],
+  legacyTasks: TaskSummary[]
+): Map<string, JobQueueIndicator> {
+  const indicators = new Map<string, JobQueueIndicator>();
+  const activeJobs = jobs.filter(isActiveProjectJob).sort(
+    (left, right) =>
+      Number(right.status === "running") - Number(left.status === "running") ||
+      jobTime(left.scheduled_at) - jobTime(right.scheduled_at) ||
+      jobTime(left.created_at) - jobTime(right.created_at)
+  );
+
+  const runningJobs = activeJobs.filter((job) => job.status === "running");
+  const pendingJobs = activeJobs.filter((job) => job.status === "pending");
+  const legacyRunningTasks = legacyTasks
+    .filter(
+      (task) =>
+        task.state !== TASK_STATE_COMPLETE && task.state !== TASK_STATE_FAILED
+    )
+    .map((task) => ({ project_id: task.task_id, status: "running" as const }));
+
+  [...runningJobs, ...legacyRunningTasks, ...pendingJobs].forEach((job) => {
+    // A project can be retried or queued twice; show its next active run only.
+    if (!indicators.has(job.project_id)) {
+      indicators.set(job.project_id, {
+        position: indicators.size + 1,
+        status: job.status,
+      });
+    }
+  });
+
+  return indicators;
 }
 
 export function ProjectSidebar() {
@@ -31,6 +91,9 @@ export function ProjectSidebar() {
   const taskId = useProjectWorkspaceStore((s) => s.taskId);
   const taskState = useProjectWorkspaceStore((s) => s.taskStatus?.state);
   const topic = useProjectWorkspaceStore((s) => s.topic);
+  const jobs = useJobsStore((s) => s.jobs);
+  const refreshJobs = useJobsStore((s) => s.refresh);
+  const [legacyTasks, setLegacyTasks] = useState<TaskSummary[]>([]);
   const [projects, setProjects] = useState<ProjectRow[]>([]);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
@@ -51,6 +114,30 @@ export function ProjectSidebar() {
   useEffect(() => {
     refreshProjects();
   }, [location.pathname, taskId, taskState, topic]);
+
+  useEffect(() => {
+    let mounted = true;
+    const refreshQueue = () => {
+      // Jobs are optional in this installation. Legacy tasks remain visible
+      // while the durable worker is disabled or before the server is restarted.
+      void refreshJobs();
+      void videoApi
+        .listTasks()
+        .then((response) => {
+          if (mounted) setLegacyTasks(response.tasks);
+        })
+        .catch(() => {
+          if (mounted) setLegacyTasks([]);
+        });
+    };
+
+    refreshQueue();
+    const interval = window.setInterval(refreshQueue, JOB_REFRESH_INTERVAL_MS);
+    return () => {
+      mounted = false;
+      window.clearInterval(interval);
+    };
+  }, [refreshJobs]);
 
   const handleNew = () => {
     workspaceReset();
@@ -84,6 +171,7 @@ export function ProjectSidebar() {
     (left, right) =>
       new Date(right.updated_at).getTime() - new Date(left.updated_at).getTime()
   );
+  const queueIndicators = queueIndicatorsByProject(jobs, legacyTasks);
 
   const commitRename = (id: string, isDraft: boolean) => {
     // Guard against double-commit: Enter already resolved this rename and the
@@ -184,6 +272,9 @@ export function ProjectSidebar() {
                 isDraft
                   ? handleOpenDraft(project.project_id)
                   : navigate(`/project/${project.project_id}`);
+              const queueIndicator = isDraft
+                ? undefined
+                : queueIndicators.get(project.project_id);
               return (
                 <div
                   key={project.project_id}
@@ -206,7 +297,16 @@ export function ProjectSidebar() {
                   }`}
                   title={project.topic ?? project.project_id}
                 >
-                  <Clock3 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-foreground/45 group-hover:text-accent" />
+                  {queueIndicator ? (
+                    <LoaderCircle
+                      className={`mt-0.5 h-3.5 w-3.5 shrink-0 text-accent ${
+                        queueIndicator.status === "running" ? "animate-spin" : "animate-pulse"
+                      }`}
+                      aria-hidden="true"
+                    />
+                  ) : (
+                    <Clock3 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-foreground/45 group-hover:text-accent" />
+                  )}
                   <span className="min-w-0 flex-1">
                     {renamingId === project.project_id ? (
                       <input
@@ -224,8 +324,22 @@ export function ProjectSidebar() {
                     ) : (
                       <>
                         <span className="block truncate">{project.topic || project.project_id}</span>
-                        <span className="mt-0.5 block text-[10px] text-foreground/40">
-                          {isDraft ? t("sidebar.draft") : new Date(project.updated_at).toLocaleDateString()}
+                        <span className="mt-0.5 flex items-center gap-1.5 text-[10px] text-foreground/40">
+                          <span>{isDraft ? t("sidebar.draft") : new Date(project.updated_at).toLocaleDateString()}</span>
+                          {queueIndicator && (
+                            <span
+                              role="status"
+                              aria-label={t(
+                                queueIndicator.status === "running"
+                                  ? "sidebar.jobRunning"
+                                  : "sidebar.jobQueued",
+                                { position: queueIndicator.position }
+                              )}
+                              className="rounded-full border border-accent/35 bg-accent/10 px-1.5 py-px font-medium tabular-nums text-accent"
+                            >
+                              #{queueIndicator.position}
+                            </span>
+                          )}
                         </span>
                       </>
                     )}

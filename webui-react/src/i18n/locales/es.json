@@ -49,6 +49,8 @@
   "sidebar": {
     "newProject": "Nuevo proyecto",
     "draft": "Borrador",
+    "jobRunning": "Generando · puesto {{position}} de la cola",
+    "jobQueued": "En cola · puesto {{position}}",
     "rowActions": "Acciones de {{name}}",
     "deleteConfirm": "¿Eliminar «{{name}}»? No se puede deshacer."
   },
@@ -181,6 +183,7 @@
       "reviewClips": "Revisar clips",
       "taskReviewTitle": "Revisar video final",
       "taskReviewDescription": "Este es el video con subtítulos aplicado. Puedes volver a configuración para ajustar la voz, clips o subtítulos y generar otra versión.",
+      "videoNotReady": "El video final todavía no está listo para revisar.",
       "noClips": "No se encontraron clips. Construye una línea de tiempo primero.",
       "enableProjectMode": "Habilita el modo de proyecto en el servidor para usar la revisión de clips.",
       "continueToDone": "Continuar a Finalizado",
@@ -356,6 +359,7 @@
   },
   "errors": {
     "taskFailed": "La tarea falló en el servidor",
+    "noFinalVideo": "La tarea terminó sin un video final válido.",
     "requestFailed": "La solicitud falló",
     "generationFailed": "La generación falló",
     "projectAction": "La acción del proyecto falló",

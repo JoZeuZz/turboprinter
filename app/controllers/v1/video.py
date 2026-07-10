@@ -3,6 +3,7 @@ import os
 import pathlib
 import shutil
 from typing import Union
+from uuid import UUID
 
 from fastapi import BackgroundTasks, Depends, Path, Query, Request, UploadFile
 from fastapi.params import File
@@ -244,7 +245,21 @@ def create_task(
     body: Union[TaskVideoRequest, SubtitleRequest, AudioRequest],
     stop_at: str,
 ):
-    task_id = utils.get_uuid()
+    requested_project_id = getattr(body, "project_id", None)
+    if requested_project_id:
+        try:
+            task_id = str(UUID(str(requested_project_id)))
+        except (TypeError, ValueError, AttributeError) as exc:
+            raise HttpException(
+                task_id="", status_code=400, message="invalid project_id"
+            ) from exc
+        existing_task = sm.state.get_task(task_id)
+        if existing_task and existing_task.get("state") not in (-1, 1):
+            raise HttpException(
+                task_id=task_id, status_code=409, message="project generation is already active"
+            )
+    else:
+        task_id = utils.get_uuid()
     request_id = base.get_task_id(request)
     try:
         task = {

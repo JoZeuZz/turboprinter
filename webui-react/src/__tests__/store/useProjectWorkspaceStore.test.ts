@@ -144,4 +144,27 @@ describe("useProjectWorkspaceStore", () => {
     const state = useProjectWorkspaceStore.getState();
     expect(state.videoUrls).toEqual(["/a.mp4", "/b.mp4"]);
   });
+
+  it("does not unlock review when a completed task only has intermediate videos", async () => {
+    vi.mocked(videoApi.createTask).mockResolvedValue({ task_id: "task-intermediate" });
+    vi.mocked(pollTask).mockImplementation(async (_id, onUpdate) => {
+      const status = {
+        state: 1,
+        progress: 100,
+        videos: [],
+        combined_videos: ["/combined-1.mp4"],
+      };
+      onUpdate(status);
+      return status;
+    });
+
+    await act(async () => {
+      await useProjectWorkspaceStore.getState().generateVideo({ video_subject: "unfinished" });
+    });
+
+    const state = useProjectWorkspaceStore.getState();
+    expect(state.panel).toBe("config");
+    expect(state.videoUrls).toEqual([]);
+    expect(state.error).toBeTruthy();
+  });
 });

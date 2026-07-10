@@ -8,9 +8,14 @@ import { useProjectHistoryStore } from "./useProjectHistoryStore";
 import type { TaskStatus, VideoParams } from "../api/types";
 import type { WorkspacePanel } from "../types/workspace";
 
-function finalVideoUrls(status: TaskStatus | null): string[] {
-  const urls = status?.videos?.length ? status.videos : status?.combined_videos ?? [];
-  return [...new Set(urls)];
+export function finalVideoUrls(status: TaskStatus | null): string[] {
+  // `combined_videos` are intermediate clips without the final subtitle/audio
+  // pass. They must never unlock the review or finalization stages.
+  return [...new Set((status?.videos ?? []).filter(isFinalVideoUrl))];
+}
+
+export function isFinalVideoUrl(url: string): boolean {
+  return /\/final-\d+\.mp4(?:[?#].*)?$/i.test(url);
 }
 
 interface WorkspaceStoreState {
@@ -61,7 +66,15 @@ export const useProjectWorkspaceStore = create<WorkspaceStoreState>()(
           // After successful completion, retrieve final taskStatus to get video URLs
           set((state) => {
             const status = state.taskStatus;
-            return { panel: "review", videoUrls: finalVideoUrls(status) };
+            const videoUrls = finalVideoUrls(status);
+            if (videoUrls.length === 0) {
+              return {
+                panel: "config",
+                videoUrls: [],
+                error: i18n.t("errors.noFinalVideo"),
+              };
+            }
+            return { panel: "review", videoUrls, error: null };
           });
         } catch (e) {
           set({

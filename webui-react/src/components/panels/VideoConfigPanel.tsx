@@ -1,6 +1,7 @@
 // webui-react/src/components/panels/VideoConfigPanel.tsx
 import { useState, useEffect } from "react";
 import { Eye, Wand2 } from "lucide-react";
+import { useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
   TabBar,
@@ -32,6 +33,7 @@ import type {
 
 export function VideoConfigPanel() {
   const { t } = useTranslation();
+  const { id: routeProjectId } = useParams();
   const [tab, setTab] = useState("video");
   const [bgmFiles, setBgmFiles] = useState<BgmFile[]>([]);
   const [voiceOptions, setVoiceOptions] = useState<{ value: string; label: string }[]>([]);
@@ -100,11 +102,18 @@ export function VideoConfigPanel() {
   ];
 
   const handleGenerate = () => {
+    const params = store.toParams();
     if (projectStore.mode !== "disabled" && projectStore.projectId) {
-      void projectStore.generateViaProjectMode(store.toParams());
+      void projectStore.generateViaProjectMode(params);
       workspaceStore.setPanel("generating");
     } else {
-      void workspaceStore.generateVideo(store.toParams());
+      void workspaceStore.generateVideo(
+        routeProjectId
+          ? { ...params, project_id: routeProjectId }
+          : projectStore.projectId
+            ? { ...params, project_id: projectStore.projectId }
+            : params
+      );
     }
   };
 

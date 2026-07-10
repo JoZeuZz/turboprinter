@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -24,6 +25,29 @@ def test_endpoints_404_when_project_mode_off(monkeypatch):
     c = TestClient(app)
     r = c.post("/api/v1/projects/from-script", json={"script": "Hola.", "language": "es"})
     assert r.status_code == 404
+
+
+def test_generated_task_ignores_empty_final_video(monkeypatch, tmp_path):
+    task_id = "11111111-1111-1111-1111-111111111111"
+    task_dir = tmp_path / task_id
+    meta_dir = task_dir / "_meta"
+    meta_dir.mkdir(parents=True)
+    (meta_dir / "script.json").write_text(
+        json.dumps({"script": "Guion", "params": {"video_subject": "Video roto"}}),
+        encoding="utf-8",
+    )
+    (task_dir / "final-1.mp4").write_bytes(b"")
+    (task_dir / "combined-1.mp4").write_bytes(b"intermediate")
+
+    monkeypatch.setattr(pj.config, "project_mode_enabled", False)
+    monkeypatch.setattr(pj.utils, "task_dir", lambda *args, **kwargs: str(tmp_path))
+
+    response = TestClient(app).get(f"/api/v1/projects/{task_id}")
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["videos"] == []
+    assert data["combined_videos"] == [f"/api/v1/stream/{task_id}/combined-1.mp4"]
 
 
 def test_create_from_script_and_get(client):

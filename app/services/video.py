@@ -1,5 +1,6 @@
 import glob
 import itertools
+import hashlib
 import io
 import json
 import os
@@ -331,14 +332,20 @@ def _get_temp_audio_dir(output_dir: str) -> str:
     On Windows, Windows Defender can lock files written to the task output
     directory while scanning them, causing MoviePy to fail with a
     PermissionError (WinError 32) on the TEMP_MPY_wvf_snd temp file and
-    leaving the final MP4 at 0 bytes.  Using the system temp directory
-    sidesteps the scan without changing behaviour on other platforms.
+    leaving the final MP4 at 0 bytes. Using a task-specific directory below
+    the system temp directory sidesteps the scan and prevents concurrent
+    tasks from colliding on MoviePy's filename-derived temp audio name.
 
     On Linux/macOS/Docker the output directory is returned unchanged so
     existing behaviour is preserved.
     """
     if sys.platform == "win32":
-        return tempfile.gettempdir()
+        output_key = hashlib.sha256(
+            os.path.abspath(output_dir).encode("utf-8", errors="surrogatepass")
+        ).hexdigest()[:16]
+        temp_dir = os.path.join(tempfile.gettempdir(), "moneyprinterturbo", output_key)
+        os.makedirs(temp_dir, exist_ok=True)
+        return temp_dir
     return output_dir
 
 

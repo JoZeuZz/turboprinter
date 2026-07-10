@@ -52,7 +52,7 @@ export function ReviewPanel() {
           </div>
         ) : (
           <div className="flex min-h-48 items-center justify-center rounded-lg border border-border bg-surface text-sm text-muted">
-            {t("panels.done.none")}
+            {t("panels.review.videoNotReady")}
           </div>
         )}
 
@@ -61,10 +61,12 @@ export function ReviewPanel() {
             <SlidersHorizontal className="mr-1.5 h-3.5 w-3.5" />
             {t("panels.review.editSettings")}
           </Button>
-          <Button onClick={() => setPanel("done")} className="flex-1 min-w-40">
-            <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
-            {t("panels.review.continueToDone")}
-          </Button>
+          {finalVideo && (
+            <Button onClick={() => setPanel("done")} className="flex-1 min-w-40">
+              <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
+              {t("panels.review.continueToDone")}
+            </Button>
+          )}
         </div>
       </div>
     );

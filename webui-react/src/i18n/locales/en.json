@@ -49,6 +49,8 @@
   "sidebar": {
     "newProject": "New Project",
     "draft": "Draft",
+    "jobRunning": "Generating · queue position {{position}}",
+    "jobQueued": "Queued · position {{position}}",
     "rowActions": "{{name}} actions",
     "deleteConfirm": "Delete «{{name}}»? This can't be undone."
   },
@@ -181,6 +183,7 @@
       "reviewClips": "Review clips",
       "taskReviewTitle": "Review final video",
       "taskReviewDescription": "This is the video with subtitles applied. You can go back to settings to adjust voice, clips, or subtitles and generate another version.",
+      "videoNotReady": "The final video is not ready to review yet.",
       "noClips": "No clips found. Build a timeline first.",
       "enableProjectMode": "Enable project mode on the server to use clip review.",
       "continueToDone": "Continue to Done",
@@ -356,6 +359,7 @@
   },
   "errors": {
     "taskFailed": "Task failed on server",
+    "noFinalVideo": "The task finished without a valid final video.",
     "requestFailed": "Request failed",
     "generationFailed": "Generation failed",
     "projectAction": "Project action failed",

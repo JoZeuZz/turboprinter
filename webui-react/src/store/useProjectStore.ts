@@ -120,7 +120,13 @@ export const useProjectStore = create<ProjectStoreState>()(
               projectId,
               project: state.timeline ?? null,
               projectMeta: toProjectMeta(state),
-              mode: "ready",
+              // Legacy generated tasks include their saved params but have no
+              // timeline. Treat them as legacy even against an older backend
+              // that does not yet send `project_mode_enabled`.
+              mode:
+                state.project_mode_enabled === false || Boolean(state.params)
+                  ? "disabled"
+                  : "ready",
               error: null,
               timelineValidation: null,
             });

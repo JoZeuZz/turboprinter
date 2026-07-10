@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { Check, Loader2, Circle, ChevronDown, ChevronUp, XCircle } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useProjectWorkspaceStore } from "../../store/useProjectWorkspaceStore";
+import { finalVideoUrls } from "../../store/useProjectWorkspaceStore";
 import { useProjectStore } from "../../store/useProjectStore";
 import { useVideoStore } from "../../store/useVideoStore";
 import { TASK_STATE_COMPLETE, TASK_STATE_FAILED } from "../../api/types";
@@ -41,7 +42,7 @@ export function GeneratingPanel() {
 
   // Auto-transition on completion
   useEffect(() => {
-    if (taskStatus?.state === TASK_STATE_COMPLETE) {
+    if (taskStatus?.state === TASK_STATE_COMPLETE && finalVideoUrls(taskStatus).length > 0) {
       setPanel("review");
     }
   }, [taskStatus?.state, setPanel]);
