@@ -5,6 +5,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from app.domain.publication.models import Publication
 from app.domain.operational.models import Job
 from app.infrastructure.storage.filesystem_store import FilesystemProjectStore
 from app.workers import handlers
@@ -72,3 +73,45 @@ def test_handle_render_project_raises_when_no_timeline(monkeypatch, store):
 
     with pytest.raises(ValueError, match="has no timeline"):
         handlers.handle_render_project(_job("render_project", "proj-1", {}))
+
+
+def test_handle_publish_video_calls_publication_service(monkeypatch):
+    calls = []
+
+    class FakePublicationService:
+        def publish(self, publication_id, dry_run=None):
+            calls.append((publication_id, dry_run))
+            return Publication(
+                id=publication_id,
+                video_output_id="vo-1",
+                title="Title",
+                status="published",
+            )
+
+    monkeypatch.setattr(handlers, "PublicationService", FakePublicationService)
+
+    handlers.handle_publish_video(_job("publish_video", "proj-1", {"publication_id": "pub-1", "dry_run": True}))
+
+    assert calls == [("pub-1", True)]
+
+
+def test_handle_publish_video_raises_when_publication_failed(monkeypatch):
+    class FakePublicationService:
+        def publish(self, publication_id, dry_run=None):
+            return Publication(
+                id=publication_id,
+                video_output_id="vo-1",
+                title="Title",
+                status="failed",
+                error="youtube publisher disabled",
+            )
+
+    monkeypatch.setattr(handlers, "PublicationService", FakePublicationService)
+
+    with pytest.raises(RuntimeError, match="youtube publisher disabled"):
+        handlers.handle_publish_video(_job("publish_video", "proj-1", {"publication_id": "pub-1", "dry_run": False}))
+
+
+def test_handle_publish_video_requires_publication_id():
+    with pytest.raises(ValueError, match="publication_id"):
+        handlers.handle_publish_video(_job("publish_video", "proj-1", {}))

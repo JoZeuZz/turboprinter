@@ -1,6 +1,6 @@
 // webui-react/src/components/layout/NavBar.tsx
 import { NavLink } from "react-router-dom";
-import { Home, Settings, Film, Layers, ListChecks } from "lucide-react";
+import { Home, Settings, Film, Layers, ListChecks, UploadCloud } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useProjectStore } from "../../store/useProjectStore";
 
@@ -58,6 +58,21 @@ export function NavBar() {
       >
         <Layers className="h-4 w-4" />
         {t("nav.channels")}
+      </NavLink>
+      <NavLink
+        to="/publications"
+        end={false}
+        title={t("nav.publications")}
+        className={({ isActive }) =>
+          `flex h-10 w-10 flex-col items-center justify-center rounded-md text-[10px] gap-0.5 transition-colors ${
+            isActive
+              ? "bg-accent text-white"
+              : "text-muted hover:bg-surface-2 hover:text-foreground"
+          }`
+        }
+      >
+        <UploadCloud className="h-4 w-4" />
+        {t("nav.publications")}
       </NavLink>
       <NavLink
         to="/jobs"

@@ -5,11 +5,12 @@ from datetime import datetime, timezone
 from sqlalchemy import Engine, select
 
 from app.infrastructure.database import schema
-from app.infrastructure.database.migrations import m0001_initial, m0002_jobs
+from app.infrastructure.database.migrations import m0001_initial, m0002_jobs, m0003_publications
 
 MIGRATIONS: tuple[tuple[int, str, object], ...] = (
     (1, "initial", m0001_initial.upgrade),
     (2, "jobs", m0002_jobs.upgrade),
+    (3, "publications", m0003_publications.upgrade),
 )
 
 

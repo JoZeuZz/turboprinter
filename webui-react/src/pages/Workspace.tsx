@@ -8,6 +8,7 @@ import { ReviewPanel } from "../components/panels/ReviewPanel";
 import { EditorPanel } from "../components/panels/EditorPanel";
 import { RenderingPanel } from "../components/panels/RenderingPanel";
 import { DonePanel } from "../components/panels/DonePanel";
+import { PublicationPanel } from "../components/panels/PublicationPanel";
 import { videoApi } from "../api/video";
 import { pollTask } from "../api/polling";
 import { TASK_STATE_COMPLETE, TASK_STATE_FAILED, type TaskStatus } from "../api/types";
@@ -28,6 +29,7 @@ const PANEL_MAP = {
   editor:     <EditorPanel />,
   rendering:  <RenderingPanel />,
   done:       <DonePanel />,
+  publication: <PublicationPanel />,
 } as const;
 
 function taskError(status: TaskStatus): string {

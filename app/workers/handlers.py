@@ -4,6 +4,7 @@ import json
 from typing import Callable
 
 from app.application.services.media_aggregator import MediaAggregator
+from app.application.services.publication_service import PublicationService
 from app.application.services.project_lifecycle import create_project
 from app.application.services.project_preflight import ProjectPreflightService
 from app.application.services.shot_planner import ShotPlanner
@@ -169,6 +170,16 @@ def handle_full_project_pipeline(job: Job) -> None:
         raise RuntimeError(f"render failed for {project_id!r}: {result.error}")
 
 
+def handle_publish_video(job: Job) -> None:
+    payload = _payload(job)
+    publication_id = payload.get("publication_id")
+    if not publication_id:
+        raise ValueError("publish_video job requires publication_id")
+    publication = PublicationService().publish(str(publication_id), dry_run=payload.get("dry_run", True))
+    if publication.status == "failed":
+        raise RuntimeError(publication.error or "publication failed")
+
+
 HANDLERS: dict[str, Callable[[Job], None]] = {
     "generate_project": handle_generate_project,
     "plan_project": handle_plan_project,
@@ -177,4 +188,5 @@ HANDLERS: dict[str, Callable[[Job], None]] = {
     "build_timeline": handle_build_timeline,
     "render_project": handle_render_project,
     "full_project_pipeline": handle_full_project_pipeline,
+    "publish_video": handle_publish_video,
 }

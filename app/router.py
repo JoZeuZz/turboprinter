@@ -15,6 +15,7 @@ from app.controllers.v1 import (
     llm,
     projects,
     prompt_templates,
+    publications,
     system,
     video,
     workspaces,
@@ -30,3 +31,4 @@ root_api_router.include_router(workspaces.router)
 root_api_router.include_router(prompt_templates.router)
 root_api_router.include_router(system.router)
 root_api_router.include_router(jobs.router)
+root_api_router.include_router(publications.router)

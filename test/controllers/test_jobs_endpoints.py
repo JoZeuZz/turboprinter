@@ -50,6 +50,19 @@ def test_create_and_get_job(client):
     assert g.json()["data"]["job"]["id"] == job["id"]
 
 
+def test_create_publish_video_job(client):
+    c, _store = client
+    r = c.post(
+        "/api/v1/jobs",
+        json={"type": "publish_video", "project_id": "p1", "payload": {"publication_id": "pub-1", "dry_run": True}},
+    )
+
+    assert r.status_code == 200
+    job = r.json()["data"]["job"]
+    assert job["type"] == "publish_video"
+    assert job["payload"] == {"publication_id": "pub-1", "dry_run": True}
+
+
 def test_get_missing_job_404(client):
     c, _store = client
     assert c.get("/api/v1/jobs/does-not-exist").status_code == 404

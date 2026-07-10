@@ -736,3 +736,44 @@ export interface RunFullPipelineResponse {
   job_id: string;
   project_id: string;
 }
+
+export type PublicationStatus = "draft" | "publishing" | "published" | "failed";
+
+export interface Publication {
+  id: string;
+  video_output_id: string;
+  project_id: string | null;
+  workspace_id: string | null;
+  platform: string;
+  channel_id: string | null;
+  external_video_id: string | null;
+  title: string;
+  description: string;
+  tags: string[];
+  thumbnail_path: string | null;
+  privacy_status: string;
+  scheduled_at: string | null;
+  published_at: string | null;
+  status: PublicationStatus;
+  error: string | null;
+  dry_run: boolean;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DraftPublicationRequest {
+  platform?: string | null;
+  channel_id?: string | null;
+  title?: string | null;
+  description?: string | null;
+  tags?: string[];
+  thumbnail_path?: string | null;
+  privacy_status?: string | null;
+  scheduled_at?: string | null;
+  dry_run?: boolean | null;
+}
+
+export interface PublishPublicationRequest {
+  dry_run?: boolean | null;
+}

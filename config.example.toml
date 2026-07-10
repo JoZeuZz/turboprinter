@@ -455,6 +455,23 @@ enabled = false
 poll_interval_sec = 5
 default_max_attempts = 3
 
+[publication]
+# Publication draft + dry-run publishing architecture. Safe by default: dry-run
+# performs no network calls and no real upload. Missing section uses these
+# defaults.
+enabled = true
+default_platform = "youtube"
+default_dry_run = true
+
+[publication.youtube]
+# Real YouTube upload is disabled in this phase. The publisher fails cleanly
+# unless a later OAuth implementation enables it and supplies credentials via
+# environment variables. Do not store token values in this file.
+enabled = false
+client_id_env = "YOUTUBE_CLIENT_ID"
+client_secret_env = "YOUTUBE_CLIENT_SECRET"
+token_env = "YOUTUBE_OAUTH_TOKEN"
+
 
 ##############################################################################
 # Personal Quality Stack (optional)

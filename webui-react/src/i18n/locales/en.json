@@ -19,7 +19,8 @@
     "workspace": "Workspace",
     "channels": "Channels",
     "config": "Config",
-    "jobs": "Jobs"
+    "jobs": "Jobs",
+    "publications": "Publish"
   },
   "channels": {
     "title": "Channels",
@@ -45,6 +46,20 @@
     "running": "Running",
     "completed": "Completed",
     "failed": "Failed"
+  },
+  "publication": {
+    "titlePage": "Publications",
+    "empty": "No publications yet.",
+    "panelTitle": "Publication",
+    "dryRunHint": "Safe dry-run: no real video is uploaded.",
+    "title": "Title",
+    "description": "Description",
+    "tags": "Tags",
+    "tagsHint": "Comma-separated.",
+    "privacy": "Privacy",
+    "createDraft": "Create draft",
+    "dryRunPublish": "Dry-run publish",
+    "openPanel": "Publish"
   },
   "sidebar": {
     "newProject": "New Project",
@@ -350,7 +365,8 @@
     "review": "Review",
     "editing": "Editing",
     "rendering": "Rendering…",
-    "done": "Done"
+    "done": "Done",
+    "publication": "Publishing"
   },
   "status": {
     "loading": "Loading…",
@@ -380,7 +396,8 @@
     "review": "Review",
     "editor": "Edit",
     "rendering": "Render",
-    "done": "Done"
+    "done": "Done",
+    "publication": "Publish"
   },
   "apiKey": {
     "notSet": "(not set)",

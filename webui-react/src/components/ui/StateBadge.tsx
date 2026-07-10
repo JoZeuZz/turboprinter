@@ -9,6 +9,7 @@ const BADGE: Record<WorkspacePanel, { key: string; cls: string }> = {
   editor:     { key: "state.editing",    cls: "bg-accent/20 text-accent" },
   rendering:  { key: "state.rendering",  cls: "bg-amber-500/20 text-amber-400" },
   done:       { key: "state.done",       cls: "bg-green-500/20 text-green-400" },
+  publication: { key: "state.publication", cls: "bg-accent/20 text-accent" },
 };
 
 interface StateBadgeProps {

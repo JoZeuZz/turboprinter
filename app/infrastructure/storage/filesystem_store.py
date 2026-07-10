@@ -110,6 +110,12 @@ class FilesystemProjectStore:
         except ValueError as exc:
             raise ProjectStoreError(self._path(task_id, _PROJECT_META), exc) from exc
 
+    def save_publication_metadata(self, task_id: str, publication_metadata: dict) -> None:
+        payload = self.load_project_metadata(task_id) or {"project_id": task_id}
+        payload["publication_metadata"] = publication_metadata
+        payload["updated_at"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        self._write(task_id, _PROJECT_META, _json.dumps(payload, ensure_ascii=False, indent=2))
+
     def exists(self, task_id: str) -> bool:
         return os.path.exists(self._path(task_id, _SCRIPT)) or any(
             os.path.exists(self._path(task_id, name))

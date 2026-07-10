@@ -13,6 +13,7 @@ JobType = Literal[
     "build_timeline",
     "render_project",
     "full_project_pipeline",
+    "publish_video",
 ]
 
 JOB_TYPES: frozenset[str] = frozenset(
@@ -24,6 +25,7 @@ JOB_TYPES: frozenset[str] = frozenset(
         "build_timeline",
         "render_project",
         "full_project_pipeline",
+        "publish_video",
     }
 )
 

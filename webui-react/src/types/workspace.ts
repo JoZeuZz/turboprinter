@@ -5,7 +5,8 @@ export type WorkspacePanel =
   | "review"
   | "editor"
   | "rendering"
-  | "done";
+  | "done"
+  | "publication";
 
 export interface ProjectSummary {
   project_id: string;
@@ -20,6 +21,7 @@ export const PANEL_ORDER: WorkspacePanel[] = [
   "generating",
   "review",
   "done",
+  "publication",
 ];
 
 export const PANEL_LABEL_KEY: Record<WorkspacePanel, string> = {
@@ -30,4 +32,5 @@ export const PANEL_LABEL_KEY: Record<WorkspacePanel, string> = {
   editor: "pipeline.editor",
   rendering: "pipeline.rendering",
   done: "pipeline.done",
+  publication: "pipeline.publication",
 };

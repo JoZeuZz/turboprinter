@@ -155,6 +155,7 @@ def save_config():
         _cfg["siliconflow"] = siliconflow
         _cfg["ui"] = ui
         _cfg["quality"] = quality
+        _cfg["publication"] = publication
         f.write(toml.dumps(_cfg))
 
 
@@ -177,6 +178,12 @@ database = _cfg.get("database", {})
 # [jobs] table yields {} and the flags below fall back to their defaults
 # (disabled). See app/infrastructure (Job model/repository) and Task 7/10.
 jobs = _cfg.get("jobs", {})
+publication = _cfg.get("publication", {})
+if not isinstance(publication, dict):
+    publication = {}
+publication_youtube = publication.get("youtube", {})
+if not isinstance(publication_youtube, dict):
+    publication_youtube = {}
 # Optional per-intent LLM profiles. Tolerant by design: a missing [llm_profiles]
 # table yields {} and llm.get_llm_profile() falls back to built-in defaults, so
 # behaviour is identical to upstream. See app/services/llm.py LLM_PROFILES.
@@ -302,6 +309,43 @@ database_sqlite_path = str(database.get("sqlite_path", "storage/app.db"))
 jobs_enabled = _env_bool_or_config("TURBOPRINTER_JOBS_ENABLED", jobs.get("enabled", False))
 jobs_poll_interval_sec = int(jobs.get("poll_interval_sec", 5))
 jobs_default_max_attempts = int(jobs.get("default_max_attempts", 3))
+
+# Publication architecture defaults. Safe by default: drafts and dry-run
+# publishing can be created, but real YouTube uploads stay disabled.
+publication_enabled = _env_bool_or_config(
+    "TURBOPRINTER_PUBLICATION_ENABLED", publication.get("enabled", True)
+)
+publication_default_platform = _env_str_or_config(
+    "TURBOPRINTER_PUBLICATION_DEFAULT_PLATFORM",
+    publication.get("default_platform", "youtube"),
+    "youtube",
+)
+publication_default_dry_run = _env_bool_or_config(
+    "TURBOPRINTER_PUBLICATION_DEFAULT_DRY_RUN",
+    publication.get("default_dry_run", True),
+)
+publication_youtube_enabled = _env_bool_or_config(
+    "TURBOPRINTER_PUBLICATION_YOUTUBE_ENABLED",
+    publication_youtube.get("enabled", False),
+)
+publication_youtube_client_id_env = str(
+    os.getenv(
+        "TURBOPRINTER_PUBLICATION_YOUTUBE_CLIENT_ID_ENV",
+        publication_youtube.get("client_id_env", "YOUTUBE_CLIENT_ID"),
+    )
+).strip()
+publication_youtube_client_secret_env = str(
+    os.getenv(
+        "TURBOPRINTER_PUBLICATION_YOUTUBE_CLIENT_SECRET_ENV",
+        publication_youtube.get("client_secret_env", "YOUTUBE_CLIENT_SECRET"),
+    )
+).strip()
+publication_youtube_token_env = str(
+    os.getenv(
+        "TURBOPRINTER_PUBLICATION_YOUTUBE_TOKEN_ENV",
+        publication_youtube.get("token_env", "YOUTUBE_OAUTH_TOKEN"),
+    )
+).strip()
 
 app["redis_host"] = os.getenv(
     "MPT_APP_REDIS_HOST",

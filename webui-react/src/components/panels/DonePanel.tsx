@@ -56,6 +56,9 @@ export function DonePanel() {
           <Button variant="ghost" onClick={handleBack} size="sm">
             {t("panels.done.back")}
           </Button>
+          <Button variant="ghost" onClick={() => setPanel("publication")} size="sm">
+            {t("publication.openPanel")}
+          </Button>
           <Button onClick={handleMakeAnother} size="sm">
             <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
             {t("panels.done.makeAnother")}
