@@ -124,8 +124,56 @@ async function generateGeminiContent(prompt: string, jsonMode = false): Promise<
   }
 }
 
-// In-Memory Database
-const projects = new Map<string, any>();
+// Persistent Project Database helper
+const PROJECTS_FILE = path.join(process.cwd(), "storage", "projects_db.json");
+
+function loadProjects() {
+  try {
+    const dir = path.dirname(PROJECTS_FILE);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    if (fs.existsSync(PROJECTS_FILE)) {
+      const data = fs.readFileSync(PROJECTS_FILE, "utf-8");
+      const parsed = JSON.parse(data);
+      const map = new Map<string, any>();
+      for (const [k, v] of Object.entries(parsed)) {
+        map.set(k, v);
+      }
+      return map;
+    }
+  } catch (err) {
+    console.error("Error loading projects from file, using empty map:", err);
+  }
+  return new Map<string, any>();
+}
+
+function saveProjects(map: Map<string, any>) {
+  try {
+    const obj = Object.fromEntries(map);
+    fs.writeFileSync(PROJECTS_FILE, JSON.stringify(obj, null, 2), "utf-8");
+  } catch (err) {
+    console.error("Error saving projects to file:", err);
+  }
+}
+
+const projects = loadProjects();
+
+// Override set and delete to automatically save to disk
+const originalSet = projects.set.bind(projects);
+projects.set = function (key: string, value: any) {
+  const result = originalSet(key, value);
+  saveProjects(projects);
+  return result;
+};
+
+const originalDelete = projects.delete.bind(projects);
+projects.delete = function (key: string) {
+  const result = originalDelete(key);
+  saveProjects(projects);
+  return result;
+};
+
 const tasks = new Map<string, any>();
 
 // Default Global Config Configuration
@@ -959,6 +1007,8 @@ async function startServer() {
       }
     };
     p.has_shot_plan = true;
+    p.videos = [];
+    p.combined_videos = [];
     p.updated_at = new Date().toISOString();
     projects.set(req.params.id, p);
 
@@ -1129,7 +1179,17 @@ async function startServer() {
         if (progress >= 100) {
           t.state = 1; // TASK_STATE_COMPLETE
           // The finished video is our beautiful Tokyo Timelapse
-          t.output_path = SAMPLE_VIDEOS[3].source_url;
+          const videoUrl = SAMPLE_VIDEOS[3].source_url;
+          t.output_path = videoUrl;
+
+          // Save to persistent project map
+          const p = projects.get(req.params.id);
+          if (p) {
+            p.videos = [videoUrl];
+            p.combined_videos = [videoUrl];
+            projects.set(req.params.id, p);
+          }
+
           clearInterval(interval);
         }
         tasks.set(renderTaskId, t);

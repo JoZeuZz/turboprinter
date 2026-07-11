@@ -204,6 +204,8 @@ export const useProjectStore = create<ProjectStoreState>()(
         },
         generateViaProjectMode: async (params) => {
           console.log("[ProjectStore] generateViaProjectMode triggered with params:", params);
+          const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+          
           // Clear any stale non-project task state to avoid false triggers
           useProjectWorkspaceStore.setState({ taskId: null, taskStatus: null, error: null, videoUrls: [] });
           set({ mode: "loading", error: null, orchestrationStep: "plan" });
@@ -215,15 +217,19 @@ export const useProjectStore = create<ProjectStoreState>()(
 
             console.log("[ProjectStore] Phase 1: Planning project...");
             await projectsApi.planProject(projectId, {});
-            console.log("[ProjectStore] Planning succeeded. Phase 2: Searching media assets...");
+            console.log("[ProjectStore] Planning succeeded. Waiting 1.8s...");
+            await delay(1800);
 
+            console.log("[ProjectStore] Phase 2: Searching media assets...");
             set({ orchestrationStep: "media" });
             await projectsApi.mediaSearch(projectId, {
               orientation: orientationForAspect(params.video_aspect),
               prefer_local: false,
             });
-            console.log("[ProjectStore] Media search succeeded. Phase 3: Synthesizing narration...");
+            console.log("[ProjectStore] Media search succeeded. Waiting 1.8s...");
+            await delay(1800);
 
+            console.log("[ProjectStore] Phase 3: Synthesizing narration...");
             set({ orchestrationStep: "narration" });
             const narration = await projectsApi.synthesizeNarration(projectId, {
               voice_name: params.voice_name,
@@ -231,6 +237,8 @@ export const useProjectStore = create<ProjectStoreState>()(
               subtitle_enabled: params.subtitle_enabled,
             });
             console.log("[ProjectStore] Narration synthesized successfully:", narration);
+            console.log("[ProjectStore] Narration succeeded. Waiting 1.8s...");
+            await delay(1800);
 
             console.log("[ProjectStore] Phase 4: Building timeline tracks...");
             set({ orchestrationStep: "timeline" });
@@ -238,7 +246,8 @@ export const useProjectStore = create<ProjectStoreState>()(
               narration_audio_path: narration.narration_audio_path,
               subtitle_path: narration.subtitle_path ?? undefined,
             });
-            console.log("[ProjectStore] Timeline build succeeded.");
+            console.log("[ProjectStore] Timeline build succeeded. Waiting 1.8s...");
+            await delay(1800);
 
             console.log("[ProjectStore] Refreshing project data...");
             await refresh(projectId);

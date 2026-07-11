@@ -138,7 +138,48 @@ async function generateGeminiContent(prompt, jsonMode = false) {
     throw err;
   }
 }
-var projects = /* @__PURE__ */ new Map();
+var PROJECTS_FILE = import_path.default.join(process.cwd(), "storage", "projects_db.json");
+function loadProjects() {
+  try {
+    const dir = import_path.default.dirname(PROJECTS_FILE);
+    if (!import_fs.default.existsSync(dir)) {
+      import_fs.default.mkdirSync(dir, { recursive: true });
+    }
+    if (import_fs.default.existsSync(PROJECTS_FILE)) {
+      const data = import_fs.default.readFileSync(PROJECTS_FILE, "utf-8");
+      const parsed = JSON.parse(data);
+      const map = /* @__PURE__ */ new Map();
+      for (const [k, v] of Object.entries(parsed)) {
+        map.set(k, v);
+      }
+      return map;
+    }
+  } catch (err) {
+    console.error("Error loading projects from file, using empty map:", err);
+  }
+  return /* @__PURE__ */ new Map();
+}
+function saveProjects(map) {
+  try {
+    const obj = Object.fromEntries(map);
+    import_fs.default.writeFileSync(PROJECTS_FILE, JSON.stringify(obj, null, 2), "utf-8");
+  } catch (err) {
+    console.error("Error saving projects to file:", err);
+  }
+}
+var projects = loadProjects();
+var originalSet = projects.set.bind(projects);
+projects.set = function(key, value) {
+  const result = originalSet(key, value);
+  saveProjects(projects);
+  return result;
+};
+var originalDelete = projects.delete.bind(projects);
+projects.delete = function(key) {
+  const result = originalDelete(key);
+  saveProjects(projects);
+  return result;
+};
 var tasks = /* @__PURE__ */ new Map();
 var globalConfig = {
   video_sources: ["pexels", "pixabay", "local"],
@@ -912,6 +953,8 @@ ${body}`;
       }
     };
     p.has_shot_plan = true;
+    p.videos = [];
+    p.combined_videos = [];
     p.updated_at = (/* @__PURE__ */ new Date()).toISOString();
     projects.set(req.params.id, p);
     res.json({
@@ -1058,7 +1101,14 @@ ${body}`;
         t.progress = progress;
         if (progress >= 100) {
           t.state = 1;
-          t.output_path = SAMPLE_VIDEOS[3].source_url;
+          const videoUrl = SAMPLE_VIDEOS[3].source_url;
+          t.output_path = videoUrl;
+          const p = projects.get(req.params.id);
+          if (p) {
+            p.videos = [videoUrl];
+            p.combined_videos = [videoUrl];
+            projects.set(req.params.id, p);
+          }
           clearInterval(interval);
         }
         tasks.set(renderTaskId, t);

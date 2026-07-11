@@ -22,7 +22,39 @@ export function ScriptPanel() {
   const currentDraftId = useProjectHistoryStore((s) => s.currentDraftId);
   const navigate = useNavigate();
   const [generating, setGenerating] = useState(false);
+  const [isContinuing, setIsContinuing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const handleContinueToSettings = async () => {
+    if (!store.video_subject.trim()) return;
+    setIsContinuing(true);
+    setError(null);
+    try {
+      if (!projectStore.projectId) {
+        console.log("[ScriptPanel] No projectId found. Creating project from manual input...");
+        const { project_id } = await projectsApi.createFromScript({
+          script: store.video_script ?? "",
+          language: store.video_language ?? "es",
+          topic: store.video_subject,
+        });
+        console.log("[ScriptPanel] Project created with ID:", project_id);
+        await projectStore.open(project_id);
+        removeDraft(currentDraftId);
+        navigate(`/project/${project_id}`, { replace: true });
+      }
+      workspaceStore.setPanel("config");
+    } catch (projectError) {
+      console.error("[ScriptPanel] Failed to auto-create project:", projectError);
+      if (!(projectError instanceof ApiError && projectError.status === 404)) {
+        setError(projectError instanceof Error ? projectError.message : String(projectError));
+      } else {
+        useProjectStore.setState({ mode: "disabled" });
+        workspaceStore.setPanel("config");
+      }
+    } finally {
+      setIsContinuing(false);
+    }
+  };
 
   const handleTopicChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     store.set("video_subject", e.target.value);
@@ -168,8 +200,9 @@ export function ScriptPanel() {
 
       <div className="w-full max-w-2xl pt-4 border-t border-border flex justify-end">
         <Button
-          disabled={!store.video_subject.trim()}
-          onClick={() => workspaceStore.setPanel("config")}
+          disabled={isContinuing || !store.video_subject.trim()}
+          onClick={handleContinueToSettings}
+          isLoading={isContinuing}
         >
           {t("panels.script.continueToSettings")}
         </Button>
