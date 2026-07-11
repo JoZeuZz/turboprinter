@@ -10,8 +10,8 @@ export function NavBar() {
   const workspaceHref = projectId ? `/project/${projectId}` : "/";
 
   return (
-    <nav className="flex h-screen w-14 flex-col items-center border-r border-border bg-surface py-4 gap-1">
-      <div className="mb-4 flex h-8 w-8 items-center justify-center rounded-md bg-accent">
+    <nav className="flex h-screen w-[72px] flex-col items-center border-r border-border bg-surface py-4 gap-1.5">
+      <div className="mb-4 flex h-9 w-9 items-center justify-center rounded-md bg-accent">
         <span className="text-xs font-bold text-white">MP</span>
       </div>
       <NavLink
@@ -19,14 +19,14 @@ export function NavBar() {
         end
         title={t("nav.home")}
         className={({ isActive }) =>
-          `flex h-10 w-10 flex-col items-center justify-center rounded-md text-[10px] gap-0.5 transition-colors ${
+          `flex h-12 w-[56px] flex-col items-center justify-center rounded-md text-[11px] gap-0.5 transition-colors ${
             isActive
               ? "bg-accent text-white"
               : "text-muted hover:bg-surface-2 hover:text-foreground"
           }`
         }
       >
-        <Home className="h-4 w-4" />
+        <Home className="h-[18px] w-[18px]" />
         {t("nav.home")}
       </NavLink>
       <NavLink
@@ -34,14 +34,14 @@ export function NavBar() {
         end={false}
         title={t("nav.workspace")}
         className={({ isActive }) =>
-          `flex h-10 w-10 flex-col items-center justify-center rounded-md text-[10px] gap-0.5 transition-colors ${
+          `flex h-12 w-[56px] flex-col items-center justify-center rounded-md text-[11px] gap-0.5 transition-colors ${
             isActive && workspaceHref !== "/"
               ? "bg-accent text-white"
               : "text-muted hover:bg-surface-2 hover:text-foreground"
           }`
         }
       >
-        <Film className="h-4 w-4" />
+        <Film className="h-[18px] w-[18px]" />
         {t("nav.workspace")}
       </NavLink>
       <NavLink
@@ -49,14 +49,14 @@ export function NavBar() {
         end={false}
         title={t("nav.config")}
         className={({ isActive }) =>
-          `flex h-10 w-10 flex-col items-center justify-center rounded-md text-[10px] gap-0.5 transition-colors ${
+          `flex h-12 w-[56px] flex-col items-center justify-center rounded-md text-[11px] gap-0.5 transition-colors ${
             isActive
               ? "bg-accent text-white"
               : "text-muted hover:bg-surface-2 hover:text-foreground"
           }`
         }
       >
-        <Settings className="h-4 w-4" />
+        <Settings className="h-[18px] w-[18px]" />
         {t("nav.config")}
       </NavLink>
     </nav>
