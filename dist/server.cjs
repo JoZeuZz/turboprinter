@@ -53,7 +53,7 @@ var SAMPLE_VIDEOS = [
     provider: "pexels",
     source_url: "https://images.pexels.com/video-files/3209211/3209211-hd_1920_1080_25fps.mp4",
     download_url: "https://images.pexels.com/video-files/3209211/3209211-hd_1920_1080_25fps.mp4",
-    thumbnail_url: "https://images.pexels.com/videos/3209211/pictures/preview-0.jpg",
+    thumbnail_url: "https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&w=600&q=80",
     width: 1920,
     height: 1080,
     duration_sec: 15,
@@ -65,7 +65,7 @@ var SAMPLE_VIDEOS = [
     provider: "pexels",
     source_url: "https://images.pexels.com/video-files/3195398/3195398-hd_1920_1080_25fps.mp4",
     download_url: "https://images.pexels.com/video-files/3195398/3195398-hd_1920_1080_25fps.mp4",
-    thumbnail_url: "https://images.pexels.com/videos/3195398/pictures/preview-0.jpg",
+    thumbnail_url: "https://images.unsplash.com/photo-1505118380757-91f5f5632de0?auto=format&fit=crop&w=600&q=80",
     width: 1920,
     height: 1080,
     duration_sec: 20,
@@ -77,7 +77,7 @@ var SAMPLE_VIDEOS = [
     provider: "pexels",
     source_url: "https://images.pexels.com/video-files/3248319/3248319-hd_1920_1080_25fps.mp4",
     download_url: "https://images.pexels.com/video-files/3248319/3248319-hd_1920_1080_25fps.mp4",
-    thumbnail_url: "https://images.pexels.com/videos/3248319/pictures/preview-0.jpg",
+    thumbnail_url: "https://images.unsplash.com/photo-1447752875215-b2761acb3c5d?auto=format&fit=crop&w=600&q=80",
     width: 1920,
     height: 1080,
     duration_sec: 12,
@@ -89,7 +89,7 @@ var SAMPLE_VIDEOS = [
     provider: "pexels",
     source_url: "https://images.pexels.com/video-files/856973/856973-hd_1920_1080_30fps.mp4",
     download_url: "https://images.pexels.com/video-files/856973/856973-hd_1920_1080_30fps.mp4",
-    thumbnail_url: "https://images.pexels.com/videos/856973/pictures/preview-0.jpg",
+    thumbnail_url: "https://images.unsplash.com/photo-1503899036084-c55cdd92da26?auto=format&fit=crop&w=600&q=80",
     width: 1920,
     height: 1080,
     duration_sec: 25,
@@ -101,12 +101,72 @@ var SAMPLE_VIDEOS = [
     provider: "pexels",
     source_url: "https://images.pexels.com/video-files/1448735/1448735-hd_1920_1080_24fps.mp4",
     download_url: "https://images.pexels.com/video-files/1448735/1448735-hd_1920_1080_24fps.mp4",
-    thumbnail_url: "https://images.pexels.com/videos/1448735/pictures/preview-0.jpg",
+    thumbnail_url: "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=600&q=80",
     width: 1920,
     height: 1080,
     duration_sec: 18,
     query: "sunset",
     title: "Golden Hour Mountain"
+  },
+  {
+    id: "v6",
+    provider: "pexels",
+    source_url: "https://images.pexels.com/video-files/2048246/2048246-hd_1920_1080_24fps.mp4",
+    download_url: "https://images.pexels.com/video-files/2048246/2048246-hd_1920_1080_24fps.mp4",
+    thumbnail_url: "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?auto=format&fit=crop&w=600&q=80",
+    width: 1920,
+    height: 1080,
+    duration_sec: 15,
+    query: "foggy",
+    title: "Mist Over Mountains"
+  },
+  {
+    id: "v7",
+    provider: "pexels",
+    source_url: "https://images.pexels.com/video-files/2811417/2811417-hd_1920_1080_24fps.mp4",
+    download_url: "https://images.pexels.com/video-files/2811417/2811417-hd_1920_1080_24fps.mp4",
+    thumbnail_url: "https://images.unsplash.com/photo-1472214222541-d510753a4907?auto=format&fit=crop&w=600&q=80",
+    width: 1920,
+    height: 1080,
+    duration_sec: 22,
+    query: "valley",
+    title: "Green Meadows"
+  },
+  {
+    id: "v8",
+    provider: "pexels",
+    source_url: "https://images.pexels.com/video-files/5092640/5092640-hd_1920_1080_30fps.mp4",
+    download_url: "https://images.pexels.com/video-files/5092640/5092640-hd_1920_1080_30fps.mp4",
+    thumbnail_url: "https://images.unsplash.com/photo-1518156677180-95a2893f3e9f?auto=format&fit=crop&w=600&q=80",
+    width: 1920,
+    height: 1080,
+    duration_sec: 14,
+    query: "snow",
+    title: "Snowy Pine Forests"
+  },
+  {
+    id: "v9",
+    provider: "pexels",
+    source_url: "https://images.pexels.com/video-files/3191571/3191571-hd_1920_1080_25fps.mp4",
+    download_url: "https://images.pexels.com/video-files/3191571/3191571-hd_1920_1080_25fps.mp4",
+    thumbnail_url: "https://images.unsplash.com/photo-1475924156734-496f6cac6ec1?auto=format&fit=crop&w=600&q=80",
+    width: 1920,
+    height: 1080,
+    duration_sec: 17,
+    query: "beach",
+    title: "Sunset Over Beach Waves"
+  },
+  {
+    id: "v10",
+    provider: "pexels",
+    source_url: "https://images.pexels.com/video-files/3121435/3121435-hd_1920_1080_24fps.mp4",
+    download_url: "https://images.pexels.com/video-files/3121435/3121435-hd_1920_1080_24fps.mp4",
+    thumbnail_url: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=600&q=80",
+    width: 1920,
+    height: 1080,
+    duration_sec: 19,
+    query: "island",
+    title: "Tropical Shoreline"
   }
 ];
 async function generateGeminiContent(prompt, jsonMode = false) {
@@ -922,6 +982,7 @@ ${body}`;
     if (!p) {
       return res.status(404).json({ status: 404, message: "Project not found", data: null });
     }
+    const clipDuration = Number(req.body.target_duration_sec) || 5;
     const sentences = (p.script || p.topic || "").split(/[.!?]+/).map((s) => s.trim()).filter((s) => s.length > 5);
     const segments = sentences.map((sentence, idx) => {
       const words = sentence.split(" ");
@@ -931,9 +992,9 @@ ${body}`;
         id: `seg_${idx + 1}`,
         order: idx + 1,
         narration_text: sentence,
-        start_sec: idx * 5,
-        end_sec: (idx + 1) * 5,
-        target_duration_sec: 5,
+        start_sec: idx * clipDuration,
+        end_sec: (idx + 1) * clipDuration,
+        target_duration_sec: clipDuration,
         visual_goal: `Visual style representing: ${sentence}`,
         search_queries: [firstWord, secondWord, "cinematic"]
       };
@@ -942,7 +1003,7 @@ ${body}`;
       language: p.language || "es",
       topic: p.topic,
       script: p.script,
-      total_duration_sec: segments.length * 5,
+      total_duration_sec: segments.length * clipDuration,
       segments,
       global_visual_style: req.body.global_visual_style || "cinematic",
       music_intent: {
@@ -977,8 +1038,9 @@ ${body}`;
         score_reasons: ["Matches query: " + seg.search_queries.join(", ")]
       }));
     }) || [];
-    const selected = p.shot_plan?.segments?.map((seg) => {
-      const best = SAMPLE_VIDEOS[Math.floor(Math.random() * SAMPLE_VIDEOS.length)];
+    const selected = p.shot_plan?.segments?.map((seg, idx) => {
+      const videoIndex = idx % SAMPLE_VIDEOS.length;
+      const best = SAMPLE_VIDEOS[videoIndex];
       return {
         ...best,
         id: `${seg.id}_selected`,
@@ -1001,27 +1063,36 @@ ${body}`;
     if (!p) {
       return res.status(404).json({ status: 404, message: "Project not found", data: null });
     }
-    const videoItems = (p.selected_media || []).map((med, idx) => ({
-      id: `item_${idx + 1}`,
-      media_id: med.id,
-      local_path: med.local_path,
-      asset_url: med.source_url,
-      thumbnail_url: med.thumbnail_url,
-      source_url: med.source_url,
-      start_sec: idx * 5,
-      duration_sec: 5,
-      trim_start_sec: 0,
-      trim_end_sec: 5,
-      segment_id: med.segment_id,
-      provider: med.provider
-    }));
-    const subtitleItems = (p.shot_plan?.segments || []).map((seg, idx) => ({
-      id: `sub_${idx + 1}`,
-      start_sec: idx * 5,
-      duration_sec: 5,
-      text: seg.narration_text,
-      segment_id: seg.id
-    }));
+    const videoItems = (p.selected_media || []).map((med, idx) => {
+      const seg = p.shot_plan?.segments?.find((s) => s.id === med.segment_id);
+      const startSec = seg ? seg.start_sec : idx * 5;
+      const durationSec = seg ? seg.target_duration_sec : 5;
+      return {
+        id: `item_${idx + 1}`,
+        media_id: med.id,
+        local_path: med.local_path,
+        asset_url: med.source_url,
+        thumbnail_url: med.thumbnail_url,
+        source_url: med.source_url,
+        start_sec: startSec,
+        duration_sec: durationSec,
+        trim_start_sec: 0,
+        trim_end_sec: durationSec,
+        segment_id: med.segment_id,
+        provider: med.provider
+      };
+    });
+    const subtitleItems = (p.shot_plan?.segments || []).map((seg, idx) => {
+      const startSec = seg.start_sec !== void 0 ? seg.start_sec : idx * 5;
+      const durationSec = seg.target_duration_sec !== void 0 ? seg.target_duration_sec : 5;
+      return {
+        id: `sub_${idx + 1}`,
+        start_sec: startSec,
+        duration_sec: durationSec,
+        text: seg.narration_text,
+        segment_id: seg.id
+      };
+    });
     p.tracks = [
       { id: "track_video", type: "video", name: "Video Track", items: videoItems },
       { id: "track_subtitle", type: "subtitle", name: "Subtitle Track", items: subtitleItems }

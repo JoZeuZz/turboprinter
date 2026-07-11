@@ -68,6 +68,7 @@ export function DonePanel() {
               <video
                 src={url}
                 controls
+                {...{ referrerpolicy: "no-referrer" }}
                 className="w-full h-full object-contain"
               />
             </div>

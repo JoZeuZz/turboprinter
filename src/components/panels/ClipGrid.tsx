@@ -1,4 +1,5 @@
 // webui-react/src/components/panels/ClipGrid.tsx
+import { useState } from "react";
 import { X, Play } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { TimelineItem } from "../../api/types";
@@ -11,6 +12,8 @@ interface ClipGridProps {
 
 export function ClipGrid({ clips, excluded, onExclude }: ClipGridProps) {
   const { t } = useTranslation();
+  const [brokenImages, setBrokenImages] = useState<Set<string>>(new Set());
+
   return (
     <div className="grid grid-cols-4 gap-3">
       {clips.map((clip, idx) => {
@@ -32,10 +35,18 @@ export function ClipGrid({ clips, excluded, onExclude }: ClipGridProps) {
                 background: `hsl(${(idx * 47) % 360}, 20%, 18%)`,
               }}
             >
-              {clip.thumbnail_url ? (
+              {clip.thumbnail_url && !brokenImages.has(clip.id) ? (
                 <img
                   src={clip.thumbnail_url}
                   alt={t("clips.altClip", { n: idx + 1 })}
+                  referrerPolicy="no-referrer"
+                  onError={() => {
+                    setBrokenImages((prev) => {
+                      const next = new Set(prev);
+                      next.add(clip.id);
+                      return next;
+                    });
+                  }}
                   className="w-full h-full object-cover"
                 />
               ) : (

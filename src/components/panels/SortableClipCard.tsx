@@ -1,7 +1,8 @@
 // webui-react/src/components/panels/SortableClipCard.tsx
+import { useState } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Play, X, GripVertical } from "lucide-react";
+import { Play, X, GripVertical, Video } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { TimelineItem } from "../../api/types";
 
@@ -21,6 +22,8 @@ export function SortableClipCard({
   const { t } = useTranslation();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: clip.id });
+
+  const [imgError, setImgError] = useState(false);
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -49,15 +52,18 @@ export function SortableClipCard({
 
       {/* Thumbnail */}
       <div className="aspect-video bg-surface flex items-center justify-center relative">
-        {clip.thumbnail_url ? (
+        {clip.thumbnail_url && !imgError ? (
           <img
             src={clip.thumbnail_url}
             alt={clip.text ?? clip.id}
+            referrerPolicy="no-referrer"
+            onError={() => setImgError(true)}
             className="w-full h-full object-cover"
           />
         ) : (
-          <div className="text-xs text-muted px-2 text-center truncate">
-            {clip.text ?? clip.id}
+          <div className="flex flex-col items-center justify-center text-xs text-muted-foreground px-2 text-center truncate">
+            <Video className="h-5 w-5 mb-1 opacity-60 text-accent" />
+            <span className="text-[10px] truncate max-w-full font-mono">{clip.text ?? clip.id}</span>
           </div>
         )}
 

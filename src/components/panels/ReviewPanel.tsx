@@ -74,7 +74,7 @@ export function ReviewPanel() {
         {finalVideo ? (
           <div className="w-full max-w-sm sm:max-w-md rounded-2xl overflow-hidden border border-border bg-neutral-900/60 shadow-2xl p-2 transition-all duration-300 hover:shadow-accent/5 hover:border-accent/20">
             <div className="relative rounded-xl overflow-hidden bg-black flex items-center justify-center aspect-[9/16] max-h-[500px]">
-              <video src={finalVideo} controls className="w-full h-full object-contain" />
+              <video src={finalVideo} controls {...{ referrerpolicy: "no-referrer" }} className="w-full h-full object-contain" />
             </div>
           </div>
         ) : (

@@ -216,7 +216,9 @@ export const useProjectStore = create<ProjectStoreState>()(
             console.log("[ProjectStore] Project ID retrieved:", projectId);
 
             console.log("[ProjectStore] Phase 1: Planning project...");
-            await projectsApi.planProject(projectId, {});
+            await projectsApi.planProject(projectId, {
+              target_duration_sec: params.video_clip_duration,
+            });
             console.log("[ProjectStore] Planning succeeded. Waiting 1.8s...");
             await delay(1800);
 

@@ -1,5 +1,7 @@
+import { useState } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { Video } from "lucide-react";
 import type { TimelineItem } from "../../api/types";
 
 interface TimelineVideoCardProps {
@@ -20,6 +22,8 @@ export function TimelineVideoCard({
 }: TimelineVideoCardProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: item.id });
+
+  const [imgError, setImgError] = useState(false);
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -43,15 +47,18 @@ export function TimelineVideoCard({
           : "border-border bg-surface hover:border-accent/50 hover:brightness-110"
       }`}
     >
-      {item.thumbnail_url ? (
+      {item.thumbnail_url && !imgError ? (
         <img
           src={item.thumbnail_url}
           alt={item.text ?? item.id}
+          referrerPolicy="no-referrer"
+          onError={() => setImgError(true)}
           className="h-full w-full object-cover"
         />
       ) : (
-        <div className="flex h-full items-center justify-center px-1 text-center text-[10px] text-muted truncate">
-          {item.text ?? item.id}
+        <div className="flex h-full w-full flex-col items-center justify-center bg-muted/10 px-1 text-center text-[9px] text-muted-foreground truncate">
+          <Video className="h-4 w-4 mb-0.5 opacity-60 text-accent shrink-0" />
+          <span className="truncate w-full font-mono">{item.text ?? item.id}</span>
         </div>
       )}
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-4 bg-gradient-to-t from-black/70 to-transparent" />

@@ -87,6 +87,7 @@ export function VideoPreview({ items, selectedId, onTimeUpdate }: VideoPreviewPr
           ref={videoRef}
           data-testid="video-preview"
           src={src}
+          {...{ referrerpolicy: "no-referrer" }}
           className="w-full max-h-[420px] bg-black object-contain"
           onEnded={handleEnded}
           onTimeUpdate={handleTimeUpdate}
