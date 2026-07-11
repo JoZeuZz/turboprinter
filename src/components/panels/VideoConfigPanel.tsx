@@ -13,6 +13,7 @@ import {
   Input,
   Textarea,
 } from "../ui";
+import { usePresetStore } from "../../store/usePresetStore";
 import { useVideoStore } from "../../store/useVideoStore";
 import { useConfigStore } from "../../store/useConfigStore";
 import { useProjectWorkspaceStore } from "../../store/useProjectWorkspaceStore";
@@ -122,6 +123,12 @@ export function VideoConfigPanel() {
   ];
 
   const handleGenerate = () => {
+    const autoSaveEnabled = usePresetStore.getState().autoSaveConfigAfterGeneration;
+    if (autoSaveEnabled) {
+      const params = store.toParams();
+      localStorage.setItem("mpt-last-generated-config", JSON.stringify(params));
+    }
+
     if (projectStore.mode !== "disabled" && projectStore.projectId) {
       void projectStore.generateViaProjectMode(store.toParams());
       workspaceStore.setPanel("generating");

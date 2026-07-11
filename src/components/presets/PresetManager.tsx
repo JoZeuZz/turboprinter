@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { usePresetStore, type VideoPreset } from "../../store/usePresetStore";
 import { useVideoStore } from "../../store/useVideoStore";
-import { Button, Input } from "../ui";
+import { Button, Input, Checkbox } from "../ui";
 
 // Helper to check if current video settings match the preset settings
 function settingsMatchPreset(store: any, preset: VideoPreset): boolean {
@@ -638,6 +638,18 @@ export function PresetManager() {
           </div>
         </div>
       )}
+
+      {/* Auto-save configuration checkbox */}
+      <div id="auto-save-config-checkbox-container" className="pt-3 border-t border-border/50 flex flex-col gap-1">
+        <Checkbox
+          checked={presetStore.autoSaveConfigAfterGeneration}
+          onChange={(checked) => presetStore.setAutoSaveConfigAfterGeneration(checked)}
+          label={t("presets.autoSaveConfig")}
+        />
+        <span className="text-[10px] text-muted-foreground ml-6 leading-normal">
+          {t("presets.autoSaveConfigHint")}
+        </span>
+      </div>
     </div>
   );
 }

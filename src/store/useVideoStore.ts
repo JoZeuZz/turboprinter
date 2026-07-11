@@ -46,6 +46,38 @@ const DEFAULTS: VideoParams & VideoStoreExtras = {
   preview_text: "Este es un texto de ejemplo para probar la sintesis de voz.",
 };
 
+const getInitialState = (): VideoParams & VideoStoreExtras => {
+  let autoSaveEnabled = true;
+  try {
+    const presetStoreData = localStorage.getItem("mpt-presets");
+    if (presetStoreData) {
+      const parsed = JSON.parse(presetStoreData);
+      if (parsed?.state && parsed.state.autoSaveConfigAfterGeneration !== undefined) {
+        autoSaveEnabled = parsed.state.autoSaveConfigAfterGeneration;
+      }
+    }
+  } catch (e) {}
+
+  if (autoSaveEnabled) {
+    try {
+      const lastGeneratedStr = localStorage.getItem("mpt-last-generated-config");
+      if (lastGeneratedStr) {
+        const lastGenerated = JSON.parse(lastGeneratedStr);
+        return {
+          ...DEFAULTS,
+          ...lastGenerated,
+          video_subject: "",
+          video_script: "",
+          video_terms: null,
+          video_script_prompt: "",
+          custom_system_prompt: "",
+        };
+      }
+    } catch (e) {}
+  }
+  return DEFAULTS;
+};
+
 interface VideoStoreState extends VideoParams, VideoStoreExtras {
   set: <K extends keyof (VideoParams & VideoStoreExtras)>(
     key: K,
@@ -58,9 +90,40 @@ interface VideoStoreState extends VideoParams, VideoStoreExtras {
 export const useVideoStore = create<VideoStoreState>()(
   persist(
     (set, get) => ({
-      ...DEFAULTS,
+      ...getInitialState(),
       set: (key, value) => set({ [key]: value } as Partial<VideoStoreState>),
-      reset: () => set({ ...DEFAULTS }),
+      reset: () => {
+        let autoSaveEnabled = true;
+        try {
+          const presetStoreData = localStorage.getItem("mpt-presets");
+          if (presetStoreData) {
+            const parsed = JSON.parse(presetStoreData);
+            if (parsed?.state && parsed.state.autoSaveConfigAfterGeneration !== undefined) {
+              autoSaveEnabled = parsed.state.autoSaveConfigAfterGeneration;
+            }
+          }
+        } catch (e) {}
+
+        if (autoSaveEnabled) {
+          const lastGeneratedStr = localStorage.getItem("mpt-last-generated-config");
+          if (lastGeneratedStr) {
+            try {
+              const lastGenerated = JSON.parse(lastGeneratedStr);
+              set({
+                ...DEFAULTS,
+                ...lastGenerated,
+                video_subject: "",
+                video_script: "",
+                video_terms: null,
+                video_script_prompt: "",
+                custom_system_prompt: "",
+              });
+              return;
+            } catch (e) {}
+          }
+        }
+        set({ ...DEFAULTS });
+      },
       toParams: (): VideoParams => {
         const {
           set: _s,

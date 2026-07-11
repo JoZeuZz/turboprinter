@@ -402,6 +402,8 @@
     "useCurrent": "Usar actual como base",
     "overwriteConfirm": "¿Estás seguro de que deseas sobrescribir este preset con las configuraciones actuales de la pantalla?",
     "overwrite": "Actualizar con config actual",
-    "options": "Opciones de Preset"
+    "options": "Opciones de Preset",
+    "autoSaveConfig": "Auto-guardar configuración al generar",
+    "autoSaveConfigHint": "Conserva automáticamente tus ajustes seleccionados para nuevos videos"
   }
 }

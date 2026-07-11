@@ -162,10 +162,12 @@ interface PresetStoreState {
   presets: VideoPreset[];
   activePresetId: string | null;
   defaultPresetId: string | null;
+  autoSaveConfigAfterGeneration: boolean;
   
   // Actions
   setActivePresetId: (id: string | null) => void;
   setDefaultPresetId: (id: string | null) => void;
+  setAutoSaveConfigAfterGeneration: (enabled: boolean) => void;
   savePreset: (name: string, values: Omit<VideoPreset, "id" | "name" | "isSystem">) => string;
   updatePreset: (id: string, values: Partial<Omit<VideoPreset, "id" | "isSystem">>) => void;
   duplicatePreset: (id: string, copyLabel: string) => string;
@@ -179,10 +181,13 @@ export const usePresetStore = create<PresetStoreState>()(
       presets: SYSTEM_PRESETS,
       activePresetId: null,
       defaultPresetId: null,
+      autoSaveConfigAfterGeneration: true,
 
       setActivePresetId: (id) => set({ activePresetId: id }),
       
       setDefaultPresetId: (id) => set({ defaultPresetId: id }),
+
+      setAutoSaveConfigAfterGeneration: (enabled) => set({ autoSaveConfigAfterGeneration: enabled }),
 
       savePreset: (name, values) => {
         const id = "custom-" + Date.now();
