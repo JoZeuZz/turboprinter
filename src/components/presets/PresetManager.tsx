@@ -283,7 +283,7 @@ export function PresetManager() {
   return (
     <div id="preset-manager-container" className="rounded-xl border border-border bg-surface p-5.5 space-y-4 shadow-sm">
       <div className="flex items-center justify-between">
-        <h3 className="text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-1.5">
+        <h3 className="text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-1.5 pt-2.5 pl-2.5">
           <span>{t("presets.title")}</span>
           {hasModified && (
             <span className="inline-flex h-2 w-2 rounded-full bg-amber-500 animate-pulse" title="Configuración modificada" />
@@ -303,7 +303,7 @@ export function PresetManager() {
         )}
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
+      <div className="grid gap-3 sm:grid-cols-[1fr_auto] px-2.5">
         {/* Dropdown Selector */}
         <div className="relative">
           <select
@@ -623,7 +623,7 @@ export function PresetManager() {
       )}
 
       {/* Auto-save configuration checkbox */}
-      <div id="auto-save-config-checkbox-container" className="pt-4 border-t border-border/50 flex flex-col gap-1">
+      <div id="auto-save-config-checkbox-container" className="p-2.5 border-t border-border/50 flex flex-col gap-1">
         <Checkbox
           checked={presetStore.autoSaveConfigAfterGeneration}
           onChange={(checked) => presetStore.setAutoSaveConfigAfterGeneration(checked)}
