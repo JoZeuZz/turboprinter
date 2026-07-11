@@ -174,7 +174,7 @@ export function ProjectSidebar() {
         </button>
 
         <div className="mt-2 space-y-0.5" id="recent-projects">
-          {rows.map((project) => {
+          {rows.map((project, index) => {
               const isDraft = "kind" in project && project.kind === "draft";
               const isActive = isDraft
                 ? location.pathname === "/project/new" &&
@@ -184,6 +184,7 @@ export function ProjectSidebar() {
                 isDraft
                   ? handleOpenDraft(project.project_id)
                   : navigate(`/project/${project.project_id}`);
+              const projectNum = rows.length - index;
               return (
                 <div
                   key={project.project_id}
@@ -223,7 +224,10 @@ export function ProjectSidebar() {
                       />
                     ) : (
                       <>
-                        <span className="block truncate">{project.topic || project.project_id}</span>
+                        <span className="block truncate">
+                          <span className="text-accent/90 font-bold mr-1.5 text-xs bg-accent/10 px-1.5 py-0.5 rounded">#{projectNum}</span>
+                          {project.topic || project.project_id}
+                        </span>
                         <span className="mt-0.5 block text-[10px] text-foreground/40">
                           {isDraft ? t("sidebar.draft") : new Date(project.updated_at).toLocaleDateString()}
                         </span>
