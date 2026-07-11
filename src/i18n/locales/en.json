@@ -43,6 +43,8 @@
       "rendering": "Rendering & assets",
       "queue": "Queue & Redis",
       "upload": "Upload post",
+      "youtube": "YouTube Integration",
+      "youtubeHint": "Configure your API credentials and link your YouTube channel to post shorts or videos directly.",
       "whisper": "Whisper, UI & quality",
       "prompts": "Global prompts"
     },
@@ -94,7 +96,15 @@
       "normalizeAudio": "Normalize audio",
       "safeArea": "Safe area",
       "twoPassRender": "Two-pass render",
-      "customSystemPrompt": "Custom system prompt"
+      "customSystemPrompt": "Custom system prompt",
+      "youtubeApiKey": "YouTube API Key / Developer Key",
+      "youtubeClientId": "OAuth Client ID",
+      "youtubeChannelName": "YouTube Channel (Handle)",
+      "youtubeStatus": "Linking Status",
+      "youtubeLinked": "Linked",
+      "youtubeNotLinked": "Not Linked",
+      "youtubeLinkBtn": "Link Channel",
+      "youtubeUnlinkBtn": "Unlink Channel"
     }
   },
   "topbar": {
@@ -155,7 +165,12 @@
       "continueToDone": "Continue to Done",
       "editSettings": "Edit settings",
       "backToScript": "← Back to Script",
-      "renderVideo": "Render Video →"
+      "renderVideo": "Render Video →",
+      "uploadToYoutube": "Upload to YouTube",
+      "uploadingToYoutube": "Uploading to YouTube... {{progress}}%",
+      "uploadSuccess": "Uploaded successfully to your channel!",
+      "uploadChannelInfo": "Channel: {{channel}}",
+      "notLinkedYoutube": "Link your YouTube account in Settings to enable uploading."
     },
     "generating": {
       "title": "Generating your video",

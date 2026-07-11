@@ -1,12 +1,38 @@
 // webui-react/src/components/panels/DonePanel.tsx
-import { Download, RotateCcw, CheckCircle2 } from "lucide-react";
+import { useState } from "react";
+import { Download, RotateCcw, CheckCircle2, Youtube, Loader2, SlidersHorizontal } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "../ui";
 import { useProjectWorkspaceStore } from "../../store/useProjectWorkspaceStore";
+import { useConfigStore } from "../../store/useConfigStore";
 
 export function DonePanel() {
   const { t } = useTranslation();
   const { videoUrls, reset, setPanel } = useProjectWorkspaceStore();
+  const { config } = useConfigStore();
+
+  const isYoutubeLinked = !!config?.settings?.youtube?.is_linked;
+  const youtubeChannel = config?.settings?.youtube?.channel_name || "";
+
+  const [uploadStatus, setUploadStatus] = useState<"idle" | "uploading" | "success" | "error">("idle");
+  const [uploadProgress, setUploadProgress] = useState(0);
+
+  const handleYoutubeUpload = () => {
+    if (!isYoutubeLinked) return;
+    setUploadStatus("uploading");
+    setUploadProgress(0);
+
+    const interval = setInterval(() => {
+      setUploadProgress((prev) => {
+        if (prev >= 100) {
+          clearInterval(interval);
+          setUploadStatus("success");
+          return 100;
+        }
+        return prev + 10;
+      });
+    }, 250);
+  };
 
   const handleBack = () => {
     setPanel("config");
@@ -18,50 +44,129 @@ export function DonePanel() {
   };
 
   return (
-    <div className="flex h-full w-full max-w-5xl mx-auto flex-col justify-start px-6 py-5">
-      <div className="w-full max-w-xl space-y-4">
-        <div className="flex items-center gap-2">
-          <CheckCircle2 className="h-5 w-5 text-green-400" />
-          <h2 className="text-sm font-semibold text-foreground">{t("panels.done.ready")}</h2>
+    <div className="flex h-full w-full max-w-4xl mx-auto flex-col items-center justify-start gap-6 px-6 py-8 text-center">
+      <div className="space-y-2 max-w-xl">
+        <div className="flex items-center justify-center gap-2 text-green-400">
+          <CheckCircle2 className="h-6 w-6" />
+          <h2 className="text-xl font-bold tracking-tight text-foreground">{t("panels.done.ready")}</h2>
         </div>
+        <p className="text-sm text-muted-foreground">{t("panels.review.taskReviewDescription")}</p>
+      </div>
 
-        {videoUrls.length === 0 && (
-          <p className="text-xs text-muted">{t("panels.done.none")}</p>
-        )}
-
-        {videoUrls.map((url) => (
+      {videoUrls.length === 0 ? (
+        <div className="flex min-h-[300px] w-full max-w-md flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-surface p-8 text-sm text-muted-foreground gap-3">
+          <Loader2 className="h-10 w-10 text-muted/40 animate-pulse" />
+          <span>{t("panels.done.none")}</span>
+        </div>
+      ) : (
+        videoUrls.map((url) => (
           <div
             key={url}
-            className="rounded-lg overflow-hidden border border-border bg-surface"
+            className="w-full max-w-sm sm:max-w-md rounded-2xl overflow-hidden border border-border bg-neutral-900/60 shadow-2xl p-2 transition-all duration-300 hover:shadow-accent/5 hover:border-accent/20"
           >
-            <video
-              src={url}
-              controls
-              className="w-full max-h-[480px] object-contain"
-            />
-            <div className="flex items-center gap-2 px-3 py-2">
+            <div className="relative rounded-xl overflow-hidden bg-black flex items-center justify-center aspect-[9/16] max-h-[500px]">
+              <video
+                src={url}
+                controls
+                className="w-full h-full object-contain"
+              />
+            </div>
+            <div className="flex items-center justify-center gap-2 px-3 py-3 border-t border-border/50 mt-2 bg-surface/30 rounded-lg">
               <a
                 href={url}
                 download
-                className="inline-flex items-center gap-1 text-xs text-accent hover:text-accent-hover"
+                className="inline-flex items-center gap-1.5 text-xs text-accent hover:text-accent-hover font-medium bg-accent/10 px-3 py-1.5 rounded-md transition-colors"
               >
                 <Download className="h-3.5 w-3.5" />
                 {t("common.download")}
               </a>
             </div>
           </div>
-        ))}
+        ))
+      )}
 
-        <div className="flex gap-2 pt-2">
-          <Button variant="ghost" onClick={handleBack} size="sm">
-            {t("panels.done.back")}
-          </Button>
-          <Button onClick={handleMakeAnother} size="sm">
-            <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
-            {t("panels.done.makeAnother")}
-          </Button>
+      {videoUrls.length > 0 && (
+        <div className="w-full max-w-md space-y-4">
+          {/* YouTube Upload Status Card */}
+          {uploadStatus !== "idle" && (
+            <div className={`rounded-xl border p-4 text-left transition-all duration-300 ${
+              uploadStatus === "uploading" 
+                ? "bg-accent/5 border-accent/20" 
+                : "bg-green-500/5 border-green-500/20"
+            }`}>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-semibold text-foreground">
+                  {uploadStatus === "uploading" 
+                    ? t("panels.review.uploadingToYoutube", { progress: uploadProgress })
+                    : t("panels.review.uploadSuccess")
+                  }
+                </span>
+                {uploadStatus === "uploading" ? (
+                  <Loader2 className="h-4 w-4 animate-spin text-accent" />
+                ) : (
+                  <CheckCircle2 className="h-4 w-4 text-green-500" />
+                )}
+              </div>
+              {uploadStatus === "uploading" ? (
+                <div className="w-full bg-border rounded-full h-1.5 overflow-hidden">
+                  <div 
+                    className="bg-accent h-full transition-all duration-300 ease-out" 
+                    style={{ width: `${uploadProgress}%` }}
+                  />
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  {t("panels.review.uploadChannelInfo", { channel: youtubeChannel })}
+                </p>
+              )}
+            </div>
+          )}
+
+          <div className="flex flex-col sm:flex-row gap-3 w-full justify-center">
+            <Button 
+              variant="ghost" 
+              onClick={handleBack}
+              className="flex items-center justify-center gap-2"
+            >
+              <SlidersHorizontal className="h-4 w-4" />
+              {t("panels.review.editSettings")}
+            </Button>
+
+            <Button
+              onClick={handleYoutubeUpload}
+              disabled={!isYoutubeLinked || uploadStatus === "uploading" || uploadStatus === "success"}
+              className={`flex-1 flex items-center justify-center gap-2 font-medium ${
+                isYoutubeLinked 
+                  ? "bg-red-600 hover:bg-red-700 text-white focus:ring-red-500" 
+                  : "bg-muted/50 text-muted-foreground cursor-not-allowed hover:bg-muted/50 border border-border"
+              }`}
+              title={!isYoutubeLinked ? t("panels.review.notLinkedYoutube") : undefined}
+            >
+              <Youtube className="h-4 w-4" />
+              {uploadStatus === "success" 
+                ? t("panels.review.uploadSuccess") 
+                : uploadStatus === "uploading"
+                ? t("panels.review.uploadingToYoutube", { progress: uploadProgress })
+                : t("panels.review.uploadToYoutube")
+              }
+            </Button>
+
+            <Button 
+              onClick={handleMakeAnother} 
+              className="flex items-center justify-center gap-2"
+            >
+              <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
+              {t("panels.done.makeAnother")}
+            </Button>
+          </div>
+
+          {!isYoutubeLinked && (
+            <p className="text-xs text-muted-foreground text-center bg-muted/30 py-2 px-4 rounded-lg border border-border/50 max-w-sm mx-auto">
+              ℹ️ {t("panels.review.notLinkedYoutube")}
+            </p>
+          )}
         </div>
-      </div>
+      )}
     </div>
   );
 }

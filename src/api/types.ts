@@ -163,6 +163,12 @@ export interface EditableConfig {
     content_package: boolean;
     use_two_pass: boolean;
   };
+  youtube: {
+    api_key: string;
+    channel_name: string;
+    is_linked: boolean;
+    client_id: string;
+  };
 }
 
 export interface BgmFile {

@@ -212,6 +212,12 @@ let globalConfig = {
       safe_area_enabled: true,
       content_package: false,
       use_two_pass: false
+    },
+    youtube: {
+      api_key: "",
+      channel_name: "",
+      is_linked: false,
+      client_id: ""
     }
   },
   options: {

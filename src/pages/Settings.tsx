@@ -70,7 +70,7 @@ export function Settings() {
       return {
         ...current,
         [section]: {
-          ...current[section],
+          ...(current[section] || {}),
           [key]: value,
         },
       };
@@ -268,6 +268,59 @@ export function Settings() {
           <SecretInput label={t("settings.fields.uploadPostApiKey")} value={draft.app.upload_post_api_key} onChange={(value) => updateField("app", "upload_post_api_key", value)} />
           <Input label={t("settings.fields.uploadPostUsername")} value={draft.app.upload_post_username ?? ""} onChange={(e) => updateField("app", "upload_post_username", e.target.value)} />
           <ListInput label={t("settings.fields.uploadPostPlatforms")} value={draft.app.upload_post_platforms} onChange={(value) => updateField("app", "upload_post_platforms", value)} />
+        </div>
+      </Collapsible>
+
+      <Collapsible title={t("settings.sections.youtube")}>
+        <p className="mb-3 text-xs text-muted">
+          {t("settings.sections.youtubeHint")}
+        </p>
+        <div className="grid gap-4 md:grid-cols-2">
+          <Input
+            label={t("settings.fields.youtubeClientId")}
+            value={draft.youtube?.client_id ?? ""}
+            onChange={(e) => updateField("youtube", "client_id", e.target.value)}
+            placeholder="e.g. 123456-abcdef.apps.googleusercontent.com"
+          />
+          <SecretInput
+            label={t("settings.fields.youtubeApiKey")}
+            value={draft.youtube?.api_key ?? ""}
+            onChange={(value) => updateField("youtube", "api_key", value)}
+          />
+          <Input
+            label={t("settings.fields.youtubeChannelName")}
+            value={draft.youtube?.channel_name ?? ""}
+            onChange={(e) => updateField("youtube", "channel_name", e.target.value)}
+            placeholder="e.g. @MiCanalShorts"
+          />
+          <div className="flex flex-col justify-end space-y-1">
+            <span className="text-xs font-medium text-muted">{t("settings.fields.youtubeStatus")}</span>
+            <div className="flex items-center gap-3">
+              <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-semibold ring-1 ring-inset ${
+                draft.youtube?.is_linked 
+                  ? "bg-green-500/10 text-green-400 ring-green-500/20" 
+                  : "bg-red-500/10 text-red-400 ring-red-500/20"
+              }`}>
+                {draft.youtube?.is_linked ? t("settings.fields.youtubeLinked") : t("settings.fields.youtubeNotLinked")}
+              </span>
+              <Button
+                type="button"
+                variant={draft.youtube?.is_linked ? "ghost" : "primary"}
+                size="sm"
+                onClick={() => {
+                  const isLinked = !draft.youtube?.is_linked;
+                  updateField("youtube", "is_linked", isLinked);
+                  if (isLinked) {
+                    if (!draft.youtube?.channel_name) {
+                      updateField("youtube", "channel_name", "@MiCanalShorts");
+                    }
+                  }
+                }}
+              >
+                {draft.youtube?.is_linked ? t("settings.fields.youtubeUnlinkBtn") : t("settings.fields.youtubeLinkBtn")}
+              </Button>
+            </div>
+          </div>
         </div>
       </Collapsible>
 

@@ -43,6 +43,8 @@
       "rendering": "Renderizado y materiales",
       "queue": "Cola y Redis",
       "upload": "Upload post",
+      "youtube": "Integración de YouTube",
+      "youtubeHint": "Configura tus credenciales y vincula tu canal de YouTube para publicar videos directamente.",
       "whisper": "Whisper, UI y calidad",
       "prompts": "Prompts globales"
     },
@@ -94,7 +96,15 @@
       "normalizeAudio": "Normalizar audio",
       "safeArea": "Safe area",
       "twoPassRender": "Two-pass render",
-      "customSystemPrompt": "System prompt custom"
+      "customSystemPrompt": "System prompt custom",
+      "youtubeApiKey": "YouTube API Key / Developer Key",
+      "youtubeClientId": "ID de Cliente OAuth",
+      "youtubeChannelName": "Canal de YouTube (Handle)",
+      "youtubeStatus": "Estado de vinculación",
+      "youtubeLinked": "Vinculado",
+      "youtubeNotLinked": "No vinculado",
+      "youtubeLinkBtn": "Vincular Canal",
+      "youtubeUnlinkBtn": "Desvincular Canal"
     }
   },
   "topbar": {
@@ -155,7 +165,12 @@
       "continueToDone": "Continuar a Finalizado",
       "editSettings": "Editar configuración",
       "backToScript": "← Volver al guion",
-      "renderVideo": "Renderizar video →"
+      "renderVideo": "Renderizar video →",
+      "uploadToYoutube": "Subir a YouTube",
+      "uploadingToYoutube": "Subiendo a YouTube... {{progress}}%",
+      "uploadSuccess": "¡Subido con éxito a tu canal!",
+      "uploadChannelInfo": "Canal: {{channel}}",
+      "notLinkedYoutube": "Vincula tu cuenta de YouTube en Configuración para habilitar la subida."
     },
     "generating": {
       "title": "Generando tu video",
