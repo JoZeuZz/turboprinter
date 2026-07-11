@@ -1,0 +1,182 @@
+// webui-react/src/components/panels/ReviewPanel.tsx
+import { useState, useEffect } from "react";
+import { ArrowLeft, CheckCircle2, Clapperboard, SlidersHorizontal } from "lucide-react";
+import { useTranslation } from "react-i18next";
+import {
+  DndContext,
+  closestCenter,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  rectSortingStrategy,
+  arrayMove,
+} from "@dnd-kit/sortable";
+import { Button } from "../ui";
+import { ClipPreviewModal } from "../ui/ClipPreviewModal";
+import { SortableClipCard } from "./SortableClipCard";
+import { useProjectStore } from "../../store/useProjectStore";
+import { useProjectWorkspaceStore } from "../../store/useProjectWorkspaceStore";
+import type { TimelineItem, EditCommand } from "../../api/types";
+
+export function ReviewPanel() {
+  const { t } = useTranslation();
+  const projectStore = useProjectStore();
+  const { setPanel, videoUrls } = useProjectWorkspaceStore();
+
+  const videoTrack = projectStore.project?.tracks.find((t) => t.type === "video");
+  const sourceClips = videoTrack?.items ?? [];
+
+  const [orderedClips, setOrderedClips] = useState<TimelineItem[]>(sourceClips);
+  const [excluded, setExcluded] = useState<Set<string>>(new Set());
+  const [previewClip, setPreviewClip] = useState<TimelineItem | null>(null);
+
+  // Sync orderedClips when project loads
+  useEffect(() => {
+    setOrderedClips(sourceClips);
+  }, [sourceClips.length]);
+
+  if (projectStore.mode === "disabled" || !projectStore.project) {
+    const finalVideo = videoUrls[0];
+
+    return (
+      <div className="flex h-full w-full max-w-5xl mx-auto flex-col gap-4 px-6 py-5">
+        <div>
+          <h2 className="text-sm font-semibold text-foreground">{t("panels.review.taskReviewTitle")}</h2>
+          <p className="text-xs text-muted mt-1">{t("panels.review.taskReviewDescription")}</p>
+        </div>
+
+        {finalVideo ? (
+          <div className="w-full max-w-xl rounded-lg overflow-hidden border border-border bg-surface">
+            <video src={finalVideo} controls className="w-full max-h-[520px] object-contain" />
+          </div>
+        ) : (
+          <div className="flex min-h-48 items-center justify-center rounded-lg border border-border bg-surface text-sm text-muted">
+            {t("panels.done.none")}
+          </div>
+        )}
+
+        <div className="flex flex-wrap gap-2 pt-2 border-t border-border">
+          <Button variant="ghost" onClick={() => setPanel("config")}>
+            <SlidersHorizontal className="mr-1.5 h-3.5 w-3.5" />
+            {t("panels.review.editSettings")}
+          </Button>
+          <Button onClick={() => setPanel("done")} className="flex-1 min-w-40">
+            <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
+            {t("panels.review.continueToDone")}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      setOrderedClips((clips) => {
+        const oldIndex = clips.findIndex((c) => c.id === active.id);
+        const newIndex = clips.findIndex((c) => c.id === over.id);
+        return arrayMove(clips, oldIndex, newIndex);
+      });
+    }
+  };
+
+  const handleExclude = (clipId: string) => {
+    setExcluded((prev) => {
+      const next = new Set(prev);
+      if (next.has(clipId)) next.delete(clipId);
+      else next.add(clipId);
+      return next;
+    });
+  };
+
+  const totalDuration = orderedClips
+    .filter((c) => !excluded.has(c.id))
+    .reduce((sum, c) => sum + c.duration_sec, 0);
+
+  const handleRender = async () => {
+    const trackId = videoTrack?.id ?? "";
+    let accStart = 0;
+    const commands: EditCommand[] = [];
+
+    for (const clip of orderedClips) {
+      if (excluded.has(clip.id)) {
+        commands.push({
+          type: "set_timing",
+          track_id: trackId,
+          item_id: clip.id,
+          duration_sec: 0,
+        });
+      } else {
+        commands.push({
+          type: "move",
+          track_id: trackId,
+          item_id: clip.id,
+          new_start_sec: accStart,
+        });
+        accStart += clip.duration_sec;
+      }
+    }
+
+    if (commands.length > 0) {
+      await projectStore.applyTimelineCommands({ commands });
+    }
+    await projectStore.render();
+    setPanel("rendering");
+  };
+
+  return (
+    <div className="flex h-full w-full max-w-5xl mx-auto flex-col gap-4 px-6 py-5">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-sm font-semibold text-foreground">{t("panels.review.reviewClips")}</h2>
+          <p className="text-xs text-muted mt-0.5">
+            {orderedClips.length} clips · ~{totalDuration.toFixed(0)}s total
+            {excluded.size > 0 && ` · ${excluded.size} excluded`}
+          </p>
+        </div>
+      </div>
+
+      {orderedClips.length === 0 ? (
+        <div className="flex flex-1 items-center justify-center">
+          <p className="text-sm text-muted">{t("panels.review.noClips")}</p>
+        </div>
+      ) : (
+        <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext
+            items={orderedClips.map((c) => c.id)}
+            strategy={rectSortingStrategy}
+          >
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {orderedClips.map((clip) => (
+                <SortableClipCard
+                  key={clip.id}
+                  clip={clip}
+                  excluded={excluded.has(clip.id)}
+                  onExclude={handleExclude}
+                  onPreview={setPreviewClip}
+                />
+              ))}
+            </div>
+          </SortableContext>
+        </DndContext>
+      )}
+
+      <div className="flex gap-2 pt-2 border-t border-border">
+        <Button variant="ghost" onClick={() => setPanel("script")}>
+          <ArrowLeft className="mr-1.5 h-3.5 w-3.5" />
+          {t("panels.review.backToScript")}
+        </Button>
+        <Button onClick={handleRender} className="flex-1">
+          <Clapperboard className="mr-1.5 h-3.5 w-3.5" />
+          {t("panels.review.renderVideo")}
+        </Button>
+      </div>
+
+      <ClipPreviewModal
+        clip={previewClip}
+        onClose={() => setPreviewClip(null)}
+      />
+    </div>
+  );
+}

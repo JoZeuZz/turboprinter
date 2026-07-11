@@ -1,0 +1,8 @@
+{
+  "name": "MoneyPrinter Turbo",
+  "description": "An automated AI video generator that creates videos from topics, scripts, or Reddit posts.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

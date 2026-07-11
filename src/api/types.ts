@@ -1,0 +1,550 @@
+// webui-react/src/api/types.ts
+export type VideoConcatMode = "random" | "sequential";
+export type VideoTransitionMode =
+  | "Shuffle"
+  | "FadeIn"
+  | "FadeOut"
+  | "SlideIn"
+  | "SlideOut"
+  | null;
+export type VideoAspect = "16:9" | "9:16" | "1:1";
+
+export interface VideoParams {
+  video_subject: string;
+  video_script?: string;
+  video_terms?: string | string[] | null;
+  video_aspect?: VideoAspect;
+  video_concat_mode?: VideoConcatMode;
+  video_transition_mode?: VideoTransitionMode;
+  video_clip_duration?: number;
+  match_materials_to_script?: boolean;
+  video_count?: number;
+  video_source?: string;
+  video_language?: string;
+  voice_name?: string;
+  voice_volume?: number;
+  voice_rate?: number;
+  bgm_type?: string;
+  bgm_file?: string;
+  bgm_volume?: number;
+  subtitle_enabled?: boolean;
+  subtitle_position?: string;
+  custom_position?: number;
+  font_name?: string;
+  text_fore_color?: string;
+  text_background_color?: boolean | string;
+  rounded_subtitle_background?: boolean;
+  font_size?: number;
+  stroke_color?: string;
+  stroke_width?: number;
+  n_threads?: number;
+  paragraph_number?: number;
+  video_script_prompt?: string;
+  custom_system_prompt?: string;
+  local_video_files?: string[];
+}
+
+export const TASK_STATE_FAILED = -1 as const;
+export const TASK_STATE_COMPLETE = 1 as const;
+export const TASK_STATE_PROCESSING = 4 as const;
+
+export interface TaskStatus {
+  state: number;
+  progress: number;
+  videos: string[];
+  combined_videos: string[];
+  logs?: string[];
+}
+
+export interface ApiResponse<T> {
+  status: number;
+  message: string;
+  data: T;
+}
+
+export interface CreateTaskResponse {
+  task_id: string;
+}
+
+export interface UiConfig {
+  video_sources: string[];
+  subtitle_position_default: string;
+  custom_position_default: number;
+  settings: EditableConfig;
+  options: ConfigOptions;
+}
+
+export interface ConfigOptions {
+  video_sources: string[];
+  video_codecs: string[];
+  llm_providers: string[];
+  quality_profiles: string[];
+  subtitle_positions: string[];
+  whisper_devices: string[];
+}
+
+export interface EditableConfig {
+  app: {
+    video_source: string;
+    tls_verify: boolean;
+    pexels_api_keys: string[];
+    pixabay_api_keys: string[];
+    coverr_api_keys: string[];
+    llm_provider: string;
+    llm_fallback_providers: string[];
+    llm_request_timeout_seconds: number;
+    llm_connect_timeout_seconds: number;
+    gemini_api_key: string;
+    gemini_model_name: string;
+    subtitle_provider: string;
+    endpoint: string;
+    material_directory: string;
+    enable_redis: boolean;
+    redis_host: string;
+    redis_port: number;
+    redis_db: number;
+    redis_password: string;
+    max_concurrent_tasks: number;
+    max_queued_tasks: number;
+    max_upload_size_mb: number;
+    video_codec: string;
+    match_materials_to_script: boolean;
+    upload_post_enabled: boolean;
+    upload_post_api_key: string;
+    upload_post_username: string;
+    upload_post_platforms: string[];
+    upload_post_auto_upload: boolean;
+    n_threads: number;
+    custom_system_prompt: string;
+  };
+  whisper: {
+    model_size: string;
+    device: string;
+    compute_type: string;
+  };
+  azure: {
+    speech_key: string;
+    speech_region: string;
+  };
+  siliconflow: {
+    api_key: string;
+  };
+  ui: {
+    hide_log: boolean;
+    language: string;
+    subtitle_position: string;
+    custom_position: number;
+    layout_mode: string;
+    bgm_type: string;
+    tts_server: string;
+    voice_name: string;
+    font_name: string;
+    text_fore_color: string;
+    font_size: number;
+    subtitle_background_enabled: boolean;
+    subtitle_background_color: string;
+    rounded_subtitle_background: boolean;
+    stroke_width: number;
+    stroke_color: string;
+    text_background_color: string;
+  };
+  quality: {
+    enabled: boolean;
+    profile: string;
+    target_platform: string;
+    language: string;
+    prefer_local_assets: boolean;
+    prefer_licensed_assets: boolean;
+    avoid_reencode_intermediates: boolean;
+    normalize_audio: boolean;
+    subtitle_style: string;
+    word_highlight: boolean;
+    safe_area_enabled: boolean;
+    content_package: boolean;
+    use_two_pass: boolean;
+  };
+}
+
+export interface BgmFile {
+  name: string;
+  size: number;
+  file: string;
+}
+
+// ─── Project-mode types ───────────────────────────────────────────────────────
+
+// Request bodies
+export interface CreateFromTopicRequest {
+  topic: string;
+  language?: string;
+  generate_script?: boolean;
+  paragraph_number?: number;
+  global_visual_style?: string | null;
+  target_duration_sec?: number | null;
+}
+
+export interface CreateFromScriptRequest {
+  script: string;
+  language?: string;
+  topic?: string | null;
+  global_visual_style?: string | null;
+  target_duration_sec?: number | null;
+}
+
+export interface CreateFromRedditRequest {
+  url?: string | null;
+  title?: string | null;
+  body?: string | null;
+  comments?: string[];
+  language?: string;
+  topic?: string | null;
+}
+
+export interface PlanRequest {
+  target_duration_sec?: number | null;
+  global_visual_style?: string | null;
+}
+
+export interface MediaSearchRequest {
+  orientation?: string | null;
+  prefer_local?: boolean;
+}
+
+export interface TimelineBuildRequest {
+  title?: string | null;
+  narration_audio_path?: string | null;
+  subtitle_path?: string | null;
+}
+
+export type EditCommandType = "move" | "trim" | "replace" | "set_timing" | "set_volume";
+
+export interface LicenseInfo {
+  type?: string | null;
+  commercial_use?: boolean | null;
+  attribution_required?: boolean | null;
+  source_url?: string | null;
+  license_name?: string | null;
+  license_url?: string | null;
+  usage_notes?: string | null;
+  source_terms_url?: string | null;
+  training_restricted?: boolean | null;
+  redistribution_restricted?: boolean | null;
+  unknown_or_provider_specific?: boolean;
+}
+
+export interface MediaCandidate {
+  id: string;
+  provider: string;
+  source_url?: string | null;
+  download_url?: string | null;
+  local_path?: string | null;
+  thumbnail_url?: string | null;
+  width?: number | null;
+  height?: number | null;
+  duration_sec?: number | null;
+  fps?: number | null;
+  query?: string | null;
+  title?: string | null;
+  tags?: string[];
+  license?: LicenseInfo | null;
+  score?: number | null;
+  score_reasons?: string[];
+  segment_id?: string | null;
+}
+
+export interface MoveClipCommand {
+  type: "move";
+  track_id: string;
+  item_id: string;
+  new_start_sec: number;
+}
+
+export interface TrimClipCommand {
+  type: "trim";
+  track_id: string;
+  item_id: string;
+  trim_start_sec?: number;
+  trim_end_sec?: number | null;
+}
+
+export interface ReplaceClipCommand {
+  type: "replace";
+  track_id: string;
+  item_id: string;
+  new_candidate: MediaCandidate;
+}
+
+export interface SetClipTimingCommand {
+  type: "set_timing";
+  track_id: string;
+  item_id: string;
+  duration_sec: number;
+}
+
+export interface SetClipVolumeCommand {
+  type: "set_volume";
+  track_id: string;
+  item_id: string;
+  volume: number;
+}
+
+export type EditCommand =
+  | MoveClipCommand
+  | TrimClipCommand
+  | ReplaceClipCommand
+  | SetClipTimingCommand
+  | SetClipVolumeCommand;
+
+export interface TimelineCommandsRequest {
+  commands: EditCommand[];
+}
+
+export interface MusicSelectRequest {
+  mood?: string | null;
+  energy?: string | null;
+  tempo?: string | null;
+  style?: string | null;
+  avoid?: string[];
+  commercial_safe_only?: boolean;
+  local_only?: boolean;
+  volume?: number;
+}
+
+export interface RenderRequest {
+  renderer?: "moviepy" | "opencut" | null;
+  include_subtitles?: boolean;
+  include_background_music?: boolean;
+  subtitle_style?: string | null;
+  font_name?: string | null;
+}
+
+// Domain models
+export interface TimelineItem {
+  id: string;
+  media_id?: string | null;
+  local_path?: string | null;
+  asset_url?: string | null;
+  thumbnail_url?: string | null;
+  source_url?: string | null;
+  start_sec: number;
+  duration_sec: number;
+  trim_start_sec?: number;
+  trim_end_sec?: number | null;
+  segment_id?: string | null;
+  provider?: string | null;
+  transition_in?: string | null;
+  transition_out?: string | null;
+  volume?: number | null;
+  text?: string | null;
+  keywords?: string[];
+}
+
+export type TrackType = "video" | "audio" | "subtitle" | "overlay";
+
+export interface TimelineTrack {
+  id: string;
+  type: TrackType;
+  name: string;
+  items: TimelineItem[];
+}
+
+export interface ExportSettings {
+  width?: number;
+  height?: number;
+  fps?: number;
+  codec?: string;
+  audio_codec?: string;
+}
+
+export interface MusicIntent {
+  mood: string;
+  energy: string;
+  tempo?: string | null;
+  style?: string | null;
+  avoid?: string[];
+  commercial_use_required?: boolean;
+}
+
+export interface ShotSegment {
+  id: string;
+  order: number;
+  narration_text: string;
+  start_sec?: number | null;
+  end_sec?: number | null;
+  target_duration_sec: number;
+  visual_goal: string;
+  search_queries: string[];
+  fallback_queries?: string[];
+  preferred_providers?: string[];
+  must_avoid?: string[];
+  mood?: string | null;
+  pacing?: string | null;
+}
+
+export interface ShotPlan {
+  schema_version?: string;
+  task_id?: string | null;
+  language: string;
+  topic?: string | null;
+  script: string;
+  total_duration_sec?: number | null;
+  segments: ShotSegment[];
+  global_visual_style?: string | null;
+  music_intent?: MusicIntent | null;
+}
+
+export interface TimelineProject {
+  schema_version?: string;
+  project_id: string;
+  task_id?: string | null;
+  title?: string | null;
+  created_at?: string;
+  updated_at?: string;
+  script?: string | null;
+  shot_plan?: ShotPlan | null;
+  tracks: TimelineTrack[];
+  export?: ExportSettings;
+  metadata?: Record<string, unknown>;
+}
+
+export interface MusicTrack {
+  id: string;
+  provider: string;
+  local_path?: string | null;
+  url?: string | null;
+  title?: string | null;
+  tags?: string[];
+  duration_sec?: number | null;
+  license?: LicenseInfo | null;
+  volume?: number | null;
+  score?: number | null;
+  score_reasons?: string[];
+}
+
+export interface ProjectAsset {
+  asset_id: string;
+  path: string;
+}
+
+// Response shapes
+export interface CreateProjectResponse {
+  project_id: string;
+  has_script: boolean;
+  source_kind?: string;
+}
+
+export interface GetProjectResponse {
+  project_id: string;
+  has_script: boolean;
+  has_shot_plan: boolean;
+  has_selected_media: boolean;
+  has_timeline: boolean;
+  script?: string | null;
+  shot_plan?: ShotPlan | null;
+  timeline?: TimelineProject | null;
+  media_candidates?: MediaCandidate[];
+  selected_media?: MediaCandidate[];
+  selected_music?: MusicTrack[];
+  preview_assets?: ProjectAsset[];
+  topic?: string | null;
+  params?: Partial<VideoParams>;
+  videos?: string[];
+  combined_videos?: string[];
+}
+
+export interface PlanProjectResponse {
+  project_id: string;
+  segment_count: number;
+}
+
+export interface MediaSearchResponse {
+  project_id: string;
+  selected_count: number;
+}
+
+export interface TimelineBuildResponse {
+  project_id: string;
+  track_count: number;
+}
+
+export interface NarrationRequest {
+  voice_name?: string;
+  voice_rate?: number;
+  subtitle_enabled?: boolean;
+}
+
+export interface NarrationResponse {
+  project_id: string;
+  narration_audio_path: string;
+  audio_duration_sec: number;
+  subtitle_path?: string | null;
+}
+
+export interface TimelineCommandsResponse {
+  project_id: string;
+  applied: number;
+  valid?: boolean;
+  errors?: string[];
+}
+
+export interface TimelineValidateResponse {
+  project_id: string;
+  valid: boolean;
+  errors?: string[];
+}
+
+export interface MusicSelectResponse {
+  project_id: string;
+  selected?: MusicTrack | null;
+  selected_count: number;
+}
+
+export interface MusicGetResponse {
+  project_id: string;
+  tracks: MusicTrack[];
+}
+
+export interface ReplaceTimelineResponse {
+  project_id: string;
+}
+
+export interface RenderStartResponse {
+  project_id: string;
+  state: number;
+}
+
+export interface RenderStatusResponse {
+  task_id: string;
+  state: number;
+  progress: number;
+  output_path?: string | null;
+  error?: string | null;
+}
+
+export interface ListAssetsResponse {
+  project_id: string;
+  assets: string[];
+  preview_assets: ProjectAsset[];
+}
+
+// ─── TTS Provider types ───────────────────────────────────────────────────────
+
+export const TTS_PROVIDERS = [
+  { value: "no-voice", label: "Sin voz" },
+  { value: "azure-tts-v1", label: "Azure TTS V1" },
+  { value: "azure-tts-v2", label: "Azure TTS V2" },
+  { value: "siliconflow", label: "SiliconFlow TTS" },
+  { value: "gemini-tts", label: "Google Gemini TTS" },
+  { value: "mimo-tts", label: "Xiaomi MiMo TTS" },
+] as const;
+
+export type TtsProvider = (typeof TTS_PROVIDERS)[number]["value"];
+
+export interface VoiceOption {
+  value: string;
+  label: string;
+}
+
+export interface VoicesResponse {
+  voices: VoiceOption[];
+}
