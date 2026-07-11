@@ -311,22 +311,22 @@ export function PresetManager() {
             id="preset-select-dropdown"
             value={activePresetId || ""}
             onChange={(e) => handleSelectPreset(e.target.value)}
-            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium text-foreground shadow-sm focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+            className="w-full rounded-lg border border-border bg-neutral-900 px-3 py-2 text-xs font-semibold text-neutral-100 shadow-sm focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
           >
-            <option value="">{t("presets.select")}</option>
+            <option value="" className="bg-neutral-950 text-neutral-100">{t("presets.select")}</option>
             {systemPresets.length > 0 && (
-              <optgroup label={t("presets.systemPresets")}>
+              <optgroup label={t("presets.systemPresets")} className="bg-neutral-950 text-neutral-400 font-bold">
                 {systemPresets.map((p) => (
-                  <option key={p.id} value={p.id}>
+                  <option key={p.id} value={p.id} className="bg-neutral-900 text-neutral-100 font-medium">
                     {getPresetDisplayName(p)} {defaultPresetId === p.id ? ` ★` : ""}
                   </option>
                 ))}
               </optgroup>
             )}
             {customPresets.length > 0 && (
-              <optgroup label={t("presets.customPresets")}>
+              <optgroup label={t("presets.customPresets")} className="bg-neutral-950 text-neutral-400 font-bold">
                 {customPresets.map((p) => (
-                  <option key={p.id} value={p.id}>
+                  <option key={p.id} value={p.id} className="bg-neutral-900 text-neutral-100 font-medium">
                     {getPresetDisplayName(p)} {defaultPresetId === p.id ? ` ★` : ""}
                   </option>
                 ))}
@@ -542,6 +542,99 @@ export function PresetManager() {
                 <span> Los presets del sistema son de solo lectura, pero puedes guardar tus cambios como un nuevo preset personalizado (<Plus className="inline h-3 w-3 mx-0.5" />).</span>
               )}
             </p>
+          </div>
+        </div>
+      )}
+
+      {/* Custom Presets List for direct management */}
+      {customPresets.length > 0 && (
+        <div className="pt-2 border-t border-border/50 space-y-2.5">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-muted block">
+            {t("presets.customPresets")}
+          </span>
+          <div className="space-y-1.5 max-h-[160px] overflow-y-auto pr-1">
+            {customPresets.map((p) => {
+              const isDefault = defaultPresetId === p.id;
+              const isActive = activePresetId === p.id;
+              return (
+                <div 
+                  key={p.id}
+                  className={`flex items-center justify-between rounded-lg px-2.5 py-1.5 text-xs transition-colors ${
+                    isActive 
+                      ? "bg-accent/10 border border-accent/20 text-foreground" 
+                      : "bg-background/40 hover:bg-background/80 border border-border/50 text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {/* Clickable name to select it */}
+                  <button
+                    type="button"
+                    onClick={() => handleSelectPreset(p.id)}
+                    className="flex-1 text-left font-medium truncate pr-2 hover:underline"
+                    title={`Cargar ${p.name}`}
+                  >
+                    {p.name}
+                  </button>
+
+                  <div className="flex items-center gap-1.5">
+                    {/* Select/Active Indicator */}
+                    {isActive && (
+                      <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-green-500/10 text-green-400 border border-green-500/20 mr-1 text-center scale-90">
+                        Activo
+                      </span>
+                    )}
+
+                    {/* Default/Star Button */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (isDefault) {
+                          presetStore.setDefaultPresetId(null);
+                          showToast(t("presets.defaultCleared"), "info");
+                        } else {
+                          presetStore.setDefaultPresetId(p.id);
+                          showToast(t("presets.defaultSet"));
+                        }
+                      }}
+                      title={isDefault ? t("presets.clearDefault") : t("presets.setDefault")}
+                      className={`p-1 rounded hover:bg-surface-hover transition-colors ${
+                        isDefault ? "text-yellow-500" : "text-muted hover:text-yellow-500"
+                      }`}
+                    >
+                      <Star className={`h-3.5 w-3.5 ${isDefault ? "fill-yellow-500" : ""}`} />
+                    </button>
+
+                    {/* Rename Button */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        presetStore.setActivePresetId(p.id);
+                        setIsRenaming(true);
+                        setRenameValue(p.name);
+                      }}
+                      title={t("presets.edit")}
+                      className="p-1 rounded text-muted hover:text-foreground hover:bg-surface-hover transition-colors"
+                    >
+                      <Edit2 className="h-3.5 w-3.5" />
+                    </button>
+
+                    {/* Delete Button */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (confirm(t("presets.confirmDelete"))) {
+                          presetStore.deletePreset(p.id);
+                          showToast(`${t("presets.deleted")}: ${p.name}`, "info");
+                        }
+                      }}
+                      title={t("presets.delete")}
+                      className="p-1 rounded text-muted hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
