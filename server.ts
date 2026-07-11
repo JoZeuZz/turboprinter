@@ -386,7 +386,7 @@ async function startServer() {
 
     if (process.env.GEMINI_API_KEY) {
       try {
-        const prompt = `Escribe un guión de video cautivador sobre "${video_subject}" en idioma ${video_language}. Debe tener aproximadamente ${paragraph_number} párrafos bien estructurados. Devuelve SOLAMENTE el texto del guión, sin introducciones ni comentarios adicionales.`;
+        const prompt = `Escribe un guión de video cautivador, detallado y narrativo sobre "${video_subject}" en idioma ${video_language}. Es CRÍTICO que el guión tenga exactamente ${paragraph_number} párrafos bien estructurados, completos y detallados (cada párrafo debe ser lo suficientemente largo y descriptivo, óptimo para narrar una historia o un documental). Separa cada párrafo estrictamente con dos saltos de línea (\\n\\n). Devuelve SOLAMENTE el texto del guión, sin títulos, introducciones ni comentarios adicionales.`;
         scriptText = await generateGeminiContent(prompt);
       } catch (err) {
         console.warn("Gemini script generation failed, falling back to static", err);
@@ -394,11 +394,22 @@ async function startServer() {
     }
 
     if (!scriptText) {
-      scriptText = [
-        `Bienvenidos a este viaje fascinante por el mundo de ${video_subject}. Hoy exploraremos los misterios y las bellezas que hacen que este tema sea tan apasionante.`,
-        `A medida que profundizamos, descubrimos detalles asombrosos que cambian por completo nuestra perspectiva. Es realmente increíble contemplar cómo la ciencia, la naturaleza y la creatividad se combinan.`,
-        `Esperamos que hayan disfrutado de este breve recorrido. Sigan explorando, sigan aprendiendo, y no olviden que la curiosidad es el motor del conocimiento.`
-      ].slice(0, paragraph_number).join("\n\n");
+      const fallbackParagraphs = [
+        `Bienvenidos a este viaje fascinante y profundamente revelador por el maravilloso mundo de ${video_subject}. En este relato, nos disponemos a desentrañar los secretos más asombrosos, las leyendas ocultas y los acontecimientos históricos que han dado forma a este tema y que despiertan una inmensa pasión en todos aquellos que se atreven a explorarlo con una mirada curiosa y atenta.`,
+        `Al adentrarnos en las profundidades de ${video_subject}, comenzamos a descubrir detalles verdaderamente sorprendentes que desafían lo convencional y cambian por completo nuestra percepción cotidiana de la realidad. Es un espectáculo absolutamente asombroso contemplar cómo la ciencia rigurosa, la majestuosidad de la naturaleza indómita y la chispa inagotable de la creatividad humana se entrelazan de manera perfecta para crear algo único.`,
+        `Cada rincón y cada época relacionados con ${video_subject} albergan lecciones valiosas de perseverancia, ingenio y misterio. A través de los años, grandes pensadores y exploradores dedicaron sus vidas enteras a comprender estas dinámicas, dejando un legado imborrable que hoy en día continúa inspirando a nuevas generaciones de entusiastas en todo el planeta.`,
+        `Este impacto cultural y social no solo se limita al pasado, sino que sigue moldeando activamente nuestras interacciones modernas y la forma en que concebimos el mañana. Comprender la esencia misma de ${video_subject} nos permite conectar con un propósito mayor, reconociendo las influencias invisibles pero poderosas que guían constantemente nuestras decisiones y nuestra evolución colectiva.`,
+        `Esperamos sinceramente que hayan disfrutado al máximo de este enriquecedor recorrido lleno de aprendizaje y asombro. Los invitamos cordialmente a seguir explorando este y otros enigmas con la mente abierta, recordando siempre que la curiosidad insaciable es el verdadero motor que impulsa el conocimiento humano hacia horizontes infinitos.`
+      ];
+
+      const resultParagraphs = [...fallbackParagraphs];
+      while (resultParagraphs.length < paragraph_number) {
+        resultParagraphs.push(
+          `Además, al reflexionar sobre la trascendencia de ${video_subject}, nos damos cuenta de que existen dimensiones inexploradas que prometen seguir revelando sorpresas y planteando preguntas fascinantes en los años venideros, consolidando su lugar como un pilar fundamental en la historia del saber.`
+        );
+      }
+
+      scriptText = resultParagraphs.slice(0, paragraph_number).join("\n\n");
     }
 
     res.json({ status: 200, message: "ok", data: { video_script: scriptText } });
