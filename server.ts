@@ -374,6 +374,23 @@ async function startServer() {
     });
   }));
 
+  function getFallbackScript(subject: string, paragraph_number: number): string {
+    const fallbackParagraphs = [
+      `Bienvenidos a este viaje fascinante y profundamente revelador por el maravilloso mundo de ${subject}. En este relato, nos disponemos a desentrañar los secretos más asombrosos, las leyendas ocultas y los acontecimientos históricos que han dado forma a este tema y que despiertan una inmensa pasión en todos aquellos que se atreven a explorarlo con una mirada curiosa y atenta.`,
+      `Al adentrarnos en las profundidades de ${subject}, comenzamos a descubrir detalles verdaderamente sorprendentes que desafían lo unconventional y cambian por completo nuestra percepción cotidiana de la realidad. Es un espectáculo absolutamente asombroso contemplar cómo la ciencia rigurosa, la majestuosidad de la naturaleza indómita y la chispa inagotable de la creatividad humana se entrelazan de manera perfecta para crear algo único.`,
+      `Cada rincón y cada época relacionados con ${subject} albergan lecciones valiosas de perseverancia, ingenio y misterio. A través de los años, grandes pensadores y exploradores dedicaron sus vidas enteras a comprender estas dinámicas, dejando un legado imborrable que hoy en día continúa inspirando a nuevas generaciones de entusiastas en todo el planeta.`,
+      `Además, el impacto cultural y social de ${subject} no solo se limita al pasado, sino que sigue moldeando activamente nuestras interacciones modernas y la forma en que concebimos el mañana. Comprender su esencia misma nos permite conectar con un propósito mayor, reconociendo las influencias invisibles pero poderosas que guían constantemente nuestras decisiones y nuestra evolución colectiva.`,
+      `Es fascinante observar cómo las diferentes corrientes de pensamiento han convergido en torno a ${subject}, aportando cada una de ellas una perspectiva valiosa y única que enriquece el debate global. Desde las aplicaciones más prácticas del día a día hasta las teorías más abstractas de la filosofía y el arte, este campo de estudio se consolida como un puente indispensable entre diversas disciplinas del saber humano.`,
+      `A medida que la tecnología y la investigación avanzan a pasos agigantados, nuevas dimensiones de ${subject} comienzan a revelarse ante nuestros ojos, planteando desafíos emocionantes y oportunidades sin precedentes. Los expertos coinciden en que apenas estamos rozando la superficie de lo que es posible alcanzar, lo que convierte a esta disciplina en un terreno sumamente fértil para la innovación y el descubrimiento continuo.`,
+      `Por otro lado, la vertiente humana de ${subject} nos recuerda la importancia de la empatía, la colaboración y el esfuerzo compartido en la construcción de un futuro más próspero. Las grandes historias de éxito asociadas a este ámbito suelen estar protagonizadas por personas comunes que, impulsadas por una visión extraordinaria, lograron superar barreras aparentemente insalvables.`,
+      `Al reflexionar con mayor profundidad sobre la trascendencia de ${subject}, nos damos cuenta de que cada pequeño avance en esta materia contribuye a tejer una red global de conocimiento interconectado. Esta sinergia no solo acelera el progreso técnico, sino que también fomenta un entendimiento más profundo y compasivo entre las diversas comunidades que cohabitan en nuestro planeta.`,
+      `De cara a los próximos años, se vislumbra que ${subject} jugará un papel crucial en la resolución de algunos de los interrogantes más complejos del nuevo milenio. Estar preparados para comprender estos cambios y adaptarnos a ellos con flexibilidad será, sin duda, una de las habilidades más valiosas para las generaciones venideras.`,
+      `Esperamos sinceramente que hayan disfrutado al máximo de este enriquecedor recorrido lleno de aprendizaje y asombro por el universo de ${subject}. Los invitamos cordialmente a seguir explorando este y otros enigmas con la mente abierta, recordando siempre que la curiosidad insaciable es el verdadero motor que impulsa el conocimiento humano hacia horizontes infinitos.`
+    ];
+
+    return fallbackParagraphs.slice(0, paragraph_number).join("\n\n");
+  }
+
   app.post("/api/v1/voices/preview", wrap(async (req: any, res: any) => {
     // Redirect to a real lovely sample mp3 file
     res.redirect("https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3");
@@ -394,22 +411,7 @@ async function startServer() {
     }
 
     if (!scriptText) {
-      const fallbackParagraphs = [
-        `Bienvenidos a este viaje fascinante y profundamente revelador por el maravilloso mundo de ${video_subject}. En este relato, nos disponemos a desentrañar los secretos más asombrosos, las leyendas ocultas y los acontecimientos históricos que han dado forma a este tema y que despiertan una inmensa pasión en todos aquellos que se atreven a explorarlo con una mirada curiosa y atenta.`,
-        `Al adentrarnos en las profundidades de ${video_subject}, comenzamos a descubrir detalles verdaderamente sorprendentes que desafían lo convencional y cambian por completo nuestra percepción cotidiana de la realidad. Es un espectáculo absolutamente asombroso contemplar cómo la ciencia rigurosa, la majestuosidad de la naturaleza indómita y la chispa inagotable de la creatividad humana se entrelazan de manera perfecta para crear algo único.`,
-        `Cada rincón y cada época relacionados con ${video_subject} albergan lecciones valiosas de perseverancia, ingenio y misterio. A través de los años, grandes pensadores y exploradores dedicaron sus vidas enteras a comprender estas dinámicas, dejando un legado imborrable que hoy en día continúa inspirando a nuevas generaciones de entusiastas en todo el planeta.`,
-        `Este impacto cultural y social no solo se limita al pasado, sino que sigue moldeando activamente nuestras interacciones modernas y la forma en que concebimos el mañana. Comprender la esencia misma de ${video_subject} nos permite conectar con un propósito mayor, reconociendo las influencias invisibles pero poderosas que guían constantemente nuestras decisiones y nuestra evolución colectiva.`,
-        `Esperamos sinceramente que hayan disfrutado al máximo de este enriquecedor recorrido lleno de aprendizaje y asombro. Los invitamos cordialmente a seguir explorando este y otros enigmas con la mente abierta, recordando siempre que la curiosidad insaciable es el verdadero motor que impulsa el conocimiento humano hacia horizontes infinitos.`
-      ];
-
-      const resultParagraphs = [...fallbackParagraphs];
-      while (resultParagraphs.length < paragraph_number) {
-        resultParagraphs.push(
-          `Además, al reflexionar sobre la trascendencia de ${video_subject}, nos damos cuenta de que existen dimensiones inexploradas que prometen seguir revelando sorpresas y planteando preguntas fascinantes en los años venideros, consolidando su lugar como un pilar fundamental en la historia del saber.`
-        );
-      }
-
-      scriptText = resultParagraphs.slice(0, paragraph_number).join("\n\n");
+      scriptText = getFallbackScript(video_subject, paragraph_number);
     }
 
     res.json({ status: 200, message: "ok", data: { video_script: scriptText } });
@@ -648,18 +650,14 @@ async function startServer() {
     if (generate_script) {
       if (process.env.GEMINI_API_KEY) {
         try {
-          const prompt = `Escribe un guión de video para un video educativo sobre "${topic}" en idioma ${language}. Debe tener alrededor de ${paragraph_number} párrafos. Devuelve únicamente el guión final.`;
+          const prompt = `Escribe un guión de video cautivador, detallado y narrativo sobre "${topic}" en idioma ${language}. Es CRÍTICO que el guión tenga exactamente ${paragraph_number} párrafos bien estructurados, completos y detallados (cada párrafo debe ser lo suficientemente largo y descriptivo, óptimo para narrar una historia o un documental). Separa cada párrafo estrictamente con dos saltos de línea (\\n\\n). Devuelve SOLAMENTE el texto del guión, sin títulos, introducciones ni comentarios adicionales.`;
           scriptText = await generateGeminiContent(prompt);
         } catch {
           // ignore
         }
       }
       if (!scriptText) {
-        scriptText = [
-          `Hoy profundizaremos en el maravilloso concepto de ${topic}. Este tema ha revolucionado la forma en que entendemos el mundo actual.`,
-          `Históricamente, los desarrollos han demostrado que ${topic} influye en múltiples sectores, desde el arte hasta la tecnología más avanzada.`,
-          `Para concluir, el futuro de ${topic} sigue brillando con fuerza y promete continuar inspirando a las próximas generaciones.`
-        ].slice(0, paragraph_number).join("\n\n");
+        scriptText = getFallbackScript(topic, paragraph_number);
       }
     }
 
