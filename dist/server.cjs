@@ -331,24 +331,80 @@ async function startServer() {
   }));
   app.get("/api/v1/voices", wrap(async (req, res) => {
     const provider = req.query.provider || "";
-    let voicesList = [
-      { value: "Zephyr", label: "Zephyr (Neutral/Friendly)" },
-      { value: "Kore", label: "Kore (Cheer/Energetic)" },
-      { value: "Puck", label: "Puck (Narrator/Deep)" },
-      { value: "Fenrir", label: "Fenrir (Soft/Calm)" },
-      { value: "Charon", label: "Charon (Professional)" }
-    ];
-    if (provider === "azure-tts-v1" || provider === "edge-tts") {
+    let voicesList = [];
+    if (provider === "azure-tts-v1" || provider === "edge-tts" || provider === "azure-tts-v2") {
+      try {
+        const azureVoicesPath = import_path.default.join(process.cwd(), "src", "api", "azure_voices.json");
+        if (import_fs.default.existsSync(azureVoicesPath)) {
+          const rawData = import_fs.default.readFileSync(azureVoicesPath, "utf-8");
+          const azureVoicesList = JSON.parse(rawData);
+          voicesList = azureVoicesList.map((item) => ({
+            value: `${item.name}-${item.gender}`,
+            label: `${item.name} (${item.gender})`
+          }));
+        } else {
+          voicesList = [
+            { value: "es-ES-AlvaroNeural-Male", label: "es-ES-AlvaroNeural (Male)" },
+            { value: "es-ES-ElviraNeural-Female", label: "es-ES-ElviraNeural (Female)" },
+            { value: "es-MX-DaliaNeural-Female", label: "es-MX-DaliaNeural (Female)" },
+            { value: "es-MX-JorgeNeural-Male", label: "es-MX-JorgeNeural (Male)" },
+            { value: "en-US-JennyNeural-Female", label: "en-US-JennyNeural (Female)" },
+            { value: "en-US-GuyNeural-Male", label: "en-US-GuyNeural (Male)" },
+            { value: "zh-CN-XiaoxiaoNeural-Female", label: "zh-CN-XiaoxiaoNeural (Female)" },
+            { value: "zh-CN-YunxiNeural-Male", label: "zh-CN-YunxiNeural (Male)" }
+          ];
+        }
+      } catch (err) {
+        console.error("Failed to load azure voices JSON:", err);
+      }
+    } else if (provider === "siliconflow") {
       voicesList = [
-        { value: "es-ES-AlvaroNeural", label: "es-ES \xC1lvaro (Male)" },
-        { value: "es-ES-ElviraNeural", label: "es-ES Elvira (Female)" },
-        { value: "es-MX-DaliaNeural", label: "es-MX Dalia (Female)" },
-        { value: "es-MX-JorgeNeural", label: "es-MX Jorge (Male)" },
-        { value: "en-US-JennyNeural", label: "en-US Jenny (Female)" },
-        { value: "en-US-GuyNeural", label: "en-US Guy (Male)" },
-        { value: "zh-CN-XiaoxiaoNeural", label: "zh-CN Xiaoxiao (Female)" },
-        { value: "zh-CN-YunxiNeural", label: "zh-CN Yunxi (Male)" },
-        ...voicesList
+        { value: "siliconflow:FunAudioLLM/CosyVoice2-0.5B:alex-Male", label: "alex (Male)" },
+        { value: "siliconflow:FunAudioLLM/CosyVoice2-0.5B:anna-Female", label: "anna (Female)" },
+        { value: "siliconflow:FunAudioLLM/CosyVoice2-0.5B:bella-Female", label: "bella (Female)" },
+        { value: "siliconflow:FunAudioLLM/CosyVoice2-0.5B:benjamin-Male", label: "benjamin (Male)" },
+        { value: "siliconflow:FunAudioLLM/CosyVoice2-0.5B:charles-Male", label: "charles (Male)" },
+        { value: "siliconflow:FunAudioLLM/CosyVoice2-0.5B:claire-Female", label: "claire (Female)" },
+        { value: "siliconflow:FunAudioLLM/CosyVoice2-0.5B:david-Male", label: "david (Male)" },
+        { value: "siliconflow:FunAudioLLM/CosyVoice2-0.5B:diana-Female", label: "diana (Female)" }
+      ];
+    } else if (provider === "gemini-tts") {
+      voicesList = [
+        { value: "gemini:Zephyr-Female", label: "Zephyr (Female)" },
+        { value: "gemini:Puck-Male", label: "Puck (Male)" },
+        { value: "gemini:Charon-Male", label: "Charon (Male)" },
+        { value: "gemini:Kore-Female", label: "Kore (Female)" },
+        { value: "gemini:Fenrir-Male", label: "Fenrir (Male)" },
+        { value: "gemini:Aoede-Female", label: "Aoede (Female)" },
+        { value: "gemini:Thalia-Female", label: "Thalia (Female)" },
+        { value: "gemini:Sage-Male", label: "Sage (Male)" },
+        { value: "gemini:Echo-Female", label: "Echo (Female)" },
+        { value: "gemini:Harmony-Female", label: "Harmony (Female)" },
+        { value: "gemini:Lux-Female", label: "Lux (Female)" },
+        { value: "gemini:Nova-Female", label: "Nova (Female)" },
+        { value: "gemini:Vale-Male", label: "Vale (Male)" },
+        { value: "gemini:Orion-Male", label: "Orion (Male)" },
+        { value: "gemini:Atlas-Male", label: "Atlas (Male)" }
+      ];
+    } else if (provider === "mimo-tts") {
+      voicesList = [
+        { value: "mimo:mimo_default-Female", label: "mimo_default (Female)" },
+        { value: "mimo:\u51B0\u7CD6-Female", label: "\u51B0\u7CD6 (Female)" },
+        { value: "mimo:\u8309\u8389-Female", label: "\u8309\u8389 (Female)" },
+        { value: "mimo:\u82CF\u6253-Male", label: "\u82CF\u6253 (Male)" },
+        { value: "mimo:\u767D\u6866-Male", label: "\u767D\u6866 (Male)" },
+        { value: "mimo:Mia-Female", label: "Mia (Female)" },
+        { value: "mimo:Chloe-Female", label: "Chloe (Female)" },
+        { value: "mimo:Milo-Male", label: "Milo (Male)" },
+        { value: "mimo:Dean-Male", label: "Dean (Male)" }
+      ];
+    } else {
+      voicesList = [
+        { value: "Zephyr-Female", label: "Zephyr (Female)" },
+        { value: "Kore-Female", label: "Kore (Female)" },
+        { value: "Puck-Male", label: "Puck (Male)" },
+        { value: "Fenrir-Male", label: "Fenrir (Male)" },
+        { value: "Charon-Male", label: "Charon (Male)" }
       ];
     }
     res.json({
@@ -375,7 +431,79 @@ async function startServer() {
     return fallbackParagraphs.slice(0, paragraph_number).join("\n\n");
   }
   app.post("/api/v1/voices/preview", wrap(async (req, res) => {
-    res.redirect("https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3");
+    try {
+      const response = await fetch("https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3");
+      if (!response.ok) {
+        throw new Error(`Failed to fetch preview audio: ${response.status}`);
+      }
+      res.setHeader("Content-Type", "audio/mpeg");
+      const arrayBuffer = await response.arrayBuffer();
+      res.send(Buffer.from(arrayBuffer));
+    } catch (err) {
+      console.error("Error fetching preview audio, falling back to silent wave:", err);
+      const waveHeader = Buffer.from([
+        82,
+        73,
+        70,
+        70,
+        // "RIFF"
+        36,
+        8,
+        0,
+        0,
+        // Chunk size
+        87,
+        65,
+        86,
+        69,
+        // "WAVE"
+        102,
+        109,
+        116,
+        32,
+        // "fmt "
+        16,
+        0,
+        0,
+        0,
+        // Subchunk1Size
+        1,
+        0,
+        // AudioFormat: PCM
+        1,
+        0,
+        // NumChannels: Mono
+        64,
+        31,
+        0,
+        0,
+        // SampleRate: 8000
+        64,
+        31,
+        0,
+        0,
+        // ByteRate: 8000
+        1,
+        0,
+        // BlockAlign
+        8,
+        0,
+        // BitsPerSample: 8
+        100,
+        97,
+        116,
+        97,
+        // "data"
+        0,
+        8,
+        0,
+        0
+        // Subchunk2Size
+      ]);
+      const waveData = Buffer.alloc(2048, 128);
+      res.setHeader("Content-Type", "audio/wav");
+      res.send(Buffer.concat([waveHeader, waveData]));
+    }
   }));
   app.post("/api/v1/scripts", wrap(async (req, res) => {
     const { video_subject, video_language = "es", paragraph_number = 3 } = req.body;

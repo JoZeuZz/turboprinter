@@ -343,25 +343,82 @@ async function startServer() {
   app.get("/api/v1/voices", wrap(async (req: any, res: any) => {
     const provider = req.query.provider || "";
 
-    let voicesList = [
-      { value: "Zephyr", label: "Zephyr (Neutral/Friendly)" },
-      { value: "Kore", label: "Kore (Cheer/Energetic)" },
-      { value: "Puck", label: "Puck (Narrator/Deep)" },
-      { value: "Fenrir", label: "Fenrir (Soft/Calm)" },
-      { value: "Charon", label: "Charon (Professional)" }
-    ];
+    let voicesList: { value: string; label: string }[] = [];
 
-    if (provider === "azure-tts-v1" || provider === "edge-tts") {
+    if (provider === "azure-tts-v1" || provider === "edge-tts" || provider === "azure-tts-v2") {
+      try {
+        const azureVoicesPath = path.join(process.cwd(), "src", "api", "azure_voices.json");
+        if (fs.existsSync(azureVoicesPath)) {
+          const rawData = fs.readFileSync(azureVoicesPath, "utf-8");
+          const azureVoicesList = JSON.parse(rawData);
+          voicesList = azureVoicesList.map((item: any) => ({
+            value: `${item.name}-${item.gender}`,
+            label: `${item.name} (${item.gender})`
+          }));
+        } else {
+          voicesList = [
+            { value: "es-ES-AlvaroNeural-Male", label: "es-ES-AlvaroNeural (Male)" },
+            { value: "es-ES-ElviraNeural-Female", label: "es-ES-ElviraNeural (Female)" },
+            { value: "es-MX-DaliaNeural-Female", label: "es-MX-DaliaNeural (Female)" },
+            { value: "es-MX-JorgeNeural-Male", label: "es-MX-JorgeNeural (Male)" },
+            { value: "en-US-JennyNeural-Female", label: "en-US-JennyNeural (Female)" },
+            { value: "en-US-GuyNeural-Male", label: "en-US-GuyNeural (Male)" },
+            { value: "zh-CN-XiaoxiaoNeural-Female", label: "zh-CN-XiaoxiaoNeural (Female)" },
+            { value: "zh-CN-YunxiNeural-Male", label: "zh-CN-YunxiNeural (Male)" }
+          ];
+        }
+      } catch (err) {
+        console.error("Failed to load azure voices JSON:", err);
+      }
+    } else if (provider === "siliconflow") {
       voicesList = [
-        { value: "es-ES-AlvaroNeural", label: "es-ES Álvaro (Male)" },
-        { value: "es-ES-ElviraNeural", label: "es-ES Elvira (Female)" },
-        { value: "es-MX-DaliaNeural", label: "es-MX Dalia (Female)" },
-        { value: "es-MX-JorgeNeural", label: "es-MX Jorge (Male)" },
-        { value: "en-US-JennyNeural", label: "en-US Jenny (Female)" },
-        { value: "en-US-GuyNeural", label: "en-US Guy (Male)" },
-        { value: "zh-CN-XiaoxiaoNeural", label: "zh-CN Xiaoxiao (Female)" },
-        { value: "zh-CN-YunxiNeural", label: "zh-CN Yunxi (Male)" },
-        ...voicesList
+        { value: "siliconflow:FunAudioLLM/CosyVoice2-0.5B:alex-Male", label: "alex (Male)" },
+        { value: "siliconflow:FunAudioLLM/CosyVoice2-0.5B:anna-Female", label: "anna (Female)" },
+        { value: "siliconflow:FunAudioLLM/CosyVoice2-0.5B:bella-Female", label: "bella (Female)" },
+        { value: "siliconflow:FunAudioLLM/CosyVoice2-0.5B:benjamin-Male", label: "benjamin (Male)" },
+        { value: "siliconflow:FunAudioLLM/CosyVoice2-0.5B:charles-Male", label: "charles (Male)" },
+        { value: "siliconflow:FunAudioLLM/CosyVoice2-0.5B:claire-Female", label: "claire (Female)" },
+        { value: "siliconflow:FunAudioLLM/CosyVoice2-0.5B:david-Male", label: "david (Male)" },
+        { value: "siliconflow:FunAudioLLM/CosyVoice2-0.5B:diana-Female", label: "diana (Female)" }
+      ];
+    } else if (provider === "gemini-tts") {
+      voicesList = [
+        { value: "gemini:Zephyr-Female", label: "Zephyr (Female)" },
+        { value: "gemini:Puck-Male", label: "Puck (Male)" },
+        { value: "gemini:Charon-Male", label: "Charon (Male)" },
+        { value: "gemini:Kore-Female", label: "Kore (Female)" },
+        { value: "gemini:Fenrir-Male", label: "Fenrir (Male)" },
+        { value: "gemini:Aoede-Female", label: "Aoede (Female)" },
+        { value: "gemini:Thalia-Female", label: "Thalia (Female)" },
+        { value: "gemini:Sage-Male", label: "Sage (Male)" },
+        { value: "gemini:Echo-Female", label: "Echo (Female)" },
+        { value: "gemini:Harmony-Female", label: "Harmony (Female)" },
+        { value: "gemini:Lux-Female", label: "Lux (Female)" },
+        { value: "gemini:Nova-Female", label: "Nova (Female)" },
+        { value: "gemini:Vale-Male", label: "Vale (Male)" },
+        { value: "gemini:Orion-Male", label: "Orion (Male)" },
+        { value: "gemini:Atlas-Male", label: "Atlas (Male)" }
+      ];
+    } else if (provider === "mimo-tts") {
+      voicesList = [
+        { value: "mimo:mimo_default-Female", label: "mimo_default (Female)" },
+        { value: "mimo:冰糖-Female", label: "冰糖 (Female)" },
+        { value: "mimo:茉莉-Female", label: "茉莉 (Female)" },
+        { value: "mimo:苏打-Male", label: "苏打 (Male)" },
+        { value: "mimo:白桦-Male", label: "白桦 (Male)" },
+        { value: "mimo:Mia-Female", label: "Mia (Female)" },
+        { value: "mimo:Chloe-Female", label: "Chloe (Female)" },
+        { value: "mimo:Milo-Male", label: "Milo (Male)" },
+        { value: "mimo:Dean-Male", label: "Dean (Male)" }
+      ];
+    } else {
+      // Default fallback
+      voicesList = [
+        { value: "Zephyr-Female", label: "Zephyr (Female)" },
+        { value: "Kore-Female", label: "Kore (Female)" },
+        { value: "Puck-Male", label: "Puck (Male)" },
+        { value: "Fenrir-Male", label: "Fenrir (Male)" },
+        { value: "Charon-Male", label: "Charon (Male)" }
       ];
     }
 
@@ -392,8 +449,36 @@ async function startServer() {
   }
 
   app.post("/api/v1/voices/preview", wrap(async (req: any, res: any) => {
-    // Redirect to a real lovely sample mp3 file
-    res.redirect("https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3");
+    try {
+      const response = await fetch("https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3");
+      if (!response.ok) {
+        throw new Error(`Failed to fetch preview audio: ${response.status}`);
+      }
+      res.setHeader("Content-Type", "audio/mpeg");
+      const arrayBuffer = await response.arrayBuffer();
+      res.send(Buffer.from(arrayBuffer));
+    } catch (err) {
+      console.error("Error fetching preview audio, falling back to silent wave:", err);
+      // Fallback to a locally generated valid short silent WAV file so it never fails!
+      const waveHeader = Buffer.from([
+        0x52, 0x49, 0x46, 0x46, // "RIFF"
+        0x24, 0x08, 0x00, 0x00, // Chunk size
+        0x57, 0x41, 0x56, 0x45, // "WAVE"
+        0x66, 0x6d, 0x74, 0x20, // "fmt "
+        0x10, 0x00, 0x00, 0x00, // Subchunk1Size
+        0x01, 0x00,             // AudioFormat: PCM
+        0x01, 0x00,             // NumChannels: Mono
+        0x40, 0x1f, 0x00, 0x00, // SampleRate: 8000
+        0x40, 0x1f, 0x00, 0x00, // ByteRate: 8000
+        0x01, 0x00,             // BlockAlign
+        0x08, 0x00,             // BitsPerSample: 8
+        0x64, 0x61, 0x74, 0x61, // "data"
+        0x00, 0x08, 0x00, 0x00  // Subchunk2Size
+      ]);
+      const waveData = Buffer.alloc(2048, 128); // 128 is silence in 8-bit PCM
+      res.setHeader("Content-Type", "audio/wav");
+      res.send(Buffer.concat([waveHeader, waveData]));
+    }
   }));
 
   // 3. LLM APIs (Scripts & Terms)
