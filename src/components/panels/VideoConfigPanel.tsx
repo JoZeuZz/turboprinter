@@ -22,6 +22,7 @@ import { voiceApi } from "../../api/voice";
 import { SubtitleFontGallery } from "../subtitles/SubtitleFontGallery";
 import { SubtitlePreview } from "../subtitles/SubtitlePreview";
 import { VoiceGallery } from "../voice/VoiceGallery";
+import { PresetManager } from "../presets/PresetManager";
 import { TTS_PROVIDERS, type TtsProvider } from "../../api/types";
 import type {
   VideoAspect,
@@ -154,6 +155,8 @@ export function VideoConfigPanel() {
         <div className="grid h-full min-h-0 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(220px,260px)]">
           <div className="h-full min-h-0 overflow-y-auto pr-1 pb-6">
             <div className="min-w-0 space-y-3">
+              <PresetManager />
+
         {tab === "video" && (
           <>
             <Select
