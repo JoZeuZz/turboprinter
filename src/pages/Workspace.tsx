@@ -72,7 +72,7 @@ export function Workspace() {
             panel: "review",
           });
         } else {
-          setPanel(state.has_timeline ? "review" : "script");
+          setPanel(state.has_timeline ? "editor" : "script");
         }
       })
       .catch(() => {

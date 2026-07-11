@@ -116,7 +116,7 @@ async function generateGeminiContent(prompt, jsonMode = false) {
   }
   try {
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -156,7 +156,7 @@ var globalConfig = {
       llm_request_timeout_seconds: 60,
       llm_connect_timeout_seconds: 10,
       gemini_api_key: "",
-      gemini_model_name: "gemini-2.5-flash",
+      gemini_model_name: "gemini-3.5-flash",
       subtitle_provider: "whisper",
       endpoint: "",
       material_directory: "",
@@ -708,21 +708,21 @@ async function startServer() {
     }, 1500);
     res.json({ status: 200, message: "ok", data: { task_id: taskId } });
   }));
-  app.get("/tasks/:id", wrap(async (req, res) => {
+  app.get("/api/v1/tasks/:id", wrap(async (req, res) => {
     const t = tasks.get(req.params.id);
     if (!t) {
       return res.status(404).json({ status: 404, message: "Task not found", data: null });
     }
     res.json({ status: 200, message: "ok", data: t });
   }));
-  app.get("/tasks", wrap(async (req, res) => {
+  app.get("/api/v1/tasks", wrap(async (req, res) => {
     const data = {};
     for (const [k, v] of tasks.entries()) {
       data[k] = v;
     }
     res.json({ status: 200, message: "ok", data });
   }));
-  app.delete("/tasks/:id", wrap(async (req, res) => {
+  app.delete("/api/v1/tasks/:id", wrap(async (req, res) => {
     tasks.delete(req.params.id);
     res.json({ status: 200, message: "ok", data: null });
   }));
@@ -836,7 +836,7 @@ ${body}`;
     if (!p) {
       return res.status(404).json({ status: 404, message: "Project not found", data: null });
     }
-    res.json({ status: 200, message: "ok", data: p });
+    res.json({ status: 200, message: "ok", data: { ...p, timeline: p } });
   }));
   app.delete("/api/v1/projects/:id", wrap(async (req, res) => {
     projects.delete(req.params.id);

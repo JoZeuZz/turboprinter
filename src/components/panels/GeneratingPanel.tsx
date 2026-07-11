@@ -41,10 +41,10 @@ export function GeneratingPanel() {
 
   // Auto-transition on completion
   useEffect(() => {
-    if (taskStatus?.state === TASK_STATE_COMPLETE) {
+    if (!isProjectMode && taskStatus?.state === TASK_STATE_COMPLETE) {
       setPanel("review");
     }
-  }, [taskStatus?.state, setPanel]);
+  }, [taskStatus?.state, setPanel, isProjectMode]);
 
   useEffect(() => {
     if (logsOpen && logsRef.current) {

@@ -203,6 +203,8 @@ export const useProjectStore = create<ProjectStoreState>()(
           return status;
         },
         generateViaProjectMode: async (params) => {
+          // Clear any stale non-project task state to avoid false triggers
+          useProjectWorkspaceStore.setState({ taskId: null, taskStatus: null, error: null, videoUrls: [] });
           set({ mode: "loading", error: null, orchestrationStep: "plan" });
           try {
             const projectId = requireProjectId();
