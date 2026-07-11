@@ -342,43 +342,166 @@ async function startServer() {
   }));
 
   // 4. Tasks APIs (Videos generator)
-  app.post("/api/v1/videos", wrap(async (req: any, res: any) => {
-    const { video_source, local_video_files } = req.body;
-    const taskId = "task_" + Math.random().toString(36).substring(2, 9);
-    const initialLogs = ["Task initiated..."];
-    if (video_source === "local") {
-      initialLogs.push(`Using local video source with selected files: ${Array.isArray(local_video_files) ? local_video_files.join(", ") : "None selected"}`);
-    } else {
-      initialLogs.push(`Using online video source: ${video_source || "pexels"}`);
+  const logTask = (taskId: string, level: "INFO" | "SUCCESS" | "WARNING" | "ERROR", category: string, message: string) => {
+    const t = tasks.get(taskId);
+    if (t) {
+      const timestamp = new Date().toISOString().replace('T', ' ').substring(0, 19);
+      const logLine = `[${timestamp}] [${level}] [${category.toUpperCase()}] ${message}`;
+      if (!t.logs) t.logs = [];
+      t.logs.push(logLine);
+      console.log(`Task ${taskId}: ${logLine}`);
+      tasks.set(taskId, t);
     }
+  };
 
+  app.post("/api/v1/videos", wrap(async (req: any, res: any) => {
+    const {
+      video_source,
+      local_video_files,
+      video_script,
+      video_subject,
+      voice_name,
+      bgm_file,
+      video_aspect,
+      font_name,
+      font_size,
+      text_fore_color,
+      video_concat_mode,
+      bgm_volume,
+      n_threads,
+      video_codec,
+      tts_provider
+    } = req.body;
+
+    const taskId = "task_" + Math.random().toString(36).substring(2, 9);
+    
+    // Create initial task state
     const taskStatus = {
       state: 4, // TASK_STATE_PROCESSING
       progress: 0,
       videos: [],
       combined_videos: [],
-      logs: initialLogs
+      logs: []
     };
 
     tasks.set(taskId, taskStatus);
 
-    // Simulate background process
+    // Initial Logs
+    logTask(taskId, "INFO", "SYSTEM", `Initializing video generation task ${taskId}...`);
+    logTask(taskId, "INFO", "VALIDATION", "Verifying request payload parameters...");
+
+    // Validate video source and files if local
+    let validationFailed = false;
+    let validationErrorMessage = "";
+
+    if (video_source === "local") {
+      logTask(taskId, "INFO", "VALIDATION", `Video source is set to LOCAL. Selected files: ${Array.isArray(local_video_files) ? local_video_files.join(", ") : "None"}`);
+      if (!local_video_files || !Array.isArray(local_video_files) || local_video_files.length === 0) {
+        validationFailed = true;
+        validationErrorMessage = "No local video files were selected. Please choose at least one video in the Configurations panel.";
+      } else {
+        // Check if selected files exist on disk
+        const missingFiles = [];
+        for (const file of local_video_files) {
+          const filePath = path.join(LOCAL_VIDEOS_DIR, file);
+          if (!fs.existsSync(filePath)) {
+            missingFiles.push(file);
+          }
+        }
+        if (missingFiles.length > 0) {
+          validationFailed = true;
+          validationErrorMessage = `The following selected files do not exist in storage/local_videos: ${missingFiles.join(", ")}. Please make sure they exist.`;
+        }
+      }
+    } else {
+      logTask(taskId, "INFO", "VALIDATION", `Video source is set to ONLINE (${video_source || "pexels"}).`);
+    }
+
+    // Validate script or subject
+    if (!validationFailed) {
+      if (!video_script && !video_subject) {
+        validationFailed = true;
+        validationErrorMessage = "Both the video script and subject are empty. Please write a script or enter a subject to generate one.";
+      }
+    }
+
+    if (validationFailed) {
+      logTask(taskId, "ERROR", "VALIDATION", `Validation Failed: ${validationErrorMessage}`);
+      logTask(taskId, "ERROR", "SYSTEM", "Task execution aborted due to pre-requisite failures.");
+      const t = tasks.get(taskId);
+      if (t) {
+        t.state = -1; // TASK_STATE_FAILED
+        tasks.set(taskId, t);
+      }
+      return res.json({ status: 200, message: "ok", data: { task_id: taskId } });
+    }
+
+    // Pre-requisite validation passed
+    logTask(taskId, "SUCCESS", "VALIDATION", `All parameters validated. Script character count: ${video_script?.length || 0}. Format: ${video_aspect || "9:16"}`);
+
+    // Simulate background process step-by-step
     let progress = 0;
     const interval = setInterval(() => {
       progress += 20;
       const t = tasks.get(taskId);
-      if (t) {
-        t.progress = progress;
-        t.logs.push(`Processing at ${progress}%...`);
-        if (progress >= 100) {
-          t.state = 1; // TASK_STATE_COMPLETE
-          t.videos = [SAMPLE_VIDEOS[0].source_url];
-          t.combined_videos = [SAMPLE_VIDEOS[0].source_url];
-          t.logs.push("Task completed successfully using local video sources!");
-          clearInterval(interval);
+      if (!t) {
+        clearInterval(interval);
+        return;
+      }
+
+      t.progress = progress;
+      tasks.set(taskId, t);
+
+      if (progress === 20) {
+        // Phase 1: Audio Synthesis & TTS
+        logTask(taskId, "INFO", "TTS", `Starting Text-to-Speech synthesis using provider: "${tts_provider || "azure-tts-v1"}"...`);
+        if (!voice_name) {
+          logTask(taskId, "WARNING", "TTS", "No voice name specified. Falling back to default neural speaker.");
+        } else {
+          logTask(taskId, "INFO", "TTS", `Synthesizing spoken track with voice: "${voice_name}"...`);
         }
+        logTask(taskId, "SUCCESS", "TTS", `Audio track synthesized successfully. Duration: 38.4s. Saved as tts_${taskId}.mp3.`);
+
+      } else if (progress === 40) {
+        // Phase 2: Whisper alignment & Subtitles
+        logTask(taskId, "INFO", "SUBTITLES", "Loading Whisper voice-alignment model...");
+        logTask(taskId, "INFO", "SUBTITLES", "Aligning spoken voice audio to original script tokens...");
+        logTask(taskId, "SUCCESS", "SUBTITLES", "Successfully generated subtitle cues (SRT) with timestamp mappings.");
+
+      } else if (progress === 60) {
+        // Phase 3: Video asset sourcing
+        if (video_source === "local") {
+          logTask(taskId, "INFO", "VIDEO_ASSET", `Loading ${local_video_files.length} verified files from local storage...`);
+          local_video_files.forEach((file: string) => {
+            logTask(taskId, "INFO", "VIDEO_ASSET", `Including asset: storage/local_videos/${file}`);
+          });
+          logTask(taskId, "SUCCESS", "VIDEO_ASSET", "All local assets imported successfully.");
+        } else {
+          logTask(taskId, "INFO", "VIDEO_ASSET", `Querying search terms from online API provider (${video_source || "pexels"})...`);
+          logTask(taskId, "SUCCESS", "VIDEO_ASSET", `Successfully retrieved and cached 5 clips matching tags: ${Array.isArray(req.body.video_terms) ? req.body.video_terms.join(", ") : "general"}.`);
+        }
+
+      } else if (progress === 80) {
+        // Phase 4: Composition & Subtitle overlay
+        logTask(taskId, "INFO", "COMPOSITION", `Joining video assets with concat mode: "${video_concat_mode || "random"}"`);
+        if (bgm_file) {
+          logTask(taskId, "INFO", "AUDIO_MIXER", `Mixing background music track: "${bgm_file}" at volume: ${bgm_volume || 0.2}`);
+        } else {
+          logTask(taskId, "INFO", "AUDIO_MIXER", "Injecting ambient background music track...");
+        }
+        logTask(taskId, "INFO", "COMPOSITION", `Burning subtitle overlays onto visual frames (Font: "${font_name || "STHeitiMedium.ttc"}", Size: ${font_size || 60}px, Color: "${text_fore_color || "#FFFFFF"}")...`);
+        logTask(taskId, "SUCCESS", "COMPOSITION", "Composition of video and subtitle tracks complete.");
+
+      } else if (progress >= 100) {
+        // Phase 5: Final render
+        logTask(taskId, "INFO", "RENDER", `Launching FFmpeg encoding task (Threads: ${n_threads || 2}, Codec: "${video_codec || "libx264"}")...`);
+        logTask(taskId, "SUCCESS", "RENDER", `Compression and rendering complete. Output file generated at: storage/renders/render_${taskId}.mp4`);
+        logTask(taskId, "SUCCESS", "SYSTEM", `Task ${taskId} completed successfully!`);
+
+        t.state = 1; // TASK_STATE_COMPLETE
+        t.videos = [SAMPLE_VIDEOS[0].source_url];
+        t.combined_videos = [SAMPLE_VIDEOS[0].source_url];
         tasks.set(taskId, t);
-      } else {
         clearInterval(interval);
       }
     }, 1500);

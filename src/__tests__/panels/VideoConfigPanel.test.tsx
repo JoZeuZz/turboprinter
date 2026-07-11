@@ -18,6 +18,7 @@ vi.mock("../../api/video", () => ({
   videoApi: {
     getBgmList: vi.fn(),
     createTask: vi.fn(),
+    getLocalVideos: vi.fn(),
   },
 }));
 
@@ -37,6 +38,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   vi.mocked(videoApi.getBgmList).mockResolvedValue({ files: [] });
   vi.mocked(videoApi.createTask).mockResolvedValue({ task_id: "test-task-id" });
+  vi.mocked(videoApi.getLocalVideos).mockResolvedValue({ files: [] });
   vi.mocked(voiceApi.getVoices).mockResolvedValue([
     { value: "es-ES-AlvaroNeural-Male", label: "es-ES AlvaroNeural (Male)" },
     { value: "es-ES-ElviraNeural-Female", label: "es-ES ElviraNeural (Female)" },
