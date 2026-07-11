@@ -65,7 +65,17 @@ export function RenderingPanel() {
         )}
 
         {(isDone || isFailed) && (
-          <Button onClick={() => setPanel(isDone ? "done" : "editor")} size="sm">
+          <Button
+            onClick={() => {
+              if (isDone && status?.output_path) {
+                useProjectWorkspaceStore.setState({
+                  videoUrls: [status.output_path],
+                });
+              }
+              setPanel(isDone ? "done" : "editor");
+            }}
+            size="sm"
+          >
             {isDone ? t("panels.rendering.viewResult") : t("panels.rendering.backToEditor")}
           </Button>
         )}

@@ -234,6 +234,67 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
+  // Load configuration from config.toml if it exists
+  function loadConfigToml() {
+    const tomlPath = path.join(process.cwd(), "config.toml");
+    if (fs.existsSync(tomlPath)) {
+      try {
+        console.log("[Config] Found config.toml. Loading keys...");
+        const content = fs.readFileSync(tomlPath, "utf-8");
+        const lines = content.split(/\r?\n/);
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || trimmed.startsWith("#") || trimmed.startsWith("[")) {
+            continue;
+          }
+          const match = trimmed.match(/^([\w_.-]+)\s*=\s*(.*)$/);
+          if (match) {
+            const key = match[1].trim();
+            let rawValue = match[2].trim();
+            rawValue = rawValue.split("#")[0].trim();
+            if (rawValue.startsWith("[") && rawValue.endsWith("]")) {
+              const values = rawValue
+                .slice(1, -1)
+                .split(",")
+                .map((s) => s.trim().replace(/^["']|["']$/g, ""))
+                .filter(Boolean);
+              
+              if (key === "pexels_api_keys" || key === "pexels_api_key") {
+                globalConfig.settings.app.pexels_api_keys = values as never[];
+              } else if (key === "pixabay_api_keys" || key === "pixabay_api_key") {
+                globalConfig.settings.app.pixabay_api_keys = values as never[];
+              }
+            } else {
+              const value = rawValue.replace(/^["']|["']$/g, "").trim();
+              if (value) {
+                const envKey = key.toUpperCase();
+                if (!process.env[envKey]) {
+                  process.env[envKey] = value;
+                  console.log(`[Config] Loaded ${envKey} from config.toml`);
+                }
+                if (key === "gemini_api_key") {
+                  process.env.GEMINI_API_KEY = value;
+                  globalConfig.settings.app.gemini_api_key = value;
+                  console.log(`[Config] Loaded GEMINI_API_KEY from config.toml`);
+                }
+                if (key === "pexels_api_key" && globalConfig.settings.app.pexels_api_keys.length === 0) {
+                  globalConfig.settings.app.pexels_api_keys = [value] as never[];
+                }
+                if (key === "pixabay_api_key" && globalConfig.settings.app.pixabay_api_keys.length === 0) {
+                  globalConfig.settings.app.pixabay_api_keys = [value] as never[];
+                }
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.error("[Config] Failed to parse config.toml:", err);
+      }
+    }
+  }
+
+  loadConfigToml();
+
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
@@ -280,17 +341,35 @@ async function startServer() {
 
   // 2. Voices APIs
   app.get("/api/v1/voices", wrap(async (req: any, res: any) => {
+    const provider = req.query.provider || "";
+
+    let voicesList = [
+      { value: "Zephyr", label: "Zephyr (Neutral/Friendly)" },
+      { value: "Kore", label: "Kore (Cheer/Energetic)" },
+      { value: "Puck", label: "Puck (Narrator/Deep)" },
+      { value: "Fenrir", label: "Fenrir (Soft/Calm)" },
+      { value: "Charon", label: "Charon (Professional)" }
+    ];
+
+    if (provider === "azure-tts-v1" || provider === "edge-tts") {
+      voicesList = [
+        { value: "es-ES-AlvaroNeural", label: "es-ES Álvaro (Male)" },
+        { value: "es-ES-ElviraNeural", label: "es-ES Elvira (Female)" },
+        { value: "es-MX-DaliaNeural", label: "es-MX Dalia (Female)" },
+        { value: "es-MX-JorgeNeural", label: "es-MX Jorge (Male)" },
+        { value: "en-US-JennyNeural", label: "en-US Jenny (Female)" },
+        { value: "en-US-GuyNeural", label: "en-US Guy (Male)" },
+        { value: "zh-CN-XiaoxiaoNeural", label: "zh-CN Xiaoxiao (Female)" },
+        { value: "zh-CN-YunxiNeural", label: "zh-CN Yunxi (Male)" },
+        ...voicesList
+      ];
+    }
+
     res.json({
       status: 200,
       message: "ok",
       data: {
-        voices: [
-          { value: "Zephyr", label: "Zephyr (Neutral/Friendly)" },
-          { value: "Kore", label: "Kore (Cheer/Energetic)" },
-          { value: "Puck", label: "Puck (Narrator/Deep)" },
-          { value: "Fenrir", label: "Fenrir (Soft/Calm)" },
-          { value: "Charon", label: "Charon (Professional)" }
-        ]
+        voices: voicesList
       }
     });
   }));

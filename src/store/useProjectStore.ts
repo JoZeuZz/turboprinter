@@ -193,6 +193,11 @@ export const useProjectStore = create<ProjectStoreState>()(
             set({ mode: "error", error: status.error ?? i18n.t("errors.renderFailed") });
           } else {
             set({ mode: "ready", error: null });
+            if (status.output_path) {
+              useProjectWorkspaceStore.setState({
+                videoUrls: [status.output_path],
+              });
+            }
           }
 
           return status;

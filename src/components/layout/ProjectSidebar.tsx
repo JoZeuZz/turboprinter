@@ -224,9 +224,13 @@ export function ProjectSidebar() {
                       />
                     ) : (
                       <>
-                        <span className="block truncate">
-                          <span className="text-accent/90 font-bold mr-1.5 text-xs bg-accent/10 px-1.5 py-0.5 rounded">#{projectNum}</span>
-                          {project.topic || project.project_id}
+                        <span className="flex items-center justify-between gap-1.5 min-w-0">
+                          <span className="truncate">{project.topic || project.project_id}</span>
+                          {isDraft && (
+                            <span className="text-accent/90 font-bold text-[10px] bg-accent/10 px-1 py-0.5 rounded shrink-0">
+                              #{projectNum}
+                            </span>
+                          )}
                         </span>
                         <span className="mt-0.5 block text-[10px] text-foreground/40">
                           {isDraft ? t("sidebar.draft") : new Date(project.updated_at).toLocaleDateString()}
