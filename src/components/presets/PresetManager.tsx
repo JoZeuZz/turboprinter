@@ -8,8 +8,7 @@ import {
   Save, 
   Edit2, 
   Check, 
-  X,
-  AlertCircle
+  X
 } from "lucide-react";
 import { usePresetStore, type VideoPreset } from "../../store/usePresetStore";
 import { useVideoStore } from "../../store/useVideoStore";
@@ -528,23 +527,7 @@ export function PresetManager() {
         </div>
       )}
 
-      {/* Show indicator if current configuration has unsaved changes compared to selected preset */}
-      {hasModified && selectedPreset && (
-        <div id="preset-modified-alert" className="flex items-start gap-2 text-[11px] text-amber-400 bg-amber-500/5 border border-amber-500/10 rounded-lg p-2.5">
-          <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-          <div className="space-y-1">
-            <p className="font-semibold leading-none">Configuración modificada</p>
-            <p className="text-muted-foreground leading-normal">
-              Has hecho cambios en los controles. 
-              {!selectedPreset.isSystem ? (
-                <span> Puedes sobrescribir este preset haciendo clic en el botón de guardar (<Save className="inline h-3 w-3 mx-0.5" />) arriba, o guardar como uno nuevo.</span>
-              ) : (
-                <span> Los presets del sistema son de solo lectura, pero puedes guardar tus cambios como un nuevo preset personalizado (<Plus className="inline h-3 w-3 mx-0.5" />).</span>
-              )}
-            </p>
-          </div>
-        </div>
-      )}
+
 
       {/* Custom Presets List for direct management */}
       {customPresets.length > 0 && (
