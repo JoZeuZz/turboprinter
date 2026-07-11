@@ -115,8 +115,8 @@ export function Settings() {
           <h1 className="text-base font-semibold text-foreground">{t("settings.title")}</h1>
           <p className="text-xs text-muted">{t("settings.subtitle")}</p>
         </div>
-        <div className="flex items-center gap-3">
-          {saved && <span className="text-xs text-green-400">{t("settings.saved")}</span>}
+        <div className="flex items-end gap-3">
+          {saved && <span className="text-xs text-green-400 mb-2">{t("settings.saved")}</span>}
           <div className="w-40">
             <LanguageSelector />
           </div>
