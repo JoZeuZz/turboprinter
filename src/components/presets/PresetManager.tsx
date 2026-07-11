@@ -282,7 +282,7 @@ export function PresetManager() {
   };
 
   return (
-    <div id="preset-manager-container" className="rounded-xl border border-border bg-surface p-4.5 space-y-3.5 shadow-sm">
+    <div id="preset-manager-container" className="rounded-xl border border-border bg-surface p-5.5 space-y-4 shadow-sm">
       <div className="flex items-center justify-between">
         <h3 className="text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-1.5">
           <span>{t("presets.title")}</span>
@@ -292,7 +292,7 @@ export function PresetManager() {
         </h3>
         
         {toastMessage && (
-          <div className={`text-[11px] font-medium px-2 py-0.5 rounded transition-all animate-fadeIn ${
+          <div className={`text-[11px] font-medium px-2.5 py-0.5 rounded transition-all animate-fadeIn ${
             toastType === "success" 
               ? "bg-green-500/10 text-green-400 border border-green-500/20" 
               : toastType === "error"
@@ -304,14 +304,14 @@ export function PresetManager() {
         )}
       </div>
 
-      <div className="grid gap-2.5 sm:grid-cols-[1fr_auto]">
+      <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
         {/* Dropdown Selector */}
         <div className="relative">
           <select
             id="preset-select-dropdown"
             value={activePresetId || ""}
             onChange={(e) => handleSelectPreset(e.target.value)}
-            className="w-full rounded-lg border border-border bg-neutral-900 px-3 py-2 text-xs font-semibold text-neutral-100 shadow-sm focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+            className="w-full rounded-lg border border-border bg-neutral-900 px-3.5 py-2 text-xs font-semibold text-neutral-100 shadow-sm focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
           >
             <option value="" className="bg-neutral-950 text-neutral-100">{t("presets.select")}</option>
             {systemPresets.length > 0 && (
@@ -336,7 +336,7 @@ export function PresetManager() {
         </div>
 
         {/* Preset Actions Quick Bar */}
-        <div className="flex gap-1.5 items-center justify-end">
+        <div className="flex gap-2 items-center justify-end">
           {/* Save/New Button */}
           {!isSavingNew && !isRenaming && (
             <button
@@ -430,7 +430,7 @@ export function PresetManager() {
 
       {/* Save New Preset Dialog Inline */}
       {isSavingNew && (
-        <div id="save-preset-dialog" className="rounded-lg border border-border bg-background p-3.5 space-y-3.5 animate-fadeIn">
+        <div id="save-preset-dialog" className="rounded-lg border border-border bg-background p-4 space-y-4 animate-fadeIn">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold text-foreground flex items-center gap-1.5">
               <Plus className="h-3.5 w-3.5 text-accent" />
@@ -480,7 +480,7 @@ export function PresetManager() {
 
       {/* Rename Preset Dialog Inline */}
       {isRenaming && selectedPreset && (
-        <div id="rename-preset-dialog" className="rounded-lg border border-border bg-background p-3.5 space-y-3.5 animate-fadeIn">
+        <div id="rename-preset-dialog" className="rounded-lg border border-border bg-background p-4 space-y-4 animate-fadeIn">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold text-foreground flex items-center gap-1.5">
               <Edit2 className="h-3.5 w-3.5 text-accent" />
@@ -548,18 +548,18 @@ export function PresetManager() {
 
       {/* Custom Presets List for direct management */}
       {customPresets.length > 0 && (
-        <div className="pt-2 border-t border-border/50 space-y-2.5">
+        <div className="pt-3.5 border-t border-border/60 space-y-3">
           <span className="text-[10px] font-bold uppercase tracking-wider text-muted block">
             {t("presets.customPresets")}
           </span>
-          <div className="space-y-1.5 max-h-[160px] overflow-y-auto pr-1">
+          <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1">
             {customPresets.map((p) => {
               const isDefault = defaultPresetId === p.id;
               const isActive = activePresetId === p.id;
               return (
                 <div 
                   key={p.id}
-                  className={`flex items-center justify-between rounded-lg px-2.5 py-1.5 text-xs transition-colors ${
+                  className={`flex items-center justify-between rounded-lg px-3 py-2 text-xs transition-colors ${
                     isActive 
                       ? "bg-accent/10 border border-accent/20 text-foreground" 
                       : "bg-background/40 hover:bg-background/80 border border-border/50 text-muted-foreground hover:text-foreground"
@@ -640,7 +640,7 @@ export function PresetManager() {
       )}
 
       {/* Auto-save configuration checkbox */}
-      <div id="auto-save-config-checkbox-container" className="pt-3 border-t border-border/50 flex flex-col gap-1">
+      <div id="auto-save-config-checkbox-container" className="pt-4 border-t border-border/50 flex flex-col gap-1">
         <Checkbox
           checked={presetStore.autoSaveConfigAfterGeneration}
           onChange={(checked) => presetStore.setAutoSaveConfigAfterGeneration(checked)}
