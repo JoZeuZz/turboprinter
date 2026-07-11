@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 import { useProjectWorkspaceStore } from "../../store/useProjectWorkspaceStore";
 import { useProjectStore } from "../../store/useProjectStore";
 import { useVideoStore } from "../../store/useVideoStore";
-import { TASK_STATE_COMPLETE, TASK_STATE_FAILED } from "../../api/types";
+import { TASK_STATE_FAILED } from "../../api/types";
 
 export function GeneratingPanel() {
   const { t } = useTranslation();
@@ -39,12 +39,8 @@ export function GeneratingPanel() {
     void projectStore.generateViaProjectMode(useVideoStore.getState().toParams());
   };
 
-  // Auto-transition on completion
-  useEffect(() => {
-    if (!isProjectMode && taskStatus?.state === TASK_STATE_COMPLETE) {
-      setPanel("review");
-    }
-  }, [taskStatus?.state, setPanel, isProjectMode]);
+  // The transition to the review page is now driven directly by the async generateVideo lifecycle in the workspace store
+  // once the final successful task status and video URLs are securely retrieved.
 
   useEffect(() => {
     if (logsOpen && logsRef.current) {
@@ -56,7 +52,10 @@ export function GeneratingPanel() {
     return (
       <div className="flex h-full w-full max-w-5xl mx-auto flex-col justify-start px-6 py-5">
         <div className="w-full max-w-md space-y-6">
-          <h2 className="text-sm font-semibold text-foreground">{t("panels.generating.title")}</h2>
+          <div className="flex items-center gap-2">
+            <Loader2 className="h-4 w-4 animate-spin text-accent" />
+            <h2 className="text-sm font-semibold text-foreground">{t("panels.generating.title")}</h2>
+          </div>
 
           {hasFailed && (
             <div className="rounded-md border border-red-800 bg-red-900/20 px-3 py-2 space-y-2">
@@ -101,7 +100,10 @@ export function GeneratingPanel() {
   return (
     <div className="flex h-full w-full max-w-5xl mx-auto flex-col justify-start px-6 py-5">
       <div className="w-full max-w-md space-y-6">
-        <h2 className="text-sm font-semibold text-foreground">{t("panels.generating.title")}</h2>
+        <div className="flex items-center gap-2">
+          <Loader2 className="h-4 w-4 animate-spin text-accent" />
+          <h2 className="text-sm font-semibold text-foreground">{t("panels.generating.title")}</h2>
+        </div>
 
         {error && (
           <div className="rounded-md border border-red-800 bg-red-900/20 px-3 py-2 space-y-2">

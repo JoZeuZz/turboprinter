@@ -48,25 +48,46 @@ export const useProjectWorkspaceStore = create<WorkspaceStoreState>()(
       setPanel: (panel) => set({ panel }),
 
       generateVideo: async (params: VideoParams) => {
+        console.log("[WorkspaceStore] generateVideo started with params:", params);
         set({ panel: "generating", error: null, taskStatus: null, videoUrls: [] });
+        console.log("[WorkspaceStore] Panel transition set: 'generating', cleared previous error and taskStatus");
+
         try {
+          console.log("[WorkspaceStore] Initiating videoApi.createTask request...");
           const { task_id } = await videoApi.createTask(params);
+          console.log("[WorkspaceStore] videoApi.createTask succeeded. Received task_id:", task_id);
+
           const { currentDraftId, removeDraft } = useProjectHistoryStore.getState();
+          console.log("[WorkspaceStore] Removing draft from history. currentDraftId:", currentDraftId);
           removeDraft(currentDraftId);
+
           set({ taskId: task_id });
+          console.log("[WorkspaceStore] Task ID saved in store. Starting polling...");
+
           await pollTask(task_id, (status: TaskStatus) => {
+            console.log("[WorkspaceStore] Polling update received for task:", task_id, {
+              state: status.state,
+              progress: status.progress,
+              videoCount: status.videos?.length ?? 0,
+              logsCount: status.logs?.length ?? 0
+            });
             set({ taskStatus: status });
           });
-          // pollTask resolves on TASK_STATE_COMPLETE (throws on TASK_STATE_FAILED)
-          // After successful completion, retrieve final taskStatus to get video URLs
+
+          console.log("[WorkspaceStore] pollTask resolved successfully. Transitioning to 'review'...");
           set((state) => {
             const status = state.taskStatus;
-            return { panel: "review", videoUrls: finalVideoUrls(status) };
+            const urls = finalVideoUrls(status);
+            console.log("[WorkspaceStore] Final videos found for review:", urls);
+            return { panel: "review", videoUrls: urls };
           });
         } catch (e) {
+          console.error("[WorkspaceStore] generateVideo failed during async lifecycle!", e);
+          const errorMsg = e instanceof Error ? e.message : i18n.t("errors.generationFailed");
+          console.log("[WorkspaceStore] Reverting panel back to 'config' due to error:", errorMsg);
           set({
             panel: "config",
-            error: e instanceof Error ? e.message : i18n.t("errors.generationFailed"),
+            error: errorMsg,
           });
         }
       },

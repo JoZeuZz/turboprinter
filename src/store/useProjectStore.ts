@@ -203,32 +203,51 @@ export const useProjectStore = create<ProjectStoreState>()(
           return status;
         },
         generateViaProjectMode: async (params) => {
+          console.log("[ProjectStore] generateViaProjectMode triggered with params:", params);
           // Clear any stale non-project task state to avoid false triggers
           useProjectWorkspaceStore.setState({ taskId: null, taskStatus: null, error: null, videoUrls: [] });
           set({ mode: "loading", error: null, orchestrationStep: "plan" });
+          console.log("[ProjectStore] Mode set to 'loading', cleared workspace status, orchestrationStep set to 'plan'");
+
           try {
             const projectId = requireProjectId();
+            console.log("[ProjectStore] Project ID retrieved:", projectId);
+
+            console.log("[ProjectStore] Phase 1: Planning project...");
             await projectsApi.planProject(projectId, {});
+            console.log("[ProjectStore] Planning succeeded. Phase 2: Searching media assets...");
+
             set({ orchestrationStep: "media" });
             await projectsApi.mediaSearch(projectId, {
               orientation: orientationForAspect(params.video_aspect),
               prefer_local: false,
             });
+            console.log("[ProjectStore] Media search succeeded. Phase 3: Synthesizing narration...");
+
             set({ orchestrationStep: "narration" });
             const narration = await projectsApi.synthesizeNarration(projectId, {
               voice_name: params.voice_name,
               voice_rate: params.voice_rate,
               subtitle_enabled: params.subtitle_enabled,
             });
+            console.log("[ProjectStore] Narration synthesized successfully:", narration);
+
+            console.log("[ProjectStore] Phase 4: Building timeline tracks...");
             set({ orchestrationStep: "timeline" });
             await projectsApi.buildTimeline(projectId, {
               narration_audio_path: narration.narration_audio_path,
               subtitle_path: narration.subtitle_path ?? undefined,
             });
+            console.log("[ProjectStore] Timeline build succeeded.");
+
+            console.log("[ProjectStore] Refreshing project data...");
             await refresh(projectId);
+
+            console.log("[ProjectStore] Completed pipeline successfully! Transitioning workspace panel to 'editor'...");
             useProjectWorkspaceStore.setState({ panel: "editor" });
             set({ orchestrationStep: null });
           } catch (error) {
+            console.error("[ProjectStore] Error during generateViaProjectMode execution!", error);
             fail(error);
           }
         },

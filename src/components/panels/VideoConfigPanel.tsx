@@ -1,6 +1,6 @@
 // webui-react/src/components/panels/VideoConfigPanel.tsx
 import { useState, useEffect } from "react";
-import { Eye, Wand2 } from "lucide-react";
+import { Eye, Wand2, Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import {
   TabBar,
@@ -44,6 +44,7 @@ export function VideoConfigPanel() {
   const [localVideos, setLocalVideos] = useState<{ name: string; size: number; path: string }[]>([]);
   const [loadingLocalVideos, setLoadingLocalVideos] = useState(false);
   const [localVideosError, setLocalVideosError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     setLoadingLocalVideos(true);
@@ -122,18 +123,40 @@ export function VideoConfigPanel() {
     ...bgmFiles.map((f) => ({ value: f.file, label: f.name })),
   ];
 
-  const handleGenerate = () => {
-    const autoSaveEnabled = usePresetStore.getState().autoSaveConfigAfterGeneration;
-    if (autoSaveEnabled) {
+  const handleGenerate = async () => {
+    console.log("[VideoConfigPanel] handleGenerate triggered");
+    setIsSubmitting(true);
+    try {
+      const autoSaveEnabled = usePresetStore.getState().autoSaveConfigAfterGeneration;
       const params = store.toParams();
-      localStorage.setItem("mpt-last-generated-config", JSON.stringify(params));
-    }
+      console.log("[VideoConfigPanel] autoSaveConfigAfterGeneration:", autoSaveEnabled);
+      console.log("[VideoConfigPanel] Video parameters generated from store:", params);
 
-    if (projectStore.mode !== "disabled" && projectStore.projectId) {
-      void projectStore.generateViaProjectMode(store.toParams());
-      workspaceStore.setPanel("generating");
-    } else {
-      void workspaceStore.generateVideo(store.toParams());
+      if (autoSaveEnabled) {
+        localStorage.setItem("mpt-last-generated-config", JSON.stringify(params));
+        console.log("[VideoConfigPanel] Saved current parameters to localStorage: mpt-last-generated-config");
+      }
+
+      const isProjectMode = projectStore.mode !== "disabled" && projectStore.projectId;
+      console.log("[VideoConfigPanel] Checking generation mode:", {
+        projectModeEnabled: isProjectMode,
+        projectStoreMode: projectStore.mode,
+        projectId: projectStore.projectId
+      });
+
+      if (isProjectMode) {
+        console.log("[VideoConfigPanel] Setting workspace panel to 'generating' for Project Mode");
+        workspaceStore.setPanel("generating");
+        console.log("[VideoConfigPanel] Dispatching generateViaProjectMode with params");
+        await projectStore.generateViaProjectMode(params);
+      } else {
+        console.log("[VideoConfigPanel] Dispatching standard generateVideo with params");
+        await workspaceStore.generateVideo(params);
+      }
+    } catch (err) {
+      console.error("[VideoConfigPanel] Error during handleGenerate:", err);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -527,9 +550,13 @@ export function VideoConfigPanel() {
           className="w-full"
           size="lg"
           onClick={handleGenerate}
-          disabled={!store.video_subject.trim()}
+          disabled={isSubmitting || !store.video_subject.trim()}
         >
-          <Wand2 className="mr-2 h-4 w-4" />
+          {isSubmitting ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <Wand2 className="mr-2 h-4 w-4" />
+          )}
           {t("panels.videoConfig.generate")}
         </Button>
         </div>
