@@ -431,8 +431,41 @@ async function startServer() {
     return fallbackParagraphs.slice(0, paragraph_number).join("\n\n");
   }
   app.post("/api/v1/voices/preview", wrap(async (req, res) => {
+    const voice_name = req.body.voice_name || "";
+    const text = req.body.text || "Hola, probando esta voz.";
+    let tl = "es";
+    const voiceNameLower = voice_name.toLowerCase();
+    if (voiceNameLower.includes("en-") || voiceNameLower.includes("us-") || voiceNameLower.includes("guy") || voiceNameLower.includes("jenny") || voiceNameLower.includes("alex") || voiceNameLower.includes("anna") || voiceNameLower.includes("bella") || voiceNameLower.includes("benjamin") || voiceNameLower.includes("charles") || voiceNameLower.includes("claire") || voiceNameLower.includes("david") || voiceNameLower.includes("diana") || voiceNameLower.includes("milo") || voiceNameLower.includes("dean") || voiceNameLower.includes("chloe") || voiceNameLower.includes("mia") || voiceNameLower.includes("puck") || voiceNameLower.includes("charon") || voiceNameLower.includes("zephyr")) {
+      tl = "en";
+    } else if (voiceNameLower.includes("zh-") || voiceNameLower.includes("cn-") || voiceNameLower.includes("xiaoxiao") || voiceNameLower.includes("yunxi") || voiceNameLower.includes("\u51B0\u7CD6") || voiceNameLower.includes("\u8309\u8389") || voiceNameLower.includes("\u82CF\u6253") || voiceNameLower.includes("\u767D\u6866")) {
+      tl = "zh-CN";
+    } else if (voiceNameLower.includes("es-") || voiceNameLower.includes("mx-") || voiceNameLower.includes("alvaro") || voiceNameLower.includes("elvira") || voiceNameLower.includes("dalia") || voiceNameLower.includes("jorge")) {
+      tl = "es";
+    } else if (voiceNameLower.includes("pt-") || voiceNameLower.includes("br-")) {
+      tl = "pt";
+    } else if (voiceNameLower.includes("de-")) {
+      tl = "de";
+    } else if (voiceNameLower.includes("fr-")) {
+      tl = "fr";
+    } else if (voiceNameLower.includes("it-")) {
+      tl = "it";
+    } else if (voiceNameLower.includes("ru-")) {
+      tl = "ru";
+    } else if (voiceNameLower.includes("ja-") || voiceNameLower.includes("jp-")) {
+      tl = "ja";
+    } else {
+      const parts = voice_name.split("-");
+      if (parts[0] && parts[0].length === 2) {
+        tl = parts[0];
+      }
+    }
     try {
-      const response = await fetch("https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3");
+      const googleTtsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=${tl}&client=tw-ob&q=${encodeURIComponent(text.substring(0, 200))}`;
+      const response = await fetch(googleTtsUrl, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+        }
+      });
       if (!response.ok) {
         throw new Error(`Failed to fetch preview audio: ${response.status}`);
       }
