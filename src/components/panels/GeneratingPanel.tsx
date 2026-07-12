@@ -50,26 +50,32 @@ export function GeneratingPanel() {
 
   if (isProjectMode) {
     return (
-      <div className="flex h-full w-full max-w-5xl mx-auto flex-col justify-start px-6 py-5">
-        <div className="w-full max-w-md space-y-6">
-          <div className="flex items-center gap-2">
-            <Loader2 className="h-4 w-4 animate-spin text-accent" />
+      <div className="flex h-full min-h-[80vh] w-full max-w-5xl mx-auto flex-col justify-center items-center px-6 py-12">
+        <div className="w-full max-w-md space-y-6 bg-neutral-900/60 p-8 rounded-2xl border border-border/80 shadow-2xl backdrop-blur-md">
+          <div className="flex items-center gap-2.5 justify-center pb-3 border-b border-border/40">
+            <Loader2 className="h-5 w-5 animate-spin text-accent" />
             <h2 className="text-sm font-semibold text-foreground">{t("panels.generating.title")}</h2>
           </div>
 
           {hasFailed && (
-            <div className="rounded-md border border-red-800 bg-red-900/20 px-3 py-2 space-y-2">
-              <p className="text-xs text-red-400">{projectStore.error}</p>
-              <button
-                onClick={handleRetry}
-                className="text-xs text-red-300 underline hover:text-red-100"
-              >
-                {t("panels.generating.tryAgain")}
-              </button>
+            <div className="rounded-lg border border-red-900/60 bg-red-950/20 px-4 py-3.5 space-y-3">
+              <div className="max-h-60 overflow-y-auto pr-1">
+                <p className="text-xs text-red-400 whitespace-pre-wrap leading-relaxed font-mono select-text text-left">
+                  {projectStore.error}
+                </p>
+              </div>
+              <div className="pt-1 border-t border-red-900/30 flex justify-end">
+                <button
+                  onClick={handleRetry}
+                  className="text-xs text-red-300 font-medium hover:text-red-100 transition-colors bg-red-900/40 px-2.5 py-1 rounded border border-red-800/50 hover:bg-red-900/60"
+                >
+                  {t("panels.generating.tryAgain")}
+                </button>
+              </div>
             </div>
           )}
 
-          <ul className="space-y-2">
+          <ul className="space-y-3.5">
             {PROJECT_STEPS.map((step, idx) => {
               const done = idx < currentStepIndex;
               const failed = idx === currentStepIndex && hasFailed;
@@ -77,15 +83,15 @@ export function GeneratingPanel() {
               return (
                 <li key={step.key} className="flex items-center gap-3 text-sm">
                   {done ? (
-                    <Check className="h-4 w-4 shrink-0 text-green-400" />
+                    <Check className="h-4.5 w-4.5 shrink-0 text-green-400" />
                   ) : failed ? (
-                    <XCircle className="h-4 w-4 shrink-0 text-red-400" />
+                    <XCircle className="h-4.5 w-4.5 shrink-0 text-red-400" />
                   ) : active ? (
-                    <Loader2 className="h-4 w-4 shrink-0 animate-spin text-accent" />
+                    <Loader2 className="h-4.5 w-4.5 shrink-0 animate-spin text-accent" />
                   ) : (
-                    <Circle className="h-4 w-4 shrink-0 text-border" />
+                    <Circle className="h-4.5 w-4.5 shrink-0 text-border" />
                   )}
-                  <span className={done ? "text-muted line-through" : failed ? "text-red-400" : active ? "text-foreground" : "text-muted"}>
+                  <span className={done ? "text-muted line-through" : failed ? "text-red-400 font-medium" : active ? "text-foreground font-medium" : "text-muted"}>
                     {step.label}
                   </span>
                 </li>
@@ -98,38 +104,44 @@ export function GeneratingPanel() {
   }
 
   return (
-    <div className="flex h-full w-full max-w-5xl mx-auto flex-col justify-start px-6 py-5">
-      <div className="w-full max-w-md space-y-6">
-        <div className="flex items-center gap-2">
-          <Loader2 className="h-4 w-4 animate-spin text-accent" />
+    <div className="flex h-full min-h-[80vh] w-full max-w-5xl mx-auto flex-col justify-center items-center px-6 py-12">
+      <div className="w-full max-w-md space-y-6 bg-neutral-900/60 p-8 rounded-2xl border border-border/80 shadow-2xl backdrop-blur-md">
+        <div className="flex items-center gap-2.5 justify-center pb-3 border-b border-border/40">
+          <Loader2 className="h-5 w-5 animate-spin text-accent" />
           <h2 className="text-sm font-semibold text-foreground">{t("panels.generating.title")}</h2>
         </div>
 
         {error && (
-          <div className="rounded-md border border-red-800 bg-red-900/20 px-3 py-2 space-y-2">
-            <p className="text-xs text-red-400">{error}</p>
-            <button
-              onClick={() => setPanel("config")}
-              className="text-xs text-red-300 underline hover:text-red-100"
-            >
-              {t("panels.generating.tryAgain")}
-            </button>
+          <div className="rounded-lg border border-red-900/60 bg-red-950/20 px-4 py-3.5 space-y-3">
+            <div className="max-h-60 overflow-y-auto pr-1">
+              <p className="text-xs text-red-400 whitespace-pre-wrap leading-relaxed font-mono select-text text-left">
+                {error}
+              </p>
+            </div>
+            <div className="pt-1 border-t border-red-900/30 flex justify-end">
+              <button
+                onClick={() => setPanel("config")}
+                className="text-xs text-red-300 font-medium hover:text-red-100 transition-colors bg-red-900/40 px-2.5 py-1 rounded border border-red-800/50 hover:bg-red-900/60"
+              >
+                {t("panels.generating.tryAgain")}
+              </button>
+            </div>
           </div>
         )}
 
         {taskStatus?.state === TASK_STATE_FAILED && !error && (
-          <div className="rounded-md border border-red-800 bg-red-900/20 px-3 py-2 space-y-2">
-            <p className="text-xs text-red-400">{t("panels.generating.failed")}</p>
+          <div className="rounded-lg border border-red-900/60 bg-red-950/20 px-4 py-3.5 space-y-3 text-center">
+            <p className="text-xs text-red-400 font-medium">{t("panels.generating.failed")}</p>
             <button
               onClick={() => setPanel("config")}
-              className="text-xs text-red-300 underline hover:text-red-100"
+              className="text-xs text-red-300 underline hover:text-red-100 font-medium"
             >
               {t("panels.generating.tryAgain")}
             </button>
           </div>
         )}
 
-        <div className="space-y-1">
+        <div className="space-y-1.5">
           <div className="flex items-center justify-between text-xs text-muted">
             <span>{t("panels.generating.progress")}</span>
             <span>{progress}%</span>
@@ -142,25 +154,25 @@ export function GeneratingPanel() {
           </div>
         </div>
 
-        <ul className="space-y-2">
+        <ul className="space-y-3.5">
           {STEPS.map(({ label, threshold }) => {
             const done = progress >= threshold;
             const active = !done && progress >= threshold - 30 && progress < threshold;
             return (
               <li key={label} className="flex items-center gap-3 text-sm">
                 {done ? (
-                  <Check className="h-4 w-4 shrink-0 text-green-400" />
+                  <Check className="h-4.5 w-4.5 shrink-0 text-green-400" />
                 ) : active ? (
-                  <Loader2 className="h-4 w-4 shrink-0 animate-spin text-accent" />
+                  <Loader2 className="h-4.5 w-4.5 shrink-0 animate-spin text-accent" />
                 ) : (
-                  <Circle className="h-4 w-4 shrink-0 text-border" />
+                  <Circle className="h-4.5 w-4.5 shrink-0 text-border" />
                 )}
                 <span
                   className={
                     done
                       ? "text-muted line-through"
                       : active
-                      ? "text-foreground"
+                      ? "text-foreground font-medium"
                       : "text-muted"
                   }
                 >
@@ -171,26 +183,28 @@ export function GeneratingPanel() {
           })}
         </ul>
 
-        <button
-          onClick={() => setLogsOpen((o) => !o)}
-          className="flex items-center gap-1 text-xs text-muted hover:text-foreground"
-        >
-          {logsOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-          {logsOpen ? t("panels.generating.hideLogs") : t("panels.generating.showLogs")}
-        </button>
+        <div className="flex flex-col items-center gap-2 pt-2">
+          <button
+            onClick={() => setLogsOpen((o) => !o)}
+            className="flex items-center gap-1.5 text-xs text-muted hover:text-foreground transition-colors py-1 px-2 rounded hover:bg-neutral-800/30"
+          >
+            {logsOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+            {logsOpen ? t("panels.generating.hideLogs") : t("panels.generating.showLogs")}
+          </button>
+        </div>
         {logsOpen && (
           <div
             ref={logsRef}
-            className="rounded-md border border-border bg-base p-3 font-mono text-xs text-muted h-36 overflow-y-auto"
+            className="rounded-md border border-border bg-base p-3 font-mono text-xs text-muted h-36 overflow-y-auto shadow-inner"
           >
             {logs.length > 0 ? (
               logs.map((line, index) => (
-                <p key={`${index}-${line}`} className="whitespace-pre-wrap leading-relaxed">
+                <p key={`${index}-${line}`} className="whitespace-pre-wrap leading-relaxed select-text text-left">
                   {line}
                 </p>
               ))
             ) : (
-              <p>{t("panels.generating.waitingLogs", { progress })}</p>
+              <p className="text-center py-4">{t("panels.generating.waitingLogs", { progress })}</p>
             )}
           </div>
         )}

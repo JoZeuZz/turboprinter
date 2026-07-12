@@ -1356,9 +1356,31 @@ ${sub.text || ""}
     return new Promise((resolve, reject) => {
       (0, import_child_process.exec)(cmd, { maxBuffer: 1024 * 1024 * 50 }, (error, stdout, stderr) => {
         if (error) {
-          reject(new Error(`Command failed: ${cmd}
+          let customErrorMsg = `Command failed: ${cmd}
 Error: ${error.message}
-Stderr: ${stderr}`));
+Stderr: ${stderr}`;
+          if (cmd.includes("ffmpeg") || cmd.includes("ffprobe")) {
+            const isFfmpegMissing = error.message.includes("not recognized") || error.message.includes("no se reconoce") || error.message.includes("not found") || error.message.includes("ENOENT") || error.code === 127 || error.code === 9009;
+            if (isFfmpegMissing) {
+              customErrorMsg = `\u26A0\uFE0F [ERROR DE SISTEMA] FFmpeg / FFprobe no est\xE1 instalado o no se encuentra en el PATH de tu sistema.
+
+Para ejecutar esta aplicaci\xF3n localmente y generar tus videos con \xE9xito, sigue estos pasos:
+1. Descarga FFmpeg desde la p\xE1gina oficial: https://ffmpeg.org/download.html
+   (En Windows, puedes descargar el build de Gyan.dev. En Mac, puedes usar 'brew install ffmpeg')
+2. Extrae el contenido y a\xF1ade la carpeta 'bin' (que contiene ffmpeg.exe) al PATH de las Variables de Entorno de tu sistema.
+3. Cierra tu terminal actual, abre una nueva terminal y vuelve a iniciar tu servidor con 'npm run dev'.
+
+---------------------------------------------------------
+FFmpeg / FFprobe is not installed or found in your system's PATH.
+To run this application locally and render videos successfully, please:
+1. Download FFmpeg from: https://ffmpeg.org/download.html
+2. Extract and add the 'bin' directory to your system's PATH environment variable.
+3. Restart your development terminal and run 'npm run dev' again.
+
+[Detalle t\xE9cnico / Technical Detail]: ${error.message}`;
+            }
+          }
+          reject(new Error(customErrorMsg));
           return;
         }
         resolve(stdout);
