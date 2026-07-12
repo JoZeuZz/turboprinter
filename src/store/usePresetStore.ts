@@ -90,7 +90,7 @@ const SYSTEM_PRESETS: VideoPreset[] = [
     subtitle_enabled: true,
     subtitle_position: "custom",
     custom_position: 55,
-    font_name: "UTM Kabel KT.ttf",
+    font_name: "UTM Kabel KY.ttf",
     font_size: 70,
     text_fore_color: "#FFD60A",
     stroke_color: "#000000",

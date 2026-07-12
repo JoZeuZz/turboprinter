@@ -42,7 +42,7 @@
 
 @font-face {
   font-family: "UTM Kabel Preview";
-  src: url("/fonts/UTM_Kabel_KT.ttf") format("truetype");
+  src: url("/fonts/UTM_Kabel_KY.ttf") format("truetype"), url("/fonts/UTM_Kabel_KT.ttf") format("truetype");
   font-weight: 400;
 }
 

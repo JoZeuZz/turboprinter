@@ -57,8 +57,8 @@ export const SUBTITLE_FONTS: SubtitleFont[] = [
     previewSize: "1.45rem",
   },
   {
-    value: "UTM Kabel KT.ttf",
-    label: "UTM Kabel KT",
+    value: "UTM Kabel KY.ttf",
+    label: "UTM Kabel KY",
     family: '"UTM Kabel Preview", sans-serif',
     weight: 400,
     previewSize: "1.35rem",
@@ -68,12 +68,20 @@ export const SUBTITLE_FONTS: SubtitleFont[] = [
 const PAGE_SIZE = 3;
 
 export function getSubtitleFontFamily(value: string | null | undefined) {
-  const selectedFont = SUBTITLE_FONTS.find((font) => font.value === value);
+  let normalizedValue = value;
+  if (normalizedValue === "UTM Kabel KT.ttf") {
+    normalizedValue = "UTM Kabel KY.ttf";
+  }
+  const selectedFont = SUBTITLE_FONTS.find((font) => font.value === normalizedValue);
   return selectedFont?.family ?? SUBTITLE_FONTS[0].family;
 }
 
 export function getSubtitleFontWeight(value: string | null | undefined) {
-  const selectedFont = SUBTITLE_FONTS.find((font) => font.value === value);
+  let normalizedValue = value;
+  if (normalizedValue === "UTM Kabel KT.ttf") {
+    normalizedValue = "UTM Kabel KY.ttf";
+  }
+  const selectedFont = SUBTITLE_FONTS.find((font) => font.value === normalizedValue);
   return selectedFont?.weight ?? "normal";
 }
 

@@ -3,6 +3,8 @@ import path from "path";
 import fs from "fs";
 import { exec } from "child_process";
 import { createServer as createViteServer } from "vite";
+import WebSocket from "ws";
+import crypto from "crypto";
 
 // Ensure local_videos directory exists and is populated with dummy files if empty
 const LOCAL_VIDEOS_DIR = path.join(process.cwd(), "storage", "local_videos");
@@ -339,6 +341,220 @@ let globalConfig = {
   }
 };
 
+function cleanVoiceName(voice: string): string {
+  let name = voice;
+  if (name.includes(":")) {
+    const parts = name.split(":");
+    name = parts[parts.length - 1];
+  }
+  name = name.replace(/[-:](male|female)$/i, "");
+  return name;
+}
+
+function getEdgeVoiceAndLang(rawVoiceName: string, defaultLang: string = "es"): { voice: string; lang: string } {
+  let voice = cleanVoiceName(rawVoiceName);
+  let lang = defaultLang;
+
+  const localeMatch = voice.match(/^([a-z]{2})-([A-Z]{2})/);
+  if (localeMatch) {
+    lang = localeMatch[0];
+  } else {
+    const lower = rawVoiceName.toLowerCase();
+    if (lower.includes("en-") || lower.includes("us-") || lower.includes("guy") || lower.includes("jenny") || lower.includes("alex") || lower.includes("anna") || lower.includes("bella") || lower.includes("benjamin") || lower.includes("charles") || lower.includes("claire") || lower.includes("david") || lower.includes("diana") || lower.includes("milo") || lower.includes("dean") || lower.includes("chloe") || lower.includes("mia") || lower.includes("puck") || lower.includes("charon") || lower.includes("zephyr")) {
+      lang = "en-US";
+    } else if (lower.includes("zh-") || lower.includes("cn-") || lower.includes("xiaoxiao") || lower.includes("yunxi") || lower.includes("冰糖") || lower.includes("茉莉") || lower.includes("苏打") || lower.includes("白桦")) {
+      lang = "zh-CN";
+    } else if (lower.includes("es-") || lower.includes("mx-") || lower.includes("alvaro") || lower.includes("elvira") || lower.includes("dalia") || lower.includes("jorge")) {
+      lang = "es-ES";
+    } else if (lower.includes("pt-") || lower.includes("br-")) {
+      lang = "pt-BR";
+    } else if (lower.includes("de-")) {
+      lang = "de-DE";
+    } else if (lower.includes("fr-")) {
+      lang = "fr-FR";
+    } else if (lower.includes("it-")) {
+      lang = "it-IT";
+    } else if (lower.includes("ru-")) {
+      lang = "ru-RU";
+    } else if (lower.includes("ja-") || lower.includes("jp-")) {
+      lang = "ja-JP";
+    }
+  }
+
+  const lowerVoice = voice.toLowerCase();
+  if (!voice.includes("-") || voice.length < 5) {
+    const isMale = lowerVoice.includes("male") || lowerVoice.includes("guy") || lowerVoice.includes("david") || lowerVoice.includes("charles") || lowerVoice.includes("benjamin") || lowerVoice.includes("puck") || lowerVoice.includes("charon") || lowerVoice.includes("zephyr") || lowerVoice.includes("milo") || lowerVoice.includes("dean") || lowerVoice.includes("suda") || lowerVoice.includes("苏打") || lowerVoice.includes("alvaro") || lowerVoice.includes("jorge");
+    
+    if (lang.startsWith("es")) {
+      voice = isMale ? "es-ES-AlvaroNeural" : "es-ES-ElviraNeural";
+    } else if (lang.startsWith("en")) {
+      voice = isMale ? "en-US-GuyNeural" : "en-US-JennyNeural";
+    } else if (lang.startsWith("zh")) {
+      voice = isMale ? "zh-CN-YunxiNeural" : "zh-CN-XiaoxiaoNeural";
+    } else if (lang.startsWith("pt")) {
+      voice = isMale ? "pt-BR-JulioNeural" : "pt-BR-FranciscaNeural";
+    } else if (lang.startsWith("de")) {
+      voice = isMale ? "de-DE-ConradNeural" : "de-DE-AmalaNeural";
+    } else if (lang.startsWith("fr")) {
+      voice = isMale ? "fr-FR-HenriNeural" : "fr-FR-DeniseNeural";
+    } else if (lang.startsWith("it")) {
+      voice = isMale ? "it-IT-DiegoNeural" : "it-IT-ElsaNeural";
+    } else if (lang.startsWith("ru")) {
+      voice = isMale ? "ru-RU-DmitryNeural" : "ru-RU-SvetlanaNeural";
+    } else if (lang.startsWith("ja")) {
+      voice = isMale ? "ja-JP-KeitaNeural" : "ja-JP-NanamiNeural";
+    } else {
+      voice = isMale ? "en-US-GuyNeural" : "en-US-JennyNeural";
+    }
+  }
+
+  return { voice, lang };
+}
+
+const WIN_EPOCH = 11644473600;
+const S_TO_NS = 1e9;
+const TRUSTED_CLIENT_TOKEN = "6A5AA1D4EAFF4E9FB37E23D68491D6F4";
+const SEC_MS_GEC_VERSION = "1-143.0.3650.75";
+
+function generateSecMsGec(): string {
+  let ticks = Math.floor(Date.now() / 1000);
+  ticks += WIN_EPOCH;
+  ticks -= ticks % 300;
+  const intervals = ticks * (S_TO_NS / 100);
+  const strToHash = `${intervals.toFixed(0)}${TRUSTED_CLIENT_TOKEN}`;
+  return crypto.createHash("sha256").update(strToHash, "ascii").digest("hex").toUpperCase();
+}
+
+function getJSStyleDateString(): string {
+  const d = new Date();
+  const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  
+  const dayName = days[d.getUTCDay()];
+  const monthName = months[d.getUTCMonth()];
+  const dateNum = String(d.getUTCDate()).padStart(2, '0');
+  const year = d.getUTCFullYear();
+  const hours = String(d.getUTCHours()).padStart(2, '0');
+  const minutes = String(d.getUTCMinutes()).padStart(2, '0');
+  const seconds = String(d.getUTCSeconds()).padStart(2, '0');
+  
+  return `${dayName} ${monthName} ${dateNum} ${year} ${hours}:${minutes}:${seconds} GMT+0000 (Coordinated Universal Time)`;
+}
+
+function synthesizeSpeechWithEdge(voiceName: string, text: string, defaultLang: string = "es"): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const { voice, lang } = getEdgeVoiceAndLang(voiceName, defaultLang);
+    console.log(`[EdgeTTS] Requesting voice: "${voice}" (lang: "${lang}") for text: "${text.substring(0, 60)}..."`);
+    
+    const requestId = Array.from({ length: 32 }, () => Math.floor(Math.random() * 16).toString(16)).join("");
+    const secMsGec = generateSecMsGec();
+    const wsUrl = `wss://speech.platform.bing.com/consumer/speech/synthesize/readaloud/edge/v1?TrustedClientToken=${TRUSTED_CLIENT_TOKEN}&ConnectionId=${requestId}&Sec-MS-GEC=${secMsGec}&Sec-MS-GEC-Version=${SEC_MS_GEC_VERSION}`;
+    
+    const ws = new WebSocket(wsUrl, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0",
+        "Pragma": "no-cache",
+        "Cache-Control": "no-cache",
+        "Origin": "chrome-extension://jdiccldimpdaibmpdkjnbmckianbfold",
+        "Sec-WebSocket-Version": "13"
+      }
+    });
+
+    const audioBuffers: Buffer[] = [];
+    let isFinished = false;
+
+    ws.on("open", () => {
+      const timestampStr = getJSStyleDateString();
+      
+      const configPayload = JSON.stringify({
+        context: {
+          synthesis: {
+            audio: {
+              metadataoptions: {
+                sentenceBoundaryEnabled: "false",
+                wordBoundaryEnabled: "true"
+              },
+              outputFormat: "audio-24khz-48kbitrate-mono-mp3"
+            }
+          }
+        }
+      });
+      
+      const configMsg = `X-Timestamp:${timestampStr}Z\r\nContent-Type:application/json; charset=utf-8\r\nPath:speech.config\r\n\r\n${configPayload}`;
+      ws.send(configMsg);
+
+      const cleanText = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      const ssml = `<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='${lang}'><voice name='${voice}'><prosody pitch='+0Hz' rate='+0%' volume='+0%'>${cleanText}</prosody></voice></speak>`;
+      const ssmlMsg = `X-RequestId:${requestId}\r\nContent-Type:application/ssml+xml\r\nX-Timestamp:${timestampStr}Z\r\nPath:ssml\r\n\r\n${ssml}`;
+      ws.send(ssmlMsg);
+    });
+
+    ws.on("message", (data, isBinary) => {
+      if (isBinary) {
+        const buffer = Buffer.from(data as any);
+        if (buffer.length >= 2) {
+          const headerLen = buffer.readUInt16BE(0);
+          const header = buffer.toString("utf8", 2, 2 + headerLen);
+          if (header.includes("Path: audio") || header.includes("Path:audio")) {
+            const audioPayload = buffer.subarray(2 + headerLen);
+            audioBuffers.push(audioPayload);
+          }
+        }
+      } else {
+        const textMsg = data.toString();
+        if (textMsg.includes("Path: turn.end") || textMsg.includes("Path:turn.end")) {
+          isFinished = true;
+          ws.close();
+        }
+      }
+    });
+
+    ws.on("close", () => {
+      if (audioBuffers.length > 0) {
+        resolve(Buffer.concat(audioBuffers));
+      } else {
+        reject(new Error("No audio data received from Edge TTS WebSocket"));
+      }
+    });
+
+    ws.on("error", (err) => {
+      reject(err);
+    });
+
+    setTimeout(() => {
+      if (!isFinished) {
+        ws.close();
+        if (audioBuffers.length > 0) {
+          resolve(Buffer.concat(audioBuffers));
+        } else {
+          reject(new Error("Edge TTS timeout"));
+        }
+      }
+    }, 15000);
+  });
+}
+
+async function synthesizeSpeech(voiceName: string, text: string, defaultLang: string = "es"): Promise<Buffer> {
+  try {
+    return await synthesizeSpeechWithEdge(voiceName, text, defaultLang);
+  } catch (err) {
+    console.warn(`[SpeechSynthesis] Edge TTS failed for voice "${voiceName}", falling back to Google TTS:`, err);
+    const { lang } = getEdgeVoiceAndLang(voiceName, defaultLang);
+    const shortLang = lang.split("-")[0];
+    const googleTtsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=${shortLang}&client=tw-ob&q=${encodeURIComponent(text.substring(0, 200))}`;
+    const response = await fetch(googleTtsUrl, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+      }
+    });
+    if (!response.ok) {
+      throw new Error(`Google TTS fallback failed with status ${response.status}`);
+    }
+    const arrayBuffer = await response.arrayBuffer();
+    return Buffer.from(arrayBuffer);
+  }
+}
+
 async function startServer() {
   const app = express();
   const PORT = 3000;
@@ -591,18 +807,9 @@ async function startServer() {
     }
 
     try {
-      const googleTtsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=${tl}&client=tw-ob&q=${encodeURIComponent(text.substring(0, 200))}`;
-      const response = await fetch(googleTtsUrl, {
-        headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-        }
-      });
-      if (!response.ok) {
-        throw new Error(`Failed to fetch preview audio: ${response.status}`);
-      }
+      const audioBuffer = await synthesizeSpeech(voice_name, text, tl);
       res.setHeader("Content-Type", "audio/mpeg");
-      const arrayBuffer = await response.arrayBuffer();
-      res.send(Buffer.from(arrayBuffer));
+      res.send(audioBuffer);
     } catch (err) {
       console.error("Error fetching preview audio, falling back to silent wave:", err);
       // Fallback to a locally generated valid short silent WAV file so it never fails!
@@ -1317,17 +1524,8 @@ async function startServer() {
       const destPath = path.join(cacheDir, `narration_chunk_${projectId}_${idx}.mp3`);
       
       try {
-        const googleTtsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=${tl}&client=tw-ob&q=${encodeURIComponent(text.substring(0, 200))}`;
-        const response = await fetch(googleTtsUrl, {
-          headers: {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-          }
-        });
-        if (!response.ok) {
-          throw new Error(`TTS download failed with status ${response.status}`);
-        }
-        const buffer = await response.arrayBuffer();
-        await fs.promises.writeFile(destPath, Buffer.from(buffer));
+        const audioBuffer = await synthesizeSpeech(voice_name, text, tl);
+        await fs.promises.writeFile(destPath, audioBuffer);
         localPaths.push(destPath);
       } catch (err) {
         console.error(`[Narration] Failed to synthesize chunk ${idx}:`, err);
