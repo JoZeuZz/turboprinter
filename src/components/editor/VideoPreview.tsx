@@ -4,6 +4,7 @@ import { Play, Pause, SkipBack, SkipForward } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { formatTime } from "../../lib/time";
 import type { TimelineItem } from "../../api/types";
+import { useVideoStore } from "../../store/useVideoStore";
 
 interface VideoPreviewProps {
   items: TimelineItem[];
@@ -25,6 +26,8 @@ export function VideoPreview({ items, selectedId, onTimeUpdate }: VideoPreviewPr
   const [playingId, setPlayingId] = useState<string | null>(selectedId ?? items[0]?.id ?? null);
   const [clipTime, setClipTime] = useState(0);
   const [clipDuration, setClipDuration] = useState(0);
+
+  const videoAspect = useVideoStore((s) => s.video_aspect) ?? "9:16";
 
   useEffect(() => {
     setPlayingId(selectedId ?? items[0]?.id ?? null);
@@ -80,21 +83,28 @@ export function VideoPreview({ items, selectedId, onTimeUpdate }: VideoPreviewPr
     setClipTime(t);
   };
 
+  let maxWidthClass = "max-w-5xl";
+  if (videoAspect === "9:16") {
+    maxWidthClass = "max-w-[500px]";
+  } else if (videoAspect === "1:1") {
+    maxWidthClass = "max-w-[680px]";
+  }
+
   return (
-    <div className="flex flex-col bg-black rounded-lg overflow-hidden shadow-lg shadow-black/40">
+    <div className={`flex flex-col bg-black rounded-lg overflow-hidden shadow-lg shadow-black/40 h-full w-full mx-auto ${maxWidthClass}`}>
       {src ? (
         <video
           ref={videoRef}
           data-testid="video-preview"
           src={src}
-          {...{ referrerpolicy: "no-referrer" }}
-          className="w-full max-h-[420px] bg-black object-contain"
+          {...{ referrerPolicy: "no-referrer" }}
+          className="w-full flex-1 min-h-0 bg-black object-contain"
           onEnded={handleEnded}
           onTimeUpdate={handleTimeUpdate}
           onLoadedMetadata={() => setClipDuration(videoRef.current?.duration ?? 0)}
         />
       ) : (
-        <div className="w-full h-40 flex items-center justify-center bg-surface text-muted text-sm">
+        <div className="w-full flex-1 flex items-center justify-center bg-surface text-muted text-sm min-h-[200px]">
           {t("editor.previewEmpty")}
         </div>
       )}

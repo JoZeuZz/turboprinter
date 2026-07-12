@@ -18,6 +18,7 @@ import { SortableClipCard } from "./SortableClipCard";
 import { useProjectStore } from "../../store/useProjectStore";
 import { useProjectWorkspaceStore } from "../../store/useProjectWorkspaceStore";
 import { useConfigStore } from "../../store/useConfigStore";
+import { useVideoStore } from "../../store/useVideoStore";
 import type { TimelineItem, EditCommand } from "../../api/types";
 
 export function ReviewPanel() {
@@ -63,6 +64,17 @@ export function ReviewPanel() {
 
   if (projectStore.mode === "disabled" || !projectStore.project) {
     const finalVideo = videoUrls[0];
+    const videoAspect = useVideoStore.getState().video_aspect ?? "9:16";
+
+    let aspectClass = "aspect-[9/16] max-h-[500px]";
+    let maxWidthClass = "max-w-sm sm:max-w-md";
+    if (videoAspect === "16:9") {
+      aspectClass = "aspect-video max-h-[420px]";
+      maxWidthClass = "max-w-xl sm:max-w-2xl";
+    } else if (videoAspect === "1:1") {
+      aspectClass = "aspect-square max-h-[450px]";
+      maxWidthClass = "max-w-sm sm:max-w-md";
+    }
 
     return (
       <div className="flex h-full w-full max-w-4xl mx-auto flex-col items-center justify-start gap-6 px-6 py-8 text-center">
@@ -72,9 +84,9 @@ export function ReviewPanel() {
         </div>
 
         {finalVideo ? (
-          <div className="w-full max-w-sm sm:max-w-md rounded-2xl overflow-hidden border border-border bg-neutral-900/60 shadow-2xl p-2 transition-all duration-300 hover:shadow-accent/5 hover:border-accent/20">
-            <div className="relative rounded-xl overflow-hidden bg-black flex items-center justify-center aspect-[9/16] max-h-[500px]">
-              <video src={finalVideo} controls {...{ referrerpolicy: "no-referrer" }} className="w-full h-full object-contain" />
+          <div className={`w-full ${maxWidthClass} rounded-2xl overflow-hidden border border-border bg-neutral-900/60 shadow-2xl p-2 transition-all duration-300 hover:shadow-accent/5 hover:border-accent/20`}>
+            <div className={`relative rounded-xl overflow-hidden bg-black flex items-center justify-center ${aspectClass}`}>
+              <video src={finalVideo} controls {...{ referrerPolicy: "no-referrer" }} className="w-full h-full object-contain" />
             </div>
           </div>
         ) : (

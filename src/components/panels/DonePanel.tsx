@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { Button } from "../ui";
 import { useProjectWorkspaceStore } from "../../store/useProjectWorkspaceStore";
 import { useConfigStore } from "../../store/useConfigStore";
+import { useVideoStore } from "../../store/useVideoStore";
 
 export function DonePanel() {
   const { t } = useTranslation();
@@ -59,31 +60,44 @@ export function DonePanel() {
           <span>{t("panels.done.none")}</span>
         </div>
       ) : (
-        videoUrls.map((url) => (
-          <div
-            key={url}
-            className="w-full max-w-sm sm:max-w-md rounded-2xl overflow-hidden border border-border bg-neutral-900/60 shadow-2xl p-2 transition-all duration-300 hover:shadow-accent/5 hover:border-accent/20"
-          >
-            <div className="relative rounded-xl overflow-hidden bg-black flex items-center justify-center aspect-[9/16] max-h-[500px]">
-              <video
-                src={url}
-                controls
-                {...{ referrerpolicy: "no-referrer" }}
-                className="w-full h-full object-contain"
-              />
+        (() => {
+          const videoAspect = useVideoStore.getState().video_aspect ?? "9:16";
+          let aspectClass = "aspect-[9/16] max-h-[500px]";
+          let maxWidthClass = "max-w-sm sm:max-w-md";
+          if (videoAspect === "16:9") {
+            aspectClass = "aspect-video max-h-[420px]";
+            maxWidthClass = "max-w-xl sm:max-w-2xl";
+          } else if (videoAspect === "1:1") {
+            aspectClass = "aspect-square max-h-[450px]";
+            maxWidthClass = "max-w-sm sm:max-w-md";
+          }
+
+          return videoUrls.map((url) => (
+            <div
+              key={url}
+              className={`w-full ${maxWidthClass} rounded-2xl overflow-hidden border border-border bg-neutral-900/60 shadow-2xl p-2 transition-all duration-300 hover:shadow-accent/5 hover:border-accent/20`}
+            >
+              <div className={`relative rounded-xl overflow-hidden bg-black flex items-center justify-center ${aspectClass}`}>
+                <video
+                  src={url}
+                  controls
+                  {...{ referrerPolicy: "no-referrer" }}
+                  className="w-full h-full object-contain"
+                />
+              </div>
+              <div className="flex items-center justify-center gap-2 px-3 py-3 border-t border-border/50 mt-2 bg-surface/30 rounded-lg">
+                <a
+                  href={url}
+                  download
+                  className="inline-flex items-center gap-1.5 text-xs text-accent hover:text-accent-hover font-medium bg-accent/10 px-3 py-1.5 rounded-md transition-colors"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  {t("common.download")}
+                </a>
+              </div>
             </div>
-            <div className="flex items-center justify-center gap-2 px-3 py-3 border-t border-border/50 mt-2 bg-surface/30 rounded-lg">
-              <a
-                href={url}
-                download
-                className="inline-flex items-center gap-1.5 text-xs text-accent hover:text-accent-hover font-medium bg-accent/10 px-3 py-1.5 rounded-md transition-colors"
-              >
-                <Download className="h-3.5 w-3.5" />
-                {t("common.download")}
-              </a>
-            </div>
-          </div>
-        ))
+          ));
+        })()
       )}
 
       {videoUrls.length > 0 && (
