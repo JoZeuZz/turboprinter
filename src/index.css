@@ -5,44 +5,44 @@
 @tailwind utilities;
 
 @font-face {
-  font-family: "Charm Bold Preview";
+  font-family: "Charm Preview";
   src: url("/fonts/Charm-Bold.ttf") format("truetype");
   font-weight: 700;
 }
 
 @font-face {
-  font-family: "Charm Regular Preview";
+  font-family: "Charm Preview";
   src: url("/fonts/Charm-Regular.ttf") format("truetype");
   font-weight: 400;
 }
 
 @font-face {
-  font-family: "Microsoft YaHei Bold Preview";
+  font-family: "Microsoft YaHei Preview";
   src: local("Microsoft YaHei Bold"), local("Microsoft YaHei"), local("MS YaHei"), url("/fonts/MicrosoftYaHeiBold.ttc") format("truetype");
   font-weight: 700;
 }
 
 @font-face {
-  font-family: "Microsoft YaHei Normal Preview";
+  font-family: "Microsoft YaHei Preview";
   src: local("Microsoft YaHei"), local("MS YaHei"), url("/fonts/MicrosoftYaHeiNormal.ttc") format("truetype");
   font-weight: 400;
 }
 
 @font-face {
-  font-family: "STHeiti Light Preview";
+  font-family: "STHeiti Preview";
   src: local("STHeiti Light"), local("STHeitiSC-Light"), local("STHeitiTC-Light"), url("/fonts/STHeitiLight.ttc") format("truetype");
   font-weight: 300;
 }
 
 @font-face {
-  font-family: "STHeiti Medium Preview";
+  font-family: "STHeiti Preview";
   src: local("STHeiti Medium"), local("STHeitiSC-Medium"), local("STHeitiTC-Medium"), url("/fonts/STHeitiMedium.ttc") format("truetype");
   font-weight: 500;
 }
 
 @font-face {
   font-family: "UTM Kabel Preview";
-  src: url("/fonts/UTM%20Kabel%20KT.ttf") format("truetype");
+  src: url("/fonts/UTM_Kabel_KT.ttf") format("truetype");
   font-weight: 400;
 }
 
