@@ -28,14 +28,23 @@ export function EditorPanel() {
   const subtitleTrack = projectStore.project?.tracks.find((t) => t.type === "subtitle");
   const items: TimelineItem[] = videoTrack?.items ?? [];
 
-  const selectedClip = items.find((c) => c.id === selectedId) ?? null;
+  const allClips = [
+    ...(videoTrack?.items ?? []),
+    ...(audioTrack?.items ?? []),
+    ...(subtitleTrack?.items ?? []),
+  ];
+  const selectedClip = allClips.find((c) => c.id === selectedId) ?? null;
 
   const handleTrimChange = (id: string, start: number, end: number | null) => {
+    const track = [videoTrack, audioTrack, subtitleTrack].find(
+      (t) => t?.items.some((item) => item.id === id)
+    );
+    if (!track) return;
     void projectStore.applyTimelineCommands({
       commands: [
         {
           type: "trim",
-          track_id: videoTrack?.id ?? "",
+          track_id: track.id,
           item_id: id,
           trim_start_sec: start,
           trim_end_sec: end,
@@ -45,11 +54,15 @@ export function EditorPanel() {
   };
 
   const handleRemove = (id: string) => {
+    const track = [videoTrack, audioTrack, subtitleTrack].find(
+      (t) => t?.items.some((item) => item.id === id)
+    );
+    if (!track) return;
     void projectStore.applyTimelineCommands({
       commands: [
         {
           type: "move",
-          track_id: videoTrack?.id ?? "",
+          track_id: track.id,
           item_id: id,
           new_start_sec: -1,
         },
@@ -59,12 +72,16 @@ export function EditorPanel() {
   };
 
   const handleDuplicate = async (id: string) => {
+    const track = [videoTrack, audioTrack, subtitleTrack].find(
+      (t) => t?.items.some((item) => item.id === id)
+    );
+    if (!track) return;
     const newItemId = `${id}_dup_${Math.random().toString(36).substring(2, 6)}`;
     await projectStore.applyTimelineCommands({
       commands: [
         {
           type: "duplicate",
-          track_id: videoTrack?.id ?? "",
+          track_id: track.id,
           item_id: id,
           new_item_id: newItemId,
         },

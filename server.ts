@@ -1188,6 +1188,30 @@ async function startServer() {
     if (!p) {
       return res.status(404).json({ status: 404, message: "Project not found", data: null });
     }
+
+    // Auto-fix audio track if it's missing but we have tracks and segments
+    if (p.tracks && !p.tracks.some((t: any) => t.type === "audio") && p.shot_plan?.segments) {
+      const audioItems = (p.shot_plan?.segments || []).map((seg: any, idx: number) => {
+        const startSec = seg.start_sec !== undefined ? seg.start_sec : idx * 5;
+        const durationSec = seg.target_duration_sec !== undefined ? seg.target_duration_sec : 5;
+        return {
+          id: `audio_${idx + 1}`,
+          start_sec: startSec,
+          duration_sec: durationSec,
+          text: seg.narration_text,
+          segment_id: seg.id,
+          asset_url: p.narration_audio_path || null
+        };
+      });
+      p.tracks.push({
+        id: "track_audio",
+        type: "audio",
+        name: "Audio Track",
+        items: audioItems
+      });
+      projects.set(req.params.id, p);
+    }
+
     res.json({ status: 200, message: "ok", data: { ...p, timeline: p } });
   }));
 
@@ -1437,6 +1461,19 @@ async function startServer() {
       };
     });
 
+    const audioItems = (p.shot_plan?.segments || []).map((seg: any, idx: number) => {
+      const startSec = seg.start_sec !== undefined ? seg.start_sec : idx * 5;
+      const durationSec = seg.target_duration_sec !== undefined ? seg.target_duration_sec : 5;
+      return {
+        id: `audio_${idx + 1}`,
+        start_sec: startSec,
+        duration_sec: durationSec,
+        text: seg.narration_text,
+        segment_id: seg.id,
+        asset_url: p.narration_audio_path || null
+      };
+    });
+
     const subtitleItems = (p.shot_plan?.segments || []).map((seg: any, idx: number) => {
       const startSec = seg.start_sec !== undefined ? seg.start_sec : idx * 5;
       const durationSec = seg.target_duration_sec !== undefined ? seg.target_duration_sec : 5;
@@ -1451,6 +1488,7 @@ async function startServer() {
 
     p.tracks = [
       { id: "track_video", type: "video", name: "Video Track", items: videoItems },
+      { id: "track_audio", type: "audio", name: "Audio Track", items: audioItems },
       { id: "track_subtitle", type: "subtitle", name: "Subtitle Track", items: subtitleItems }
     ];
 
@@ -1575,6 +1613,37 @@ async function startServer() {
       await fs.promises.writeFile(srtPath, srtContent, "utf8");
       subtitlePath = `/storage/renders/subtitles_${projectId}.srt`;
       p.subtitle_path = subtitlePath;
+    }
+
+    const audioItems = (p.shot_plan?.segments || []).map((seg: any, idx: number) => {
+      const startSec = seg.start_sec !== undefined ? seg.start_sec : idx * 5;
+      const durationSec = seg.target_duration_sec !== undefined ? seg.target_duration_sec : 5;
+      return {
+        id: `audio_${idx + 1}`,
+        start_sec: startSec,
+        duration_sec: durationSec,
+        text: seg.narration_text,
+        segment_id: seg.id,
+        asset_url: p.narration_audio_path || null
+      };
+    });
+
+    const subtitleItems = (p.shot_plan?.segments || []).map((seg: any, idx: number) => {
+      const startSec = seg.start_sec !== undefined ? seg.start_sec : idx * 5;
+      const durationSec = seg.target_duration_sec !== undefined ? seg.target_duration_sec : 5;
+      return {
+        id: `sub_${idx + 1}`,
+        start_sec: startSec,
+        duration_sec: durationSec,
+        text: seg.narration_text,
+        segment_id: seg.id
+      };
+    });
+
+    if (p.tracks) {
+      p.tracks = p.tracks.filter((t: any) => t.type !== "audio" && t.type !== "subtitle");
+      p.tracks.push({ id: "track_audio", type: "audio", name: "Audio Track", items: audioItems });
+      p.tracks.push({ id: "track_subtitle", type: "subtitle", name: "Subtitle Track", items: subtitleItems });
     }
 
     projects.set(projectId, p);
