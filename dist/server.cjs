@@ -1694,6 +1694,102 @@ ${sub.text || ""}
 `;
     }).join("\n");
   };
+  const formatAssTime = (seconds) => {
+    const hrs = Math.floor(seconds / 3600);
+    const mins = Math.floor(seconds % 3600 / 60);
+    const secs = Math.floor(seconds % 60);
+    const ms = Math.floor(seconds % 1 * 1e3);
+    const cs = Math.floor(ms / 10);
+    return `${hrs}:${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}.${cs.toString().padStart(2, "0")}`;
+  };
+  const generateAss = (subtitles, resWidth, resHeight, styleParams) => {
+    const assFont = getAssFontName(styleParams.fontName);
+    const textColor = cssHexToAss(styleParams.textColor);
+    const strokeColor = cssHexToAss(styleParams.strokeColor);
+    let borderStyle = 1;
+    let outlineVal = styleParams.strokeWidth !== void 0 ? styleParams.strokeWidth : 1.5;
+    let assBgColor = "000000";
+    let assBgAlpha = "00";
+    if (styleParams.hasBg === true) {
+      borderStyle = 3;
+      outlineVal = Math.max(2, Math.round(styleParams.fontSize * 0.15));
+      assBgColor = "000000";
+      assBgAlpha = "80";
+    } else if (typeof styleParams.hasBg === "string" && styleParams.hasBg.trim()) {
+      borderStyle = 3;
+      outlineVal = Math.max(2, Math.round(styleParams.fontSize * 0.15));
+      const cleanBg = styleParams.hasBg.trim();
+      if (cleanBg.startsWith("#")) {
+        assBgColor = cssHexToAss(cleanBg);
+        if (cleanBg.length === 9) {
+          const alphaHex = cleanBg.substring(7, 9);
+          const cssAlphaInt = parseInt(alphaHex, 16);
+          const assAlphaInt = 255 - cssAlphaInt;
+          assBgAlpha = assAlphaInt.toString(16).padStart(2, "0").toUpperCase();
+        } else {
+          assBgAlpha = "80";
+        }
+      } else if (cleanBg.startsWith("rgba")) {
+        const match = cleanBg.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*([\d.]+)\s*\)/);
+        if (match) {
+          const r = parseInt(match[1]).toString(16).padStart(2, "0");
+          const g = parseInt(match[2]).toString(16).padStart(2, "0");
+          const b = parseInt(match[3]).toString(16).padStart(2, "0");
+          assBgColor = `${b}${g}${r}`;
+          const a = parseFloat(match[4]);
+          const assAlphaInt = Math.round((1 - a) * 255);
+          assBgAlpha = assAlphaInt.toString(16).padStart(2, "0").toUpperCase();
+        }
+      } else if (cleanBg.startsWith("rgb")) {
+        const match = cleanBg.match(/rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/);
+        if (match) {
+          const r = parseInt(match[1]).toString(16).padStart(2, "0");
+          const g = parseInt(match[2]).toString(16).padStart(2, "0");
+          const b = parseInt(match[3]).toString(16).padStart(2, "0");
+          assBgColor = `${b}${g}${r}`;
+          assBgAlpha = "00";
+        }
+      }
+    } else {
+      borderStyle = 1;
+    }
+    let alignment = 2;
+    let marginV = Math.round(0.08 * resHeight);
+    if (styleParams.position === "top") {
+      alignment = 8;
+      marginV = Math.round(0.08 * resHeight);
+    } else if (styleParams.position === "center" || styleParams.position === "middle") {
+      alignment = 5;
+      marginV = 0;
+    } else if (styleParams.position === "custom") {
+      alignment = 2;
+      const pctFromBottom = (100 - styleParams.customPosition) / 100;
+      marginV = Math.round(pctFromBottom * resHeight);
+    }
+    let out = `[Script Info]
+ScriptType: v4.00+
+PlayResX: ${resWidth}
+PlayResY: ${resHeight}
+WrapStyle: 0
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,${assFont},${styleParams.fontSize},&H00${textColor},&H00000000,&H00${strokeColor},&H${assBgAlpha}${assBgColor},0,0,0,0,100,100,0,0,${borderStyle},${outlineVal.toFixed(1)},0,${alignment},20,20,${marginV},1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+`;
+    for (const sub of subtitles) {
+      const startSec = Number(sub.start_sec) || 0;
+      const durationSec = Number(sub.duration_sec) || 5;
+      const start = formatAssTime(startSec);
+      const end = formatAssTime(startSec + durationSec);
+      const text = (sub.text || "").replace(/\\n/g, "\\N").replace(/\n/g, "\\N");
+      out += `Dialogue: 0,${start},${end},Default,,0,0,0,,${text}
+`;
+    }
+    return out;
+  };
   const executeCommand = (cmd) => {
     return new Promise((resolve, reject) => {
       (0, import_child_process.exec)(cmd, { maxBuffer: 1024 * 1024 * 50 }, (error, stdout, stderr) => {
@@ -1893,11 +1989,18 @@ To run this application locally and render videos successfully, please:
       const subtitles = subtitleTrack?.items || [];
       let finalOutputPath = audioMixedOutput;
       if (subtitles.length > 0) {
-        const srtFilePath = import_path.default.join(cacheDir, `subtitles_${taskId}.srt`);
-        const srtContent = generateSrt(subtitles);
-        await import_fs.default.promises.writeFile(srtFilePath, srtContent, "utf8");
-        const srtOutput = import_path.default.join(renderDir, `render_${projectId}.mp4`);
-        const srtRelative = import_path.default.relative(process.cwd(), srtFilePath).replace(/\\/g, "/");
+        const fontsConfPath = import_path.default.join(cacheDir, `fonts_${taskId}.conf`);
+        const fontsConfXml = `<?xml version="1.0"?>
+<!DOCTYPE fontconfig SYSTEM "fonts.dtd">
+<fontconfig>
+  <dir>${import_path.default.join(process.cwd(), "public", "fonts")}</dir>
+  <dir>${import_path.default.join(process.cwd(), "resource", "fonts")}</dir>
+  <cachedir>/tmp/fonts-cache-${taskId}</cachedir>
+  <config></config>
+</fontconfig>`;
+        await import_fs.default.promises.writeFile(fontsConfPath, fontsConfXml, "utf8");
+        process.env.FONTCONFIG_FILE = fontsConfPath;
+        process.env.FONTCONFIG_PATH = cacheDir;
         const pParams = p.params || {};
         const fontNameParam = pParams.font_name || p.font_name || "STHeitiMedium.ttc";
         const fontSizeParam = pParams.font_size || p.font_size || 60;
@@ -1907,51 +2010,22 @@ To run this application locally and render videos successfully, please:
         const hasBgParam = pParams.text_background_color !== void 0 ? pParams.text_background_color : p.text_background_color !== void 0 ? p.text_background_color : true;
         const subtitlePosParam = pParams.subtitle_position || p.subtitle_position || "bottom";
         const customPosParam = pParams.custom_position !== void 0 ? pParams.custom_position : p.custom_position !== void 0 ? p.custom_position : 70;
-        const assFont = getAssFontName(fontNameParam);
-        const assFontSize = Math.max(12, Math.round(fontSizeParam / 1920 * resHeight));
-        const assTextColor = cssHexToAss(textColorParam);
-        const assStrokeColor = cssHexToAss(strokeColorParam);
-        let borderStyle = 1;
-        let outlineVal = 0;
-        let shadowVal = 0;
-        let assBgColor = "000000";
-        let assBgAlpha = "00";
-        if (hasBgParam) {
-          borderStyle = 3;
-          outlineVal = Math.max(2, Math.round(fontSizeParam / 1920 * resHeight * 0.15));
-          assBgColor = "000000";
-          assBgAlpha = "80";
-        } else {
-          borderStyle = 1;
-          outlineVal = Math.max(0, strokeWidthParam / 1920 * resHeight);
-          shadowVal = 0;
-        }
-        let alignment = 2;
-        let marginV = Math.round(0.08 * resHeight);
-        if (subtitlePosParam === "top") {
-          alignment = 8;
-          marginV = Math.round(0.08 * resHeight);
-        } else if (subtitlePosParam === "center" || subtitlePosParam === "middle") {
-          alignment = 5;
-          marginV = 0;
-        } else if (subtitlePosParam === "custom") {
-          alignment = 2;
-          const pctFromBottom = (100 - customPosParam) / 100;
-          marginV = Math.round(pctFromBottom * resHeight);
-        }
-        const forceStyleOpts = [
-          `Fontname=${assFont}`,
-          `Fontsize=${assFontSize}`,
-          `PrimaryColour=&H00${assTextColor}`,
-          `OutlineColour=&H00${assStrokeColor}`,
-          `BackColour=&H${assBgAlpha}${assBgColor}`,
-          `BorderStyle=${borderStyle}`,
-          `Outline=${outlineVal.toFixed(1)}`,
-          `Shadow=${shadowVal}`,
-          `Alignment=${alignment}`,
-          `MarginV=${marginV}`
-        ];
-        const subFilter = `subtitles='${srtRelative}':force_style='${forceStyleOpts.join(",")}'`;
+        const assFilePath = import_path.default.join(cacheDir, `subtitles_${taskId}.ass`);
+        const assContent = generateAss(subtitles, resWidth, resHeight, {
+          fontName: fontNameParam,
+          fontSize: fontSizeParam,
+          textColor: textColorParam,
+          strokeColor: strokeColorParam,
+          strokeWidth: strokeWidthParam,
+          hasBg: hasBgParam,
+          position: subtitlePosParam,
+          customPosition: customPosParam
+        });
+        await import_fs.default.promises.writeFile(assFilePath, assContent, "utf8");
+        const srtOutput = import_path.default.join(renderDir, `render_${projectId}.mp4`);
+        const assRelative = import_path.default.relative(process.cwd(), assFilePath).replace(/\\/g, "/");
+        const escapedAssPath = assRelative.replace(/'/g, "'\\\\''").replace(/:/g, "\\:");
+        const subFilter = `subtitles='${escapedAssPath}'`;
         const srtCmd = `ffmpeg -y -i "${audioMixedOutput}" -vf "${subFilter}" -c:a copy "${srtOutput}"`;
         await executeCommand(srtCmd);
         finalOutputPath = srtOutput;
