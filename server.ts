@@ -1,6 +1,7 @@
 import express from "express";
 import path from "path";
 import fs from "fs";
+import { exec } from "child_process";
 import { createServer as createViteServer } from "vite";
 
 // Ensure local_videos directory exists and is populated with dummy files if empty
@@ -34,8 +35,8 @@ const SAMPLE_VIDEOS = [
   {
     id: "v1",
     provider: "pexels",
-    source_url: "https://images.pexels.com/video-files/3209211/3209211-hd_1920_1080_25fps.mp4",
-    download_url: "https://images.pexels.com/video-files/3209211/3209211-hd_1920_1080_25fps.mp4",
+    source_url: "https://videos.pexels.com/video-files/3209211/3209211-hd_1920_1080_25fps.mp4",
+    download_url: "https://videos.pexels.com/video-files/3209211/3209211-hd_1920_1080_25fps.mp4",
     thumbnail_url: "https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&w=600&q=80",
     width: 1920,
     height: 1080,
@@ -46,8 +47,8 @@ const SAMPLE_VIDEOS = [
   {
     id: "v2",
     provider: "pexels",
-    source_url: "https://images.pexels.com/video-files/3195398/3195398-hd_1920_1080_25fps.mp4",
-    download_url: "https://images.pexels.com/video-files/3195398/3195398-hd_1920_1080_25fps.mp4",
+    source_url: "https://videos.pexels.com/video-files/3195398/3195398-hd_1920_1080_25fps.mp4",
+    download_url: "https://videos.pexels.com/video-files/3195398/3195398-hd_1920_1080_25fps.mp4",
     thumbnail_url: "https://images.unsplash.com/photo-1505118380757-91f5f5632de0?auto=format&fit=crop&w=600&q=80",
     width: 1920,
     height: 1080,
@@ -58,8 +59,8 @@ const SAMPLE_VIDEOS = [
   {
     id: "v3",
     provider: "pexels",
-    source_url: "https://images.pexels.com/video-files/3248319/3248319-hd_1920_1080_25fps.mp4",
-    download_url: "https://images.pexels.com/video-files/3248319/3248319-hd_1920_1080_25fps.mp4",
+    source_url: "https://videos.pexels.com/video-files/3248319/3248319-hd_1920_1080_25fps.mp4",
+    download_url: "https://videos.pexels.com/video-files/3248319/3248319-hd_1920_1080_25fps.mp4",
     thumbnail_url: "https://images.unsplash.com/photo-1447752875215-b2761acb3c5d?auto=format&fit=crop&w=600&q=80",
     width: 1920,
     height: 1080,
@@ -70,8 +71,8 @@ const SAMPLE_VIDEOS = [
   {
     id: "v4",
     provider: "pexels",
-    source_url: "https://images.pexels.com/video-files/856973/856973-hd_1920_1080_30fps.mp4",
-    download_url: "https://images.pexels.com/video-files/856973/856973-hd_1920_1080_30fps.mp4",
+    source_url: "https://videos.pexels.com/video-files/856973/856973-hd_1920_1080_30fps.mp4",
+    download_url: "https://videos.pexels.com/video-files/856973/856973-hd_1920_1080_30fps.mp4",
     thumbnail_url: "https://images.unsplash.com/photo-1503899036084-c55cdd92da26?auto=format&fit=crop&w=600&q=80",
     width: 1920,
     height: 1080,
@@ -82,8 +83,8 @@ const SAMPLE_VIDEOS = [
   {
     id: "v5",
     provider: "pexels",
-    source_url: "https://images.pexels.com/video-files/1448735/1448735-hd_1920_1080_24fps.mp4",
-    download_url: "https://images.pexels.com/video-files/1448735/1448735-hd_1920_1080_24fps.mp4",
+    source_url: "https://videos.pexels.com/video-files/1448735/1448735-hd_1920_1080_24fps.mp4",
+    download_url: "https://videos.pexels.com/video-files/1448735/1448735-hd_1920_1080_24fps.mp4",
     thumbnail_url: "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=600&q=80",
     width: 1920,
     height: 1080,
@@ -94,8 +95,8 @@ const SAMPLE_VIDEOS = [
   {
     id: "v6",
     provider: "pexels",
-    source_url: "https://images.pexels.com/video-files/2048246/2048246-hd_1920_1080_24fps.mp4",
-    download_url: "https://images.pexels.com/video-files/2048246/2048246-hd_1920_1080_24fps.mp4",
+    source_url: "https://videos.pexels.com/video-files/2048246/2048246-hd_1920_1080_24fps.mp4",
+    download_url: "https://videos.pexels.com/video-files/2048246/2048246-hd_1920_1080_24fps.mp4",
     thumbnail_url: "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?auto=format&fit=crop&w=600&q=80",
     width: 1920,
     height: 1080,
@@ -106,8 +107,8 @@ const SAMPLE_VIDEOS = [
   {
     id: "v7",
     provider: "pexels",
-    source_url: "https://images.pexels.com/video-files/2811417/2811417-hd_1920_1080_24fps.mp4",
-    download_url: "https://images.pexels.com/video-files/2811417/2811417-hd_1920_1080_24fps.mp4",
+    source_url: "https://videos.pexels.com/video-files/2811417/2811417-hd_1920_1080_24fps.mp4",
+    download_url: "https://videos.pexels.com/video-files/2811417/2811417-hd_1920_1080_24fps.mp4",
     thumbnail_url: "https://images.unsplash.com/photo-1472214222541-d510753a4907?auto=format&fit=crop&w=600&q=80",
     width: 1920,
     height: 1080,
@@ -118,8 +119,8 @@ const SAMPLE_VIDEOS = [
   {
     id: "v8",
     provider: "pexels",
-    source_url: "https://images.pexels.com/video-files/5092640/5092640-hd_1920_1080_30fps.mp4",
-    download_url: "https://images.pexels.com/video-files/5092640/5092640-hd_1920_1080_30fps.mp4",
+    source_url: "https://videos.pexels.com/video-files/5092640/5092640-hd_1920_1080_30fps.mp4",
+    download_url: "https://videos.pexels.com/video-files/5092640/5092640-hd_1920_1080_30fps.mp4",
     thumbnail_url: "https://images.unsplash.com/photo-1518156677180-95a2893f3e9f?auto=format&fit=crop&w=600&q=80",
     width: 1920,
     height: 1080,
@@ -130,8 +131,8 @@ const SAMPLE_VIDEOS = [
   {
     id: "v9",
     provider: "pexels",
-    source_url: "https://images.pexels.com/video-files/3191571/3191571-hd_1920_1080_25fps.mp4",
-    download_url: "https://images.pexels.com/video-files/3191571/3191571-hd_1920_1080_25fps.mp4",
+    source_url: "https://videos.pexels.com/video-files/3191571/3191571-hd_1920_1080_25fps.mp4",
+    download_url: "https://videos.pexels.com/video-files/3191571/3191571-hd_1920_1080_25fps.mp4",
     thumbnail_url: "https://images.unsplash.com/photo-1475924156734-496f6cac6ec1?auto=format&fit=crop&w=600&q=80",
     width: 1920,
     height: 1080,
@@ -142,8 +143,8 @@ const SAMPLE_VIDEOS = [
   {
     id: "v10",
     provider: "pexels",
-    source_url: "https://images.pexels.com/video-files/3121435/3121435-hd_1920_1080_24fps.mp4",
-    download_url: "https://images.pexels.com/video-files/3121435/3121435-hd_1920_1080_24fps.mp4",
+    source_url: "https://videos.pexels.com/video-files/3121435/3121435-hd_1920_1080_24fps.mp4",
+    download_url: "https://videos.pexels.com/video-files/3121435/3121435-hd_1920_1080_24fps.mp4",
     thumbnail_url: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=600&q=80",
     width: 1920,
     height: 1080,
@@ -1081,33 +1082,113 @@ async function startServer() {
     });
   }));
 
+  const getPexelsApiKey = (): string | null => {
+    if (process.env.PEXELS_API_KEY) return process.env.PEXELS_API_KEY;
+    if (process.env.PEXELS_KEY) return process.env.PEXELS_KEY;
+    const keys = (globalConfig.settings as any)?.app?.pexels_api_keys || [];
+    if (keys && keys.length > 0) return keys[0];
+    return null;
+  };
+
+  const searchPexelsVideos = async (query: string, apiKey: string): Promise<any[]> => {
+    try {
+      const url = `https://api.pexels.com/videos/search?query=${encodeURIComponent(query)}&per_page=15&orientation=portrait`;
+      const res = await fetch(url, {
+        headers: {
+          "Authorization": apiKey
+        }
+      });
+      if (!res.ok) {
+        throw new Error(`Pexels API response error: ${res.status}`);
+      }
+      const data: any = await res.json();
+      return (data.videos || []).map((video: any) => {
+        const file = video.video_files?.find((f: any) => f.quality === "hd" || f.quality === "sd") || video.video_files?.[0];
+        return {
+          id: `pexels_${video.id}`,
+          provider: "pexels",
+          source_url: file?.link || video.video_files?.[0]?.link,
+          download_url: file?.link || video.video_files?.[0]?.link,
+          thumbnail_url: video.image || `https://images.pexels.com/videos/${video.id}/pictures/medium-1.jpg`,
+          width: video.width,
+          height: video.height,
+          duration_sec: video.duration,
+          query: query,
+          title: video.user?.name ? `Video by ${video.user.name}` : "Pexels Video"
+        };
+      });
+    } catch (err) {
+      console.error(`Failed to search Pexels for query "${query}":`, err);
+      return [];
+    }
+  };
+
   app.post("/api/v1/projects/:id/media/search", wrap(async (req: any, res: any) => {
     const p = projects.get(req.params.id);
     if (!p) {
       return res.status(404).json({ status: 404, message: "Project not found", data: null });
     }
 
-    // Assign mock media candidates based on planned segments
-    const candidates = p.shot_plan?.segments?.flatMap((seg: any) => {
-      return SAMPLE_VIDEOS.map((v, i) => ({
-        ...v,
-        id: `${seg.id}_cand_${i + 1}`,
-        segment_id: seg.id,
-        score: 0.9 - i * 0.1,
-        score_reasons: ["Matches query: " + seg.search_queries.join(", ")]
-      }));
-    }) || [];
+    const apiKey = getPexelsApiKey();
+    let selected: any[] = [];
+    let candidates: any[] = [];
 
-    // Pre-select candidates with round-robin index to avoid repeating adjacent videos
-    const selected = p.shot_plan?.segments?.map((seg: any, idx: number) => {
-      const videoIndex = idx % SAMPLE_VIDEOS.length;
-      const best = SAMPLE_VIDEOS[videoIndex];
-      return {
-        ...best,
-        id: `${seg.id}_selected`,
-        segment_id: seg.id
-      };
-    }) || [];
+    if (apiKey) {
+      console.log(`[Pexels] API Key found! Searching Pexels online...`);
+      const segments = p.shot_plan?.segments || [];
+      for (let idx = 0; idx < segments.length; idx++) {
+        const seg = segments[idx];
+        const query = seg.search_queries?.[0] || p.topic || "nature";
+        const results = await searchPexelsVideos(query, apiKey);
+        if (results.length > 0) {
+          candidates.push(...results.map((r, i) => ({
+            ...r,
+            id: `${seg.id}_cand_${i + 1}`,
+            segment_id: seg.id,
+            score: 1.0 - i * 0.05,
+            score_reasons: [`Matches online search: ${query}`]
+          })));
+
+          selected.push({
+            ...results[0],
+            id: `${seg.id}_selected`,
+            segment_id: seg.id
+          });
+        } else {
+          const videoIndex = idx % SAMPLE_VIDEOS.length;
+          const best = SAMPLE_VIDEOS[videoIndex];
+          selected.push({
+            ...best,
+            id: `${seg.id}_selected`,
+            segment_id: seg.id
+          });
+        }
+      }
+    } else {
+      console.log(`[Pexels] No API Key found, using local semantic matching against SAMPLE_VIDEOS...`);
+      candidates = p.shot_plan?.segments?.flatMap((seg: any) => {
+        return SAMPLE_VIDEOS.map((v, i) => ({
+          ...v,
+          id: `${seg.id}_cand_${i + 1}`,
+          segment_id: seg.id,
+          score: 0.9 - i * 0.1,
+          score_reasons: ["Matches query: " + seg.search_queries.join(", ")]
+        }));
+      }) || [];
+
+      selected = p.shot_plan?.segments?.map((seg: any, idx: number) => {
+        const queryKeywords = seg.search_queries || [];
+        const match = SAMPLE_VIDEOS.find(v => 
+          queryKeywords.some((q: string) => v.query.toLowerCase().includes(q.toLowerCase()) || v.title.toLowerCase().includes(q.toLowerCase()))
+        );
+        const best = match || SAMPLE_VIDEOS[idx % SAMPLE_VIDEOS.length];
+        return {
+          ...best,
+          id: `${seg.id}_selected`,
+          segment_id: seg.id
+        };
+      }) || [];
+    }
 
     p.media_candidates = candidates;
     p.selected_media = selected;
@@ -1178,14 +1259,136 @@ async function startServer() {
   }));
 
   app.post("/api/v1/projects/:id/narration", wrap(async (req: any, res: any) => {
+    const projectId = req.params.id;
+    const p = projects.get(projectId);
+    if (!p) {
+      return res.status(404).json({ status: 404, message: "Project not found", data: null });
+    }
+
+    const voice_name = req.body.voice_name || "es-ES-AlvaroNeural-Male";
+    const subtitle_enabled = req.body.subtitle_enabled !== false;
+
+    // Resolve Google Translate TTS language code
+    let tl = p.language || "es";
+    const voiceNameLower = voice_name.toLowerCase();
+    if (voiceNameLower.includes("en-") || voiceNameLower.includes("us-") || voiceNameLower.includes("guy") || voiceNameLower.includes("jenny") || voiceNameLower.includes("alex") || voiceNameLower.includes("anna") || voiceNameLower.includes("bella") || voiceNameLower.includes("benjamin") || voiceNameLower.includes("charles") || voiceNameLower.includes("claire") || voiceNameLower.includes("david") || voiceNameLower.includes("diana") || voiceNameLower.includes("milo") || voiceNameLower.includes("dean") || voiceNameLower.includes("chloe") || voiceNameLower.includes("mia") || voiceNameLower.includes("puck") || voiceNameLower.includes("charon") || voiceNameLower.includes("zephyr")) {
+      tl = "en";
+    } else if (voiceNameLower.includes("zh-") || voiceNameLower.includes("cn-") || voiceNameLower.includes("xiaoxiao") || voiceNameLower.includes("yunxi") || voiceNameLower.includes("冰糖") || voiceNameLower.includes("茉莉") || voiceNameLower.includes("苏打") || voiceNameLower.includes("白桦")) {
+      tl = "zh-CN";
+    } else if (voiceNameLower.includes("es-") || voiceNameLower.includes("mx-") || voiceNameLower.includes("alvaro") || voiceNameLower.includes("elvira") || voiceNameLower.includes("dalia") || voiceNameLower.includes("jorge")) {
+      tl = "es";
+    }
+
+    const cacheDir = path.join(process.cwd(), "storage", "cache");
+    const renderDir = path.join(process.cwd(), "storage", "renders");
+    await fs.promises.mkdir(cacheDir, { recursive: true });
+    await fs.promises.mkdir(renderDir, { recursive: true });
+
+    // Ensure we have planned segments
+    let segments = p.shot_plan?.segments || [];
+    if (segments.length === 0) {
+      const sentences = (p.script || p.topic || "")
+        .split(/[.!?]+/)
+        .map((s: string) => s.trim())
+        .filter((s: string) => s.length > 5);
+
+      if (sentences.length === 0) {
+        sentences.push("Esto es un video de prueba de generación.");
+      }
+
+      segments = sentences.map((sentence: string, idx: number) => ({
+        id: `seg_${idx + 1}`,
+        order: idx + 1,
+        narration_text: sentence,
+        search_queries: sentence.split(" ").slice(0, 2).map(w => w.replace(/[^a-zA-Z]/g, "")).filter(w => w.length > 2)
+      }));
+
+      p.shot_plan = p.shot_plan || {};
+      p.shot_plan.segments = segments;
+      p.has_shot_plan = true;
+    }
+
+    console.log(`[Narration] Synthesizing speech for ${segments.length} segments using language ${tl}...`);
+
+    const localPaths: string[] = [];
+    for (let idx = 0; idx < segments.length; idx++) {
+      const seg = segments[idx];
+      const text = seg.narration_text || "Silencio";
+      const destPath = path.join(cacheDir, `narration_chunk_${projectId}_${idx}.mp3`);
+      
+      try {
+        const googleTtsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=${tl}&client=tw-ob&q=${encodeURIComponent(text.substring(0, 200))}`;
+        const response = await fetch(googleTtsUrl, {
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+          }
+        });
+        if (!response.ok) {
+          throw new Error(`TTS download failed with status ${response.status}`);
+        }
+        const buffer = await response.arrayBuffer();
+        await fs.promises.writeFile(destPath, Buffer.from(buffer));
+        localPaths.push(destPath);
+      } catch (err) {
+        console.error(`[Narration] Failed to synthesize chunk ${idx}:`, err);
+        const fallbackPath = path.join(cacheDir, `narration_chunk_${projectId}_${idx}_fallback.mp3`);
+        await executeCommand(`ffmpeg -y -f lavfi -i anullsrc=r=44100:cl=stereo -t 3 "${fallbackPath}"`);
+        localPaths.push(fallbackPath);
+      }
+    }
+
+    const concatListPath = path.join(cacheDir, `concat_audio_${projectId}.txt`);
+    const concatContent = localPaths.map(p => `file '${p.replace(/\\/g, "/")}'`).join("\n");
+    await fs.promises.writeFile(concatListPath, concatContent, "utf8");
+
+    const finalAudioPath = path.join(renderDir, `narration_${projectId}.mp3`);
+    console.log(`[Narration] Merging ${localPaths.length} chunks into: ${finalAudioPath}`);
+    await executeCommand(`ffmpeg -y -f concat -safe 0 -i "${concatListPath}" -c copy "${finalAudioPath}"`);
+
+    let currentStartSec = 0;
+    for (let idx = 0; idx < segments.length; idx++) {
+      const seg = segments[idx];
+      const chunkPath = localPaths[idx];
+      let duration = 5;
+      try {
+        const durationStr = await executeCommand(`ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${chunkPath}"`);
+        const val = parseFloat(durationStr.trim());
+        if (!isNaN(val) && val > 0) {
+          duration = val;
+        }
+      } catch (err) {
+        console.error(`[Narration] Failed to probe duration for chunk ${idx}:`, err);
+      }
+
+      seg.start_sec = currentStartSec;
+      seg.target_duration_sec = duration;
+      seg.end_sec = currentStartSec + duration;
+      currentStartSec += duration;
+    }
+
+    p.shot_plan.segments = segments;
+    p.narration_audio_path = `/storage/renders/narration_${projectId}.mp3`;
+    p.updated_at = new Date().toISOString();
+
+    let subtitlePath: string | null = null;
+    if (subtitle_enabled) {
+      const srtContent = generateSrt(segments);
+      const srtPath = path.join(renderDir, `subtitles_${projectId}.srt`);
+      await fs.promises.writeFile(srtPath, srtContent, "utf8");
+      subtitlePath = `/storage/renders/subtitles_${projectId}.srt`;
+      p.subtitle_path = subtitlePath;
+    }
+
+    projects.set(projectId, p);
+
     res.json({
       status: 200,
       message: "ok",
       data: {
-        project_id: req.params.id,
-        narration_audio_path: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
-        audio_duration_sec: 30,
-        subtitle_path: null
+        project_id: projectId,
+        narration_audio_path: p.narration_audio_path,
+        audio_duration_sec: currentStartSec,
+        subtitle_path: subtitlePath
       }
     });
   }));
@@ -1233,42 +1436,299 @@ async function startServer() {
     });
   }));
 
+  const formatSrtTime = (seconds: number): string => {
+    const hrs = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+    const secs = Math.floor(seconds % 60);
+    const ms = Math.floor((seconds % 1) * 1000);
+    return `${hrs.toString().padStart(2, "0")}:${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")},${ms.toString().padStart(3, "0")}`;
+  };
+
+  const generateSrt = (subtitles: any[]): string => {
+    return subtitles
+      .map((sub, idx) => {
+        const startSec = Number(sub.start_sec) || 0;
+        const durationSec = Number(sub.duration_sec) || 5;
+        const start = formatSrtTime(startSec);
+        const end = formatSrtTime(startSec + durationSec);
+        return `${idx + 1}\n${start} --> ${end}\n${sub.text || ""}\n`;
+      })
+      .join("\n");
+  };
+
+  const executeCommand = (cmd: string): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      exec(cmd, { maxBuffer: 1024 * 1024 * 50 }, (error, stdout, stderr) => {
+        if (error) {
+          reject(new Error(`Command failed: ${cmd}\nError: ${error.message}\nStderr: ${stderr}`));
+          return;
+        }
+        resolve(stdout);
+      });
+    });
+  };
+
+  const downloadFile = async (url: string, destPath: string): Promise<string> => {
+    if (fs.existsSync(destPath)) {
+      const stat = fs.statSync(destPath);
+      if (stat.size > 0) {
+        return destPath;
+      }
+      fs.unlinkSync(destPath);
+    }
+    
+    let correctedUrl = url;
+    if (url.includes("images.pexels.com/video-files/")) {
+      correctedUrl = url.replace("images.pexels.com/video-files/", "videos.pexels.com/video-files/");
+    }
+
+    const response = await fetch(correctedUrl, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "*/*",
+        "Accept-Language": "en-US,en;q=0.9"
+      }
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to download ${correctedUrl}: ${response.status} ${response.statusText}`);
+    }
+    const buffer = await response.arrayBuffer();
+    await fs.promises.writeFile(destPath, Buffer.from(buffer));
+    return destPath;
+  };
+
+  const runRealRender = async (projectId: string, taskId: string) => {
+    const updateTaskState = (progress: number, outputPath: string | null, error: string | null, state: number = 4) => {
+      const t = tasks.get(taskId);
+      if (t) {
+        t.progress = progress;
+        t.state = state;
+        t.output_path = outputPath;
+        t.error = error;
+        tasks.set(taskId, t);
+      }
+    };
+
+    try {
+      const p = projects.get(projectId);
+      if (!p) {
+        throw new Error("Project not found");
+      }
+
+      const videoTrack = p.tracks?.find((tr: any) => tr.type === "video");
+      const subtitleTrack = p.tracks?.find((tr: any) => tr.type === "subtitle");
+      const musicItem = p.selected_music?.[0];
+
+      const clips = videoTrack?.items || [];
+      if (clips.length === 0) {
+        throw new Error("No video clips in the timeline to render.");
+      }
+
+      const cacheDir = path.join(process.cwd(), "storage", "cache");
+      const renderDir = path.join(process.cwd(), "storage", "renders");
+      await fs.promises.mkdir(cacheDir, { recursive: true });
+      await fs.promises.mkdir(renderDir, { recursive: true });
+
+      logTask(taskId, "INFO", "SUBTITLES", "Generating subtitles");
+      await new Promise(r => setTimeout(r, 600));
+      logTask(taskId, "SUCCESS", "SUBTITLES", "Subtitles ready");
+
+      // Update progress to 10%
+      updateTaskState(10, null, null);
+
+      logTask(taskId, "INFO", "VIDEO_ASSET", "Collecting video materials");
+      
+      const localVideoPaths: string[] = [];
+      for (let i = 0; i < clips.length; i++) {
+        const clip = clips[i];
+        const url = clip.source_url || clip.asset_url;
+        if (!url) {
+          logTask(taskId, "WARNING", "VIDEO_ASSET", `Clip ${clip.id} has no source URL. Generating synthetic placeholder...`);
+          localVideoPaths.push("placeholder");
+          continue;
+        }
+
+        const cleanUrl = url.split("?")[0];
+        const ext = path.extname(cleanUrl) || ".mp4";
+        const dest = path.join(cacheDir, `clip_${clip.id}${ext}`);
+
+        try {
+          await downloadFile(url, dest);
+          localVideoPaths.push(dest);
+        } catch (downloadErr: any) {
+          console.error(`[Renderer] Failed to download clip ${clip.id}:`, downloadErr);
+          logTask(taskId, "WARNING", "VIDEO_ASSET", `Could not download clip ${clip.id}. Generating synthetic placeholder...`);
+          localVideoPaths.push("placeholder");
+        }
+      }
+
+      logTask(taskId, "SUCCESS", "VIDEO_ASSET", `Collected ${clips.length} video materials`);
+      updateTaskState(30, null, null);
+
+      // Download narration and BGM
+      let localNarrationPath: string | null = null;
+      if (p.narration_audio_path) {
+        const ext = path.extname(p.narration_audio_path.split("?")[0]) || ".mp3";
+        const dest = path.join(cacheDir, `narration_${projectId}${ext}`);
+        try {
+          await downloadFile(p.narration_audio_path, dest);
+          localNarrationPath = dest;
+        } catch (err) {
+          console.error(`[Renderer] Narration download failed:`, err);
+        }
+      }
+
+      let localMusicPath: string | null = null;
+      if (musicItem && musicItem.url) {
+        const ext = path.extname(musicItem.url.split("?")[0]) || ".mp3";
+        const dest = path.join(cacheDir, `music_${musicItem.id}${ext}`);
+        try {
+          await downloadFile(musicItem.url, dest);
+          localMusicPath = dest;
+        } catch (err) {
+          console.error(`[Renderer] BGM download failed:`, err);
+        }
+      }
+
+      logTask(taskId, "INFO", "RENDER", "Rendering final video");
+      updateTaskState(40, null, null);
+
+      // Format clips
+      const formattedClips: string[] = [];
+      const isLandscape = p.global_visual_style === "landscape" || p.aspect_ratio === "landscape";
+      const resWidth = isLandscape ? 1280 : 720;
+      const resHeight = isLandscape ? 720 : 1280;
+
+      for (let i = 0; i < clips.length; i++) {
+        const clip = clips[i];
+        const inputPath = localVideoPaths[i];
+        const formattedPath = path.join(cacheDir, `formatted_${taskId}_${i}.mp4`);
+        const duration = Number(clip.duration_sec) || 5;
+        const start = Number(clip.trim_start_sec) || 0;
+
+        if (inputPath === "placeholder") {
+          console.log(`[Renderer] Building synthetic placeholder clip ${i}`);
+          const cmd = `ffmpeg -y -f lavfi -i color=c=0x1E1E2E:s=${resWidth}x${resHeight}:d=${duration} -r 25 -pix_fmt yuv420p "${formattedPath}"`;
+          await executeCommand(cmd);
+        } else {
+          console.log(`[Renderer] Formatting clip ${i}: ${inputPath}`);
+          const cmd = `ffmpeg -y -ss ${start} -t ${duration} -i "${inputPath}" -vf "scale=${resWidth}:${resHeight}:force_original_aspect_ratio=increase,crop=${resWidth}:${resHeight},setsar=1" -r 25 -pix_fmt yuv420p "${formattedPath}"`;
+          await executeCommand(cmd);
+        }
+
+        formattedClips.push(formattedPath);
+        updateTaskState(Math.floor(40 + (i / clips.length) * 20), null, null);
+      }
+
+      logTask(taskId, "INFO", "COMPOSITION", "Combining video 1/1");
+      updateTaskState(65, null, null);
+
+      // Concatenate
+      const concatFilePath = path.join(cacheDir, `concat_${taskId}.txt`);
+      const concatContent = formattedClips.map(f => `file '${f.replace(/\\/g, "/")}'`).join("\n");
+      await fs.promises.writeFile(concatFilePath, concatContent, "utf8");
+
+      const concatOutput = path.join(cacheDir, `concatenated_${taskId}.mp4`);
+      const concatCmd = `ffmpeg -y -f concat -safe 0 -i "${concatFilePath}" -c copy "${concatOutput}"`;
+      await executeCommand(concatCmd);
+      updateTaskState(75, null, null);
+
+      logTask(taskId, "INFO", "AUDIO_MIXER", "Applying audio and subtitles 1/1");
+      updateTaskState(80, null, null);
+
+      // Mix Audio
+      const audioMixedOutput = path.join(cacheDir, `audio_mixed_${taskId}.mp4`);
+      let audioFilter = "";
+      const audioInputs: string[] = [];
+
+      if (localNarrationPath && localMusicPath) {
+        audioInputs.push(`-i "${localNarrationPath}"`, `-i "${localMusicPath}"`);
+        const musicVolume = musicItem.volume || 0.2;
+        audioFilter = `[1:a]volume=1.0[v];[2:a]volume=${musicVolume}[m];[v][m]amix=inputs=2:duration=first[a]`;
+      } else if (localNarrationPath) {
+        audioInputs.push(`-i "${localNarrationPath}"`);
+        audioFilter = `[1:a]volume=1.0[a]`;
+      } else if (localMusicPath) {
+        audioInputs.push(`-i "${localMusicPath}"`);
+        const musicVolume = musicItem.volume || 0.2;
+        audioFilter = `[1:a]volume=${musicVolume}[a]`;
+      }
+
+      let mixCmd = "";
+      if (audioFilter) {
+        mixCmd = `ffmpeg -y -i "${concatOutput}" ${audioInputs.join(" ")} -filter_complex "${audioFilter}" -map 0:v -map "[a]" -c:v copy -c:a aac "${audioMixedOutput}"`;
+      } else {
+        mixCmd = `ffmpeg -y -i "${concatOutput}" -f lavfi -i anullsrc=r=44100:cl=stereo -c:v copy -c:a aac -shortest "${audioMixedOutput}"`;
+      }
+      await executeCommand(mixCmd);
+      updateTaskState(90, null, null);
+
+      // Burn Subtitles
+      const subtitles = subtitleTrack?.items || [];
+      let finalOutputPath = audioMixedOutput;
+
+      if (subtitles.length > 0) {
+        const srtFilePath = path.join(cacheDir, `subtitles_${taskId}.srt`);
+        const srtContent = generateSrt(subtitles);
+        await fs.promises.writeFile(srtFilePath, srtContent, "utf8");
+
+        const srtOutput = path.join(renderDir, `render_${projectId}.mp4`);
+        const srtRelative = path.relative(process.cwd(), srtFilePath).replace(/\\/g, "/");
+        
+        // Beautiful TikTok-style yellow/white subtitles with clean outlines and no giant background block!
+        const subFilter = `subtitles='${srtRelative}':force_style='Alignment=2,OutlineColour=&H00000000,BorderStyle=1,Outline=2.0,Shadow=0,MarginV=120,Fontname=Arial,Fontsize=24,PrimaryColour=&H0000FFFF'`;
+        const srtCmd = `ffmpeg -y -i "${audioMixedOutput}" -vf "${subFilter}" -c:a copy "${srtOutput}"`;
+        await executeCommand(srtCmd);
+        finalOutputPath = srtOutput;
+      } else {
+        const copyOutput = path.join(renderDir, `render_${projectId}.mp4`);
+        await fs.promises.copyFile(audioMixedOutput, copyOutput);
+        finalOutputPath = copyOutput;
+      }
+
+      // Clean temp files
+      for (const f of formattedClips) {
+        fs.promises.unlink(f).catch(() => {});
+      }
+      fs.promises.unlink(concatFilePath).catch(() => {});
+      fs.promises.unlink(concatOutput).catch(() => {});
+      if (finalOutputPath !== audioMixedOutput) {
+        fs.promises.unlink(audioMixedOutput).catch(() => {});
+      }
+
+      const finalUrl = `/storage/renders/render_${projectId}.mp4`;
+      logTask(taskId, "SUCCESS", "RENDER", `Compression and rendering complete. Output file generated at: ${finalUrl}`);
+      logTask(taskId, "SUCCESS", "SYSTEM", `Task ${taskId} completed successfully!`);
+
+      p.videos = [finalUrl];
+      p.combined_videos = [finalUrl];
+      p.updated_at = new Date().toISOString();
+      projects.set(projectId, p);
+
+      updateTaskState(100, finalUrl, null, 1);
+    } catch (err: any) {
+      console.error(`[Renderer] Render failure for project ${projectId}:`, err);
+      logTask(taskId, "ERROR", "RENDER", `Rendering failed: ${err.message}`);
+      updateTaskState(100, null, err.message, -1);
+    }
+  };
+
   app.post("/api/v1/projects/:id/render", wrap(async (req: any, res: any) => {
     const renderTaskId = "render_task_" + req.params.id;
     tasks.set(renderTaskId, {
       state: 4, // TASK_STATE_PROCESSING
       progress: 0,
       output_path: null,
-      error: null
+      error: null,
+      logs: []
     });
 
-    let progress = 0;
-    const interval = setInterval(() => {
-      progress += 20;
-      const t = tasks.get(renderTaskId);
-      if (t) {
-        t.progress = progress;
-        if (progress >= 100) {
-          t.state = 1; // TASK_STATE_COMPLETE
-          // The finished video is our beautiful Tokyo Timelapse
-          const videoUrl = SAMPLE_VIDEOS[3].source_url;
-          t.output_path = videoUrl;
+    logTask(renderTaskId, "INFO", "SYSTEM", `Initializing video generation task ${renderTaskId}...`);
+    logTask(renderTaskId, "INFO", "VALIDATION", "Verifying request payload parameters...");
 
-          // Save to persistent project map
-          const p = projects.get(req.params.id);
-          if (p) {
-            p.videos = [videoUrl];
-            p.combined_videos = [videoUrl];
-            projects.set(req.params.id, p);
-          }
-
-          clearInterval(interval);
-        }
-        tasks.set(renderTaskId, t);
-      } else {
-        clearInterval(interval);
-      }
-    }, 1500);
+    runRealRender(req.params.id, renderTaskId).catch(err => {
+      console.error(`[Renderer] Background render failed for project ${req.params.id}:`, err);
+    });
 
     res.json({ status: 200, message: "ok", data: { project_id: req.params.id, state: 4 } });
   }));
@@ -1303,8 +1763,11 @@ async function startServer() {
 
   app.get("/api/v1/projects/:id/assets/*", wrap(async (req: any, res: any) => {
     // Redirect asset fetch to online resource
-    res.redirect("https://images.pexels.com/video-files/3248319/3248319-hd_1920_1080_25fps.mp4");
+    res.redirect("https://videos.pexels.com/video-files/3248319/3248319-hd_1920_1080_25fps.mp4");
   }));
+
+  // Serve storage directory statically
+  app.use("/storage", express.static(path.join(process.cwd(), "storage")));
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
