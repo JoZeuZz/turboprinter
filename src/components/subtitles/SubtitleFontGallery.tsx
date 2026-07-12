@@ -18,41 +18,41 @@ export const SUBTITLE_FONTS: SubtitleFont[] = [
   {
     value: "STHeitiMedium.ttc",
     label: "STHeitiMedium",
-    family: "STHeiti Medium Preview",
+    family: '"STHeiti Medium Preview", "STHeitiSC-Medium", "Noto Sans SC", sans-serif',
   },
   {
     value: "STHeitiLight.ttc",
     label: "STHeitiLight",
-    family: "STHeiti Light Preview",
+    family: '"STHeiti Light Preview", "STHeitiSC-Light", "Noto Sans SC", sans-serif',
   },
   {
     value: "MicrosoftYaHeiBold.ttc",
     label: "MicrosoftYaHeiBold",
-    family: "Microsoft YaHei Bold Preview",
+    family: '"Microsoft YaHei Bold Preview", "ZCOOL QingKe HuangYou", "Noto Sans SC", sans-serif',
     previewSize: "1.08rem",
   },
   {
     value: "MicrosoftYaHeiNormal.ttc",
     label: "MicrosoftYaHeiNormal",
-    family: "Microsoft YaHei Normal Preview",
+    family: '"Microsoft YaHei Normal Preview", "Noto Sans SC", sans-serif',
     previewSize: "1.02rem",
   },
   {
     value: "Charm-Bold.ttf",
     label: "Charm-Bold",
-    family: "Charm Bold Preview",
+    family: '"Charm Bold Preview", sans-serif',
     previewSize: "1.55rem",
   },
   {
     value: "Charm-Regular.ttf",
     label: "Charm-Regular",
-    family: "Charm Regular Preview",
+    family: '"Charm Regular Preview", sans-serif',
     previewSize: "1.45rem",
   },
   {
     value: "UTM Kabel KT.ttf",
     label: "UTM Kabel KT",
-    family: "UTM Kabel Preview",
+    family: '"UTM Kabel Preview", sans-serif',
     previewSize: "1.35rem",
   },
 ];
@@ -127,7 +127,7 @@ export function SubtitleFontGallery({
                   <div
                     className="flex min-h-[4rem] w-full min-w-0 items-center justify-center overflow-hidden text-center leading-tight text-foreground"
                     style={{
-                      fontFamily: `"${font.family}", sans-serif`,
+                      fontFamily: font.family,
                       fontSize: font.previewSize ?? "1.14rem",
                     }}
                     title={font.label}

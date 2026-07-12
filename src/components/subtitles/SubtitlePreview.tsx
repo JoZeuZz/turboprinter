@@ -93,12 +93,19 @@ export function SubtitlePreview({
               className="block break-words font-semibold"
               style={{
                 color: previewStyle.color,
-                fontFamily: `"${getSubtitleFontFamily(fontName)}", sans-serif`,
+                fontFamily: getSubtitleFontFamily(fontName),
                 fontSize: `${previewStyle.fontSizePx}px`,
-                WebkitTextStroke: `${previewStyle.strokePx}px ${previewStyle.strokeColor}`,
                 textShadow:
                   previewStyle.strokePx > 0
-                    ? `0 1px 2px ${previewStyle.strokeColor}, 0 0 8px rgba(0,0,0,0.45)`
+                    ? `-${previewStyle.strokePx}px -${previewStyle.strokePx}px 0 ${previewStyle.strokeColor},
+                       ${previewStyle.strokePx}px -${previewStyle.strokePx}px 0 ${previewStyle.strokeColor},
+                       -${previewStyle.strokePx}px ${previewStyle.strokePx}px 0 ${previewStyle.strokeColor},
+                       ${previewStyle.strokePx}px ${previewStyle.strokePx}px 0 ${previewStyle.strokeColor},
+                       0px -${previewStyle.strokePx}px 0 ${previewStyle.strokeColor},
+                       0px ${previewStyle.strokePx}px 0 ${previewStyle.strokeColor},
+                       -${previewStyle.strokePx}px 0px 0 ${previewStyle.strokeColor},
+                       ${previewStyle.strokePx}px 0px 0 ${previewStyle.strokeColor},
+                       0 1px 4px rgba(0,0,0,0.5)`
                     : "0 1px 2px rgba(0,0,0,0.45)",
               }}
             >
