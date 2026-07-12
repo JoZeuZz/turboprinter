@@ -222,7 +222,7 @@ export interface TimelineBuildRequest {
   subtitle_path?: string | null;
 }
 
-export type EditCommandType = "move" | "trim" | "replace" | "set_timing" | "set_volume";
+export type EditCommandType = "move" | "trim" | "replace" | "set_timing" | "set_volume" | "duplicate";
 
 export interface LicenseInfo {
   type?: string | null;
@@ -294,12 +294,20 @@ export interface SetClipVolumeCommand {
   volume: number;
 }
 
+export interface DuplicateClipCommand {
+  type: "duplicate";
+  track_id: string;
+  item_id: string;
+  new_item_id?: string;
+}
+
 export type EditCommand =
   | MoveClipCommand
   | TrimClipCommand
   | ReplaceClipCommand
   | SetClipTimingCommand
-  | SetClipVolumeCommand;
+  | SetClipVolumeCommand
+  | DuplicateClipCommand;
 
 export interface TimelineCommandsRequest {
   commands: EditCommand[];

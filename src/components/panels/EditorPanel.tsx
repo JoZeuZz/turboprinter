@@ -58,6 +58,21 @@ export function EditorPanel() {
     if (selectedId === id) setSelectedId(null);
   };
 
+  const handleDuplicate = async (id: string) => {
+    const newItemId = `${id}_dup_${Math.random().toString(36).substring(2, 6)}`;
+    await projectStore.applyTimelineCommands({
+      commands: [
+        {
+          type: "duplicate",
+          track_id: videoTrack?.id ?? "",
+          item_id: id,
+          new_item_id: newItemId,
+        },
+      ],
+    });
+    setSelectedId(newItemId);
+  };
+
   const handleReorder = (commands: EditCommand[]) => {
     void projectStore.applyTimelineCommands({ commands });
   };
@@ -100,6 +115,7 @@ export function EditorPanel() {
             clip={selectedClip}
             onTrimChange={handleTrimChange}
             onRemove={handleRemove}
+            onDuplicate={handleDuplicate}
           />
         </div>
       </div>

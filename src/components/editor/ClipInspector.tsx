@@ -8,6 +8,7 @@ interface ClipInspectorProps {
   clip: TimelineItem | null;
   onTrimChange: (id: string, start: number, end: number | null) => void;
   onRemove: (id: string) => void;
+  onDuplicate?: (id: string) => void;
 }
 
 function TrimSlider({
@@ -48,7 +49,7 @@ function TrimSlider({
   );
 }
 
-export function ClipInspector({ clip, onTrimChange, onRemove }: ClipInspectorProps) {
+export function ClipInspector({ clip, onTrimChange, onRemove, onDuplicate }: ClipInspectorProps) {
   const { t } = useTranslation();
 
   if (!clip) {
@@ -118,6 +119,15 @@ export function ClipInspector({ clip, onTrimChange, onRemove }: ClipInspectorPro
       )}
 
       <div className="flex flex-col gap-2 pt-2 border-t border-border">
+        {onDuplicate && (
+          <button
+            onClick={() => onDuplicate(clip.id)}
+            className="flex items-center gap-2 rounded-md border border-border px-3 py-1.5 text-xs text-foreground hover:bg-surface-2 transition-colors"
+          >
+            <Layers className="h-3.5 w-3.5" />
+            {t("common.duplicate")}
+          </button>
+        )}
         <button
           onClick={() => onRemove(clip.id)}
           className="flex items-center gap-2 rounded-md border border-red-800/50 px-3 py-1.5 text-xs text-red-400 hover:border-red-500 hover:bg-red-950/30 transition-colors"

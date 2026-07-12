@@ -1480,10 +1480,74 @@ ${body}`;
     });
   }));
   app.post("/api/v1/projects/:id/timeline/commands", wrap(async (req, res) => {
+    const p = projects.get(req.params.id);
+    if (!p) {
+      return res.status(404).json({ status: 404, message: "Project not found", data: null });
+    }
+    const commands = req.body.commands || [];
+    if (!p.tracks) {
+      p.tracks = [];
+    }
+    for (const cmd of commands) {
+      const track = p.tracks.find((t) => t.id === cmd.track_id);
+      if (!track) continue;
+      if (cmd.type === "move") {
+        const itemIndex = track.items.findIndex((item) => item.id === cmd.item_id);
+        if (itemIndex !== -1) {
+          if (cmd.new_start_sec < 0) {
+            track.items.splice(itemIndex, 1);
+          } else {
+            track.items[itemIndex].start_sec = cmd.new_start_sec;
+          }
+        }
+      } else if (cmd.type === "trim") {
+        const item = track.items.find((item2) => item2.id === cmd.item_id);
+        if (item) {
+          if (cmd.trim_start_sec !== void 0) item.trim_start_sec = cmd.trim_start_sec;
+          if (cmd.trim_end_sec !== void 0) item.trim_end_sec = cmd.trim_end_sec;
+        }
+      } else if (cmd.type === "set_timing") {
+        const item = track.items.find((item2) => item2.id === cmd.item_id);
+        if (item) {
+          if (cmd.duration_sec === 0) {
+            const itemIndex = track.items.indexOf(item);
+            if (itemIndex !== -1) {
+              track.items.splice(itemIndex, 1);
+            }
+          } else if (cmd.duration_sec !== void 0) {
+            item.duration_sec = cmd.duration_sec;
+          }
+        }
+      } else if (cmd.type === "duplicate") {
+        const itemIndex = track.items.findIndex((item) => item.id === cmd.item_id);
+        if (itemIndex !== -1) {
+          const originalItem = track.items[itemIndex];
+          const newItemId = cmd.new_item_id || `item_dup_${Math.random().toString(36).substring(2, 6)}`;
+          const duplicatedItem = {
+            ...originalItem,
+            id: newItemId,
+            start_sec: originalItem.start_sec + originalItem.duration_sec
+          };
+          track.items.splice(itemIndex + 1, 0, duplicatedItem);
+          let accStart = originalItem.start_sec + originalItem.duration_sec;
+          for (let i = itemIndex + 1; i < track.items.length; i++) {
+            track.items[i].start_sec = accStart;
+            accStart += track.items[i].duration_sec;
+          }
+        }
+      }
+    }
+    for (const track of p.tracks) {
+      if (Array.isArray(track.items)) {
+        track.items.sort((a, b) => a.start_sec - b.start_sec);
+      }
+    }
+    p.updated_at = (/* @__PURE__ */ new Date()).toISOString();
+    projects.set(req.params.id, p);
     res.json({
       status: 200,
       message: "ok",
-      data: { project_id: req.params.id, applied: req.body.commands?.length || 0, valid: true }
+      data: { project_id: req.params.id, applied: commands.length, valid: true }
     });
   }));
   app.post("/api/v1/projects/:id/timeline/validate", wrap(async (req, res) => {

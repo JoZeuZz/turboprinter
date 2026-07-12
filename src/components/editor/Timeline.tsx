@@ -75,6 +75,8 @@ export function Timeline({
     onReorder(moveCommandsForOrder(videoTrack.id, reordered));
   };
 
+  const LEFT_OFFSET_PX = 72; // Padding (12px) + Label (56px) + Gap (4px)
+
   const totalDuration = Math.max(
     trackEnd(videoTrack),
     trackEnd(audioTrack),
@@ -85,14 +87,17 @@ export function Timeline({
     TICK_INTERVALS.find((i) => i * pxPerSecond >= MIN_TICK_SPACING_PX) ??
     TICK_INTERVALS[TICK_INTERVALS.length - 1];
   const tickCount = Math.ceil(totalDuration / tickInterval) + 1;
-  const contentWidthPx = totalDuration * pxPerSecond + 48;
+  const contentWidthPx = LEFT_OFFSET_PX + totalDuration * pxPerSecond + 48;
   const playheadLeftPx = Math.min(currentTime, totalDuration) * pxPerSecond;
 
   const handleRulerClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
-    const time = (e.clientX - rect.left) / pxPerSecond;
-    const item = findItemAtTime(orderedItems, time);
-    if (item) onSelect(item.id);
+    const clickX = e.clientX - rect.left;
+    const time = (clickX - LEFT_OFFSET_PX) / pxPerSecond;
+    if (time >= 0) {
+      const item = findItemAtTime(orderedItems, time);
+      if (item) onSelect(item.id);
+    }
   };
 
   return (
@@ -131,7 +136,7 @@ export function Timeline({
           <div
             data-testid="timeline-playhead"
             className="pointer-events-none absolute top-0 bottom-0 z-20 w-px bg-red-500"
-            style={{ left: `${playheadLeftPx}px` }}
+            style={{ left: `${LEFT_OFFSET_PX + playheadLeftPx}px` }}
           >
             <div className="absolute -top-1 -left-[3px] h-1.5 w-1.5 rotate-45 bg-red-500" />
           </div>
@@ -140,13 +145,16 @@ export function Timeline({
           <div
             data-testid="timeline-ruler"
             onClick={handleRulerClick}
-            className="relative h-5 cursor-pointer border-b border-border/60"
+            className="relative h-5 cursor-pointer border-b border-border/60 bg-base"
           >
+            {/* Sticky spacer block on the left to cover scrolling ticks */}
+            <div className="sticky left-0 top-0 bottom-0 z-30 w-[72px] bg-base border-r border-transparent" />
+
             {Array.from({ length: tickCount }, (_, i) => i * tickInterval).map((t) => (
               <div
                 key={t}
                 className="absolute top-0 bottom-0 flex items-end"
-                style={{ left: `${t * pxPerSecond}px` }}
+                style={{ left: `${LEFT_OFFSET_PX + t * pxPerSecond}px` }}
               >
                 <span className="h-2 w-px bg-border" />
                 <span className="pl-1 pb-0.5 text-[9px] text-muted tabular-nums">
@@ -158,7 +166,7 @@ export function Timeline({
 
           {/* Video track */}
           <div className="flex items-center gap-1 px-3 py-2">
-            <span className="sticky left-0 z-10 flex w-14 shrink-0 items-center gap-1 bg-base text-[10px] uppercase tracking-wide text-muted">
+            <span className="sticky left-0 z-30 flex w-14 shrink-0 items-center gap-1 bg-base text-[10px] uppercase tracking-wide text-muted">
               <Film className="h-3 w-3" /> Video
             </span>
             {orderedItems.length > 0 && (
@@ -183,7 +191,7 @@ export function Timeline({
 
           {/* Audio track */}
           <div className="flex items-center gap-1 px-3 py-1.5">
-            <span className="sticky left-0 z-10 flex w-14 shrink-0 items-center gap-1 bg-base text-[10px] uppercase tracking-wide text-muted">
+            <span className="sticky left-0 z-30 flex w-14 shrink-0 items-center gap-1 bg-base text-[10px] uppercase tracking-wide text-muted">
               <Music className="h-3 w-3" /> Audio
             </span>
             {(audioTrack?.items ?? []).map((item) => (
@@ -200,7 +208,7 @@ export function Timeline({
 
           {/* Subtitle track */}
           <div className="flex items-center gap-1 px-3 py-1.5">
-            <span className="sticky left-0 z-10 flex w-14 shrink-0 items-center gap-1 bg-base text-[10px] uppercase tracking-wide text-muted">
+            <span className="sticky left-0 z-30 flex w-14 shrink-0 items-center gap-1 bg-base text-[10px] uppercase tracking-wide text-muted">
               <Captions className="h-3 w-3" /> Subs
             </span>
             {(subtitleTrack?.items ?? []).map((item) => (
