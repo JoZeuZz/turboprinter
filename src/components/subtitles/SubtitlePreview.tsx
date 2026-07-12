@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { getSubtitleFontFamily } from "./SubtitleFontGallery";
+import { getSubtitleFontFamily, getSubtitleFontWeight } from "./SubtitleFontGallery";
 import { resolvePreviewStyle, PREVIEW_DIMS } from "../../lib/subtitlePreviewStyle";
 
 interface SubtitlePreviewProps {
@@ -90,10 +90,11 @@ export function SubtitlePreview({
             style={{ backgroundColor: previewStyle.background ? previewStyle.background.color : "transparent" }}
           >
             <span
-              className="block break-words font-semibold"
+              className="block break-words"
               style={{
                 color: previewStyle.color,
                 fontFamily: getSubtitleFontFamily(fontName),
+                fontWeight: getSubtitleFontWeight(fontName),
                 fontSize: `${previewStyle.fontSizePx}px`,
                 textShadow:
                   previewStyle.strokePx > 0

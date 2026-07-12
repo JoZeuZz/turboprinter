@@ -6,6 +6,7 @@ interface SubtitleFont {
   value: string;
   label: string;
   family: string;
+  weight?: string | number;
   previewSize?: string;
 }
 
@@ -19,40 +20,47 @@ export const SUBTITLE_FONTS: SubtitleFont[] = [
     value: "STHeitiMedium.ttc",
     label: "STHeitiMedium",
     family: '"STHeiti Medium Preview", "STHeitiSC-Medium", "Noto Sans SC", sans-serif',
+    weight: 500,
   },
   {
     value: "STHeitiLight.ttc",
     label: "STHeitiLight",
     family: '"STHeiti Light Preview", "STHeitiSC-Light", "Noto Sans SC", sans-serif',
+    weight: 300,
   },
   {
     value: "MicrosoftYaHeiBold.ttc",
     label: "MicrosoftYaHeiBold",
     family: '"Microsoft YaHei Bold Preview", "ZCOOL QingKe HuangYou", "Noto Sans SC", sans-serif',
+    weight: 700,
     previewSize: "1.08rem",
   },
   {
     value: "MicrosoftYaHeiNormal.ttc",
     label: "MicrosoftYaHeiNormal",
     family: '"Microsoft YaHei Normal Preview", "Noto Sans SC", sans-serif',
+    weight: 400,
     previewSize: "1.02rem",
   },
   {
     value: "Charm-Bold.ttf",
     label: "Charm-Bold",
     family: '"Charm Bold Preview", sans-serif',
+    weight: 700,
     previewSize: "1.55rem",
   },
   {
     value: "Charm-Regular.ttf",
     label: "Charm-Regular",
     family: '"Charm Regular Preview", sans-serif',
+    weight: 400,
     previewSize: "1.45rem",
   },
   {
     value: "UTM Kabel KT.ttf",
     label: "UTM Kabel KT",
     family: '"UTM Kabel Preview", sans-serif',
+    weight: 400,
     previewSize: "1.35rem",
   },
 ];
@@ -62,6 +70,11 @@ const PAGE_SIZE = 3;
 export function getSubtitleFontFamily(value: string | null | undefined) {
   const selectedFont = SUBTITLE_FONTS.find((font) => font.value === value);
   return selectedFont?.family ?? SUBTITLE_FONTS[0].family;
+}
+
+export function getSubtitleFontWeight(value: string | null | undefined) {
+  const selectedFont = SUBTITLE_FONTS.find((font) => font.value === value);
+  return selectedFont?.weight ?? "normal";
 }
 
 export function SubtitleFontGallery({
@@ -128,6 +141,7 @@ export function SubtitleFontGallery({
                     className="flex min-h-[4rem] w-full min-w-0 items-center justify-center overflow-hidden text-center leading-tight text-foreground"
                     style={{
                       fontFamily: font.family,
+                      fontWeight: font.weight ?? "normal",
                       fontSize: font.previewSize ?? "1.14rem",
                     }}
                     title={font.label}
