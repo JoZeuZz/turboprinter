@@ -419,6 +419,7 @@ export interface TimelineProject {
   tracks: TimelineTrack[];
   export?: ExportSettings;
   metadata?: Record<string, unknown>;
+  params?: VideoParams;
 }
 
 export interface MusicTrack {

@@ -1786,6 +1786,41 @@ async function startServer() {
     return `${hrs.toString().padStart(2, "0")}:${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")},${ms.toString().padStart(3, "0")}`;
   };
 
+  const cssHexToAss = (hex: string): string => {
+    if (!hex) return "FFFFFF";
+    let clean = hex.replace("#", "");
+    if (clean.length === 3) {
+      clean = clean[0] + clean[0] + clean[1] + clean[1] + clean[2] + clean[2];
+    }
+    if (clean.length === 6) {
+      const r = clean.substring(0, 2);
+      const g = clean.substring(2, 4);
+      const b = clean.substring(4, 6);
+      return `${b}${g}${r}`; // BBGGRR
+    }
+    if (clean.length === 8) {
+      const r = clean.substring(0, 2);
+      const g = clean.substring(2, 4);
+      const b = clean.substring(4, 6);
+      return `${b}${g}${r}`;
+    }
+    return "FFFFFF";
+  };
+
+  const getAssFontName = (fontName: string): string => {
+    if (!fontName) return "Arial";
+    const clean = fontName.trim();
+    if (clean.startsWith("STHeitiMedium")) return "STHeitiSC-Medium";
+    if (clean.startsWith("STHeitiLight")) return "STHeitiSC-Light";
+    if (clean.startsWith("MicrosoftYaHeiBold")) return "Microsoft YaHei";
+    if (clean.startsWith("MicrosoftYaHeiNormal")) return "Microsoft YaHei";
+    if (clean.startsWith("Charm-Bold")) return "Charm";
+    if (clean.startsWith("Charm-Regular")) return "Charm";
+    if (clean.startsWith("UTM Kabel KY")) return "UTM Kabel KY";
+    if (clean.startsWith("UTM_Kabel_KY")) return "UTM Kabel KY";
+    return clean.split(".")[0] || "Arial";
+  };
+
   const generateSrt = (subtitles: any[]): string => {
     return subtitles
       .map((sub, idx) => {
@@ -2046,8 +2081,70 @@ To run this application locally and render videos successfully, please:
         const srtOutput = path.join(renderDir, `render_${projectId}.mp4`);
         const srtRelative = path.relative(process.cwd(), srtFilePath).replace(/\\/g, "/");
         
-        // Beautiful TikTok-style yellow/white subtitles with clean outlines and no giant background block!
-        const subFilter = `subtitles='${srtRelative}':force_style='Alignment=2,OutlineColour=&H00000000,BorderStyle=1,Outline=2.0,Shadow=0,MarginV=120,Fontname=Arial,Fontsize=24,PrimaryColour=&H0000FFFF'`;
+        // Dynamically compile force_style options based on project settings (or fallbacks)
+        const pParams = p.params || {};
+        const fontNameParam = pParams.font_name || p.font_name || "STHeitiMedium.ttc";
+        const fontSizeParam = pParams.font_size || p.font_size || 60;
+        const textColorParam = pParams.text_fore_color || p.text_fore_color || "#FFFFFF";
+        const strokeColorParam = pParams.stroke_color || p.stroke_color || "#000000";
+        const strokeWidthParam = pParams.stroke_width !== undefined ? pParams.stroke_width : (p.stroke_width !== undefined ? p.stroke_width : 1.5);
+        const hasBgParam = pParams.text_background_color !== undefined ? pParams.text_background_color : (p.text_background_color !== undefined ? p.text_background_color : true);
+        const subtitlePosParam = pParams.subtitle_position || p.subtitle_position || "bottom";
+        const customPosParam = pParams.custom_position !== undefined ? pParams.custom_position : (p.custom_position !== undefined ? p.custom_position : 70);
+
+        const assFont = getAssFontName(fontNameParam);
+        const assFontSize = Math.max(12, Math.round((fontSizeParam / 1920) * resHeight));
+        const assTextColor = cssHexToAss(textColorParam);
+        const assStrokeColor = cssHexToAss(strokeColorParam);
+        
+        let borderStyle = 1; // Outline + Shadow
+        let outlineVal = 0;
+        let shadowVal = 0;
+        let assBgColor = "000000";
+        let assBgAlpha = "00"; // fully opaque
+
+        if (hasBgParam) {
+          borderStyle = 3; // Opaque Box
+          outlineVal = Math.max(2, Math.round((fontSizeParam / 1920) * resHeight * 0.15)); // Padding proportional to font size
+          assBgColor = "000000";
+          assBgAlpha = "80"; // 50% opacity black box
+        } else {
+          borderStyle = 1;
+          outlineVal = Math.max(0, (strokeWidthParam / 1920) * resHeight);
+          shadowVal = 0;
+        }
+
+        let alignment = 2; // bottom-center
+        let marginV = Math.round(0.08 * resHeight); // default 8% of height
+
+        if (subtitlePosParam === "top") {
+          alignment = 8; // top-center
+          marginV = Math.round(0.08 * resHeight);
+        } else if (subtitlePosParam === "center" || subtitlePosParam === "middle") {
+          alignment = 5; // middle-center
+          marginV = 0;
+        } else if (subtitlePosParam === "custom") {
+          alignment = 2; // bottom-center
+          // customPosParam is % from top (0 = top, 100 = bottom)
+          // we need height from bottom
+          const pctFromBottom = (100 - customPosParam) / 100;
+          marginV = Math.round(pctFromBottom * resHeight);
+        }
+
+        const forceStyleOpts = [
+          `Fontname=${assFont}`,
+          `Fontsize=${assFontSize}`,
+          `PrimaryColour=&H00${assTextColor}`,
+          `OutlineColour=&H00${assStrokeColor}`,
+          `BackColour=&H${assBgAlpha}${assBgColor}`,
+          `BorderStyle=${borderStyle}`,
+          `Outline=${outlineVal.toFixed(1)}`,
+          `Shadow=${shadowVal}`,
+          `Alignment=${alignment}`,
+          `MarginV=${marginV}`
+        ];
+
+        const subFilter = `subtitles='${srtRelative}':force_style='${forceStyleOpts.join(",")}'`;
         const srtCmd = `ffmpeg -y -i "${audioMixedOutput}" -vf "${subFilter}" -c:a copy "${srtOutput}"`;
         await executeCommand(srtCmd);
         finalOutputPath = srtOutput;

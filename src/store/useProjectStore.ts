@@ -21,6 +21,7 @@ import {
 } from "../api/types";
 import { orientationForAspect } from "../lib/mediaOrientation";
 import { useProjectWorkspaceStore } from "./useProjectWorkspaceStore";
+import { useVideoStore } from "./useVideoStore";
 
 type ProjectMode = "idle" | "loading" | "ready" | "disabled" | "error";
 type OrchestrationStep = "plan" | "media" | "narration" | "timeline" | null;
@@ -170,6 +171,18 @@ export const useProjectStore = create<ProjectStoreState>()(
           set({ mode: "loading", error: null });
           try {
             const projectId = requireProjectId();
+            
+            // Save the current useVideoStore params to the project on the server
+            // so the backend has access to the subtitle style settings during rendering
+            const currentProject = get().project;
+            if (currentProject) {
+              const videoStoreParams = useVideoStore.getState().toParams();
+              await projectsApi.replaceTimeline(projectId, {
+                ...currentProject,
+                params: videoStoreParams,
+              });
+            }
+
             await projectsApi.startRender(projectId, params);
             await get().pollRenderStatus();
           } catch (error) {
@@ -214,6 +227,15 @@ export const useProjectStore = create<ProjectStoreState>()(
           try {
             const projectId = requireProjectId();
             console.log("[ProjectStore] Project ID retrieved:", projectId);
+
+            // Save the params into the project right away so the backend can access them during planning, narration, building timeline
+            const currentProject = get().project;
+            if (currentProject) {
+              await projectsApi.replaceTimeline(projectId, {
+                ...currentProject,
+                params,
+              });
+            }
 
             console.log("[ProjectStore] Phase 1: Planning project...");
             await projectsApi.planProject(projectId, {
