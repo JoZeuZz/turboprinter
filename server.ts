@@ -6,6 +6,27 @@ import { createServer as createViteServer } from "vite";
 import WebSocket from "ws";
 import crypto from "crypto";
 
+// Load .env variables manually if they exist
+try {
+  const envPath = path.join(process.cwd(), ".env");
+  if (fs.existsSync(envPath)) {
+    const envContent = fs.readFileSync(envPath, "utf8");
+    envContent.split("\n").forEach((line) => {
+      const trimmed = line.trim();
+      if (trimmed && !trimmed.startsWith("#")) {
+        const parts = trimmed.split("=");
+        const key = parts[0]?.trim();
+        const value = parts.slice(1).join("=").trim();
+        if (key && value) {
+          process.env[key] = value.replace(/^['"]|['"]$/g, ""); // remove wrapping quotes if present
+        }
+      }
+    });
+  }
+} catch (e) {
+  console.error("Error parsing .env file:", e);
+}
+
 // Ensure local_videos directory exists and is populated with dummy files if empty
 const LOCAL_VIDEOS_DIR = path.join(process.cwd(), "storage", "local_videos");
 if (!fs.existsSync(LOCAL_VIDEOS_DIR)) {
@@ -248,7 +269,7 @@ let globalConfig = {
     app: {
       video_source: "pexels",
       tls_verify: true,
-      pexels_api_keys: [],
+      pexels_api_keys: [process.env.PEXELS_API_KEY || "PEXELS_KEY_REMOVED_FROM_HISTORY_ROTATE_IT"],
       pixabay_api_keys: [],
       coverr_api_keys: [],
       llm_provider: "gemini",
@@ -2076,7 +2097,8 @@ To run this application locally and render videos successfully, please:
 
         const cleanUrl = url.split("?")[0];
         const ext = path.extname(cleanUrl) || ".mp4";
-        const dest = path.join(cacheDir, `clip_${clip.id}${ext}`);
+        const urlHash = crypto.createHash("md5").update(url).digest("hex");
+        const dest = path.join(cacheDir, `clip_${clip.id}_${urlHash}${ext}`);
 
         try {
           await downloadFile(url, dest);
