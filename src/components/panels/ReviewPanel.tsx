@@ -77,16 +77,16 @@ export function ReviewPanel() {
     }
 
     return (
-      <div className="flex h-full w-full max-w-4xl mx-auto flex-col items-center justify-start gap-6 px-6 py-8 text-center">
+      <div className="flex h-full w-full max-w-4xl mx-auto flex-col items-center justify-center gap-6 px-6 py-8 text-center">
         <div className="space-y-2 max-w-xl">
           <h2 className="text-xl font-bold tracking-tight text-foreground">{t("panels.review.taskReviewTitle")}</h2>
           <p className="text-sm text-muted-foreground">{t("panels.review.taskReviewDescription")}</p>
         </div>
 
         {finalVideo ? (
-          <div className={`w-full ${maxWidthClass} rounded-2xl overflow-hidden border border-border bg-neutral-900/60 shadow-2xl p-2 transition-all duration-300 hover:shadow-accent/5 hover:border-accent/20`}>
-            <div className={`relative rounded-xl overflow-hidden bg-black flex items-center justify-center ${aspectClass}`}>
-              <video src={finalVideo} controls {...{ referrerPolicy: "no-referrer" }} className="w-full h-full object-contain" />
+          <div className={`w-full ${maxWidthClass} mx-auto rounded-2xl overflow-hidden border border-border bg-neutral-900/60 shadow-2xl p-2 transition-all duration-300 hover:shadow-accent/5 hover:border-accent/20`}>
+            <div className={`relative rounded-xl overflow-hidden bg-black flex items-center justify-center ${aspectClass}`} style={{ display: "contents" }}>
+              <video src={finalVideo} controls {...{ referrerPolicy: "no-referrer" }} className="w-full h-full object-contain mx-auto block" />
             </div>
           </div>
         ) : (

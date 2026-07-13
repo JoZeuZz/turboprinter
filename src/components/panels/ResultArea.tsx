@@ -22,7 +22,7 @@ export function ResultArea() {
           <video
             src={url}
             controls
-            className="w-full max-h-[480px] object-contain"
+            className="w-full max-h-[480px] object-contain mx-auto block"
           />
           <div className="px-3 py-2">
             <a

@@ -45,7 +45,7 @@ export function DonePanel() {
   };
 
   return (
-    <div className="flex h-full w-full max-w-4xl mx-auto flex-col items-center justify-start gap-6 px-6 py-8 text-center">
+    <div className="flex h-full w-full max-w-4xl mx-auto flex-col items-center justify-center gap-6 px-6 py-8 text-center">
       <div className="space-y-2 max-w-xl">
         <div className="flex items-center justify-center gap-2 text-green-400">
           <CheckCircle2 className="h-6 w-6" />
@@ -75,14 +75,14 @@ export function DonePanel() {
           return videoUrls.map((url) => (
             <div
               key={url}
-              className={`w-full ${maxWidthClass} rounded-2xl overflow-hidden border border-border bg-neutral-900/60 shadow-2xl p-2 transition-all duration-300 hover:shadow-accent/5 hover:border-accent/20`}
+              className={`w-full ${maxWidthClass} mx-auto rounded-2xl overflow-hidden border border-border bg-neutral-900/60 shadow-2xl p-2 transition-all duration-300 hover:shadow-accent/5 hover:border-accent/20`}
             >
-              <div className={`relative rounded-xl overflow-hidden bg-black flex items-center justify-center ${aspectClass}`}>
+              <div className={`relative rounded-xl overflow-hidden bg-black flex items-center justify-center ${aspectClass}`} style={{ display: "contents" }}>
                 <video
                   src={url}
                   controls
                   {...{ referrerPolicy: "no-referrer" }}
-                  className="w-full h-full object-contain"
+                  className="w-full h-full object-contain mx-auto block"
                 />
               </div>
               <div className="flex items-center justify-center gap-2 px-3 py-3 border-t border-border/50 mt-2 bg-surface/30 rounded-lg">

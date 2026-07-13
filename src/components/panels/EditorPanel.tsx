@@ -124,7 +124,7 @@ export function EditorPanel() {
     <div className="flex flex-col h-full">
       {/* Top: preview + inspector */}
       <div className="flex flex-1 overflow-hidden">
-        <div className="flex-[3] p-4 flex flex-col h-full overflow-hidden">
+        <div className="flex-[3] p-4 flex flex-col items-center justify-center h-full overflow-hidden">
           <VideoPreview items={items} selectedId={selectedId} onTimeUpdate={setCurrentTime} />
         </div>
         <div className="flex-[2] border-l border-border overflow-y-auto">
