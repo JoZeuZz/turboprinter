@@ -5,6 +5,7 @@ import { exec } from "child_process";
 import { createServer as createViteServer } from "vite";
 import WebSocket from "ws";
 import crypto from "crypto";
+import { GoogleGenAI } from "@google/genai";
 
 // Load .env variables manually if they exist
 try {
@@ -184,26 +185,24 @@ async function generateGeminiContent(prompt: string, jsonMode = false): Promise<
     throw new Error("No Gemini API key configured. Set GEMINI_API_KEY.");
   }
   try {
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: jsonMode ? { responseMimeType: "application/json" } : undefined,
-        }),
+    const ai = new GoogleGenAI({
+      apiKey,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        }
       }
-    );
-    if (!response.ok) {
-      const txt = await response.text();
-      console.error("Gemini API error status:", response.status, txt);
-      throw new Error(`Gemini status ${response.status}`);
-    }
-    const result = await response.json() as any;
-    return result?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    });
+
+    const response = await ai.models.generateContent({
+      model: "gemini-3.1-flash-lite",
+      contents: prompt,
+      config: jsonMode ? { responseMimeType: "application/json" } : undefined,
+    });
+
+    return response.text || "";
   } catch (err: any) {
-    console.error("Failed calling Gemini API:", err);
+    console.error("Failed calling Gemini API via SDK:", err);
     throw err;
   }
 }
@@ -858,42 +857,26 @@ async function startServer() {
   // 3. LLM APIs (Scripts & Terms)
   app.post("/api/v1/scripts", wrap(async (req: any, res: any) => {
     const { video_subject, video_language = "es", paragraph_number = 3 } = req.body;
-    let scriptText = "";
-
-    if (process.env.GEMINI_API_KEY) {
-      try {
-        const prompt = `Escribe un guión de video cautivador, detallado y narrativo sobre "${video_subject}" en idioma ${video_language}. Es CRÍTICO que el guión tenga exactamente ${paragraph_number} párrafos bien estructurados, completos y detallados (cada párrafo debe ser lo suficientemente largo y descriptivo, óptimo para narrar una historia o un documental). Separa cada párrafo estrictamente con dos saltos de línea (\\n\\n). Devuelve SOLAMENTE el texto del guión, sin títulos, introducciones ni comentarios adicionales.`;
-        scriptText = await generateGeminiContent(prompt);
-      } catch (err) {
-        console.warn("Gemini script generation failed, falling back to static", err);
-      }
+    if (!process.env.GEMINI_API_KEY) {
+      throw new Error("No Gemini API key configured. Please set GEMINI_API_KEY.");
     }
 
-    if (!scriptText) {
-      scriptText = getFallbackScript(video_subject, paragraph_number);
-    }
+    const prompt = `Escribe un guión de video cautivador, detallado y narrativo sobre "${video_subject}" en idioma ${video_language}. Es CRÍTICO que el guión tenga exactamente ${paragraph_number} párrafos bien estructurados, completos y detallados (cada párrafo debe ser lo suficientemente largo y descriptivo, óptimo para narrar una historia o un documental). Separa cada párrafo estrictamente con dos saltos de línea (\\n\\n). Devuelve SOLAMENTE el texto del guión, sin títulos, introducciones ni comentarios adicionales.`;
+    const scriptText = await generateGeminiContent(prompt);
 
     res.json({ status: 200, message: "ok", data: { video_script: scriptText } });
   }));
 
   app.post("/api/v1/terms", wrap(async (req: any, res: any) => {
     const { video_subject, video_script = "" } = req.body;
-    let terms: string[] = [];
-
-    if (process.env.GEMINI_API_KEY) {
-      try {
-        const prompt = `Analiza el siguiente guión de video y genera una lista de exactamente 5 términos de búsqueda en inglés (para buscar videos de stock relevantes). Devuelve una respuesta JSON con el formato: { "terms": ["term1", "term2", ...] }. Guión: ${video_script}`;
-        const resp = await generateGeminiContent(prompt, true);
-        const parsed = JSON.parse(resp);
-        terms = parsed.terms || [];
-      } catch (err) {
-        console.warn("Gemini terms extraction failed, falling back to static", err);
-      }
+    if (!process.env.GEMINI_API_KEY) {
+      throw new Error("No Gemini API key configured. Please set GEMINI_API_KEY.");
     }
 
-    if (!terms || terms.length === 0) {
-      terms = [video_subject, "nature", "epic", "cinematic", "scenic"];
-    }
+    const prompt = `Analiza el siguiente guión de video y genera una lista de exactamente 5 términos de búsqueda en inglés (para buscar videos de stock relevantes). Devuelve una respuesta JSON con el formato: { "terms": ["term1", "term2", ...] }. Guión: ${video_script}`;
+    const resp = await generateGeminiContent(prompt, true);
+    const parsed = JSON.parse(resp);
+    const terms = parsed.terms || [];
 
     res.json({ status: 200, message: "ok", data: { video_terms: terms } });
   }));
@@ -1107,17 +1090,11 @@ async function startServer() {
 
     let scriptText = "";
     if (generate_script) {
-      if (process.env.GEMINI_API_KEY) {
-        try {
-          const prompt = `Escribe un guión de video cautivador, detallado y narrativo sobre "${topic}" en idioma ${language}. Es CRÍTICO que el guión tenga exactamente ${paragraph_number} párrafos bien estructurados, completos y detallados (cada párrafo debe ser lo suficientemente largo y descriptivo, óptimo para narrar una historia o un documental). Separa cada párrafo estrictamente con dos saltos de línea (\\n\\n). Devuelve SOLAMENTE el texto del guión, sin títulos, introducciones ni comentarios adicionales.`;
-          scriptText = await generateGeminiContent(prompt);
-        } catch {
-          // ignore
-        }
+      if (!process.env.GEMINI_API_KEY) {
+        throw new Error("No Gemini API key configured. Please set GEMINI_API_KEY.");
       }
-      if (!scriptText) {
-        scriptText = getFallbackScript(topic, paragraph_number);
-      }
+      const prompt = `Escribe un guión de video cautivador, detallado y narrativo sobre "${topic}" en idioma ${language}. Es CRÍTICO que el guión tenga exactamente ${paragraph_number} párrafos bien estructurados, completos y detallados (cada párrafo debe ser lo suficientemente largo y descriptivo, óptimo para narrar una historia o un documental). Separa cada párrafo estrictamente con dos saltos de línea (\\n\\n). Devuelve SOLAMENTE el texto del guión, sin títulos, introducciones ni comentarios adicionales.`;
+      scriptText = await generateGeminiContent(prompt);
     }
 
     const newProject = {
