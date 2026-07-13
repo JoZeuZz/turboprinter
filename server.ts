@@ -2095,6 +2095,16 @@ To run this application locally and render videos successfully, please:
           continue;
         }
 
+        // Support local relative/absolute URLs or disk paths directly
+        if (url.startsWith("/") || !url.includes("://")) {
+          const cleanLocalPath = url.startsWith("/") ? url.slice(1) : url;
+          const diskPath = path.join(process.cwd(), cleanLocalPath);
+          if (fs.existsSync(diskPath)) {
+            localVideoPaths.push(diskPath);
+            continue;
+          }
+        }
+
         const cleanUrl = url.split("?")[0];
         const ext = path.extname(cleanUrl) || ".mp4";
         const urlHash = crypto.createHash("md5").update(url).digest("hex");
@@ -2116,25 +2126,47 @@ To run this application locally and render videos successfully, please:
       // Download narration and BGM
       let localNarrationPath: string | null = null;
       if (p.narration_audio_path) {
-        const ext = path.extname(p.narration_audio_path.split("?")[0]) || ".mp3";
-        const dest = path.join(cacheDir, `narration_${projectId}${ext}`);
-        try {
-          await downloadFile(p.narration_audio_path, dest);
-          localNarrationPath = dest;
-        } catch (err) {
-          console.error(`[Renderer] Narration download failed:`, err);
+        // Resolve local relative URLs (e.g. /storage/renders/narration_xxx.mp3)
+        if (p.narration_audio_path.startsWith("/") || !p.narration_audio_path.includes("://")) {
+          const cleanLocalPath = p.narration_audio_path.startsWith("/") ? p.narration_audio_path.slice(1) : p.narration_audio_path;
+          const diskPath = path.join(process.cwd(), cleanLocalPath);
+          if (fs.existsSync(diskPath)) {
+            localNarrationPath = diskPath;
+          }
+        }
+
+        if (!localNarrationPath) {
+          const ext = path.extname(p.narration_audio_path.split("?")[0]) || ".mp3";
+          const dest = path.join(cacheDir, `narration_${projectId}${ext}`);
+          try {
+            await downloadFile(p.narration_audio_path, dest);
+            localNarrationPath = dest;
+          } catch (err) {
+            console.error(`[Renderer] Narration download failed:`, err);
+          }
         }
       }
 
       let localMusicPath: string | null = null;
       if (musicItem && musicItem.url) {
-        const ext = path.extname(musicItem.url.split("?")[0]) || ".mp3";
-        const dest = path.join(cacheDir, `music_${musicItem.id}${ext}`);
-        try {
-          await downloadFile(musicItem.url, dest);
-          localMusicPath = dest;
-        } catch (err) {
-          console.error(`[Renderer] BGM download failed:`, err);
+        // Resolve local relative BGM URLs
+        if (musicItem.url.startsWith("/") || !musicItem.url.includes("://")) {
+          const cleanLocalPath = musicItem.url.startsWith("/") ? musicItem.url.slice(1) : musicItem.url;
+          const diskPath = path.join(process.cwd(), cleanLocalPath);
+          if (fs.existsSync(diskPath)) {
+            localMusicPath = diskPath;
+          }
+        }
+
+        if (!localMusicPath) {
+          const ext = path.extname(musicItem.url.split("?")[0]) || ".mp3";
+          const dest = path.join(cacheDir, `music_${musicItem.id}${ext}`);
+          try {
+            await downloadFile(musicItem.url, dest);
+            localMusicPath = dest;
+          } catch (err) {
+            console.error(`[Renderer] BGM download failed:`, err);
+          }
         }
       }
 
@@ -2212,7 +2244,21 @@ To run this application locally and render videos successfully, please:
       updateTaskState(90, null, null);
 
       // Burn Subtitles
-      const subtitles = subtitleTrack?.items || [];
+      let subtitles = subtitleTrack?.items || [];
+      if (subtitles.length === 0 && p.shot_plan?.segments) {
+        console.log(`[Renderer] Subtitle track was empty, falling back to shot_plan segments (${p.shot_plan.segments.length} items)`);
+        subtitles = p.shot_plan.segments.map((seg: any, idx: number) => {
+          const startSec = seg.start_sec !== undefined ? seg.start_sec : idx * 5;
+          const durationSec = seg.target_duration_sec !== undefined ? seg.target_duration_sec : 5;
+          return {
+            id: `sub_fallback_${idx + 1}`,
+            start_sec: startSec,
+            duration_sec: durationSec,
+            text: seg.narration_text || "",
+            segment_id: seg.id
+          };
+        });
+      }
       let finalOutputPath = audioMixedOutput;
 
       if (subtitles.length > 0) {
