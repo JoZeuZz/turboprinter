@@ -41,21 +41,29 @@ export function VideoPreview({ items, selectedId, onTimeUpdate }: VideoPreviewPr
 
   useEffect(() => {
     setPlayingId(selectedId ?? items[0]?.id ?? null);
+    setClipTime(0);
   }, [selectedId, items]);
 
   const currentIndex = items.findIndex((item) => item.id === playingId);
   const currentItem = currentIndex >= 0 ? items[currentIndex] : null;
   const src = currentItem?.asset_url ?? undefined;
 
+  const maxDuration = (currentItem && currentItem.duration_sec > 0)
+    ? currentItem.duration_sec
+    : (clipDuration || 0);
+
   const globalTime = currentItem ? currentItem.start_sec + clipTime : 0;
 
   useEffect(() => {
+    if (videoRef.current) {
+      videoRef.current.currentTime = 0;
+    }
     if (playing) {
-      void videoRef.current?.play();
+      void videoRef.current?.play().catch(() => {});
       if (audioRef.current && isFinite(globalTime)) {
         try {
           audioRef.current.currentTime = globalTime;
-          void audioRef.current.play();
+          void audioRef.current.play().catch(() => {});
         } catch (e) {
           console.warn(e);
         }
@@ -210,6 +218,10 @@ export function VideoPreview({ items, selectedId, onTimeUpdate }: VideoPreviewPr
   const handleEnded = () => {
     const nextItem = items[currentIndex + 1];
     if (nextItem) {
+      if (videoRef.current) {
+        videoRef.current.currentTime = 0;
+      }
+      setClipTime(0);
       setPlayingId(nextItem.id);
     } else {
       setPlaying(false);
@@ -218,19 +230,35 @@ export function VideoPreview({ items, selectedId, onTimeUpdate }: VideoPreviewPr
   };
 
   const handleTimeUpdate = () => {
-    const t = videoRef.current?.currentTime ?? 0;
-    setClipTime(t);
-    if (currentItem) {
-      const gTime = currentItem.start_sec + t;
-      onTimeUpdate?.(gTime);
+    if (!videoRef.current || !currentItem) return;
+    const t = videoRef.current.currentTime;
 
-      if (audioRef.current && !videoRef.current?.paused) {
-        const diff = Math.abs(audioRef.current.currentTime - gTime);
-        if (diff > 0.25 && isFinite(gTime)) {
-          try {
-            audioRef.current.currentTime = gTime;
-          } catch (e) {}
-        }
+    // Check if we've reached or exceeded the segment duration in the timeline
+    if (t >= maxDuration) {
+      videoRef.current.pause();
+      const nextItem = items[currentIndex + 1];
+      if (nextItem) {
+        videoRef.current.currentTime = 0;
+        setClipTime(0);
+        setPlayingId(nextItem.id);
+      } else {
+        setPlaying(false);
+        audioRef.current?.pause();
+        setClipTime(maxDuration);
+      }
+      return;
+    }
+
+    setClipTime(t);
+    const gTime = currentItem.start_sec + t;
+    onTimeUpdate?.(gTime);
+
+    if (audioRef.current && !videoRef.current.paused) {
+      const diff = Math.abs(audioRef.current.currentTime - gTime);
+      if (diff > 0.25 && isFinite(gTime)) {
+        try {
+          audioRef.current.currentTime = gTime;
+        } catch (e) {}
       }
     }
   };
@@ -315,7 +343,7 @@ export function VideoPreview({ items, selectedId, onTimeUpdate }: VideoPreviewPr
           <input
             type="range"
             min={0}
-            max={clipDuration || currentItem?.duration_sec || 0}
+            max={maxDuration}
             step={0.05}
             value={clipTime}
             onChange={handleSeek}
@@ -323,7 +351,7 @@ export function VideoPreview({ items, selectedId, onTimeUpdate }: VideoPreviewPr
             className="w-full h-1.5 rounded-full appearance-none bg-border cursor-pointer accent-accent"
           />
           <span className="text-[10px] tabular-nums text-muted w-9 text-right">
-            {formatTime(clipDuration || currentItem?.duration_sec || 0)}
+            {formatTime(maxDuration)}
           </span>
         </div>
       )}
