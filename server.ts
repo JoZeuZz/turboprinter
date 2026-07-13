@@ -2002,7 +2002,9 @@ To run this application locally and render videos successfully, please:
       if (stat.size > 0) {
         return destPath;
       }
-      fs.unlinkSync(destPath);
+      try {
+        fs.unlinkSync(destPath);
+      } catch (e) {}
     }
     
     let correctedUrl = url;
@@ -2010,19 +2012,57 @@ To run this application locally and render videos successfully, please:
       correctedUrl = url.replace("images.pexels.com/video-files/", "videos.pexels.com/video-files/");
     }
 
-    const response = await fetch(correctedUrl, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept": "*/*",
-        "Accept-Language": "en-US,en;q=0.9"
+    let lastError: any = null;
+    // Try fetch up to 3 times
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        const response = await fetch(correctedUrl, {
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "*/*",
+            "Accept-Language": "en-US,en;q=0.9"
+          }
+        });
+        if (response.ok) {
+          const buffer = await response.arrayBuffer();
+          await fs.promises.writeFile(destPath, Buffer.from(buffer));
+          return destPath;
+        } else {
+          throw new Error(`Status ${response.status} ${response.statusText}`);
+        }
+      } catch (err: any) {
+        lastError = err;
+        console.warn(`[Download] Fetch attempt ${attempt} failed for ${correctedUrl}: ${err.message}`);
+        if (attempt < 3) {
+          await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+        }
       }
-    });
-    if (!response.ok) {
-      throw new Error(`Failed to download ${correctedUrl}: ${response.status} ${response.statusText}`);
     }
-    const buffer = await response.arrayBuffer();
-    await fs.promises.writeFile(destPath, Buffer.from(buffer));
-    return destPath;
+
+    // Try curl as fallback
+    console.log(`[Download] Falling back to curl for ${correctedUrl}`);
+    try {
+      const { exec } = await import("child_process");
+      await new Promise<void>((resolve, reject) => {
+        const cmd = `curl -L -f --retry 3 -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" -o "${destPath}" "${correctedUrl}"`;
+        exec(cmd, (error, stdout, stderr) => {
+          if (error) {
+            reject(new Error(`curl failed: ${stderr || error.message}`));
+          } else {
+            resolve();
+          }
+        });
+      });
+
+      if (fs.existsSync(destPath) && fs.statSync(destPath).size > 0) {
+        return destPath;
+      }
+    } catch (curlErr: any) {
+      console.error(`[Download] curl fallback also failed for ${correctedUrl}:`, curlErr);
+      lastError = new Error(`${lastError?.message || ""} (curl fallback also failed: ${curlErr.message})`);
+    }
+
+    throw new Error(`Failed to download ${correctedUrl}: ${lastError?.message}`);
   };
 
   const runRealRender = async (projectId: string, taskId: string) => {
