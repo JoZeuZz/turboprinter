@@ -420,6 +420,7 @@ export interface TimelineProject {
   export?: ExportSettings;
   metadata?: Record<string, unknown>;
   params?: VideoParams;
+  narration_audio_path?: string | null;
 }
 
 export interface MusicTrack {

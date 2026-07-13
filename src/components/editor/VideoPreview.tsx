@@ -24,6 +24,7 @@ function isTypingTarget(target: EventTarget | null): boolean {
 export function VideoPreview({ items, selectedId, onTimeUpdate }: VideoPreviewProps) {
   const { t } = useTranslation();
   const videoRef = useRef<HTMLVideoElement>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
   const [playingId, setPlayingId] = useState<string | null>(selectedId ?? items[0]?.id ?? null);
   const [clipTime, setClipTime] = useState(0);
@@ -33,6 +34,8 @@ export function VideoPreview({ items, selectedId, onTimeUpdate }: VideoPreviewPr
   const projectStore = useProjectStore();
   const subtitleTrack = projectStore.project?.tracks.find((t) => t.type === "subtitle");
   const subtitleItems = subtitleTrack?.items ?? [];
+  const audioTrack = projectStore.project?.tracks.find((t) => t.type === "audio");
+  const narrationUrl = projectStore.project?.narration_audio_path || audioTrack?.items?.find((item) => item.asset_url)?.asset_url;
 
   const videoAspect = useVideoStore((s) => s.video_aspect) ?? "9:16";
 
@@ -40,15 +43,31 @@ export function VideoPreview({ items, selectedId, onTimeUpdate }: VideoPreviewPr
     setPlayingId(selectedId ?? items[0]?.id ?? null);
   }, [selectedId, items]);
 
-  useEffect(() => {
-    if (playing) void videoRef.current?.play();
-  }, [playingId]);
-
   const currentIndex = items.findIndex((item) => item.id === playingId);
   const currentItem = currentIndex >= 0 ? items[currentIndex] : null;
   const src = currentItem?.asset_url ?? undefined;
 
   const globalTime = currentItem ? currentItem.start_sec + clipTime : 0;
+
+  useEffect(() => {
+    if (playing) {
+      void videoRef.current?.play();
+      if (audioRef.current && isFinite(globalTime)) {
+        try {
+          audioRef.current.currentTime = globalTime;
+          void audioRef.current.play();
+        } catch (e) {
+          console.warn(e);
+        }
+      }
+    } else {
+      if (audioRef.current && isFinite(globalTime)) {
+        try {
+          audioRef.current.currentTime = globalTime;
+        } catch (e) {}
+      }
+    }
+  }, [playingId]);
   const activeSubtitle = subtitleItems.find(
     (item) => globalTime >= item.start_sec && globalTime < (item.start_sec + item.duration_sec)
   );
@@ -148,6 +167,37 @@ export function VideoPreview({ items, selectedId, onTimeUpdate }: VideoPreviewPr
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playing]);
 
+  const handlePlay = () => {
+    setPlaying(true);
+    if (audioRef.current) {
+      if (isFinite(globalTime)) {
+        try {
+          audioRef.current.currentTime = globalTime;
+        } catch (e) {}
+      }
+      void audioRef.current.play();
+    }
+  };
+
+  const handlePause = () => {
+    setPlaying(false);
+    audioRef.current?.pause();
+  };
+
+  const handleSeeking = () => {
+    if (audioRef.current) {
+      const vTime = videoRef.current?.currentTime ?? 0;
+      if (currentItem) {
+        const gTime = currentItem.start_sec + vTime;
+        if (isFinite(gTime)) {
+          try {
+            audioRef.current.currentTime = gTime;
+          } catch (e) {}
+        }
+      }
+    }
+  };
+
   const toggle = () => {
     if (!videoRef.current) return;
     if (playing) {
@@ -155,7 +205,6 @@ export function VideoPreview({ items, selectedId, onTimeUpdate }: VideoPreviewPr
     } else {
       void videoRef.current.play();
     }
-    setPlaying(!playing);
   };
 
   const handleEnded = () => {
@@ -164,19 +213,40 @@ export function VideoPreview({ items, selectedId, onTimeUpdate }: VideoPreviewPr
       setPlayingId(nextItem.id);
     } else {
       setPlaying(false);
+      audioRef.current?.pause();
     }
   };
 
   const handleTimeUpdate = () => {
     const t = videoRef.current?.currentTime ?? 0;
     setClipTime(t);
-    if (currentItem) onTimeUpdate?.(currentItem.start_sec + t);
+    if (currentItem) {
+      const gTime = currentItem.start_sec + t;
+      onTimeUpdate?.(gTime);
+
+      if (audioRef.current && !videoRef.current?.paused) {
+        const diff = Math.abs(audioRef.current.currentTime - gTime);
+        if (diff > 0.25 && isFinite(gTime)) {
+          try {
+            audioRef.current.currentTime = gTime;
+          } catch (e) {}
+        }
+      }
+    }
   };
 
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
     const t = parseFloat(e.target.value);
     if (videoRef.current) videoRef.current.currentTime = t;
     setClipTime(t);
+    if (currentItem) {
+      const gTime = currentItem.start_sec + t;
+      if (audioRef.current && isFinite(gTime)) {
+        try {
+          audioRef.current.currentTime = gTime;
+        } catch (e) {}
+      }
+    }
   };
 
   let maxWidthClass = "max-w-5xl";
@@ -198,8 +268,19 @@ export function VideoPreview({ items, selectedId, onTimeUpdate }: VideoPreviewPr
             className="w-full h-full object-contain"
             onEnded={handleEnded}
             onTimeUpdate={handleTimeUpdate}
+            onPlay={handlePlay}
+            onPause={handlePause}
+            onSeeking={handleSeeking}
             onLoadedMetadata={() => setClipDuration(videoRef.current?.duration ?? 0)}
           />
+          {narrationUrl && (
+            <audio
+              ref={audioRef}
+              src={narrationUrl}
+              preload="auto"
+              style={{ display: "none" }}
+            />
+          )}
           {subtitleEnabled && activeSubtitle && activeSubtitle.text && (
             <div style={positionStyle}>
               <div
