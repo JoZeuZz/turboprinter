@@ -1855,6 +1855,8 @@ async function startServer() {
       customPosition: number;
     }
   ): string => {
+    const refHeight = 1920;
+    const refWidth = Math.round(1920 * (resWidth / resHeight));
     const assFont = getAssFontName(styleParams.fontName);
     const textColor = cssHexToAss(styleParams.textColor);
     const strokeColor = cssHexToAss(styleParams.strokeColor);
@@ -1908,31 +1910,33 @@ async function startServer() {
       borderStyle = 1;
     }
 
+    const marginLR = Math.round(0.07 * refWidth);
+
     let alignment = 2; // Bottom-center
-    let marginV = Math.round(0.08 * resHeight); // default 8%
+    let marginV = Math.round(0.08 * refHeight); // default 8%
 
     if (styleParams.position === "top") {
       alignment = 8;
-      marginV = Math.round(0.08 * resHeight);
+      marginV = Math.round(0.08 * refHeight);
     } else if (styleParams.position === "center" || styleParams.position === "middle") {
       alignment = 5;
       marginV = 0;
     } else if (styleParams.position === "custom") {
       alignment = 2;
       const pctFromBottom = (100 - styleParams.customPosition) / 100;
-      marginV = Math.round(pctFromBottom * resHeight);
+      marginV = Math.round(pctFromBottom * refHeight);
     }
 
     // Header section
     let out = `[Script Info]
 ScriptType: v4.00+
-PlayResX: ${resWidth}
-PlayResY: ${resHeight}
+PlayResX: ${refWidth}
+PlayResY: ${refHeight}
 WrapStyle: 0
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,${assFont},${styleParams.fontSize},&H00${textColor},&H00000000,&H00${strokeColor},&H${assBgAlpha}${assBgColor},0,0,0,0,100,100,0,0,${borderStyle},${outlineVal.toFixed(1)},0,${alignment},20,20,${marginV},1
+Style: Default,${assFont},${styleParams.fontSize},&H00${textColor},&H00000000,&H00${strokeColor},&H${assBgAlpha}${assBgColor},0,0,0,0,100,100,0,0,${borderStyle},${outlineVal.toFixed(1)},0,${alignment},${marginLR},${marginLR},${marginV},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
