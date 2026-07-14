@@ -84,7 +84,8 @@ export function Workspace() {
     return () => {
       cancelled = true;
     };
-  }, [id, openProject, setPanel, setTopic, setVideo]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
 
   return (
     <div className="flex flex-col h-full">
