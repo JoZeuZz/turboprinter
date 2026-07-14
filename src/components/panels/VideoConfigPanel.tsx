@@ -486,24 +486,72 @@ export function VideoConfigPanel() {
                     onChange={(v) => store.set("stroke_width", v)}
                     displayValue={(store.stroke_width ?? 1.5).toFixed(1)}
                   />
-                  <Checkbox
-                    label={t("panels.videoConfig.subtitleBackground")}
-                    checked={store.text_background_color !== false}
-                    onChange={(v) =>
-                      store.set("text_background_color", v ? "#000000" : false)
-                    }
-                  />
-                  {store.text_background_color !== false && (
-                    <ColorPicker
-                      label={t("panels.videoConfig.backgroundColor")}
-                      value={
-                        typeof store.text_background_color === "string"
-                          ? store.text_background_color
-                          : "#000000"
-                      }
-                      onChange={(v) => store.set("text_background_color", v)}
-                    />
-                  )}
+                  <div className="flex flex-col gap-2 bg-surface/30 p-2 rounded-xl border border-border/40">
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 justify-between">
+                      <Checkbox
+                        label={t("panels.videoConfig.subtitleBackground")}
+                        checked={store.text_background_color !== false}
+                        onChange={(v) =>
+                          store.set("text_background_color", v ? "#000000" : false)
+                        }
+                      />
+
+                      {store.text_background_color !== false && (
+                        <label className="flex items-center gap-1 bg-surface border border-border/80 p-0.5 rounded-lg select-none">
+                          <button
+                            type="button"
+                            title="Fondo sólido clásico"
+                            className={`text-xs px-2.5 py-1 rounded-md transition-all font-medium cursor-pointer ${
+                              (store.subtitle_bg_style || "solid") === "solid"
+                                ? "bg-accent text-white shadow-sm"
+                                : "text-muted hover:text-foreground"
+                            }`}
+                            onClick={() => store.set("subtitle_bg_style", "solid")}
+                          >
+                            Sólido
+                          </button>
+                          <button
+                            type="button"
+                            title="Fondo traslúcido con el color seleccionado"
+                            className={`text-xs px-2.5 py-1 rounded-md transition-all font-medium cursor-pointer ${
+                              store.subtitle_bg_style === "translucent"
+                                ? "bg-accent text-white shadow-sm"
+                                : "text-muted hover:text-foreground"
+                            }`}
+                            onClick={() => store.set("subtitle_bg_style", "translucent")}
+                          >
+                            Translúcido
+                          </button>
+                          <button
+                            type="button"
+                            title="Efecto de desenfoque de fondo"
+                            className={`text-xs px-2.5 py-1 rounded-md transition-all font-medium cursor-pointer ${
+                              store.subtitle_bg_style === "blur"
+                                ? "bg-accent text-white shadow-sm"
+                                : "text-muted hover:text-foreground"
+                            }`}
+                            onClick={() => store.set("subtitle_bg_style", "blur")}
+                          >
+                            Efecto Blur
+                          </button>
+                        </label>
+                      )}
+                    </div>
+
+                    {store.text_background_color !== false && store.subtitle_bg_style !== "blur" && (
+                      <div className="animate-fadeIn">
+                        <ColorPicker
+                          label={t("panels.videoConfig.backgroundColor")}
+                          value={
+                            typeof store.text_background_color === "string"
+                              ? store.text_background_color
+                              : "#000000"
+                          }
+                          onChange={(v) => store.set("text_background_color", v)}
+                        />
+                      </div>
+                    )}
+                  </div>
                   <Checkbox
                     label={t("audioSubtitle.roundedBackground")}
                     checked={store.rounded_subtitle_background ?? false}
@@ -528,6 +576,7 @@ export function VideoConfigPanel() {
             strokeWidth={store.stroke_width ?? 1.5}
             textBackgroundColor={store.text_background_color ?? true}
             roundedBackground={store.rounded_subtitle_background ?? false}
+            subtitleBgStyle={store.subtitle_bg_style ?? "solid"}
             sampleText={store.preview_text || store.video_script}
           />
           </div>

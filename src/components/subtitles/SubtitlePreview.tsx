@@ -13,11 +13,28 @@ interface SubtitlePreviewProps {
   strokeWidth?: number | null;
   textBackgroundColor?: boolean | string | null;
   roundedBackground?: boolean | null;
+  subtitleBgStyle?: "solid" | "translucent" | "blur" | null;
   sampleText?: string | null;
 }
 
 const DEFAULT_SAMPLE =
   "Este es un ejemplo de subtítulo para previsualizar el estilo.";
+
+function getTranslucentColor(hex: string): string {
+  if (!hex || !hex.startsWith("#")) return hex;
+  const clean = hex.substring(1);
+  if (clean.length === 3) {
+    const r = clean[0], g = clean[1], b = clean[2];
+    return `rgba(${parseInt(r+r, 16)}, ${parseInt(g+g, 16)}, ${parseInt(b+b, 16)}, 0.5)`;
+  }
+  if (clean.length === 6) {
+    const r = clean.substring(0, 2);
+    const g = clean.substring(2, 4);
+    const b = clean.substring(4, 6);
+    return `rgba(${parseInt(r, 16)}, ${parseInt(g, 16)}, ${parseInt(b, 16)}, 0.5)`;
+  }
+  return hex;
+}
 
 export function SubtitlePreview({
   enabled,
@@ -30,6 +47,7 @@ export function SubtitlePreview({
   strokeWidth,
   textBackgroundColor,
   roundedBackground,
+  subtitleBgStyle,
   sampleText,
 }: SubtitlePreviewProps) {
   const { t } = useTranslation();
@@ -56,6 +74,18 @@ export function SubtitlePreview({
         : { top: `${previewStyle.position.offsetPct}%`, transform: "translateX(-50%)" };
 
   const text = sampleText?.trim() || DEFAULT_SAMPLE;
+
+  let finalBgColor = "transparent";
+  const bgStyle = previewStyle.background;
+  if (bgStyle) {
+    if (subtitleBgStyle === "translucent") {
+      finalBgColor = getTranslucentColor(bgStyle.color);
+    } else if (subtitleBgStyle === "blur") {
+      finalBgColor = "rgba(255, 255, 255, 0.25)";
+    } else {
+      finalBgColor = bgStyle.color;
+    }
+  }
 
   return (
     <aside className="rounded-xl border border-border bg-base p-3 lg:sticky lg:top-2">
@@ -87,10 +117,10 @@ export function SubtitlePreview({
           style={positionStyle}
         >
           <div
-            className={`inline-block max-w-full px-3 py-1.5 leading-tight ${
+            className={`inline-block max-w-full px-3 py-1.5 leading-tight transition-all ${
               previewStyle.background?.rounded ? "rounded-xl" : "rounded-sm"
-            }`}
-            style={{ backgroundColor: previewStyle.background ? previewStyle.background.color : "transparent" }}
+            } ${subtitleBgStyle === "blur" ? "backdrop-blur-md border border-white/20" : ""}`}
+            style={{ backgroundColor: finalBgColor }}
           >
             <span
               className="block break-words"

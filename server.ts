@@ -1915,6 +1915,7 @@ async function startServer() {
       hasBg: boolean | string;
       position: string;
       customPosition: number;
+      subtitleBgStyle?: string;
     }
   ): string => {
     const refHeight = 1920;
@@ -1924,7 +1925,7 @@ async function startServer() {
     const strokeColor = cssHexToAss(styleParams.strokeColor);
     
     let assBgColor = "000000";
-    let assBgAlpha = "00"; // fully opaque box by default if hasBg is true
+    let assBgAlpha = "00"; // fully opaque box by default
     
     const hasBg = styleParams.hasBg === true || (
       typeof styleParams.hasBg === "string" && 
@@ -1933,42 +1934,57 @@ async function startServer() {
       styleParams.hasBg.trim() !== "none"
     );
 
-    if (typeof styleParams.hasBg === "string" && styleParams.hasBg.trim()) {
-      const cleanBg = styleParams.hasBg.trim();
-      if (cleanBg.startsWith("#")) {
-        assBgColor = cssHexToAss(cleanBg);
-        if (cleanBg.length === 9) {
-          const alphaHex = cleanBg.substring(7, 9);
-          const cssAlphaInt = parseInt(alphaHex, 16);
-          const assAlphaInt = 255 - cssAlphaInt;
-          assBgAlpha = assAlphaInt.toString(16).padStart(2, "0").toUpperCase();
-        } else {
-          assBgAlpha = "80"; // default 50% opacity
+    if (hasBg) {
+      if (typeof styleParams.hasBg === "string" && styleParams.hasBg.trim()) {
+        const cleanBg = styleParams.hasBg.trim();
+        if (cleanBg.startsWith("#")) {
+          assBgColor = cssHexToAss(cleanBg);
+          if (cleanBg.length === 9) {
+            const alphaHex = cleanBg.substring(7, 9);
+            const cssAlphaInt = parseInt(alphaHex, 16);
+            const assAlphaInt = 255 - cssAlphaInt;
+            assBgAlpha = assAlphaInt.toString(16).padStart(2, "0").toUpperCase();
+          } else {
+            assBgAlpha = "00"; // default opaque
+          }
+        } else if (cleanBg.startsWith("rgba")) {
+          const match = cleanBg.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*([\d.]+)\s*\)/);
+          if (match) {
+            const r = parseInt(match[1]).toString(16).padStart(2, "0");
+            const g = parseInt(match[2]).toString(16).padStart(2, "0");
+            const b = parseInt(match[3]).toString(16).padStart(2, "0");
+            assBgColor = `${b}${g}${r}`;
+            const a = parseFloat(match[4]);
+            const assAlphaInt = Math.round((1 - a) * 255);
+            assBgAlpha = assAlphaInt.toString(16).padStart(2, "0").toUpperCase();
+          }
+        } else if (cleanBg.startsWith("rgb")) {
+          const match = cleanBg.match(/rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/);
+          if (match) {
+            const r = parseInt(match[1]).toString(16).padStart(2, "0");
+            const g = parseInt(match[2]).toString(16).padStart(2, "0");
+            const b = parseInt(match[3]).toString(16).padStart(2, "0");
+            assBgColor = `${b}${g}${r}`;
+            assBgAlpha = "00"; // fully opaque
+          }
         }
-      } else if (cleanBg.startsWith("rgba")) {
-        const match = cleanBg.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*([\d.]+)\s*\)/);
-        if (match) {
-          const r = parseInt(match[1]).toString(16).padStart(2, "0");
-          const g = parseInt(match[2]).toString(16).padStart(2, "0");
-          const b = parseInt(match[3]).toString(16).padStart(2, "0");
-          assBgColor = `${b}${g}${r}`;
-          const a = parseFloat(match[4]);
-          const assAlphaInt = Math.round((1 - a) * 255);
-          assBgAlpha = assAlphaInt.toString(16).padStart(2, "0").toUpperCase();
-        }
-      } else if (cleanBg.startsWith("rgb")) {
-        const match = cleanBg.match(/rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/);
-        if (match) {
-          const r = parseInt(match[1]).toString(16).padStart(2, "0");
-          const g = parseInt(match[2]).toString(16).padStart(2, "0");
-          const b = parseInt(match[3]).toString(16).padStart(2, "0");
-          assBgColor = `${b}${g}${r}`;
-          assBgAlpha = "00"; // fully opaque
-        }
+      } else {
+        assBgColor = "000000";
+        assBgAlpha = "00"; // fully opaque box by default
       }
-    } else if (styleParams.hasBg === true) {
-      assBgColor = "000000";
-      assBgAlpha = "80"; // 50% opacity box
+
+      // Overrides based on subtitleBgStyle parameter:
+      if (styleParams.subtitleBgStyle === "translucent") {
+        if (assBgAlpha === "00") {
+          assBgAlpha = "80"; // 50% transparency
+        }
+      } else if (styleParams.subtitleBgStyle === "blur") {
+        assBgColor = "FFFFFF";
+        assBgAlpha = "C0"; // 25% opacity / 75% transparent white box
+      } else {
+        // solid: force opaque
+        assBgAlpha = "00";
+      }
     }
 
     const marginLR = Math.round(0.07 * refWidth);
@@ -2004,17 +2020,13 @@ WrapStyle: 0
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 `;
 
-    let borderStyle = 1; // 1 = Outline + Shadow, 3 = Opaque Box
-    let outlineVal = styleParams.strokeWidth !== undefined ? styleParams.strokeWidth : 1.5;
-    let assBackColor = "FF000000"; // transparent shadow by default
-
     if (hasBg) {
-      borderStyle = 3;
-      outlineVal = Math.max(4, Math.round(styleParams.fontSize * 0.15)); // Padding around text inside box
-      assBackColor = `${assBgAlpha}${assBgColor}`;
+      const bgPadding = Math.max(4, Math.round(styleParams.fontSize * 0.15));
+      out += `Style: BgBox,${assFont},${styleParams.fontSize},&HFF000000,&HFF000000,&HFF000000,&H${assBgAlpha}${assBgColor},${isBold},0,0,0,100,100,0,0,3,${bgPadding.toFixed(1)},0,${alignment},${marginLR},${marginLR},${marginV},1\n`;
     }
 
-    out += `Style: Default,${assFont},${styleParams.fontSize},&H00${textColor},&H00000000,&H00${strokeColor},&H${assBackColor},${isBold},0,0,0,100,100,0,0,${borderStyle},${outlineVal.toFixed(1)},0,${alignment},${marginLR},${marginLR},${marginV},1\n`;
+    const defaultOutline = styleParams.strokeWidth !== undefined ? styleParams.strokeWidth : 1.5;
+    out += `Style: Default,${assFont},${styleParams.fontSize},&H00${textColor},&H00000000,&H00${strokeColor},&HFF000000,${isBold},0,0,0,100,100,0,0,1,${defaultOutline.toFixed(1)},0,${alignment},${marginLR},${marginLR},${marginV},1\n`;
 
     out += `
 [Events]
@@ -2029,7 +2041,14 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
       const end = formatAssTime(startSec + durationSec);
       const text = (sub.text || "").replace(/\\n/g, "\\N").replace(/\n/g, "\\N"); // ASS uses \N for line breaks
       
-      out += `Dialogue: 0,${start},${end},Default,,0,0,0,,${text}\n`;
+      if (hasBg) {
+        // Output background box on Layer 0
+        out += `Dialogue: 0,${start},${end},BgBox,,0,0,0,,${text}\n`;
+        // Output text on Layer 1
+        out += `Dialogue: 1,${start},${end},Default,,0,0,0,,${text}\n`;
+      } else {
+        out += `Dialogue: 0,${start},${end},Default,,0,0,0,,${text}\n`;
+      }
     }
 
     return out;
@@ -2386,6 +2405,7 @@ To run this application locally and render videos successfully, please:
         const hasBgParam = pParams.text_background_color !== undefined ? pParams.text_background_color : (p.text_background_color !== undefined ? p.text_background_color : true);
         const subtitlePosParam = pParams.subtitle_position || p.subtitle_position || "bottom";
         const customPosParam = pParams.custom_position !== undefined ? pParams.custom_position : (p.custom_position !== undefined ? p.custom_position : 70);
+        const subtitleBgStyleParam = pParams.subtitle_bg_style || p.subtitle_bg_style || "solid";
 
         // Generate ASS file with exact styles
         const assFilePath = path.join(cacheDir, `subtitles_${taskId}.ass`);
@@ -2398,6 +2418,7 @@ To run this application locally and render videos successfully, please:
           hasBg: hasBgParam,
           position: subtitlePosParam,
           customPosition: customPosParam,
+          subtitleBgStyle: subtitleBgStyleParam,
         });
         await fs.promises.writeFile(assFilePath, assContent, "utf8");
 

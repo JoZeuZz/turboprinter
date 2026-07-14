@@ -90,6 +90,7 @@ export function VideoPreview({ items, selectedId, onTimeUpdate }: VideoPreviewPr
   const strokeWidth = useVideoStore((s) => s.stroke_width) ?? 1.5;
   const textBackgroundColor = useVideoStore((s) => s.text_background_color) ?? true;
   const roundedBackground = useVideoStore((s) => s.rounded_subtitle_background) ?? false;
+  const subtitleBgStyle = useVideoStore((s) => s.subtitle_bg_style) ?? "solid";
 
   useEffect(() => {
     if (!videoRef.current) return;
@@ -141,13 +142,38 @@ export function VideoPreview({ items, selectedId, onTimeUpdate }: VideoPreviewPr
     positionStyle.bottom = `${8}%`;
   }
 
+  const getTranslucentColor = (hex: string): string => {
+    if (!hex || !hex.startsWith("#")) return hex;
+    const clean = hex.substring(1);
+    if (clean.length === 3) {
+      const r = clean[0], g = clean[1], b = clean[2];
+      return `rgba(${parseInt(r+r, 16)}, ${parseInt(g+g, 16)}, ${parseInt(b+b, 16)}, 0.5)`;
+    }
+    if (clean.length === 6) {
+      const r = clean.substring(0, 2);
+      const g = clean.substring(2, 4);
+      const b = clean.substring(4, 6);
+      return `rgba(${parseInt(r, 16)}, ${parseInt(g, 16)}, ${parseInt(b, 16)}, 0.5)`;
+    }
+    return hex;
+  };
+
   let bgStyle: React.CSSProperties = {
     backgroundColor: "transparent",
   };
-  if (textBackgroundColor === true) {
-    bgStyle.backgroundColor = "rgba(0, 0, 0, 0.5)";
-  } else if (typeof textBackgroundColor === "string" && textBackgroundColor.trim()) {
-    bgStyle.backgroundColor = textBackgroundColor;
+  if (textBackgroundColor !== false) {
+    let baseColor = "#000000";
+    if (typeof textBackgroundColor === "string" && textBackgroundColor.trim()) {
+      baseColor = textBackgroundColor;
+    }
+    
+    if (subtitleBgStyle === "translucent") {
+      bgStyle.backgroundColor = getTranslucentColor(baseColor);
+    } else if (subtitleBgStyle === "blur") {
+      bgStyle.backgroundColor = "rgba(255, 255, 255, 0.25)";
+    } else {
+      bgStyle.backgroundColor = baseColor;
+    }
   }
 
   const borderStyleClass = roundedBackground ? "rounded-xl" : "rounded-sm";
@@ -312,7 +338,9 @@ export function VideoPreview({ items, selectedId, onTimeUpdate }: VideoPreviewPr
           {subtitleEnabled && activeSubtitle && activeSubtitle.text && (
             <div style={positionStyle}>
               <div
-                className={`inline-block max-w-full px-3 py-1.5 leading-tight ${borderStyleClass}`}
+                className={`inline-block max-w-full px-3 py-1.5 leading-tight transition-all ${borderStyleClass} ${
+                  subtitleBgStyle === "blur" ? "backdrop-blur-md border border-white/20" : ""
+                }`}
                 style={bgStyle}
               >
                 <span

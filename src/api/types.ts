@@ -34,6 +34,7 @@ export interface VideoParams {
   text_fore_color?: string;
   text_background_color?: boolean | string;
   rounded_subtitle_background?: boolean;
+  subtitle_bg_style?: "solid" | "translucent" | "blur";
   font_size?: number;
   stroke_color?: string;
   stroke_width?: number;

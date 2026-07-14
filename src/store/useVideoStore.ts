@@ -34,6 +34,7 @@ const DEFAULTS: VideoParams & VideoStoreExtras = {
   text_fore_color: "#FFFFFF",
   text_background_color: true,
   rounded_subtitle_background: false,
+  subtitle_bg_style: "solid",
   font_size: 60,
   stroke_color: "#000000",
   stroke_width: 1.5,
