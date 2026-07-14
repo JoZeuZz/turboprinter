@@ -1472,16 +1472,12 @@ async function startServer() {
       };
     });
 
-    const subtitleItems = (p.shot_plan?.segments || []).map((seg: any, idx: number) => {
+    const subtitleItems: any[] = [];
+    (p.shot_plan?.segments || []).forEach((seg: any, idx: number) => {
       const startSec = seg.start_sec !== undefined ? seg.start_sec : idx * 5;
       const durationSec = seg.target_duration_sec !== undefined ? seg.target_duration_sec : 5;
-      return {
-        id: `sub_${idx + 1}`,
-        start_sec: startSec,
-        duration_sec: durationSec,
-        text: seg.narration_text,
-        segment_id: seg.id
-      };
+      const splitCues = splitTextIntoTikTokSubtitles(seg.narration_text || "", startSec, durationSec, seg.id, `sub_${idx + 1}`);
+      subtitleItems.push(...splitCues);
     });
 
     p.tracks = [
@@ -1606,7 +1602,14 @@ async function startServer() {
 
     let subtitlePath: string | null = null;
     if (subtitle_enabled) {
-      const srtContent = generateSrt(segments);
+      const splitCuesForSrt: any[] = [];
+      segments.forEach((seg: any, idx: number) => {
+        const startSec = seg.start_sec !== undefined ? seg.start_sec : idx * 5;
+        const durationSec = seg.target_duration_sec !== undefined ? seg.target_duration_sec : 5;
+        const splitItems = splitTextIntoTikTokSubtitles(seg.narration_text || "", startSec, durationSec, seg.id, `sub_${idx + 1}`);
+        splitCuesForSrt.push(...splitItems);
+      });
+      const srtContent = generateSrt(splitCuesForSrt);
       const srtPath = path.join(renderDir, `subtitles_${projectId}.srt`);
       await fs.promises.writeFile(srtPath, srtContent, "utf8");
       subtitlePath = `/storage/renders/subtitles_${projectId}.srt`;
@@ -1626,16 +1629,12 @@ async function startServer() {
       };
     });
 
-    const subtitleItems = (p.shot_plan?.segments || []).map((seg: any, idx: number) => {
+    const subtitleItems: any[] = [];
+    (p.shot_plan?.segments || []).forEach((seg: any, idx: number) => {
       const startSec = seg.start_sec !== undefined ? seg.start_sec : idx * 5;
       const durationSec = seg.target_duration_sec !== undefined ? seg.target_duration_sec : 5;
-      return {
-        id: `sub_${idx + 1}`,
-        start_sec: startSec,
-        duration_sec: durationSec,
-        text: seg.narration_text,
-        segment_id: seg.id
-      };
+      const splitCues = splitTextIntoTikTokSubtitles(seg.narration_text || "", startSec, durationSec, seg.id, `sub_${idx + 1}`);
+      subtitleItems.push(...splitCues);
     });
 
     if (p.tracks) {
@@ -1819,6 +1818,69 @@ async function startServer() {
     return clean.split(".")[0] || "Arial";
   };
 
+  const splitTextIntoTikTokSubtitles = (
+    text: string,
+    startSec: number,
+    durationSec: number,
+    segmentId: string,
+    baseId: string
+  ): any[] => {
+    if (!text || !text.trim()) return [];
+    
+    const cleanText = text.trim().replace(/\s+/g, " ");
+    
+    // Check if the text is predominantly CJK (no spaces, or very few)
+    const isCJK = /[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\uff66-\uff9f\u1100-\u11ff\u3130-\u318f\uac00-\ud7af]/.test(cleanText);
+    
+    let units: string[] = [];
+    if (isCJK) {
+      units = Array.from(cleanText).filter(c => c !== " ");
+    } else {
+      units = cleanText.split(" ");
+    }
+    
+    if (units.length === 0) return [];
+    
+    // Target: 2 to 3 words or characters per subtitle cue (TikTok style is very dynamic)
+    const maxUnits = 3;
+    const groups: string[][] = [];
+    
+    for (let i = 0; i < units.length; i += maxUnits) {
+      groups.push(units.slice(i, i + maxUnits));
+    }
+    
+    // If we have more than one group, and the last group has only 1 unit, 
+    // merge it into the previous group so we don't have a single word/character hanging.
+    if (groups.length > 1 && groups[groups.length - 1].length === 1) {
+      const lastGroup = groups.pop();
+      if (lastGroup) {
+        groups[groups.length - 1].push(...lastGroup);
+      }
+    }
+    
+    const totalUnits = units.length;
+    let elapsed = 0;
+    
+    return groups.map((grp, idx) => {
+      const phrase = isCJK ? grp.join("") : grp.join(" ");
+      const phraseUnitsCount = grp.length;
+      
+      // Proportional start and duration
+      const chunkStart = startSec + (elapsed / totalUnits) * durationSec;
+      const chunkDuration = (phraseUnitsCount / totalUnits) * durationSec;
+      
+      elapsed += phraseUnitsCount;
+      
+      return {
+        id: `${baseId}_part_${idx + 1}`,
+        start_sec: Number(chunkStart.toFixed(3)),
+        duration_sec: Number(chunkDuration.toFixed(3)),
+        text: phrase,
+        segment_id: segmentId
+      };
+    });
+  };
+
   const generateSrt = (subtitles: any[]): string => {
     return subtitles
       .map((sub, idx) => {
@@ -1861,19 +1923,17 @@ async function startServer() {
     const textColor = cssHexToAss(styleParams.textColor);
     const strokeColor = cssHexToAss(styleParams.strokeColor);
     
-    let borderStyle = 1; // 1 = Outline + Shadow, 3 = Opaque Box
-    let outlineVal = styleParams.strokeWidth !== undefined ? styleParams.strokeWidth : 1.5;
     let assBgColor = "000000";
     let assBgAlpha = "00"; // fully opaque box by default if hasBg is true
     
-    if (styleParams.hasBg === true) {
-      borderStyle = 3;
-      outlineVal = Math.max(2, Math.round(styleParams.fontSize * 0.15)); // Padding
-      assBgColor = "000000";
-      assBgAlpha = "80"; // 50% opacity box
-    } else if (typeof styleParams.hasBg === "string" && styleParams.hasBg.trim()) {
-      borderStyle = 3;
-      outlineVal = Math.max(2, Math.round(styleParams.fontSize * 0.15));
+    const hasBg = styleParams.hasBg === true || (
+      typeof styleParams.hasBg === "string" && 
+      styleParams.hasBg.trim() && 
+      styleParams.hasBg.trim() !== "transparent" && 
+      styleParams.hasBg.trim() !== "none"
+    );
+
+    if (typeof styleParams.hasBg === "string" && styleParams.hasBg.trim()) {
       const cleanBg = styleParams.hasBg.trim();
       if (cleanBg.startsWith("#")) {
         assBgColor = cssHexToAss(cleanBg);
@@ -1906,8 +1966,9 @@ async function startServer() {
           assBgAlpha = "00"; // fully opaque
         }
       }
-    } else {
-      borderStyle = 1;
+    } else if (styleParams.hasBg === true) {
+      assBgColor = "000000";
+      assBgAlpha = "80"; // 50% opacity box
     }
 
     const marginLR = Math.round(0.07 * refWidth);
@@ -1922,9 +1983,14 @@ async function startServer() {
       alignment = 5;
       marginV = 0;
     } else if (styleParams.position === "custom") {
-      alignment = 2;
-      const pctFromBottom = (100 - styleParams.customPosition) / 100;
-      marginV = Math.round(pctFromBottom * refHeight);
+      alignment = 8; // Top-center alignment allows 1:1 match with top % from frontend
+      marginV = Math.round((styleParams.customPosition / 100) * refHeight);
+    }
+
+    // Determine font weight bold
+    let isBold = 0;
+    if (styleParams.fontName && styleParams.fontName.toLowerCase().includes("bold")) {
+      isBold = -1;
     }
 
     // Header section
@@ -1936,8 +2002,19 @@ WrapStyle: 0
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,${assFont},${styleParams.fontSize},&H00${textColor},&H00000000,&H00${strokeColor},&H${assBgAlpha}${assBgColor},0,0,0,0,100,100,0,0,${borderStyle},${outlineVal.toFixed(1)},0,${alignment},${marginLR},${marginLR},${marginV},1
+`;
 
+    if (hasBg) {
+      // Background box style uses BorderStyle = 3 (Opaque box)
+      // Text and outline are completely transparent (&HFF000000)
+      const bgPadding = Math.max(4, Math.round(styleParams.fontSize * 0.15));
+      out += `Style: BgBox,${assFont},${styleParams.fontSize},&HFF000000,&HFF000000,&HFF000000,&H${assBgAlpha}${assBgColor},${isBold},0,0,0,100,100,0,0,3,${bgPadding.toFixed(1)},0,${alignment},${marginLR},${marginLR},${marginV},1\n`;
+    }
+
+    const defaultOutline = styleParams.strokeWidth !== undefined ? styleParams.strokeWidth : 1.5;
+    out += `Style: Default,${assFont},${styleParams.fontSize},&H00${textColor},&H00000000,&H00${strokeColor},&HFF000000,${isBold},0,0,0,100,100,0,0,1,${defaultOutline.toFixed(1)},0,${alignment},${marginLR},${marginLR},${marginV},1\n`;
+
+    out += `
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 `;
@@ -1949,7 +2026,15 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
       const start = formatAssTime(startSec);
       const end = formatAssTime(startSec + durationSec);
       const text = (sub.text || "").replace(/\\n/g, "\\N").replace(/\n/g, "\\N"); // ASS uses \N for line breaks
-      out += `Dialogue: 0,${start},${end},Default,,0,0,0,,${text}\n`;
+      
+      if (hasBg) {
+        // Output background box on Layer 0
+        out += `Dialogue: 0,${start},${end},BgBox,,0,0,0,,${text}\n`;
+        // Output text on Layer 1
+        out += `Dialogue: 1,${start},${end},Default,,0,0,0,,${text}\n`;
+      } else {
+        out += `Dialogue: 0,${start},${end},Default,,0,0,0,,${text}\n`;
+      }
     }
 
     return out;
@@ -2268,21 +2353,20 @@ To run this application locally and render videos successfully, please:
       let subtitles = subtitleTrack?.items || [];
       if (subtitles.length === 0 && p.shot_plan?.segments) {
         console.log(`[Renderer] Subtitle track was empty, falling back to shot_plan segments (${p.shot_plan.segments.length} items)`);
-        subtitles = p.shot_plan.segments.map((seg: any, idx: number) => {
+        const fallbackSubtitles: any[] = [];
+        p.shot_plan.segments.forEach((seg: any, idx: number) => {
           const startSec = seg.start_sec !== undefined ? seg.start_sec : idx * 5;
           const durationSec = seg.target_duration_sec !== undefined ? seg.target_duration_sec : 5;
-          return {
-            id: `sub_fallback_${idx + 1}`,
-            start_sec: startSec,
-            duration_sec: durationSec,
-            text: seg.narration_text || "",
-            segment_id: seg.id
-          };
+          const splitItems = splitTextIntoTikTokSubtitles(seg.narration_text || "", startSec, durationSec, seg.id, `sub_fallback_${idx + 1}`);
+          fallbackSubtitles.push(...splitItems);
         });
+        subtitles = fallbackSubtitles;
       }
       let finalOutputPath = audioMixedOutput;
+      const pParams = p.params || {};
+      const subtitleEnabledParam = pParams.subtitle_enabled !== undefined ? pParams.subtitle_enabled : (p.subtitle_enabled !== undefined ? p.subtitle_enabled : true);
 
-      if (subtitles.length > 0) {
+      if (subtitles.length > 0 && subtitleEnabledParam) {
         // Write custom fonts.conf for fontconfig / libass
         const fontsConfPath = path.join(cacheDir, `fonts_${taskId}.conf`);
         const fontsConfXml = `<?xml version="1.0"?>
@@ -2299,7 +2383,6 @@ To run this application locally and render videos successfully, please:
         process.env.FONTCONFIG_FILE = fontsConfPath;
         process.env.FONTCONFIG_PATH = cacheDir;
 
-        const pParams = p.params || {};
         const fontNameParam = pParams.font_name || p.font_name || "STHeitiMedium.ttc";
         const fontSizeParam = pParams.font_size || p.font_size || 60;
         const textColorParam = pParams.text_fore_color || p.text_fore_color || "#FFFFFF";
