@@ -1823,8 +1823,7 @@ WrapStyle: 0
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 `;
     if (isRounded) {
-      const bgOutlineVal = Math.max(10, Math.round(styleParams.fontSize * 0.22));
-      out += `Style: BgBox,${assFont},${styleParams.fontSize},&H${assBgAlpha}${assBgColor},&H00000000,&H${assBgAlpha}${assBgColor},&HFF000000,${isBold},0,0,0,100,100,0,0,1,${bgOutlineVal.toFixed(1)},0,${alignment},${marginLR},${marginLR},${marginV},1
+      out += `Style: BgStyle,${assFont},${styleParams.fontSize},&H${assBgAlpha}${assBgColor},&H00000000,&HFF000000,&HFF000000,0,0,0,0,100,100,0,0,1,0,0,5,0,0,0,1
 `;
       const defaultOutline = styleParams.strokeWidth !== void 0 ? styleParams.strokeWidth : 1.5;
       out += `Style: Default,${assFont},${styleParams.fontSize},&H00${textColor},&H00000000,&H00${strokeColor},&HFF000000,${isBold},0,0,0,100,100,0,0,1,${defaultOutline.toFixed(1)},0,${alignment},${marginLR},${marginLR},${marginV},1
@@ -1847,6 +1846,65 @@ Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour,
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 `;
+    const estimateLineWidth = (line, fontSize) => {
+      let width = 0;
+      for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        if (char === " ") {
+          width += 0.25;
+        } else if (/[A-Z]/.test(char)) {
+          width += 0.62;
+        } else if (/[a-z]/.test(char)) {
+          width += 0.46;
+        } else if (/[0-9]/.test(char)) {
+          width += 0.52;
+        } else if (/[áéíóúÁÉÍÓÚñÑüÜ]/.test(char)) {
+          width += 0.48;
+        } else {
+          width += 0.35;
+        }
+      }
+      return width * fontSize;
+    };
+    const getRoundedRectPath = (w, h, r) => {
+      const kappa = 0.5522847498;
+      const halfW = w / 2;
+      const halfH = h / 2;
+      let p = `m ${-halfW + r} ${-halfH} `;
+      p += `l ${halfW - r} ${-halfH} `;
+      const tr_x1 = halfW - r + r * kappa;
+      const tr_y1 = -halfH;
+      const tr_x2 = halfW;
+      const tr_y2 = -halfH + r - r * kappa;
+      const tr_x3 = halfW;
+      const tr_y3 = -halfH + r;
+      p += `b ${tr_x1.toFixed(1)} ${tr_y1.toFixed(1)} ${tr_x2.toFixed(1)} ${tr_y2.toFixed(1)} ${tr_x3.toFixed(1)} ${tr_y3.toFixed(1)} `;
+      p += `l ${halfW} ${halfH - r} `;
+      const br_x1 = halfW;
+      const br_y1 = halfH - r + r * kappa;
+      const br_x2 = halfW - r + r * kappa;
+      const br_y2 = halfH;
+      const br_x3 = halfW - r;
+      const br_y3 = halfH;
+      p += `b ${br_x1.toFixed(1)} ${br_y1.toFixed(1)} ${br_x2.toFixed(1)} ${br_y2.toFixed(1)} ${br_x3.toFixed(1)} ${br_y3.toFixed(1)} `;
+      p += `l ${-halfW + r} ${halfH} `;
+      const bl_x1 = -halfW + r - r * kappa;
+      const bl_y1 = halfH;
+      const bl_x2 = -halfW;
+      const bl_y2 = halfH - r + r * kappa;
+      const bl_x3 = -halfW;
+      const bl_y3 = halfH - r;
+      p += `b ${bl_x1.toFixed(1)} ${bl_y1.toFixed(1)} ${bl_x2.toFixed(1)} ${bl_y2.toFixed(1)} ${bl_x3.toFixed(1)} ${bl_y3.toFixed(1)} `;
+      p += `l ${-halfW} ${-halfH + r} `;
+      const tl_x1 = -halfW;
+      const tl_y1 = -halfH + r - r * kappa;
+      const tl_x2 = -halfW + r - r * kappa;
+      const tl_y2 = -halfH;
+      const tl_x3 = -halfW + r;
+      const tl_y3 = -halfH;
+      p += `b ${tl_x1.toFixed(1)} ${tl_y1.toFixed(1)} ${tl_x2.toFixed(1)} ${tl_y2.toFixed(1)} ${tl_x3.toFixed(1)} ${tl_y3.toFixed(1)}`;
+      return p;
+    };
     for (const sub of subtitles) {
       const startSec = Number(sub.start_sec) || 0;
       const durationSec = Number(sub.duration_sec) || 5;
@@ -1854,7 +1912,29 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
       const end = formatAssTime(startSec + durationSec);
       const text = (sub.text || "").replace(/\\n/g, "\\N").replace(/\n/g, "\\N");
       if (isRounded) {
-        out += `Dialogue: 0,${start},${end},BgBox,,0,0,0,,${text}
+        const lines = text.split(/\\N/);
+        let maxLineWidth = 0;
+        for (const line of lines) {
+          const w = estimateLineWidth(line, styleParams.fontSize);
+          if (w > maxLineWidth) {
+            maxLineWidth = w;
+          }
+        }
+        const paddingX = styleParams.fontSize * 0.55;
+        const paddingY = styleParams.fontSize * 0.25;
+        const boxWidth = maxLineWidth + paddingX;
+        const textHeight = lines.length * styleParams.fontSize * 1.15;
+        const boxHeight = textHeight + paddingY;
+        const radius = Math.min(boxHeight / 2, styleParams.fontSize * 0.35);
+        const centerX = refWidth / 2;
+        let centerY = refHeight - marginV - textHeight / 2;
+        if (alignment === 8) {
+          centerY = marginV + textHeight / 2;
+        } else if (alignment === 5) {
+          centerY = refHeight / 2;
+        }
+        const pathStr = getRoundedRectPath(boxWidth, boxHeight, radius);
+        out += `Dialogue: 0,${start},${end},BgStyle,,0,0,0,,{\\an5\\pos(${centerX},${centerY.toFixed(1)})\\p1}${pathStr}{\\p0}
 `;
         out += `Dialogue: 1,${start},${end},Default,,0,0,0,,${text}
 `;

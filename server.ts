@@ -2024,14 +2024,8 @@ Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour,
 `;
 
     if (isRounded) {
-      // Rounded background is achieved using two layers:
-      // Layer 0 is BgBox (BorderStyle 1, very thick outline using background color for both fill and stroke).
-      // Since it's BorderStyle 1, the outer corners of the merged characters form a smooth rounded corner box.
-      // Layer 1 is Default (BorderStyle 1, normal text color, stroke color, and stroke width, no background box).
-      const bgOutlineVal = Math.max(10, Math.round(styleParams.fontSize * 0.22));
-      
-      // Style 1: BgBox for rounded background
-      out += `Style: BgBox,${assFont},${styleParams.fontSize},&H${assBgAlpha}${assBgColor},&H00000000,&H${assBgAlpha}${assBgColor},&HFF000000,${isBold},0,0,0,100,100,0,0,1,${bgOutlineVal.toFixed(1)},0,${alignment},${marginLR},${marginLR},${marginV},1\n`;
+      // Style 1: BgStyle for the vector drawing (rounded rect)
+      out += `Style: BgStyle,${assFont},${styleParams.fontSize},&H${assBgAlpha}${assBgColor},&H00000000,&HFF000000,&HFF000000,0,0,0,0,100,100,0,0,1,0,0,5,0,0,0,1\n`;
       
       // Style 2: Default for the foreground text
       const defaultOutline = styleParams.strokeWidth !== undefined ? styleParams.strokeWidth : 1.5;
@@ -2058,6 +2052,77 @@ Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour,
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 `;
 
+    // Helper functions for precise size/position estimation
+    const estimateLineWidth = (line: string, fontSize: number): number => {
+      let width = 0;
+      for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        if (char === " ") {
+          width += 0.25;
+        } else if (/[A-Z]/.test(char)) {
+          width += 0.62;
+        } else if (/[a-z]/.test(char)) {
+          width += 0.46;
+        } else if (/[0-9]/.test(char)) {
+          width += 0.52;
+        } else if (/[áéíóúÁÉÍÓÚñÑüÜ]/.test(char)) {
+          width += 0.48;
+        } else {
+          width += 0.35;
+        }
+      }
+      return width * fontSize;
+    };
+
+    const getRoundedRectPath = (w: number, h: number, r: number): string => {
+      const kappa = 0.5522847498;
+      const halfW = w / 2;
+      const halfH = h / 2;
+      
+      let p = `m ${-halfW + r} ${-halfH} `;
+      p += `l ${halfW - r} ${-halfH} `;
+      
+      const tr_x1 = halfW - r + r * kappa;
+      const tr_y1 = -halfH;
+      const tr_x2 = halfW;
+      const tr_y2 = -halfH + r - r * kappa;
+      const tr_x3 = halfW;
+      const tr_y3 = -halfH + r;
+      p += `b ${tr_x1.toFixed(1)} ${tr_y1.toFixed(1)} ${tr_x2.toFixed(1)} ${tr_y2.toFixed(1)} ${tr_x3.toFixed(1)} ${tr_y3.toFixed(1)} `;
+      
+      p += `l ${halfW} ${halfH - r} `;
+      
+      const br_x1 = halfW;
+      const br_y1 = halfH - r + r * kappa;
+      const br_x2 = halfW - r + r * kappa;
+      const br_y2 = halfH;
+      const br_x3 = halfW - r;
+      const br_y3 = halfH;
+      p += `b ${br_x1.toFixed(1)} ${br_y1.toFixed(1)} ${br_x2.toFixed(1)} ${br_y2.toFixed(1)} ${br_x3.toFixed(1)} ${br_y3.toFixed(1)} `;
+      
+      p += `l ${-halfW + r} ${halfH} `;
+      
+      const bl_x1 = -halfW + r - r * kappa;
+      const bl_y1 = halfH;
+      const bl_x2 = -halfW;
+      const bl_y2 = halfH - r + r * kappa;
+      const bl_x3 = -halfW;
+      const bl_y3 = halfH - r;
+      p += `b ${bl_x1.toFixed(1)} ${bl_y1.toFixed(1)} ${bl_x2.toFixed(1)} ${bl_y2.toFixed(1)} ${bl_x3.toFixed(1)} ${bl_y3.toFixed(1)} `;
+      
+      p += `l ${-halfW} ${-halfH + r} `;
+      
+      const tl_x1 = -halfW;
+      const tl_y1 = -halfH + r - r * kappa;
+      const tl_x2 = -halfW + r - r * kappa;
+      const tl_y2 = -halfH;
+      const tl_x3 = -halfW + r;
+      const tl_y3 = -halfH;
+      p += `b ${tl_x1.toFixed(1)} ${tl_y1.toFixed(1)} ${tl_x2.toFixed(1)} ${tl_y2.toFixed(1)} ${tl_x3.toFixed(1)} ${tl_y3.toFixed(1)}`;
+      
+      return p;
+    };
+
     // Dialogue events
     for (const sub of subtitles) {
       const startSec = Number(sub.start_sec) || 0;
@@ -2067,8 +2132,37 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
       const text = (sub.text || "").replace(/\\n/g, "\\N").replace(/\n/g, "\\N"); // ASS uses \N for line breaks
       
       if (isRounded) {
-        // Output background box on Layer 0, then the actual text on Layer 1
-        out += `Dialogue: 0,${start},${end},BgBox,,0,0,0,,${text}\n`;
+        // Calculate the box dimensions
+        const lines = text.split(/\\N/);
+        let maxLineWidth = 0;
+        for (const line of lines) {
+          const w = estimateLineWidth(line, styleParams.fontSize);
+          if (w > maxLineWidth) {
+            maxLineWidth = w;
+          }
+        }
+        
+        const paddingX = styleParams.fontSize * 0.55;
+        const paddingY = styleParams.fontSize * 0.25;
+        const boxWidth = maxLineWidth + paddingX;
+        const textHeight = lines.length * styleParams.fontSize * 1.15;
+        const boxHeight = textHeight + paddingY;
+        const radius = Math.min(boxHeight / 2, styleParams.fontSize * 0.35);
+        
+        // Calculate the center position
+        const centerX = refWidth / 2;
+        let centerY = refHeight - marginV - textHeight / 2;
+        if (alignment === 8) {
+          centerY = marginV + textHeight / 2;
+        } else if (alignment === 5) {
+          centerY = refHeight / 2;
+        }
+        
+        const pathStr = getRoundedRectPath(boxWidth, boxHeight, radius);
+        
+        // Output background box on Layer 0 using BgStyle with vector drawing tags
+        out += `Dialogue: 0,${start},${end},BgStyle,,0,0,0,,{\\an5\\pos(${centerX},${centerY.toFixed(1)})\\p1}${pathStr}{\\p0}\n`;
+        // Output foreground text on Layer 1 using Default style
         out += `Dialogue: 1,${start},${end},Default,,0,0,0,,${text}\n`;
       } else {
         out += `Dialogue: 0,${start},${end},Default,,0,0,0,,${text}\n`;
