@@ -2020,13 +2020,20 @@ WrapStyle: 0
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 `;
 
+    let borderStyle = 1; // 1 = Outline + Shadow, 3 = Opaque Box
+    let outlineVal = styleParams.strokeWidth !== undefined ? styleParams.strokeWidth : 1.5;
+    let assBackColor = "FF000000"; // transparent shadow by default
+    let assOutlineColor = `00${strokeColor}`;
+
     if (hasBg) {
-      const bgPadding = Math.max(4, Math.round(styleParams.fontSize * 0.15));
-      out += `Style: BgBox,${assFont},${styleParams.fontSize},&HFF000000,&HFF000000,&HFF000000,&H${assBgAlpha}${assBgColor},${isBold},0,0,0,100,100,0,0,3,${bgPadding.toFixed(1)},0,${alignment},${marginLR},${marginLR},${marginV},1\n`;
+      borderStyle = 3;
+      outlineVal = Math.max(4, Math.round(styleParams.fontSize * 0.15)); // Padding around text inside box
+      assBackColor = `${assBgAlpha}${assBgColor}`;
+      // Make the outline of the box the same color as the box itself so it doesn't show a weird border line
+      assOutlineColor = `${assBgAlpha}${assBgColor}`;
     }
 
-    const defaultOutline = styleParams.strokeWidth !== undefined ? styleParams.strokeWidth : 1.5;
-    out += `Style: Default,${assFont},${styleParams.fontSize},&H00${textColor},&H00000000,&H00${strokeColor},&HFF000000,${isBold},0,0,0,100,100,0,0,1,${defaultOutline.toFixed(1)},0,${alignment},${marginLR},${marginLR},${marginV},1\n`;
+    out += `Style: Default,${assFont},${styleParams.fontSize},&H00${textColor},&H00000000,&H${assOutlineColor},&H${assBackColor},${isBold},0,0,0,100,100,0,0,${borderStyle},${outlineVal.toFixed(1)},0,${alignment},${marginLR},${marginLR},${marginV},1\n`;
 
     out += `
 [Events]
@@ -2041,14 +2048,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
       const end = formatAssTime(startSec + durationSec);
       const text = (sub.text || "").replace(/\\n/g, "\\N").replace(/\n/g, "\\N"); // ASS uses \N for line breaks
       
-      if (hasBg) {
-        // Output background box on Layer 0
-        out += `Dialogue: 0,${start},${end},BgBox,,0,0,0,,${text}\n`;
-        // Output text on Layer 1
-        out += `Dialogue: 1,${start},${end},Default,,0,0,0,,${text}\n`;
-      } else {
-        out += `Dialogue: 0,${start},${end},Default,,0,0,0,,${text}\n`;
-      }
+      out += `Dialogue: 0,${start},${end},Default,,0,0,0,,${text}\n`;
     }
 
     return out;
