@@ -1916,6 +1916,7 @@ async function startServer() {
       position: string;
       customPosition: number;
       subtitleBgStyle?: string;
+      roundedBackground?: boolean;
     }
   ): string => {
     const refHeight = 1920;
@@ -2003,6 +2004,8 @@ async function startServer() {
       marginV = Math.round((styleParams.customPosition / 100) * refHeight);
     }
 
+    const isRounded = hasBg && styleParams.roundedBackground === true;
+
     // Determine font weight bold
     let isBold = 0;
     if (styleParams.fontName && styleParams.fontName.toLowerCase().includes("bold")) {
@@ -2020,20 +2023,35 @@ WrapStyle: 0
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 `;
 
-    let borderStyle = 1; // 1 = Outline + Shadow, 3 = Opaque Box
-    let outlineVal = styleParams.strokeWidth !== undefined ? styleParams.strokeWidth : 1.5;
-    let assBackColor = "FF000000"; // transparent shadow by default
-    let assOutlineColor = `00${strokeColor}`;
+    if (isRounded) {
+      // Rounded background is achieved using two layers:
+      // Layer 0 is BgBox (BorderStyle 1, very thick outline using background color for both fill and stroke).
+      // Since it's BorderStyle 1, the outer corners of the merged characters form a smooth rounded corner box.
+      // Layer 1 is Default (BorderStyle 1, normal text color, stroke color, and stroke width, no background box).
+      const bgOutlineVal = Math.max(10, Math.round(styleParams.fontSize * 0.22));
+      
+      // Style 1: BgBox for rounded background
+      out += `Style: BgBox,${assFont},${styleParams.fontSize},&H${assBgAlpha}${assBgColor},&H00000000,&H${assBgAlpha}${assBgColor},&HFF000000,${isBold},0,0,0,100,100,0,0,1,${bgOutlineVal.toFixed(1)},0,${alignment},${marginLR},${marginLR},${marginV},1\n`;
+      
+      // Style 2: Default for the foreground text
+      const defaultOutline = styleParams.strokeWidth !== undefined ? styleParams.strokeWidth : 1.5;
+      out += `Style: Default,${assFont},${styleParams.fontSize},&H00${textColor},&H00000000,&H00${strokeColor},&HFF000000,${isBold},0,0,0,100,100,0,0,1,${defaultOutline.toFixed(1)},0,${alignment},${marginLR},${marginLR},${marginV},1\n`;
+    } else {
+      let borderStyle = 1; // 1 = Outline + Shadow, 3 = Opaque Box
+      let outlineVal = styleParams.strokeWidth !== undefined ? styleParams.strokeWidth : 1.5;
+      let assBackColor = "FF000000"; // transparent shadow by default
+      let assOutlineColor = `00${strokeColor}`;
 
-    if (hasBg) {
-      borderStyle = 3;
-      outlineVal = Math.max(4, Math.round(styleParams.fontSize * 0.15)); // Padding around text inside box
-      assBackColor = `${assBgAlpha}${assBgColor}`;
-      // Make the outline of the box the same color as the box itself so it doesn't show a weird border line
-      assOutlineColor = `${assBgAlpha}${assBgColor}`;
+      if (hasBg) {
+        borderStyle = 3;
+        outlineVal = Math.max(4, Math.round(styleParams.fontSize * 0.15)); // Padding around text inside box
+        assBackColor = `${assBgAlpha}${assBgColor}`;
+        // Make the outline of the box the same color as the box itself so it doesn't show a weird border line
+        assOutlineColor = `${assBgAlpha}${assBgColor}`;
+      }
+
+      out += `Style: Default,${assFont},${styleParams.fontSize},&H00${textColor},&H00000000,&H${assOutlineColor},&H${assBackColor},${isBold},0,0,0,100,100,0,0,${borderStyle},${outlineVal.toFixed(1)},0,${alignment},${marginLR},${marginLR},${marginV},1\n`;
     }
-
-    out += `Style: Default,${assFont},${styleParams.fontSize},&H00${textColor},&H00000000,&H${assOutlineColor},&H${assBackColor},${isBold},0,0,0,100,100,0,0,${borderStyle},${outlineVal.toFixed(1)},0,${alignment},${marginLR},${marginLR},${marginV},1\n`;
 
     out += `
 [Events]
@@ -2048,7 +2066,13 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
       const end = formatAssTime(startSec + durationSec);
       const text = (sub.text || "").replace(/\\n/g, "\\N").replace(/\n/g, "\\N"); // ASS uses \N for line breaks
       
-      out += `Dialogue: 0,${start},${end},Default,,0,0,0,,${text}\n`;
+      if (isRounded) {
+        // Output background box on Layer 0, then the actual text on Layer 1
+        out += `Dialogue: 0,${start},${end},BgBox,,0,0,0,,${text}\n`;
+        out += `Dialogue: 1,${start},${end},Default,,0,0,0,,${text}\n`;
+      } else {
+        out += `Dialogue: 0,${start},${end},Default,,0,0,0,,${text}\n`;
+      }
     }
 
     return out;
@@ -2406,6 +2430,7 @@ To run this application locally and render videos successfully, please:
         const subtitlePosParam = pParams.subtitle_position || p.subtitle_position || "bottom";
         const customPosParam = pParams.custom_position !== undefined ? pParams.custom_position : (p.custom_position !== undefined ? p.custom_position : 70);
         const subtitleBgStyleParam = pParams.subtitle_bg_style || p.subtitle_bg_style || "solid";
+        const roundedBgParam = pParams.rounded_subtitle_background !== undefined ? pParams.rounded_subtitle_background : (p.rounded_subtitle_background !== undefined ? p.rounded_subtitle_background : false);
 
         // Generate ASS file with exact styles
         const assFilePath = path.join(cacheDir, `subtitles_${taskId}.ass`);
@@ -2419,6 +2444,7 @@ To run this application locally and render videos successfully, please:
           position: subtitlePosParam,
           customPosition: customPosParam,
           subtitleBgStyle: subtitleBgStyleParam,
+          roundedBackground: roundedBgParam,
         });
         await fs.promises.writeFile(assFilePath, assContent, "utf8");
 
