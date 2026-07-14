@@ -1823,7 +1823,7 @@ WrapStyle: 0
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 `;
     if (isRounded) {
-      out += `Style: BgStyle,${assFont},${styleParams.fontSize},&H${assBgAlpha}${assBgColor},&H00000000,&HFF000000,&HFF000000,0,0,0,0,100,100,0,0,1,0,0,5,0,0,0,1
+      out += `Style: BgStyle,${assFont},${styleParams.fontSize},&H${assBgAlpha}${assBgColor},&H00000000,&HFF000000,&HFF000000,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1
 `;
       const defaultOutline = styleParams.strokeWidth !== void 0 ? styleParams.strokeWidth : 1.5;
       out += `Style: Default,${assFont},${styleParams.fontSize},&H00${textColor},&H00000000,&H00${strokeColor},&HFF000000,${isBold},0,0,0,100,100,0,0,1,${defaultOutline.toFixed(1)},0,${alignment},${marginLR},${marginLR},${marginV},1
@@ -1868,41 +1868,39 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     };
     const getRoundedRectPath = (w, h, r) => {
       const kappa = 0.5522847498;
-      const halfW = w / 2;
-      const halfH = h / 2;
-      let p = `m ${-halfW + r} ${-halfH} `;
-      p += `l ${halfW - r} ${-halfH} `;
-      const tr_x1 = halfW - r + r * kappa;
-      const tr_y1 = -halfH;
-      const tr_x2 = halfW;
-      const tr_y2 = -halfH + r - r * kappa;
-      const tr_x3 = halfW;
-      const tr_y3 = -halfH + r;
-      p += `b ${tr_x1.toFixed(1)} ${tr_y1.toFixed(1)} ${tr_x2.toFixed(1)} ${tr_y2.toFixed(1)} ${tr_x3.toFixed(1)} ${tr_y3.toFixed(1)} `;
-      p += `l ${halfW} ${halfH - r} `;
-      const br_x1 = halfW;
-      const br_y1 = halfH - r + r * kappa;
-      const br_x2 = halfW - r + r * kappa;
-      const br_y2 = halfH;
-      const br_x3 = halfW - r;
-      const br_y3 = halfH;
-      p += `b ${br_x1.toFixed(1)} ${br_y1.toFixed(1)} ${br_x2.toFixed(1)} ${br_y2.toFixed(1)} ${br_x3.toFixed(1)} ${br_y3.toFixed(1)} `;
-      p += `l ${-halfW + r} ${halfH} `;
-      const bl_x1 = -halfW + r - r * kappa;
-      const bl_y1 = halfH;
-      const bl_x2 = -halfW;
-      const bl_y2 = halfH - r + r * kappa;
-      const bl_x3 = -halfW;
-      const bl_y3 = halfH - r;
-      p += `b ${bl_x1.toFixed(1)} ${bl_y1.toFixed(1)} ${bl_x2.toFixed(1)} ${bl_y2.toFixed(1)} ${bl_x3.toFixed(1)} ${bl_y3.toFixed(1)} `;
-      p += `l ${-halfW} ${-halfH + r} `;
-      const tl_x1 = -halfW;
-      const tl_y1 = -halfH + r - r * kappa;
-      const tl_x2 = -halfW + r - r * kappa;
-      const tl_y2 = -halfH;
-      const tl_x3 = -halfW + r;
-      const tl_y3 = -halfH;
-      p += `b ${tl_x1.toFixed(1)} ${tl_y1.toFixed(1)} ${tl_x2.toFixed(1)} ${tl_y2.toFixed(1)} ${tl_x3.toFixed(1)} ${tl_y3.toFixed(1)}`;
+      let p = `m ${Math.round(r)} 0 `;
+      p += `l ${Math.round(w - r)} 0 `;
+      const tr_x1 = Math.round(w - r + r * kappa);
+      const tr_y1 = 0;
+      const tr_x2 = Math.round(w);
+      const tr_y2 = Math.round(r - r * kappa);
+      const tr_x3 = Math.round(w);
+      const tr_y3 = Math.round(r);
+      p += `b ${tr_x1} ${tr_y1} ${tr_x2} ${tr_y2} ${tr_x3} ${tr_y3} `;
+      p += `l ${Math.round(w)} ${Math.round(h - r)} `;
+      const br_x1 = Math.round(w);
+      const br_y1 = Math.round(h - r + r * kappa);
+      const br_x2 = Math.round(w - r + r * kappa);
+      const br_y2 = Math.round(h);
+      const br_x3 = Math.round(w - r);
+      const br_y3 = Math.round(h);
+      p += `b ${br_x1} ${br_y1} ${br_x2} ${br_y2} ${br_x3} ${br_y3} `;
+      p += `l ${Math.round(r)} ${Math.round(h)} `;
+      const bl_x1 = Math.round(r - r * kappa);
+      const bl_y1 = Math.round(h);
+      const bl_x2 = 0;
+      const bl_y2 = Math.round(h - r + r * kappa);
+      const bl_x3 = 0;
+      const bl_y3 = Math.round(h - r);
+      p += `b ${bl_x1} ${bl_y1} ${bl_x2} ${bl_y2} ${bl_x3} ${bl_y3} `;
+      p += `l 0 ${Math.round(r)} `;
+      const tl_x1 = 0;
+      const tl_y1 = Math.round(r - r * kappa);
+      const tl_x2 = Math.round(r - r * kappa);
+      const tl_y2 = 0;
+      const tl_x3 = Math.round(r);
+      const tl_y3 = 0;
+      p += `b ${tl_x1} ${tl_y1} ${tl_x2} ${tl_y2} ${tl_x3} ${tl_y3}`;
       return p;
     };
     for (const sub of subtitles) {
@@ -1934,7 +1932,9 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
           centerY = refHeight / 2;
         }
         const pathStr = getRoundedRectPath(boxWidth, boxHeight, radius);
-        out += `Dialogue: 0,${start},${end},BgStyle,,0,0,0,,{\\an5\\pos(${centerX},${centerY.toFixed(1)})\\p1}${pathStr}{\\p0}
+        const boxX = Math.round(centerX - boxWidth / 2);
+        const boxY = Math.round(centerY - boxHeight / 2);
+        out += `Dialogue: 0,${start},${end},BgStyle,,0,0,0,,{\\an7\\pos(${boxX},${boxY})\\p1}${pathStr}{\\p0}
 `;
         out += `Dialogue: 1,${start},${end},Default,,0,0,0,,{\\an5\\pos(${centerX},${centerY.toFixed(1)})}${text}
 `;
