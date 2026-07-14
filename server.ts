@@ -1550,35 +1550,48 @@ async function startServer() {
     console.log(`[Narration] Synthesizing speech for ${segments.length} segments using language ${tl}...`);
 
     const localPaths: string[] = [];
+    const wavPaths: string[] = [];
     for (let idx = 0; idx < segments.length; idx++) {
       const seg = segments[idx];
       const text = seg.narration_text || "Silencio";
       const destPath = path.join(cacheDir, `narration_chunk_${projectId}_${idx}.mp3`);
+      const wavPath = path.join(cacheDir, `narration_chunk_${projectId}_${idx}.wav`);
       
       try {
         const audioBuffer = await synthesizeSpeech(voice_name, text, tl);
         await fs.promises.writeFile(destPath, audioBuffer);
         localPaths.push(destPath);
+        
+        // Convert MP3 to WAV for precise timing and gapless concatenation
+        await executeCommand(`ffmpeg -y -i "${destPath}" -acodec pcm_s16le -ar 44100 -ac 2 "${wavPath}"`);
+        wavPaths.push(wavPath);
       } catch (err) {
         console.error(`[Narration] Failed to synthesize chunk ${idx}:`, err);
         const fallbackPath = path.join(cacheDir, `narration_chunk_${projectId}_${idx}_fallback.mp3`);
         await executeCommand(`ffmpeg -y -f lavfi -i anullsrc=r=44100:cl=stereo -t 3 "${fallbackPath}"`);
         localPaths.push(fallbackPath);
+        
+        await executeCommand(`ffmpeg -y -i "${fallbackPath}" -acodec pcm_s16le -ar 44100 -ac 2 "${wavPath}"`);
+        wavPaths.push(wavPath);
       }
     }
 
     const concatListPath = path.join(cacheDir, `concat_audio_${projectId}.txt`);
-    const concatContent = localPaths.map(p => `file '${p.replace(/\\/g, "/")}'`).join("\n");
+    const concatContent = wavPaths.map(p => `file '${p.replace(/\\/g, "/")}'`).join("\n");
     await fs.promises.writeFile(concatListPath, concatContent, "utf8");
 
+    const finalWavPath = path.join(cacheDir, `narration_${projectId}_temp.wav`);
+    console.log(`[Narration] Merging ${wavPaths.length} WAV chunks into: ${finalWavPath}`);
+    await executeCommand(`ffmpeg -y -f concat -safe 0 -i "${concatListPath}" -acodec pcm_s16le "${finalWavPath}"`);
+
     const finalAudioPath = path.join(renderDir, `narration_${projectId}.mp3`);
-    console.log(`[Narration] Merging ${localPaths.length} chunks into: ${finalAudioPath}`);
-    await executeCommand(`ffmpeg -y -f concat -safe 0 -i "${concatListPath}" -c copy "${finalAudioPath}"`);
+    console.log(`[Narration] Converting final WAV to MP3: ${finalAudioPath}`);
+    await executeCommand(`ffmpeg -y -i "${finalWavPath}" -codec:a libmp3lame -b:a 192k "${finalAudioPath}"`);
 
     let currentStartSec = 0;
     for (let idx = 0; idx < segments.length; idx++) {
       const seg = segments[idx];
-      const chunkPath = localPaths[idx];
+      const chunkPath = wavPaths[idx]; // Use the WAV path to get a sample-accurate duration
       let duration = 5;
       try {
         const durationStr = await executeCommand(`ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${chunkPath}"`);
