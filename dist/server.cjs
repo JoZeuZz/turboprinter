@@ -1851,17 +1851,17 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
       for (let i = 0; i < line.length; i++) {
         const char = line[i];
         if (char === " ") {
-          width += 0.25;
+          width += 0.3;
         } else if (/[A-Z]/.test(char)) {
-          width += 0.62;
+          width += 0.72;
         } else if (/[a-z]/.test(char)) {
-          width += 0.46;
+          width += 0.54;
         } else if (/[0-9]/.test(char)) {
-          width += 0.52;
+          width += 0.58;
         } else if (/[áéíóúÁÉÍÓÚñÑüÜ]/.test(char)) {
-          width += 0.48;
+          width += 0.54;
         } else {
-          width += 0.35;
+          width += 0.45;
         }
       }
       return width * fontSize;
@@ -1920,8 +1920,8 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             maxLineWidth = w;
           }
         }
-        const paddingX = styleParams.fontSize * 0.55;
-        const paddingY = styleParams.fontSize * 0.25;
+        const paddingX = styleParams.fontSize * 0.75;
+        const paddingY = styleParams.fontSize * 0.35;
         const boxWidth = maxLineWidth + paddingX;
         const textHeight = lines.length * styleParams.fontSize * 1.15;
         const boxHeight = textHeight + paddingY;
@@ -1936,7 +1936,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         const pathStr = getRoundedRectPath(boxWidth, boxHeight, radius);
         out += `Dialogue: 0,${start},${end},BgStyle,,0,0,0,,{\\an5\\pos(${centerX},${centerY.toFixed(1)})\\p1}${pathStr}{\\p0}
 `;
-        out += `Dialogue: 1,${start},${end},Default,,0,0,0,,${text}
+        out += `Dialogue: 1,${start},${end},Default,,0,0,0,,{\\an5\\pos(${centerX},${centerY.toFixed(1)})}${text}
 `;
       } else {
         out += `Dialogue: 0,${start},${end},Default,,0,0,0,,${text}
