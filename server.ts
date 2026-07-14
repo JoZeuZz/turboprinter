@@ -1358,65 +1358,121 @@ async function startServer() {
       return res.status(404).json({ status: 404, message: "Project not found", data: null });
     }
 
-    const apiKey = getPexelsApiKey();
+    const videoSource = req.body.video_source || p.params?.video_source || p.video_source || "pexels";
     let selected: any[] = [];
     let candidates: any[] = [];
 
-    if (apiKey) {
-      console.log(`[Pexels] API Key found! Searching Pexels online...`);
+    if (videoSource === "local") {
+      console.log(`[LocalVideo] Populating timeline media from local storage...`);
+      const localFiles = req.body.local_video_files || p.params?.local_video_files || [];
+      const files = fs.readdirSync(LOCAL_VIDEOS_DIR);
+      const videoExtensions = [".mp4", ".mkv", ".avi", ".mov", ".webm"];
+      const availableLocalFiles = files.filter(f => videoExtensions.includes(path.extname(f).toLowerCase()));
+      const chosenFiles = (localFiles && localFiles.length > 0) ? localFiles : availableLocalFiles;
+
+      const defaultLocalVideos = ["nature_cinematic.mp4", "urban_streets.mp4", "retro_animation.mp4"];
+      const finalChosen = chosenFiles.length > 0 ? chosenFiles : defaultLocalVideos;
+
       const segments = p.shot_plan?.segments || [];
       for (let idx = 0; idx < segments.length; idx++) {
         const seg = segments[idx];
-        const query = seg.search_queries?.[0] || p.topic || "nature";
-        const results = await searchPexelsVideos(query, apiKey);
-        if (results.length > 0) {
-          candidates.push(...results.map((r, i) => ({
-            ...r,
+        const filename = finalChosen[idx % finalChosen.length];
+        
+        // Let's get the real duration of this local video to populate the metadata
+        const fullDiskPath = path.join(LOCAL_VIDEOS_DIR, filename);
+        let durationSec = 15;
+        if (fs.existsSync(fullDiskPath)) {
+          try {
+            const durationStr = await executeCommand(`ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${fullDiskPath}"`);
+            const d = parseFloat(durationStr.trim());
+            if (!isNaN(d) && d > 0) {
+              durationSec = d;
+            }
+          } catch (e) {
+            console.warn(`[LocalVideo] Failed to get duration for ${filename} during search, defaulting to 15s`, e);
+          }
+        }
+
+        const videoData = {
+          id: `${seg.id}_selected`,
+          provider: "local",
+          source_url: `/storage/local_videos/${filename}`,
+          download_url: `/storage/local_videos/${filename}`,
+          thumbnail_url: "/dist/assets/background.jpg",
+          width: 1280,
+          height: 720,
+          duration_sec: durationSec,
+          query: "local",
+          title: filename,
+          segment_id: seg.id
+        };
+
+        selected.push(videoData);
+        candidates.push({
+          ...videoData,
+          id: `${seg.id}_cand_1`,
+          score: 1.0,
+          score_reasons: ["Matches local video selection"]
+        });
+      }
+    } else {
+      const apiKey = getPexelsApiKey();
+      if (apiKey) {
+        console.log(`[Pexels] API Key found! Searching Pexels online...`);
+        const segments = p.shot_plan?.segments || [];
+        for (let idx = 0; idx < segments.length; idx++) {
+          const seg = segments[idx];
+          const query = seg.search_queries?.[0] || p.topic || "nature";
+          const results = await searchPexelsVideos(query, apiKey);
+          if (results.length > 0) {
+            candidates.push(...results.map((r, i) => ({
+              ...r,
+              id: `${seg.id}_cand_${i + 1}`,
+              segment_id: seg.id,
+              score: 1.0 - i * 0.05,
+              score_reasons: [`Matches online search: ${query}`]
+            })));
+
+            selected.push({
+              ...results[0],
+              id: `${seg.id}_selected`,
+              segment_id: seg.id
+            });
+          } else {
+            const videoIndex = idx % SAMPLE_VIDEOS.length;
+            const best = SAMPLE_VIDEOS[videoIndex];
+            selected.push({
+              ...best,
+              id: `${seg.id}_selected`,
+              segment_id: seg.id
+            });
+          }
+        }
+      } else {
+        console.log(`[Pexels] No API Key found, using local semantic matching against SAMPLE_VIDEOS...`);
+        candidates = p.shot_plan?.segments?.flatMap((seg: any) => {
+          return SAMPLE_VIDEOS.map((v, i) => ({
+            ...v,
             id: `${seg.id}_cand_${i + 1}`,
             segment_id: seg.id,
-            score: 1.0 - i * 0.05,
-            score_reasons: [`Matches online search: ${query}`]
-          })));
+            score: 0.9 - i * 0.1,
+            score_reasons: ["Matches query: " + seg.search_queries.join(", ")]
+          }));
+        }) || [];
 
-          selected.push({
-            ...results[0],
-            id: `${seg.id}_selected`,
-            segment_id: seg.id
-          });
-        } else {
-          const videoIndex = idx % SAMPLE_VIDEOS.length;
-          const best = SAMPLE_VIDEOS[videoIndex];
-          selected.push({
+        selected = p.shot_plan?.segments?.map((seg: any, idx: number) => {
+          const queryKeywords = seg.search_queries || [];
+          const match = SAMPLE_VIDEOS.find(v => 
+            queryKeywords.some((q: string) => v.query.toLowerCase().includes(q.toLowerCase()) || v.title.toLowerCase().includes(q.toLowerCase()))
+          );
+          const best = match || SAMPLE_VIDEOS[idx % SAMPLE_VIDEOS.length];
+          return {
             ...best,
             id: `${seg.id}_selected`,
             segment_id: seg.id
-          });
-        }
+          };
+        }) || [];
       }
-    } else {
-      console.log(`[Pexels] No API Key found, using local semantic matching against SAMPLE_VIDEOS...`);
-      candidates = p.shot_plan?.segments?.flatMap((seg: any) => {
-        return SAMPLE_VIDEOS.map((v, i) => ({
-          ...v,
-          id: `${seg.id}_cand_${i + 1}`,
-          segment_id: seg.id,
-          score: 0.9 - i * 0.1,
-          score_reasons: ["Matches query: " + seg.search_queries.join(", ")]
-        }));
-      }) || [];
-
-      selected = p.shot_plan?.segments?.map((seg: any, idx: number) => {
-        const queryKeywords = seg.search_queries || [];
-        const match = SAMPLE_VIDEOS.find(v => 
-          queryKeywords.some((q: string) => v.query.toLowerCase().includes(q.toLowerCase()) || v.title.toLowerCase().includes(q.toLowerCase()))
-        );
-        const best = match || SAMPLE_VIDEOS[idx % SAMPLE_VIDEOS.length];
-        return {
-          ...best,
-          id: `${seg.id}_selected`,
-          segment_id: seg.id
-        };
-      }) || [];
     }
 
     p.media_candidates = candidates;
@@ -2433,6 +2489,18 @@ To run this application locally and render videos successfully, please:
       logTask(taskId, "INFO", "RENDER", "Rendering final video");
       updateTaskState(40, null, null);
 
+      // Get exact duration of a video file via ffprobe
+      const getVideoDuration = async (videoPath: string): Promise<number> => {
+        try {
+          const durationStr = await executeCommand(`ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${videoPath}"`);
+          const d = parseFloat(durationStr.trim());
+          return isNaN(d) ? 0 : d;
+        } catch (err) {
+          console.error(`[getVideoDuration] Failed to probe ${videoPath}:`, err);
+          return 0;
+        }
+      };
+
       // Format clips
       const formattedClips: string[] = [];
       const isLandscape = p.global_visual_style === "landscape" || p.aspect_ratio === "landscape";
@@ -2451,9 +2519,26 @@ To run this application locally and render videos successfully, please:
           const cmd = `ffmpeg -y -f lavfi -i color=c=0x1E1E2E:s=${resWidth}x${resHeight}:d=${duration} -r 25 -pix_fmt yuv420p "${formattedPath}"`;
           await executeCommand(cmd);
         } else {
-          console.log(`[Renderer] Formatting clip ${i}: ${inputPath}`);
-          const cmd = `ffmpeg -y -ss ${start} -t ${duration} -i "${inputPath}" -vf "scale=${resWidth}:${resHeight}:force_original_aspect_ratio=increase,crop=${resWidth}:${resHeight},setsar=1" -r 25 -pix_fmt yuv420p "${formattedPath}"`;
-          await executeCommand(cmd);
+          try {
+            const inputDuration = await getVideoDuration(inputPath);
+            console.log(`[Renderer] Formatting clip ${i}: ${inputPath}, inputDuration: ${inputDuration}, targetDuration: ${duration}`);
+            
+            let loopCmd = "";
+            const neededDuration = start + duration;
+            if (inputDuration > 0 && inputDuration < neededDuration) {
+              const loopCount = Math.ceil(neededDuration / inputDuration);
+              loopCmd = `-stream_loop ${loopCount - 1} `;
+            }
+            
+            // Note: Put -ss and -t after -i for reliable seek/trim when looping is applied
+            const cmd = `ffmpeg -y ${loopCmd}-i "${inputPath}" -ss ${start} -t ${duration} -vf "scale=${resWidth}:${resHeight}:force_original_aspect_ratio=increase,crop=${resWidth}:${resHeight},setsar=1" -r 25 -pix_fmt yuv420p "${formattedPath}"`;
+            await executeCommand(cmd);
+          } catch (err) {
+            console.error(`[Renderer] Failed to format clip ${i} (${inputPath}), falling back to placeholder:`, err);
+            logTask(taskId, "WARNING", "VIDEO_ASSET", `Failed to process local video file: ${path.basename(inputPath)}. Using a colored placeholder instead.`);
+            const cmd = `ffmpeg -y -f lavfi -i color=c=0x1E1E2E:s=${resWidth}x${resHeight}:d=${duration} -r 25 -pix_fmt yuv420p "${formattedPath}"`;
+            await executeCommand(cmd);
+          }
         }
 
         formattedClips.push(formattedPath);
@@ -2476,6 +2561,20 @@ To run this application locally and render videos successfully, please:
       logTask(taskId, "INFO", "AUDIO_MIXER", "Applying audio and subtitles 1/1");
       updateTaskState(80, null, null);
 
+      // Retrieve exact duration of narration audio to trim final render if needed
+      let narrationDuration = 0;
+      if (localNarrationPath && fs.existsSync(localNarrationPath)) {
+        try {
+          const durationStr = await executeCommand(`ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${localNarrationPath}"`);
+          const d = parseFloat(durationStr.trim());
+          if (!isNaN(d) && d > 0) {
+            narrationDuration = d;
+          }
+        } catch (e) {
+          console.error("[Renderer] Failed to get narration duration:", e);
+        }
+      }
+
       // Mix Audio
       const audioMixedOutput = path.join(cacheDir, `audio_mixed_${taskId}.mp4`);
       let audioFilter = "";
@@ -2495,10 +2594,11 @@ To run this application locally and render videos successfully, please:
       }
 
       let mixCmd = "";
+      const limitDurationOpt = narrationDuration > 0 ? `-t ${narrationDuration}` : "";
       if (audioFilter) {
-        mixCmd = `ffmpeg -y -i "${concatOutput}" ${audioInputs.join(" ")} -filter_complex "${audioFilter}" -map 0:v -map "[a]" -c:v copy -c:a aac "${audioMixedOutput}"`;
+        mixCmd = `ffmpeg -y -i "${concatOutput}" ${audioInputs.join(" ")} -filter_complex "${audioFilter}" -map 0:v -map "[a]" -c:v copy -c:a aac ${limitDurationOpt} "${audioMixedOutput}"`;
       } else {
-        mixCmd = `ffmpeg -y -i "${concatOutput}" -f lavfi -i anullsrc=r=44100:cl=stereo -c:v copy -c:a aac -shortest "${audioMixedOutput}"`;
+        mixCmd = `ffmpeg -y -i "${concatOutput}" -f lavfi -i anullsrc=r=44100:cl=stereo -c:v copy -c:a aac -shortest ${limitDurationOpt} "${audioMixedOutput}"`;
       }
       await executeCommand(mixCmd);
       updateTaskState(90, null, null);
