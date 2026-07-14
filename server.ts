@@ -2004,15 +2004,17 @@ WrapStyle: 0
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 `;
 
+    let borderStyle = 1; // 1 = Outline + Shadow, 3 = Opaque Box
+    let outlineVal = styleParams.strokeWidth !== undefined ? styleParams.strokeWidth : 1.5;
+    let assBackColor = "FF000000"; // transparent shadow by default
+
     if (hasBg) {
-      // Background box style uses BorderStyle = 3 (Opaque box)
-      // Text and outline are completely transparent (&HFF000000)
-      const bgPadding = Math.max(4, Math.round(styleParams.fontSize * 0.15));
-      out += `Style: BgBox,${assFont},${styleParams.fontSize},&HFF000000,&HFF000000,&HFF000000,&H${assBgAlpha}${assBgColor},${isBold},0,0,0,100,100,0,0,3,${bgPadding.toFixed(1)},0,${alignment},${marginLR},${marginLR},${marginV},1\n`;
+      borderStyle = 3;
+      outlineVal = Math.max(4, Math.round(styleParams.fontSize * 0.15)); // Padding around text inside box
+      assBackColor = `${assBgAlpha}${assBgColor}`;
     }
 
-    const defaultOutline = styleParams.strokeWidth !== undefined ? styleParams.strokeWidth : 1.5;
-    out += `Style: Default,${assFont},${styleParams.fontSize},&H00${textColor},&H00000000,&H00${strokeColor},&HFF000000,${isBold},0,0,0,100,100,0,0,1,${defaultOutline.toFixed(1)},0,${alignment},${marginLR},${marginLR},${marginV},1\n`;
+    out += `Style: Default,${assFont},${styleParams.fontSize},&H00${textColor},&H00000000,&H00${strokeColor},&H${assBackColor},${isBold},0,0,0,100,100,0,0,${borderStyle},${outlineVal.toFixed(1)},0,${alignment},${marginLR},${marginLR},${marginV},1\n`;
 
     out += `
 [Events]
@@ -2027,14 +2029,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
       const end = formatAssTime(startSec + durationSec);
       const text = (sub.text || "").replace(/\\n/g, "\\N").replace(/\n/g, "\\N"); // ASS uses \N for line breaks
       
-      if (hasBg) {
-        // Output background box on Layer 0
-        out += `Dialogue: 0,${start},${end},BgBox,,0,0,0,,${text}\n`;
-        // Output text on Layer 1
-        out += `Dialogue: 1,${start},${end},Default,,0,0,0,,${text}\n`;
-      } else {
-        out += `Dialogue: 0,${start},${end},Default,,0,0,0,,${text}\n`;
-      }
+      out += `Dialogue: 0,${start},${end},Default,,0,0,0,,${text}\n`;
     }
 
     return out;
