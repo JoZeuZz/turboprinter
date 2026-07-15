@@ -2602,6 +2602,161 @@ To run this application locally and render videos successfully, please:
         throw new Error("Project not found");
       }
 
+      // Dynamic rebuild of local video tracks if isLocalSource is true
+      const isLocalSource = (p.params?.video_source === "local" || p.video_source === "local" || (p.selected_media && p.selected_media[0]?.provider === "local"));
+      if (isLocalSource) {
+        const uniqueFiles: any[] = [];
+        const seen = new Set();
+        const chosenLocalFiles = p.params?.local_video_files || [];
+        console.log(`[Render Rebuild] Rebuilding local video track. chosenLocalFiles:`, chosenLocalFiles);
+
+        if (chosenLocalFiles.length > 0) {
+          for (const filename of chosenLocalFiles) {
+            const existingMed = (p.selected_media || []).find((m: any) => path.basename(m.source_url || m.asset_url || "") === filename);
+            if (existingMed) {
+              if (!seen.has(existingMed.source_url)) {
+                seen.add(existingMed.source_url);
+                if (!existingMed.local_path) {
+                  existingMed.local_path = `storage/local_videos/${filename}`;
+                }
+                uniqueFiles.push(existingMed);
+              }
+            } else {
+              const sourceUrl = `/storage/local_videos/${filename}`;
+              if (!seen.has(sourceUrl)) {
+                seen.add(sourceUrl);
+                const fullDiskPath = path.join(LOCAL_VIDEOS_DIR, filename);
+                let durationSec = 15;
+                if (fs.existsSync(fullDiskPath)) {
+                  try {
+                    const durationStr = await executeCommand(`ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${fullDiskPath}"`);
+                    const d = parseFloat(durationStr.trim());
+                    if (!isNaN(d) && d > 0) {
+                      durationSec = d;
+                    }
+                  } catch (e) {
+                    console.warn(`[Render Rebuild] Failed to get duration for ${filename}, defaulting to 15s`, e);
+                  }
+                }
+                uniqueFiles.push({
+                  id: `${filename}_custom`,
+                  provider: "local",
+                  source_url: sourceUrl,
+                  download_url: sourceUrl,
+                  thumbnail_url: "/dist/assets/background.jpg",
+                  duration_sec: durationSec,
+                  local_path: `storage/local_videos/${filename}`
+                });
+              }
+            }
+          }
+        } else if (p.selected_media && p.selected_media.length > 0) {
+          for (const med of p.selected_media) {
+            if (med.source_url && !seen.has(med.source_url)) {
+              seen.add(med.source_url);
+              uniqueFiles.push(med);
+            }
+          }
+        }
+
+        if (uniqueFiles.length === 0) {
+          try {
+            const files = fs.readdirSync(LOCAL_VIDEOS_DIR);
+            const videoExtensions = [".mp4", ".mkv", ".avi", ".mov", ".webm"];
+            const availableLocalFiles = files.filter(f => videoExtensions.includes(path.extname(f).toLowerCase()));
+            const chosenFiles = availableLocalFiles.length > 0 ? availableLocalFiles : ["nature_cinematic.mp4", "urban_streets.mp4", "retro_animation.mp4"];
+            
+            for (const filename of chosenFiles) {
+              const sourceUrl = `/storage/local_videos/${filename}`;
+              if (!seen.has(sourceUrl)) {
+                seen.add(sourceUrl);
+                uniqueFiles.push({
+                  id: `${filename}_fallback`,
+                  provider: "local",
+                  source_url: sourceUrl,
+                  download_url: sourceUrl,
+                  thumbnail_url: "/dist/assets/background.jpg",
+                  duration_sec: 15,
+                  local_path: `storage/local_videos/${filename}`
+                });
+              }
+            }
+          } catch (e) {
+            console.error("[Render Rebuild] Failed to read fallback local videos:", e);
+          }
+        }
+
+        const defaultLocalVideos = ["nature_cinematic.mp4", "urban_streets.mp4", "retro_animation.mp4"];
+        try {
+          const filesOnDisk = fs.readdirSync(LOCAL_VIDEOS_DIR);
+          const videoExtensions = [".mp4", ".mkv", ".avi", ".mov", ".webm"];
+          const diskFiles = filesOnDisk.filter(f => videoExtensions.includes(path.extname(f).toLowerCase()));
+          const hasCustomFilesOnDisk = diskFiles.some(f => !defaultLocalVideos.includes(f));
+          
+          if (hasCustomFilesOnDisk && chosenLocalFiles.length === 0) {
+            const filteredUnique = uniqueFiles.filter(med => {
+              const filename = path.basename(med.source_url || med.asset_url || "");
+              return !defaultLocalVideos.includes(filename);
+            });
+            
+            if (filteredUnique.length > 0) {
+              uniqueFiles.length = 0;
+              uniqueFiles.push(...filteredUnique);
+            }
+          }
+        } catch (err) {
+          console.error("[Render Rebuild] Failed to filter uniqueFiles against disk:", err);
+        }
+
+        const audioTrack = p.tracks?.find((tr: any) => tr.type === "audio");
+        const audioItems = audioTrack?.items || [];
+        const totalDurationSec = audioItems.reduce((acc: number, item: any) => Math.max(acc, Number(item.start_sec) + Number(item.duration_sec)), 0) || 15;
+
+        console.log(`[Render Rebuild] Rebuilding continuous local video track from ${uniqueFiles.length} files for duration ${totalDurationSec}s`);
+
+        let currentStartSec = 0;
+        let itemId = 1;
+        const videoItems = [];
+        while (currentStartSec < totalDurationSec) {
+          const medIndex = (itemId - 1) % uniqueFiles.length;
+          const med = uniqueFiles[medIndex];
+          const rawDuration = Number(med.duration_sec);
+          const fullDuration = (isNaN(rawDuration) || rawDuration <= 0) ? 15 : rawDuration;
+          const usedDuration = Math.min(fullDuration, totalDurationSec - currentStartSec);
+
+          videoItems.push({
+            id: `item_${itemId}`,
+            media_id: med.id,
+            local_path: med.local_path,
+            asset_url: med.source_url,
+            thumbnail_url: med.thumbnail_url || "/dist/assets/background.jpg",
+            source_url: med.source_url,
+            start_sec: currentStartSec,
+            duration_sec: usedDuration,
+            trim_start_sec: 0,
+            trim_end_sec: usedDuration,
+            segment_id: null,
+            provider: "local"
+          });
+
+          currentStartSec += usedDuration;
+          itemId++;
+        }
+
+        const existingVideoTrack = p.tracks?.find((tr: any) => tr.type === "video");
+        if (existingVideoTrack) {
+          existingVideoTrack.items = videoItems;
+        } else {
+          if (!p.tracks) p.tracks = [];
+          p.tracks.push({
+            id: `track_video_${Date.now()}`,
+            type: "video",
+            items: videoItems
+          });
+        }
+        projects.set(projectId, p);
+      }
+
       const videoTrack = p.tracks?.find((tr: any) => tr.type === "video");
       const subtitleTrack = p.tracks?.find((tr: any) => tr.type === "subtitle");
       
@@ -2710,16 +2865,25 @@ To run this application locally and render videos successfully, please:
           continue;
         }
 
-        // Support local relative/absolute URLs or disk paths directly
-        if (url.startsWith("/") || !url.includes("://")) {
-          const cleanLocalPath = url.startsWith("/") ? url.slice(1) : url;
+        const isLocalUrl = url.startsWith("/") || !url.includes("://") || url.includes("/storage/local_videos/") || url.includes("/local_videos/");
+        if (isLocalUrl) {
+          const cleanUrl = url.split("?")[0];
+          const filename = path.basename(cleanUrl);
+          
+          // Try diskPath 1 (relative to cwd)
+          let cleanLocalPath = cleanUrl.startsWith("/") ? cleanUrl.slice(1) : cleanUrl;
+          if (url.includes("/storage/local_videos/")) {
+            cleanLocalPath = `storage/local_videos/${filename}`;
+          } else if (url.includes("/local_videos/")) {
+            cleanLocalPath = `local_videos/${filename}`;
+          }
           const diskPath = path.join(process.cwd(), cleanLocalPath);
           if (fs.existsSync(diskPath)) {
             localVideoPaths.push(diskPath);
             continue;
           }
-          // Fallback: look for the filename directly in the active LOCAL_VIDEOS_DIR
-          const filename = path.basename(url);
+
+          // Try diskPath 2 (fallback directly in LOCAL_VIDEOS_DIR)
           const fallbackPath = path.join(LOCAL_VIDEOS_DIR, filename);
           if (fs.existsSync(fallbackPath)) {
             localVideoPaths.push(fallbackPath);
