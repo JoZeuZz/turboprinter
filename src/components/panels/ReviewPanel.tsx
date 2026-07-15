@@ -19,13 +19,15 @@ import { useProjectStore } from "../../store/useProjectStore";
 import { useProjectWorkspaceStore } from "../../store/useProjectWorkspaceStore";
 import { useConfigStore } from "../../store/useConfigStore";
 import { useVideoStore } from "../../store/useVideoStore";
-import type { TimelineItem, EditCommand } from "../../api/types";
+import { videoApi } from "../../api/video";
+import type { TimelineItem, EditCommand, BgmFile } from "../../api/types";
 
 export function ReviewPanel() {
   const { t } = useTranslation();
   const projectStore = useProjectStore();
   const { setPanel, videoUrls } = useProjectWorkspaceStore();
   const { config } = useConfigStore();
+  const videoStore = useVideoStore();
 
   const isYoutubeLinked = !!config?.settings?.youtube?.is_linked;
   const youtubeChannel = config?.settings?.youtube?.channel_name || "";
@@ -39,6 +41,14 @@ export function ReviewPanel() {
   const [orderedClips, setOrderedClips] = useState<TimelineItem[]>(sourceClips);
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
   const [previewClip, setPreviewClip] = useState<TimelineItem | null>(null);
+  const [bgmFiles, setBgmFiles] = useState<BgmFile[]>([]);
+
+  // Load BGMs
+  useEffect(() => {
+    videoApi.getBgmList().then((res) => {
+      setBgmFiles(res.files);
+    });
+  }, []);
 
   // Sync orderedClips when project loads
   useEffect(() => {
@@ -239,13 +249,95 @@ export function ReviewPanel() {
 
   return (
     <div className="flex h-full w-full max-w-5xl mx-auto flex-col gap-4 px-6 py-5">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-1">
         <div>
           <h2 className="text-sm font-semibold text-foreground">{t("panels.review.reviewClips")}</h2>
           <p className="text-xs text-muted mt-0.5">
             {orderedClips.length} clips · ~{totalDuration.toFixed(0)}s total
             {excluded.size > 0 && ` · ${excluded.size} excluded`}
           </p>
+        </div>
+
+        {/* BGM Quick Control Widget */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 bg-surface-2/60 border border-border/60 px-4 py-2.5 rounded-xl text-xs w-full sm:w-auto">
+          <div className="flex items-center gap-2 select-none py-1">
+            <input
+              type="checkbox"
+              id="bgm-enabled-review"
+              className="h-4 w-4 rounded border-border bg-surface-3 text-accent focus:ring-accent accent-accent cursor-pointer"
+              checked={videoStore.bgm_type !== "none" && (videoStore.bgm_type !== "file" || videoStore.bgm_file !== "")}
+              onChange={(e) => {
+                const checked = e.target.checked;
+                if (checked) {
+                  if (videoStore.bgm_file) {
+                    videoStore.set("bgm_type", "file");
+                  } else {
+                    videoStore.set("bgm_type", "random");
+                  }
+                } else {
+                  videoStore.set("bgm_type", "none");
+                }
+              }}
+            />
+            <label htmlFor="bgm-enabled-review" className="font-semibold text-foreground cursor-pointer whitespace-nowrap">
+              🎵 Música de Fondo
+            </label>
+          </div>
+
+          {(videoStore.bgm_type !== "none" && (videoStore.bgm_type !== "file" || videoStore.bgm_file !== "")) && (
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
+              <div className="flex items-center gap-1.5">
+                <span className="text-muted text-[11px] font-medium">Tema:</span>
+                <select
+                  value={
+                    videoStore.bgm_file === "" && videoStore.bgm_type === "random"
+                      ? "random"
+                      : videoStore.bgm_type === "contextual"
+                      ? "contextual"
+                      : (videoStore.bgm_file ?? "")
+                  }
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === "random") {
+                      videoStore.set("bgm_type", "random");
+                      videoStore.set("bgm_file", "");
+                    } else if (val === "contextual") {
+                      videoStore.set("bgm_type", "contextual");
+                      videoStore.set("bgm_file", "");
+                    } else {
+                      videoStore.set("bgm_type", "file");
+                      videoStore.set("bgm_file", val);
+                    }
+                  }}
+                  className="h-8 rounded-lg border border-border bg-surface-3 px-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-accent max-w-[180px] truncate cursor-pointer"
+                >
+                  <option value="random">🎲 Aleatoria</option>
+                  <option value="contextual">✨ Contextual (IA)</option>
+                  {bgmFiles.map((f) => (
+                    <option key={f.file} value={f.file}>
+                      🎵 {f.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex items-center gap-2 min-w-[120px] max-w-[160px]">
+                <span className="text-muted text-[11px] font-medium">Vol:</span>
+                <input
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  value={videoStore.bgm_volume ?? 0.2}
+                  onChange={(e) => videoStore.set("bgm_volume", parseFloat(e.target.value))}
+                  className="w-full h-1 rounded-full appearance-none bg-border cursor-pointer accent-accent"
+                />
+                <span className="text-[10px] text-foreground font-semibold min-w-[20px] text-right">
+                  {Math.round((videoStore.bgm_volume ?? 0.2) * 100)}%
+                </span>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
