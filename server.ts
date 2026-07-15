@@ -1527,27 +1527,7 @@ async function startServer() {
       return res.status(404).json({ status: 404, message: "Project not found", data: null });
     }
 
-    // Build timeline tracks
-    const videoItems = (p.selected_media || []).map((med: any, idx: number) => {
-      const seg = p.shot_plan?.segments?.find((s: any) => s.id === med.segment_id);
-      const startSec = seg ? seg.start_sec : idx * 5;
-      const durationSec = seg ? seg.target_duration_sec : 5;
-      return {
-        id: `item_${idx + 1}`,
-        media_id: med.id,
-        local_path: med.local_path,
-        asset_url: med.source_url,
-        thumbnail_url: med.thumbnail_url,
-        source_url: med.source_url,
-        start_sec: startSec,
-        duration_sec: durationSec,
-        trim_start_sec: 0,
-        trim_end_sec: durationSec,
-        segment_id: med.segment_id,
-        provider: med.provider
-      };
-    });
-
+    // Build audio items first to determine total duration
     const audioItems = (p.shot_plan?.segments || []).map((seg: any, idx: number) => {
       const startSec = seg.start_sec !== undefined ? seg.start_sec : idx * 5;
       const durationSec = seg.target_duration_sec !== undefined ? seg.target_duration_sec : 5;
@@ -1560,6 +1540,78 @@ async function startServer() {
         asset_url: p.narration_audio_path || null
       };
     });
+
+    const totalDurationSec = audioItems.reduce((acc: number, item: any) => Math.max(acc, item.start_sec + item.duration_sec), 0) || 15;
+
+    // Build timeline video tracks
+    let videoItems = [];
+    const isLocalSource = (p.params?.video_source === "local" || p.video_source === "local" || (p.selected_media && p.selected_media[0]?.provider === "local"));
+
+    if (isLocalSource && p.selected_media && p.selected_media.length > 0) {
+      const uniqueFiles = Array.from(new Set(p.selected_media.map((med: any) => med.source_url)));
+      const firstMedia = p.selected_media[0];
+      const firstMediaDuration = Number(firstMedia.duration_sec) || 0;
+
+      // Consolidate into a single continuous item if only 1 unique video is chosen, or if the first video is long enough
+      if (uniqueFiles.length === 1 || firstMediaDuration >= totalDurationSec) {
+        console.log(`[Timeline] Consolidating local video into a single continuous item of duration ${totalDurationSec}s`);
+        videoItems = [{
+          id: "item_1",
+          media_id: firstMedia.id,
+          local_path: firstMedia.local_path,
+          asset_url: firstMedia.source_url,
+          thumbnail_url: firstMedia.thumbnail_url || "/dist/assets/background.jpg",
+          source_url: firstMedia.source_url,
+          start_sec: 0,
+          duration_sec: totalDurationSec,
+          trim_start_sec: 0,
+          trim_end_sec: totalDurationSec,
+          segment_id: firstMedia.segment_id,
+          provider: "local"
+        }];
+      } else {
+        // Map segment by segment
+        videoItems = p.selected_media.map((med: any, idx: number) => {
+          const seg = p.shot_plan?.segments?.find((s: any) => s.id === med.segment_id);
+          const startSec = seg ? seg.start_sec : idx * 5;
+          const durationSec = seg ? seg.target_duration_sec : 5;
+          return {
+            id: `item_${idx + 1}`,
+            media_id: med.id,
+            local_path: med.local_path,
+            asset_url: med.source_url,
+            thumbnail_url: med.thumbnail_url,
+            source_url: med.source_url,
+            start_sec: startSec,
+            duration_sec: durationSec,
+            trim_start_sec: 0,
+            trim_end_sec: durationSec,
+            segment_id: med.segment_id,
+            provider: med.provider
+          };
+        });
+      }
+    } else {
+      videoItems = (p.selected_media || []).map((med: any, idx: number) => {
+        const seg = p.shot_plan?.segments?.find((s: any) => s.id === med.segment_id);
+        const startSec = seg ? seg.start_sec : idx * 5;
+        const durationSec = seg ? seg.target_duration_sec : 5;
+        return {
+          id: `item_${idx + 1}`,
+          media_id: med.id,
+          local_path: med.local_path,
+          asset_url: med.source_url,
+          thumbnail_url: med.thumbnail_url,
+          source_url: med.source_url,
+          start_sec: startSec,
+          duration_sec: durationSec,
+          trim_start_sec: 0,
+          trim_end_sec: durationSec,
+          segment_id: med.segment_id,
+          provider: med.provider
+        };
+      });
+    }
 
     const subtitleItems: any[] = [];
     (p.shot_plan?.segments || []).forEach((seg: any, idx: number) => {
@@ -2458,6 +2510,22 @@ To run this application locally and render videos successfully, please:
           if (fs.existsSync(fallbackPath)) {
             localVideoPaths.push(fallbackPath);
             continue;
+          }
+
+          // Robust safety net fallback: use any existing local video file if the chosen one is missing
+          try {
+            const availableFiles = fs.readdirSync(LOCAL_VIDEOS_DIR).filter(f => 
+              [".mp4", ".mkv", ".avi", ".mov", ".webm"].includes(path.extname(f).toLowerCase())
+            );
+            if (availableFiles.length > 0) {
+              const safeFallbackPath = path.join(LOCAL_VIDEOS_DIR, availableFiles[0]);
+              console.log(`[Renderer] Selected file ${filename} missing. Falling back to available file: ${availableFiles[0]}`);
+              logTask(taskId, "WARNING", "VIDEO_ASSET", `El archivo local "${filename}" no fue encontrado. Usando archivo "${availableFiles[0]}" como respaldo.`);
+              localVideoPaths.push(safeFallbackPath);
+              continue;
+            }
+          } catch (e) {
+            console.error("[Renderer] Failed to list fallback local videos:", e);
           }
         }
 
