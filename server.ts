@@ -1863,7 +1863,14 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
       videoItems = [];
 
       const segments = p.shot_plan?.segments || [];
-      console.log(`[Timeline] Building continuous non-local video track. Clip duration setting: ${clipDuration}s. Total segments: ${segments.length}. Total duration: ${totalDurationSec}s`);
+      console.log(`[Timeline] Building continuous non-local video track with complete asset uniqueness. Clip duration setting: ${clipDuration}s. Total segments: ${segments.length}. Total duration: ${totalDurationSec}s`);
+
+      // Enforce complete asset uniqueness across the entire project
+      const usedAssetKeys = new Set<string>();
+      const getAssetKey = (media: any): string => {
+        if (!media) return "";
+        return String(media.download_url || media.source_url || media.asset_url || media.local_path || media.id || "");
+      };
 
       let currentStartSec = 0;
       while (currentStartSec < totalDurationSec) {
@@ -1878,25 +1885,79 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
           return clipMidpoint >= sStart && clipMidpoint <= sEnd;
         }) || segments[segments.length - 1];
 
-        // Find the candidates and primary selected media for this active segment
+        // 1. Get candidates for this active segment
         const segCandidates = (p.media_candidates || []).filter((c: any) => c.segment_id === activeSeg.id);
-        const primaryMedia = (p.selected_media || []).find((m: any) => m.segment_id === activeSeg.id) || segCandidates[0] || SAMPLE_VIDEOS[(activeSeg.order || 1) % SAMPLE_VIDEOS.length];
+        
+        // 2. Get primary selected media for this active segment
+        const primaryMedia = (p.selected_media || []).find((m: any) => m.segment_id === activeSeg.id);
 
-        // To make the video track dynamic and rich, try to select a candidate if the last selected item used the exact same video
-        let mediaToUse = primaryMedia;
-        if (videoItems.length > 0 && videoItems[videoItems.length - 1].media_id === primaryMedia.id && segCandidates.length > 1) {
-          const otherCandidate = segCandidates.find((c: any) => c.id !== primaryMedia.id);
-          if (otherCandidate) {
-            mediaToUse = otherCandidate;
+        let mediaToUse: any = null;
+
+        // Priority A: Unused primary media for the active segment
+        if (primaryMedia) {
+          const key = getAssetKey(primaryMedia);
+          if (key && !usedAssetKeys.has(key)) {
+            mediaToUse = primaryMedia;
           }
         }
 
-        // Smart trimming: Calculate trim_start_sec sequentially if reusing the same media
-        let trimStart = 0;
-        if (videoItems.length > 0 && videoItems[videoItems.length - 1].media_id === mediaToUse.id) {
-          const prevItem = videoItems[videoItems.length - 1];
-          trimStart = prevItem.trim_end_sec % (Number(mediaToUse.duration_sec) || 15);
+        // Priority B: An unused candidate from the current active segment
+        if (!mediaToUse && segCandidates.length > 0) {
+          for (const cand of segCandidates) {
+            const key = getAssetKey(cand);
+            if (key && !usedAssetKeys.has(key)) {
+              mediaToUse = cand;
+              break;
+            }
+          }
         }
+
+        // Priority C: An unused primary media from ANY segment in the project
+        if (!mediaToUse) {
+          for (const m of (p.selected_media || [])) {
+            const key = getAssetKey(m);
+            if (key && !usedAssetKeys.has(key)) {
+              mediaToUse = m;
+              break;
+            }
+          }
+        }
+
+        // Priority D: An unused candidate from ANY other segment in the project
+        if (!mediaToUse) {
+          for (const cand of (p.media_candidates || [])) {
+            const key = getAssetKey(cand);
+            if (key && !usedAssetKeys.has(key)) {
+              mediaToUse = cand;
+              break;
+            }
+          }
+        }
+
+        // Priority E: An unused video from SAMPLE_VIDEOS
+        if (!mediaToUse) {
+          for (const v of SAMPLE_VIDEOS) {
+            const key = getAssetKey(v);
+            if (key && !usedAssetKeys.has(key)) {
+              mediaToUse = v;
+              break;
+            }
+          }
+        }
+
+        // Priority F: Full fallback (cycle if absolutely no unique assets remain)
+        if (!mediaToUse) {
+          mediaToUse = primaryMedia || segCandidates[0] || SAMPLE_VIDEOS[(activeSeg.order || 1) % SAMPLE_VIDEOS.length];
+        }
+
+        // Track that this asset is now in use
+        const chosenKey = getAssetKey(mediaToUse);
+        if (chosenKey) {
+          usedAssetKeys.add(chosenKey);
+        }
+
+        // Fresh unique asset, start trimming from 0
+        const trimStart = 0;
 
         videoItems.push({
           id: `item_${itemId}`,

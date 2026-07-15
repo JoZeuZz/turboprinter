@@ -1708,7 +1708,12 @@ No incluyas explicaciones, marcas de c\xF3digo markdown, ni texto adicional, sol
       let itemId = 1;
       videoItems = [];
       const segments = p.shot_plan?.segments || [];
-      console.log(`[Timeline] Building continuous non-local video track. Clip duration setting: ${clipDuration}s. Total segments: ${segments.length}. Total duration: ${totalDurationSec}s`);
+      console.log(`[Timeline] Building continuous non-local video track with complete asset uniqueness. Clip duration setting: ${clipDuration}s. Total segments: ${segments.length}. Total duration: ${totalDurationSec}s`);
+      const usedAssetKeys = /* @__PURE__ */ new Set();
+      const getAssetKey = (media) => {
+        if (!media) return "";
+        return String(media.download_url || media.source_url || media.asset_url || media.local_path || media.id || "");
+      };
       let currentStartSec = 0;
       while (currentStartSec < totalDurationSec) {
         const remaining = totalDurationSec - currentStartSec;
@@ -1720,19 +1725,58 @@ No incluyas explicaciones, marcas de c\xF3digo markdown, ni texto adicional, sol
           return clipMidpoint >= sStart && clipMidpoint <= sEnd;
         }) || segments[segments.length - 1];
         const segCandidates = (p.media_candidates || []).filter((c) => c.segment_id === activeSeg.id);
-        const primaryMedia = (p.selected_media || []).find((m) => m.segment_id === activeSeg.id) || segCandidates[0] || SAMPLE_VIDEOS[(activeSeg.order || 1) % SAMPLE_VIDEOS.length];
-        let mediaToUse = primaryMedia;
-        if (videoItems.length > 0 && videoItems[videoItems.length - 1].media_id === primaryMedia.id && segCandidates.length > 1) {
-          const otherCandidate = segCandidates.find((c) => c.id !== primaryMedia.id);
-          if (otherCandidate) {
-            mediaToUse = otherCandidate;
+        const primaryMedia = (p.selected_media || []).find((m) => m.segment_id === activeSeg.id);
+        let mediaToUse = null;
+        if (primaryMedia) {
+          const key = getAssetKey(primaryMedia);
+          if (key && !usedAssetKeys.has(key)) {
+            mediaToUse = primaryMedia;
           }
         }
-        let trimStart = 0;
-        if (videoItems.length > 0 && videoItems[videoItems.length - 1].media_id === mediaToUse.id) {
-          const prevItem = videoItems[videoItems.length - 1];
-          trimStart = prevItem.trim_end_sec % (Number(mediaToUse.duration_sec) || 15);
+        if (!mediaToUse && segCandidates.length > 0) {
+          for (const cand of segCandidates) {
+            const key = getAssetKey(cand);
+            if (key && !usedAssetKeys.has(key)) {
+              mediaToUse = cand;
+              break;
+            }
+          }
         }
+        if (!mediaToUse) {
+          for (const m of p.selected_media || []) {
+            const key = getAssetKey(m);
+            if (key && !usedAssetKeys.has(key)) {
+              mediaToUse = m;
+              break;
+            }
+          }
+        }
+        if (!mediaToUse) {
+          for (const cand of p.media_candidates || []) {
+            const key = getAssetKey(cand);
+            if (key && !usedAssetKeys.has(key)) {
+              mediaToUse = cand;
+              break;
+            }
+          }
+        }
+        if (!mediaToUse) {
+          for (const v of SAMPLE_VIDEOS) {
+            const key = getAssetKey(v);
+            if (key && !usedAssetKeys.has(key)) {
+              mediaToUse = v;
+              break;
+            }
+          }
+        }
+        if (!mediaToUse) {
+          mediaToUse = primaryMedia || segCandidates[0] || SAMPLE_VIDEOS[(activeSeg.order || 1) % SAMPLE_VIDEOS.length];
+        }
+        const chosenKey = getAssetKey(mediaToUse);
+        if (chosenKey) {
+          usedAssetKeys.add(chosenKey);
+        }
+        const trimStart = 0;
         videoItems.push({
           id: `item_${itemId}`,
           media_id: mediaToUse.id || `item_media_${itemId}`,
