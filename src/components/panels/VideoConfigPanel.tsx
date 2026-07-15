@@ -607,7 +607,7 @@ export function VideoConfigPanel() {
           <Button
             variant="ghost"
             size="lg"
-            onClick={() => workspaceStore.setPanel("review")}
+            onClick={() => workspaceStore.setPanel("done")}
           >
             <Eye className="mr-2 h-4 w-4" />
             {t("panels.videoConfig.backToReview")}

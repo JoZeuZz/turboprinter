@@ -153,7 +153,7 @@
       "subtitleBackground": "Fondo de subtítulos",
       "backgroundColor": "Color de fondo",
       "generate": "Generar video",
-      "backToReview": "Volver a revisión"
+      "backToReview": "Ver video final"
     },
     "review": {
       "notAvailable": "Revisión no disponible — renderizando directamente",
@@ -283,6 +283,7 @@
     "previewEmpty": "Selecciona un clip para previsualizar",
     "notAvailable": "Editor no disponible — el modo de proyecto está deshabilitado o no es compatible con este servidor.",
     "backToReview": "← Volver a Revisión",
+    "backToConfig": "← Volver a Configuración",
     "render": "Renderizar ▶"
   },
   "subtitles": {

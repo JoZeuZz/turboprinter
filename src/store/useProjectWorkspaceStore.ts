@@ -74,12 +74,12 @@ export const useProjectWorkspaceStore = create<WorkspaceStoreState>()(
             set({ taskStatus: status });
           });
 
-          console.log("[WorkspaceStore] pollTask resolved successfully. Transitioning to 'review'...");
+          console.log("[WorkspaceStore] pollTask resolved successfully. Transitioning to 'done'...");
           set((state) => {
             const status = state.taskStatus;
             const urls = finalVideoUrls(status);
             console.log("[WorkspaceStore] Final videos found for review:", urls);
-            return { panel: "review", videoUrls: urls };
+            return { panel: "done", videoUrls: urls };
           });
         } catch (e) {
           console.error("[WorkspaceStore] generateVideo failed during async lifecycle!", e);

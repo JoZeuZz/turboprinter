@@ -69,7 +69,7 @@ export function Workspace() {
         if (videoUrls.length > 0) {
           useProjectWorkspaceStore.setState({
             videoUrls: [...new Set(videoUrls)],
-            panel: "review",
+            panel: "done",
           });
         } else {
           setPanel(state.has_timeline ? "editor" : "script");

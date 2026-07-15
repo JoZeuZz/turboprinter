@@ -153,7 +153,7 @@
       "subtitleBackground": "Subtitle background",
       "backgroundColor": "Background Color",
       "generate": "Generate Video",
-      "backToReview": "Back to review"
+      "backToReview": "View final video"
     },
     "review": {
       "notAvailable": "Review not available — rendering directly",
@@ -283,6 +283,7 @@
     "previewEmpty": "Select a clip to preview",
     "notAvailable": "Editor not available — project mode is disabled or not supported by this server.",
     "backToReview": "← Back to Review",
+    "backToConfig": "← Back to Configuration",
     "render": "Render ▶"
   },
   "subtitles": {

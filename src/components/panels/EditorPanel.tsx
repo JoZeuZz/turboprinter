@@ -150,8 +150,8 @@ export function EditorPanel() {
 
       {/* Footer actions */}
       <div className="flex items-center justify-between border-t border-border px-4 py-2">
-        <Button variant="ghost" size="sm" onClick={() => setPanel("review")}>
-          {t("editor.backToReview")}
+        <Button variant="ghost" size="sm" onClick={() => setPanel("config")}>
+          {t("editor.backToConfig") || "← Volver a Configuración"}
         </Button>
         <Button size="sm" onClick={handleRender}>
           {t("editor.render")}
