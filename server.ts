@@ -221,6 +221,23 @@ async function generateGeminiContent(prompt: string, jsonMode = false): Promise<
   }
 }
 
+function sanitizeFolderName(name: string): string {
+  return name
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9_]/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .substring(0, 40) || "project";
+}
+
+function getFormattedDateTime(): string {
+  const d = new Date();
+  const pad = (n: number) => n.toString().padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_${pad(d.getHours())}-${pad(d.getMinutes())}-${pad(d.getSeconds())}`;
+}
+
 // Persistent Project Database helper
 const PROJECTS_FILE = path.join(process.cwd(), "storage", "projects_db.json");
 
@@ -1752,8 +1769,16 @@ async function startServer() {
       tl = "es";
     }
 
-    const cacheDir = path.join(process.cwd(), "storage", "cache");
-    const renderDir = path.join(process.cwd(), "storage", "renders");
+    // Ensure we have a project_folder_name
+    if (!p.project_folder_name) {
+      const folderName = `${sanitizeFolderName(p.topic || p.project_id || 'project')}_${getFormattedDateTime()}`;
+      p.project_folder_name = folderName;
+      projects.set(projectId, p);
+    }
+
+    const projectFolder = path.join(process.cwd(), "storage", "renders", p.project_folder_name);
+    const cacheDir = path.join(projectFolder, "cache");
+    const renderDir = projectFolder;
     await fs.promises.mkdir(cacheDir, { recursive: true });
     await fs.promises.mkdir(renderDir, { recursive: true });
 
@@ -1844,7 +1869,7 @@ async function startServer() {
     }
 
     p.shot_plan.segments = segments;
-    p.narration_audio_path = `/storage/renders/narration_${projectId}.mp3`;
+    p.narration_audio_path = `/storage/renders/${p.project_folder_name}/narration_${projectId}.mp3`;
     p.updated_at = new Date().toISOString();
 
     let subtitlePath: string | null = null;
@@ -1859,7 +1884,7 @@ async function startServer() {
       const srtContent = generateSrt(splitCuesForSrt);
       const srtPath = path.join(renderDir, `subtitles_${projectId}.srt`);
       await fs.promises.writeFile(srtPath, srtContent, "utf8");
-      subtitlePath = `/storage/renders/subtitles_${projectId}.srt`;
+      subtitlePath = `/storage/renders/${p.project_folder_name}/subtitles_${projectId}.srt`;
       p.subtitle_path = subtitlePath;
     }
 
@@ -2632,8 +2657,16 @@ To run this application locally and render videos successfully, please:
         throw new Error("No video clips in the timeline to render.");
       }
 
-      const cacheDir = path.join(process.cwd(), "storage", "cache");
-      const renderDir = path.join(process.cwd(), "storage", "renders");
+      // Ensure we have a project_folder_name
+      if (!p.project_folder_name) {
+        const folderName = `${sanitizeFolderName(p.topic || p.project_id || 'project')}_${getFormattedDateTime()}`;
+        p.project_folder_name = folderName;
+        projects.set(projectId, p);
+      }
+
+      const projectFolder = path.join(process.cwd(), "storage", "renders", p.project_folder_name);
+      const cacheDir = path.join(projectFolder, "cache");
+      const renderDir = projectFolder;
       await fs.promises.mkdir(cacheDir, { recursive: true });
       await fs.promises.mkdir(renderDir, { recursive: true });
 
@@ -2968,7 +3001,7 @@ To run this application locally and render videos successfully, please:
         fs.promises.unlink(audioMixedOutput).catch(() => {});
       }
 
-      const finalUrl = `/storage/renders/render_${projectId}.mp4`;
+      const finalUrl = `/storage/renders/${p.project_folder_name}/render_${projectId}.mp4`;
       logTask(taskId, "SUCCESS", "RENDER", `Compression and rendering complete. Output file generated at: ${finalUrl}`);
       logTask(taskId, "SUCCESS", "SYSTEM", `Task ${taskId} completed successfully!`);
 

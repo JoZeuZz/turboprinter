@@ -230,6 +230,14 @@ async function generateGeminiContent(prompt, jsonMode = false) {
     throw err;
   }
 }
+function sanitizeFolderName(name) {
+  return name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9_]/g, "_").replace(/_+/g, "_").replace(/^_+|_+$/g, "").substring(0, 40) || "project";
+}
+function getFormattedDateTime() {
+  const d = /* @__PURE__ */ new Date();
+  const pad = (n) => n.toString().padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_${pad(d.getHours())}-${pad(d.getMinutes())}-${pad(d.getSeconds())}`;
+}
 var PROJECTS_FILE = import_path.default.join(process.cwd(), "storage", "projects_db.json");
 function loadProjects() {
   try {
@@ -1632,8 +1640,14 @@ ${body}`;
     } else if (voiceNameLower.includes("es-") || voiceNameLower.includes("mx-") || voiceNameLower.includes("alvaro") || voiceNameLower.includes("elvira") || voiceNameLower.includes("dalia") || voiceNameLower.includes("jorge")) {
       tl = "es";
     }
-    const cacheDir = import_path.default.join(process.cwd(), "storage", "cache");
-    const renderDir = import_path.default.join(process.cwd(), "storage", "renders");
+    if (!p.project_folder_name) {
+      const folderName = `${sanitizeFolderName(p.topic || p.project_id || "project")}_${getFormattedDateTime()}`;
+      p.project_folder_name = folderName;
+      projects.set(projectId, p);
+    }
+    const projectFolder = import_path.default.join(process.cwd(), "storage", "renders", p.project_folder_name);
+    const cacheDir = import_path.default.join(projectFolder, "cache");
+    const renderDir = projectFolder;
     await import_fs.default.promises.mkdir(cacheDir, { recursive: true });
     await import_fs.default.promises.mkdir(renderDir, { recursive: true });
     let segments = p.shot_plan?.segments || [];
@@ -1704,7 +1718,7 @@ ${body}`;
       currentStartSec += duration;
     }
     p.shot_plan.segments = segments;
-    p.narration_audio_path = `/storage/renders/narration_${projectId}.mp3`;
+    p.narration_audio_path = `/storage/renders/${p.project_folder_name}/narration_${projectId}.mp3`;
     p.updated_at = (/* @__PURE__ */ new Date()).toISOString();
     let subtitlePath = null;
     if (subtitle_enabled) {
@@ -1718,7 +1732,7 @@ ${body}`;
       const srtContent = generateSrt(splitCuesForSrt);
       const srtPath = import_path.default.join(renderDir, `subtitles_${projectId}.srt`);
       await import_fs.default.promises.writeFile(srtPath, srtContent, "utf8");
-      subtitlePath = `/storage/renders/subtitles_${projectId}.srt`;
+      subtitlePath = `/storage/renders/${p.project_folder_name}/subtitles_${projectId}.srt`;
       p.subtitle_path = subtitlePath;
     }
     const audioItems = (p.shot_plan?.segments || []).map((seg, idx) => {
@@ -2345,8 +2359,14 @@ To run this application locally and render videos successfully, please:
       if (clips.length === 0) {
         throw new Error("No video clips in the timeline to render.");
       }
-      const cacheDir = import_path.default.join(process.cwd(), "storage", "cache");
-      const renderDir = import_path.default.join(process.cwd(), "storage", "renders");
+      if (!p.project_folder_name) {
+        const folderName = `${sanitizeFolderName(p.topic || p.project_id || "project")}_${getFormattedDateTime()}`;
+        p.project_folder_name = folderName;
+        projects.set(projectId, p);
+      }
+      const projectFolder = import_path.default.join(process.cwd(), "storage", "renders", p.project_folder_name);
+      const cacheDir = import_path.default.join(projectFolder, "cache");
+      const renderDir = projectFolder;
       await import_fs.default.promises.mkdir(cacheDir, { recursive: true });
       await import_fs.default.promises.mkdir(renderDir, { recursive: true });
       logTask(taskId, "INFO", "SUBTITLES", "Generating subtitles");
@@ -2626,7 +2646,7 @@ To run this application locally and render videos successfully, please:
         import_fs.default.promises.unlink(audioMixedOutput).catch(() => {
         });
       }
-      const finalUrl = `/storage/renders/render_${projectId}.mp4`;
+      const finalUrl = `/storage/renders/${p.project_folder_name}/render_${projectId}.mp4`;
       logTask(taskId, "SUCCESS", "RENDER", `Compression and rendering complete. Output file generated at: ${finalUrl}`);
       logTask(taskId, "SUCCESS", "SYSTEM", `Task ${taskId} completed successfully!`);
       p.videos = [finalUrl];
