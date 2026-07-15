@@ -1342,9 +1342,9 @@ No incluyas explicaciones, marcas de c\xF3digo markdown, ni texto adicional, sol
     if (keys && keys.length > 0) return keys[0];
     return null;
   };
-  const searchPexelsVideos = async (query, apiKey) => {
+  const searchPexelsVideos = async (query, apiKey, orientation = "portrait") => {
     try {
-      const url = `https://api.pexels.com/videos/search?query=${encodeURIComponent(query)}&per_page=15&orientation=portrait`;
+      const url = `https://api.pexels.com/videos/search?query=${encodeURIComponent(query)}&per_page=15&orientation=${orientation}`;
       const res = await fetch(url, {
         headers: {
           "Authorization": apiKey
@@ -1452,6 +1452,7 @@ No incluyas explicaciones, marcas de c\xF3digo markdown, ni texto adicional, sol
       const orientation = reqOrientation === "landscape" || reqOrientation === "portrait" || reqOrientation === "square" ? reqOrientation : "portrait";
       if (apiKey) {
         console.log(`[Pexels] API Key found! Searching Pexels online with orientation "${orientation}"...`);
+        const usedVideoIds = /* @__PURE__ */ new Set();
         const segments = p.shot_plan?.segments || [];
         for (let idx = 0; idx < segments.length; idx++) {
           const seg = segments[idx];
@@ -1475,15 +1476,38 @@ No incluyas explicaciones, marcas de c\xF3digo markdown, ni texto adicional, sol
               score: 1 - i * 0.05,
               score_reasons: [`Matches online search: ${successfulQuery}`]
             })));
+            let selectedVideo = results[0];
+            for (const r of results) {
+              const videoId = r.id || r.source_url || r.download_url;
+              if (videoId && !usedVideoIds.has(String(videoId))) {
+                selectedVideo = r;
+                break;
+              }
+            }
+            const chosenId = selectedVideo.id || selectedVideo.source_url || selectedVideo.download_url;
+            if (chosenId) {
+              usedVideoIds.add(String(chosenId));
+            }
             selected.push({
-              ...results[0],
+              ...selectedVideo,
               id: `${seg.id}_selected`,
               segment_id: seg.id
             });
           } else {
             console.log(`[Pexels] Segment ${seg.id} search failed for all queries. Falling back to sample video.`);
-            const videoIndex = idx % SAMPLE_VIDEOS.length;
-            const best = SAMPLE_VIDEOS[videoIndex];
+            let best = SAMPLE_VIDEOS[idx % SAMPLE_VIDEOS.length];
+            for (let i = 0; i < SAMPLE_VIDEOS.length; i++) {
+              const candidate = SAMPLE_VIDEOS[(idx + i) % SAMPLE_VIDEOS.length];
+              const candId = candidate.id || candidate.source_url;
+              if (candId && !usedVideoIds.has(String(candId))) {
+                best = candidate;
+                break;
+              }
+            }
+            const chosenId = best.id || best.source_url;
+            if (chosenId) {
+              usedVideoIds.add(String(chosenId));
+            }
             selected.push({
               ...best,
               id: `${seg.id}_selected`,
@@ -1493,6 +1517,7 @@ No incluyas explicaciones, marcas de c\xF3digo markdown, ni texto adicional, sol
         }
       } else {
         console.log(`[Pexels] No API Key found, using local semantic matching against SAMPLE_VIDEOS...`);
+        const usedVideoIds = /* @__PURE__ */ new Set();
         candidates = p.shot_plan?.segments?.flatMap((seg) => {
           return SAMPLE_VIDEOS.map((v, i) => ({
             ...v,
@@ -1504,10 +1529,17 @@ No incluyas explicaciones, marcas de c\xF3digo markdown, ni texto adicional, sol
         }) || [];
         selected = p.shot_plan?.segments?.map((seg, idx) => {
           const queryKeywords = seg.search_queries || [];
-          const match = SAMPLE_VIDEOS.find(
+          const matches = SAMPLE_VIDEOS.filter(
             (v) => queryKeywords.some((q) => v.query.toLowerCase().includes(q.toLowerCase()) || v.title.toLowerCase().includes(q.toLowerCase()))
           );
-          const best = match || SAMPLE_VIDEOS[idx % SAMPLE_VIDEOS.length];
+          let best = matches.find((m) => !usedVideoIds.has(m.id || m.source_url)) || matches[0];
+          if (!best) {
+            best = SAMPLE_VIDEOS.find((v) => !usedVideoIds.has(v.id || v.source_url)) || SAMPLE_VIDEOS[idx % SAMPLE_VIDEOS.length];
+          }
+          const chosenId = best.id || best.source_url;
+          if (chosenId) {
+            usedVideoIds.add(String(chosenId));
+          }
           return {
             ...best,
             id: `${seg.id}_selected`,
@@ -1676,42 +1708,47 @@ No incluyas explicaciones, marcas de c\xF3digo markdown, ni texto adicional, sol
       let itemId = 1;
       videoItems = [];
       const segments = p.shot_plan?.segments || [];
-      console.log(`[Timeline] Building non-local video track. Clip duration setting: ${clipDuration}s. Total segments: ${segments.length}`);
-      for (let idx = 0; idx < segments.length; idx++) {
-        const seg = segments[idx];
-        const segStart = seg.start_sec !== void 0 ? seg.start_sec : idx * 5;
-        const segDuration = seg.target_duration_sec !== void 0 ? seg.target_duration_sec : 5;
-        const segCandidates = (p.media_candidates || []).filter((c) => c.segment_id === seg.id);
-        const primaryMedia = (p.selected_media || []).find((m) => m.segment_id === seg.id) || segCandidates[0] || SAMPLE_VIDEOS[idx % SAMPLE_VIDEOS.length];
-        let currentOffset = 0;
-        let candidateIdx = 0;
-        console.log(`[Timeline] Segment ${seg.id} duration: ${segDuration}s. Primary media id: ${primaryMedia.id}. Total candidates: ${segCandidates.length}`);
-        while (currentOffset < segDuration) {
-          const remaining = segDuration - currentOffset;
-          const usedDuration = Math.min(clipDuration, remaining);
-          let mediaToUse = primaryMedia;
-          if (currentOffset > 0 && segCandidates.length > 0) {
-            mediaToUse = segCandidates[candidateIdx % segCandidates.length];
-            candidateIdx++;
+      console.log(`[Timeline] Building continuous non-local video track. Clip duration setting: ${clipDuration}s. Total segments: ${segments.length}. Total duration: ${totalDurationSec}s`);
+      let currentStartSec = 0;
+      while (currentStartSec < totalDurationSec) {
+        const remaining = totalDurationSec - currentStartSec;
+        const usedDuration = Math.min(clipDuration, remaining);
+        const clipMidpoint = currentStartSec + usedDuration / 2;
+        const activeSeg = segments.find((s) => {
+          const sStart = s.start_sec !== void 0 ? s.start_sec : 0;
+          const sEnd = s.end_sec !== void 0 ? s.end_sec : sStart + (s.target_duration_sec || 5);
+          return clipMidpoint >= sStart && clipMidpoint <= sEnd;
+        }) || segments[segments.length - 1];
+        const segCandidates = (p.media_candidates || []).filter((c) => c.segment_id === activeSeg.id);
+        const primaryMedia = (p.selected_media || []).find((m) => m.segment_id === activeSeg.id) || segCandidates[0] || SAMPLE_VIDEOS[(activeSeg.order || 1) % SAMPLE_VIDEOS.length];
+        let mediaToUse = primaryMedia;
+        if (videoItems.length > 0 && videoItems[videoItems.length - 1].media_id === primaryMedia.id && segCandidates.length > 1) {
+          const otherCandidate = segCandidates.find((c) => c.id !== primaryMedia.id);
+          if (otherCandidate) {
+            mediaToUse = otherCandidate;
           }
-          const trimStart = mediaToUse.id === primaryMedia.id ? currentOffset % (Number(mediaToUse.duration_sec) || 15) : 0;
-          videoItems.push({
-            id: `item_${itemId}`,
-            media_id: mediaToUse.id || `item_media_${itemId}`,
-            local_path: mediaToUse.local_path,
-            asset_url: mediaToUse.source_url || mediaToUse.asset_url,
-            thumbnail_url: mediaToUse.thumbnail_url,
-            source_url: mediaToUse.source_url || mediaToUse.asset_url,
-            start_sec: segStart + currentOffset,
-            duration_sec: usedDuration,
-            trim_start_sec: trimStart,
-            trim_end_sec: trimStart + usedDuration,
-            segment_id: seg.id,
-            provider: mediaToUse.provider || "pexels"
-          });
-          currentOffset += usedDuration;
-          itemId++;
         }
+        let trimStart = 0;
+        if (videoItems.length > 0 && videoItems[videoItems.length - 1].media_id === mediaToUse.id) {
+          const prevItem = videoItems[videoItems.length - 1];
+          trimStart = prevItem.trim_end_sec % (Number(mediaToUse.duration_sec) || 15);
+        }
+        videoItems.push({
+          id: `item_${itemId}`,
+          media_id: mediaToUse.id || `item_media_${itemId}`,
+          local_path: mediaToUse.local_path,
+          asset_url: mediaToUse.source_url || mediaToUse.asset_url,
+          thumbnail_url: mediaToUse.thumbnail_url,
+          source_url: mediaToUse.source_url || mediaToUse.asset_url,
+          start_sec: currentStartSec,
+          duration_sec: usedDuration,
+          trim_start_sec: trimStart,
+          trim_end_sec: trimStart + usedDuration,
+          segment_id: activeSeg.id,
+          provider: mediaToUse.provider || "pexels"
+        });
+        currentStartSec += usedDuration;
+        itemId++;
       }
     }
     const subtitleItems = [];
