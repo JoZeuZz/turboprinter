@@ -215,6 +215,8 @@ export interface PlanRequest {
 export interface MediaSearchRequest {
   orientation?: string | null;
   prefer_local?: boolean;
+  video_source?: string;
+  local_video_files?: string[];
 }
 
 export interface TimelineBuildRequest {

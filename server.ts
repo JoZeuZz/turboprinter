@@ -6,6 +6,7 @@ import { createServer as createViteServer } from "vite";
 import WebSocket from "ws";
 import crypto from "crypto";
 import { GoogleGenAI } from "@google/genai";
+import multer from "multer";
 
 // Load .env variables manually if they exist
 try {
@@ -29,10 +30,23 @@ try {
 }
 
 // Ensure local_videos directory exists and is populated with dummy files if empty
-const LOCAL_VIDEOS_DIR = path.join(process.cwd(), "storage", "local_videos");
-if (!fs.existsSync(LOCAL_VIDEOS_DIR)) {
+let LOCAL_VIDEOS_DIR = path.join(process.cwd(), "storage", "local_videos");
+if (fs.existsSync(path.join(process.cwd(), "local_videos"))) {
+  LOCAL_VIDEOS_DIR = path.join(process.cwd(), "local_videos");
+} else if (!fs.existsSync(LOCAL_VIDEOS_DIR)) {
   fs.mkdirSync(LOCAL_VIDEOS_DIR, { recursive: true });
 }
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, LOCAL_VIDEOS_DIR);
+  },
+  filename: (req, file, cb) => {
+    const safeName = path.basename(file.originalname);
+    cb(null, safeName);
+  }
+});
+const upload = multer({ storage });
 
 // Populate sample local videos if empty
 const defaultLocalVideos = ["nature_cinematic.mp4", "urban_streets.mp4", "retro_animation.mp4"];
@@ -674,6 +688,25 @@ async function startServer() {
           };
         });
       res.json({ status: 200, message: "ok", data: { files: videoFiles } });
+    } catch (err: any) {
+      res.status(500).json({ status: 500, message: err.message, data: null });
+    }
+  }));
+
+  app.post("/api/v1/local-videos/upload", upload.single("video"), wrap(async (req: any, res: any) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ status: 400, message: "No video file provided", data: null });
+      }
+      res.json({
+        status: 200,
+        message: "File uploaded successfully",
+        data: {
+          name: req.file.filename,
+          size: req.file.size,
+          path: `storage/local_videos/${req.file.filename}`
+        }
+      });
     } catch (err: any) {
       res.status(500).json({ status: 500, message: err.message, data: null });
     }
@@ -2419,6 +2452,13 @@ To run this application locally and render videos successfully, please:
             localVideoPaths.push(diskPath);
             continue;
           }
+          // Fallback: look for the filename directly in the active LOCAL_VIDEOS_DIR
+          const filename = path.basename(url);
+          const fallbackPath = path.join(LOCAL_VIDEOS_DIR, filename);
+          if (fs.existsSync(fallbackPath)) {
+            localVideoPaths.push(fallbackPath);
+            continue;
+          }
         }
 
         const cleanUrl = url.split("?")[0];
@@ -2527,11 +2567,11 @@ To run this application locally and render videos successfully, please:
             const neededDuration = start + duration;
             if (inputDuration > 0 && inputDuration < neededDuration) {
               const loopCount = Math.ceil(neededDuration / inputDuration);
-              loopCmd = `-stream_loop ${loopCount - 1} `;
+              loopCmd = `-stream_loop ${loopCount - 1}`;
             }
             
             // Note: Put -ss and -t after -i for reliable seek/trim when looping is applied
-            const cmd = `ffmpeg -y ${loopCmd}-i "${inputPath}" -ss ${start} -t ${duration} -vf "scale=${resWidth}:${resHeight}:force_original_aspect_ratio=increase,crop=${resWidth}:${resHeight},setsar=1" -r 25 -pix_fmt yuv420p "${formattedPath}"`;
+            const cmd = `ffmpeg -y ${loopCmd ? loopCmd + " " : ""}-i "${inputPath}" -ss ${start} -t ${duration} -vf "scale=${resWidth}:${resHeight}:force_original_aspect_ratio=increase,crop=${resWidth}:${resHeight},setsar=1" -r 25 -pix_fmt yuv420p "${formattedPath}"`;
             await executeCommand(cmd);
           } catch (err) {
             console.error(`[Renderer] Failed to format clip ${i} (${inputPath}), falling back to placeholder:`, err);
@@ -2757,6 +2797,9 @@ To run this application locally and render videos successfully, please:
     // Redirect asset fetch to online resource
     res.redirect("https://videos.pexels.com/video-files/3248319/3248319-hd_1920_1080_25fps.mp4");
   }));
+
+  // Serve local videos from whatever folder is active (either root local_videos or storage/local_videos)
+  app.use("/storage/local_videos", express.static(LOCAL_VIDEOS_DIR));
 
   // Serve storage directory statically
   app.use("/storage", express.static(path.join(process.cwd(), "storage")));

@@ -16,7 +16,11 @@ export function VideoSettingsPanel() {
   const [loadingLocalVideos, setLoadingLocalVideos] = useState(false);
   const [localVideosError, setLocalVideosError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const [uploading, setUploading] = useState(false);
+  const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  const fetchLocalVideos = () => {
     setLoadingLocalVideos(true);
     setLocalVideosError(null);
     videoApi
@@ -31,7 +35,36 @@ export function VideoSettingsPanel() {
       .finally(() => {
         setLoadingLocalVideos(false);
       });
+  };
+
+  useEffect(() => {
+    fetchLocalVideos();
   }, [t]);
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    setUploadError(null);
+    setUploadSuccess(null);
+
+    try {
+      const res = await videoApi.uploadLocalVideo(file);
+      setUploadSuccess(`${file.name} subido con éxito!`);
+      // Select the uploaded file
+      const current = store.local_video_files ?? [];
+      if (!current.includes(res.name)) {
+        store.set("local_video_files", [...current, res.name]);
+      }
+      fetchLocalVideos();
+    } catch (err: any) {
+      console.error("Upload failed:", err);
+      setUploadError(err.message || "Error al subir el video");
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const ASPECT_OPTIONS = [
     { value: "9:16", label: t("videoSettings.aspectPortrait") },
@@ -98,6 +131,39 @@ export function VideoSettingsPanel() {
                 {t("videoSettings.localVideosDeselectAll")}
               </button>
             </div>
+          )}
+        </div>
+
+        {/* Upload Button */}
+        <div className="flex flex-col gap-1.5 pt-1">
+          <label className="relative flex flex-col items-center justify-center border border-dashed border-border hover:border-accent bg-background hover:bg-surface/50 rounded-md p-3 cursor-pointer group transition-colors">
+            <input
+              type="file"
+              accept="video/*"
+              onChange={handleUpload}
+              disabled={uploading || store.video_source !== "local"}
+              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
+            />
+            <div className="flex items-center gap-2 text-xs text-muted group-hover:text-foreground">
+              {uploading ? (
+                <span className="animate-spin text-accent">⌛</span>
+              ) : (
+                <span className="text-accent text-sm">＋</span>
+              )}
+              <span className="font-medium">
+                {uploading ? "Subiendo..." : "Subir video desde mi PC (.mp4, etc.)"}
+              </span>
+            </div>
+          </label>
+          {uploadSuccess && (
+            <p className="text-[11px] text-green-400 font-medium text-center">
+              ✓ {uploadSuccess}
+            </p>
+          )}
+          {uploadError && (
+            <p className="text-[11px] text-red-400 font-medium text-center">
+              ⚠ {uploadError}
+            </p>
           )}
         </div>
 

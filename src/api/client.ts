@@ -17,9 +17,11 @@ export async function apiFetch<T>(
   path: string,
   options?: RequestInit
 ): Promise<T> {
+  const isFormData = options?.body instanceof FormData;
+  const headers: Record<string, string> = isFormData ? {} : { "Content-Type": "application/json" };
   const response = await fetch(`${API_BASE}${path}`, {
     headers: {
-      "Content-Type": "application/json",
+      ...headers,
       ...options?.headers,
     },
     ...options,
@@ -41,9 +43,11 @@ export async function apiBlobFetch(
   path: string,
   options?: RequestInit
 ): Promise<Blob> {
+  const isFormData = options?.body instanceof FormData;
+  const headers: Record<string, string> = isFormData ? {} : { "Content-Type": "application/json" };
   const response = await fetch(`${API_BASE}${path}`, {
     headers: {
-      "Content-Type": "application/json",
+      ...headers,
       ...options?.headers,
     },
     ...options,

@@ -31,6 +31,7 @@ var import_vite = require("vite");
 var import_ws = __toESM(require("ws"), 1);
 var import_crypto = __toESM(require("crypto"), 1);
 var import_genai = require("@google/genai");
+var import_multer = __toESM(require("multer"), 1);
 try {
   const envPath = import_path.default.join(process.cwd(), ".env");
   if (import_fs.default.existsSync(envPath)) {
@@ -51,9 +52,21 @@ try {
   console.error("Error parsing .env file:", e);
 }
 var LOCAL_VIDEOS_DIR = import_path.default.join(process.cwd(), "storage", "local_videos");
-if (!import_fs.default.existsSync(LOCAL_VIDEOS_DIR)) {
+if (import_fs.default.existsSync(import_path.default.join(process.cwd(), "local_videos"))) {
+  LOCAL_VIDEOS_DIR = import_path.default.join(process.cwd(), "local_videos");
+} else if (!import_fs.default.existsSync(LOCAL_VIDEOS_DIR)) {
   import_fs.default.mkdirSync(LOCAL_VIDEOS_DIR, { recursive: true });
 }
+var storage = import_multer.default.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, LOCAL_VIDEOS_DIR);
+  },
+  filename: (req, file, cb) => {
+    const safeName = import_path.default.basename(file.originalname);
+    cb(null, safeName);
+  }
+});
+var upload = (0, import_multer.default)({ storage });
 var defaultLocalVideos = ["nature_cinematic.mp4", "urban_streets.mp4", "retro_animation.mp4"];
 try {
   const existingFiles = import_fs.default.readdirSync(LOCAL_VIDEOS_DIR);
@@ -640,6 +653,24 @@ async function startServer() {
         };
       });
       res.json({ status: 200, message: "ok", data: { files: videoFiles } });
+    } catch (err) {
+      res.status(500).json({ status: 500, message: err.message, data: null });
+    }
+  }));
+  app.post("/api/v1/local-videos/upload", upload.single("video"), wrap(async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ status: 400, message: "No video file provided", data: null });
+      }
+      res.json({
+        status: 200,
+        message: "File uploaded successfully",
+        data: {
+          name: req.file.filename,
+          size: req.file.size,
+          path: `storage/local_videos/${req.file.filename}`
+        }
+      });
     } catch (err) {
       res.status(500).json({ status: 500, message: err.message, data: null });
     }
@@ -2149,6 +2180,12 @@ To run this application locally and render videos successfully, please:
             localVideoPaths.push(diskPath);
             continue;
           }
+          const filename = import_path.default.basename(url);
+          const fallbackPath = import_path.default.join(LOCAL_VIDEOS_DIR, filename);
+          if (import_fs.default.existsSync(fallbackPath)) {
+            localVideoPaths.push(fallbackPath);
+            continue;
+          }
         }
         const cleanUrl = url.split("?")[0];
         const ext = import_path.default.extname(cleanUrl) || ".mp4";
@@ -2239,9 +2276,9 @@ To run this application locally and render videos successfully, please:
             const neededDuration = start + duration;
             if (inputDuration > 0 && inputDuration < neededDuration) {
               const loopCount = Math.ceil(neededDuration / inputDuration);
-              loopCmd = `-stream_loop ${loopCount - 1} `;
+              loopCmd = `-stream_loop ${loopCount - 1}`;
             }
-            const cmd = `ffmpeg -y ${loopCmd}-i "${inputPath}" -ss ${start} -t ${duration} -vf "scale=${resWidth}:${resHeight}:force_original_aspect_ratio=increase,crop=${resWidth}:${resHeight},setsar=1" -r 25 -pix_fmt yuv420p "${formattedPath}"`;
+            const cmd = `ffmpeg -y ${loopCmd ? loopCmd + " " : ""}-i "${inputPath}" -ss ${start} -t ${duration} -vf "scale=${resWidth}:${resHeight}:force_original_aspect_ratio=increase,crop=${resWidth}:${resHeight},setsar=1" -r 25 -pix_fmt yuv420p "${formattedPath}"`;
             await executeCommand(cmd);
           } catch (err) {
             console.error(`[Renderer] Failed to format clip ${i} (${inputPath}), falling back to placeholder:`, err);
@@ -2436,6 +2473,7 @@ To run this application locally and render videos successfully, please:
   app.get("/api/v1/projects/:id/assets/*", wrap(async (req, res) => {
     res.redirect("https://videos.pexels.com/video-files/3248319/3248319-hd_1920_1080_25fps.mp4");
   }));
+  app.use("/storage/local_videos", import_express.default.static(LOCAL_VIDEOS_DIR));
   app.use("/storage", import_express.default.static(import_path.default.join(process.cwd(), "storage")));
   if (process.env.NODE_ENV !== "production") {
     const vite = await (0, import_vite.createServer)({

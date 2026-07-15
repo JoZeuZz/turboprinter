@@ -248,7 +248,9 @@ export const useProjectStore = create<ProjectStoreState>()(
             set({ orchestrationStep: "media" });
             await projectsApi.mediaSearch(projectId, {
               orientation: orientationForAspect(params.video_aspect),
-              prefer_local: false,
+              prefer_local: params.video_source === "local",
+              video_source: params.video_source,
+              local_video_files: params.local_video_files,
             });
             console.log("[ProjectStore] Media search succeeded. Waiting 1.8s...");
             await delay(1800);
