@@ -2458,6 +2458,15 @@ To run this application locally and render videos successfully, please:
           return 0;
         }
       };
+      let encoderArgs = "-c:v libx264 -crf 18 -preset veryfast";
+      try {
+        logTask(taskId, "INFO", "SYSTEM", "Detecting optimal video encoder (NVIDIA NVENC vs. CPU libx264)...");
+        await executeCommand("ffmpeg -y -f lavfi -i color=c=black:s=16x16:d=0.1 -c:v h264_nvenc -f null -");
+        encoderArgs = "-c:v h264_nvenc -preset p4 -cq 19 -rc vbr";
+        logTask(taskId, "INFO", "SYSTEM", "\u{1F680} NVIDIA RTX GPU detected! Enabled hardware-accelerated NVENC encoding for maximum performance.");
+      } catch (err) {
+        logTask(taskId, "INFO", "SYSTEM", "No hardware NVENC support detected. Using CPU-based libx264 encoder (server/fallback mode).");
+      }
       const formattedClips = [];
       const isLandscape = p.global_visual_style === "landscape" || p.aspect_ratio === "landscape";
       const resWidth = isLandscape ? 1280 : 720;
@@ -2482,7 +2491,7 @@ To run this application locally and render videos successfully, please:
               const loopCount = Math.ceil(neededDuration / inputDuration);
               loopCmd = `-stream_loop ${loopCount - 1}`;
             }
-            const cmd = `ffmpeg -y ${loopCmd ? loopCmd + " " : ""}-i "${inputPath}" -ss ${start} -t ${duration} -vf "scale=${resWidth}:${resHeight}:force_original_aspect_ratio=increase,crop=${resWidth}:${resHeight},setsar=1" -r 25 -c:v libx264 -crf 18 -preset veryfast -pix_fmt yuv420p "${formattedPath}"`;
+            const cmd = `ffmpeg -y ${loopCmd ? loopCmd + " " : ""}-i "${inputPath}" -ss ${start} -t ${duration} -vf "scale=${resWidth}:${resHeight}:force_original_aspect_ratio=increase,crop=${resWidth}:${resHeight},setsar=1" -r 25 ${encoderArgs} -pix_fmt yuv420p "${formattedPath}"`;
             await executeCommand(cmd);
           } catch (err) {
             console.error(`[Renderer] Failed to format clip ${i} (${inputPath}), falling back to placeholder:`, err);
@@ -2597,7 +2606,7 @@ To run this application locally and render videos successfully, please:
         const assRelative = import_path.default.relative(process.cwd(), assFilePath).replace(/\\/g, "/");
         const escapedAssPath = assRelative.replace(/'/g, "'\\\\''").replace(/:/g, "\\:");
         const subFilter = `subtitles='${escapedAssPath}'`;
-        const srtCmd = `ffmpeg -y -i "${audioMixedOutput}" -vf "${subFilter}" -c:v libx264 -crf 18 -preset veryfast -c:a copy "${srtOutput}"`;
+        const srtCmd = `ffmpeg -y -i "${audioMixedOutput}" -vf "${subFilter}" ${encoderArgs} -c:a copy "${srtOutput}"`;
         await executeCommand(srtCmd);
         finalOutputPath = srtOutput;
       } else {
