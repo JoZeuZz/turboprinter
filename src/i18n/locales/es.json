@@ -263,6 +263,7 @@
     "transitionSlideIn": "Entrada deslizante",
     "transitionSlideOut": "Salida deslizante",
     "clipDuration": "Duración del clip (s)",
+    "fullVideoNoCuts": "Video completo (sin cortes)",
     "matchClips": "Coincidir clips con guion",
     "localVideosTitle": "Videos locales en storage/local_videos",
     "localVideosSelectAll": "Seleccionar todos",

@@ -263,6 +263,7 @@
     "transitionSlideIn": "Slide In",
     "transitionSlideOut": "Slide Out",
     "clipDuration": "Clip Duration (s)",
+    "fullVideoNoCuts": "Full video (no cuts)",
     "matchClips": "Match clips to script",
     "localVideosTitle": "Local videos in storage/local_videos",
     "localVideosSelectAll": "Select All",

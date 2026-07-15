@@ -321,6 +321,8 @@ export function VideoConfigPanel() {
               step={1}
               onChange={(v) => store.set("video_clip_duration", v)}
               displayValue={`${store.video_clip_duration ?? 5}s`}
+              disabled={store.video_source === "local"}
+              disabledLabel={t("videoSettings.fullVideoNoCuts")}
             />
             <Collapsible title={t("panels.videoConfig.advanced")}>
               <Input

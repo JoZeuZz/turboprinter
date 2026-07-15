@@ -7,6 +7,8 @@ interface SliderProps {
   step?: number;
   onChange: (value: number) => void;
   displayValue?: string;
+  disabled?: boolean;
+  disabledLabel?: string;
 }
 
 export function Slider({
@@ -17,13 +19,15 @@ export function Slider({
   step = 0.1,
   onChange,
   displayValue,
+  disabled = false,
+  disabledLabel,
 }: SliderProps) {
   return (
-    <div className="flex flex-col gap-1">
+    <div className={`flex flex-col gap-1 transition-opacity ${disabled ? "opacity-50 pointer-events-none select-none" : ""}`}>
       <div className="flex items-center justify-between">
         <label className="text-xs font-medium text-foreground/60">{label}</label>
-        <span className="text-xs text-foreground tabular-nums">
-          {displayValue ?? value}
+        <span className="text-xs text-foreground tabular-nums font-semibold">
+          {disabled ? (disabledLabel ?? "N/A") : (displayValue ?? value)}
         </span>
       </div>
       <input
@@ -32,6 +36,7 @@ export function Slider({
         max={max}
         step={step}
         value={value}
+        disabled={disabled}
         onChange={(e) => onChange(parseFloat(e.target.value))}
         className="w-full h-1.5 rounded-full appearance-none bg-border cursor-pointer accent-accent"
       />

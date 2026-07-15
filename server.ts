@@ -1548,48 +1548,47 @@ async function startServer() {
     const isLocalSource = (p.params?.video_source === "local" || p.video_source === "local" || (p.selected_media && p.selected_media[0]?.provider === "local"));
 
     if (isLocalSource && p.selected_media && p.selected_media.length > 0) {
-      const uniqueFiles = Array.from(new Set(p.selected_media.map((med: any) => med.source_url)));
-      const firstMedia = p.selected_media[0];
-      const firstMediaDuration = Number(firstMedia.duration_sec) || 0;
+      const uniqueFiles: any[] = [];
+      const seen = new Set();
+      for (const med of p.selected_media) {
+        if (!seen.has(med.source_url)) {
+          seen.add(med.source_url);
+          uniqueFiles.push(med);
+        }
+      }
+      if (uniqueFiles.length === 0) {
+        uniqueFiles.push(...p.selected_media);
+      }
 
-      // Consolidate into a single continuous item if only 1 unique video is chosen, or if the first video is long enough
-      if (uniqueFiles.length === 1 || firstMediaDuration >= totalDurationSec) {
-        console.log(`[Timeline] Consolidating local video into a single continuous item of duration ${totalDurationSec}s`);
-        videoItems = [{
-          id: "item_1",
-          media_id: firstMedia.id,
-          local_path: firstMedia.local_path,
-          asset_url: firstMedia.source_url,
-          thumbnail_url: firstMedia.thumbnail_url || "/dist/assets/background.jpg",
-          source_url: firstMedia.source_url,
-          start_sec: 0,
-          duration_sec: totalDurationSec,
+      console.log(`[Timeline] Building continuous local video track from ${uniqueFiles.length} unique local files for total duration ${totalDurationSec}s`);
+
+      let currentStartSec = 0;
+      let itemId = 1;
+      videoItems = [];
+      while (currentStartSec < totalDurationSec) {
+        const medIndex = (itemId - 1) % uniqueFiles.length;
+        const med = uniqueFiles[medIndex];
+        const rawDuration = Number(med.duration_sec);
+        const fullDuration = (isNaN(rawDuration) || rawDuration <= 0) ? 15 : rawDuration;
+        const usedDuration = Math.min(fullDuration, totalDurationSec - currentStartSec);
+
+        videoItems.push({
+          id: `item_${itemId}`,
+          media_id: med.id,
+          local_path: med.local_path,
+          asset_url: med.source_url,
+          thumbnail_url: med.thumbnail_url || "/dist/assets/background.jpg",
+          source_url: med.source_url,
+          start_sec: currentStartSec,
+          duration_sec: usedDuration,
           trim_start_sec: 0,
-          trim_end_sec: totalDurationSec,
-          segment_id: firstMedia.segment_id,
+          trim_end_sec: usedDuration,
+          segment_id: null,
           provider: "local"
-        }];
-      } else {
-        // Map segment by segment
-        videoItems = p.selected_media.map((med: any, idx: number) => {
-          const seg = p.shot_plan?.segments?.find((s: any) => s.id === med.segment_id);
-          const startSec = seg ? seg.start_sec : idx * 5;
-          const durationSec = seg ? seg.target_duration_sec : 5;
-          return {
-            id: `item_${idx + 1}`,
-            media_id: med.id,
-            local_path: med.local_path,
-            asset_url: med.source_url,
-            thumbnail_url: med.thumbnail_url,
-            source_url: med.source_url,
-            start_sec: startSec,
-            duration_sec: durationSec,
-            trim_start_sec: 0,
-            trim_end_sec: durationSec,
-            segment_id: med.segment_id,
-            provider: med.provider
-          };
         });
+
+        currentStartSec += usedDuration;
+        itemId++;
       }
     } else {
       videoItems = (p.selected_media || []).map((med: any, idx: number) => {
