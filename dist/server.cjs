@@ -1448,46 +1448,106 @@ ${body}`;
     const totalDurationSec = audioItems.reduce((acc, item) => Math.max(acc, item.start_sec + item.duration_sec), 0) || 15;
     let videoItems = [];
     const isLocalSource = p.params?.video_source === "local" || p.video_source === "local" || p.selected_media && p.selected_media[0]?.provider === "local";
-    if (isLocalSource && p.selected_media && p.selected_media.length > 0) {
-      const uniqueFiles = Array.from(new Set(p.selected_media.map((med) => med.source_url)));
-      const firstMedia = p.selected_media[0];
-      const firstMediaDuration = Number(firstMedia.duration_sec) || 0;
-      if (uniqueFiles.length === 1 || firstMediaDuration >= totalDurationSec) {
-        console.log(`[Timeline] Consolidating local video into a single continuous item of duration ${totalDurationSec}s`);
-        videoItems = [{
-          id: "item_1",
-          media_id: firstMedia.id,
-          local_path: firstMedia.local_path,
-          asset_url: firstMedia.source_url,
-          thumbnail_url: firstMedia.thumbnail_url || "/dist/assets/background.jpg",
-          source_url: firstMedia.source_url,
-          start_sec: 0,
-          duration_sec: totalDurationSec,
+    if (isLocalSource) {
+      const uniqueFiles = [];
+      const seen = /* @__PURE__ */ new Set();
+      const chosenLocalFiles = p.params?.local_video_files || [];
+      if (chosenLocalFiles.length > 0) {
+        for (const filename of chosenLocalFiles) {
+          const existingMed = (p.selected_media || []).find((m) => import_path.default.basename(m.source_url) === filename);
+          if (existingMed) {
+            if (!seen.has(existingMed.source_url)) {
+              seen.add(existingMed.source_url);
+              uniqueFiles.push(existingMed);
+            }
+          } else {
+            const sourceUrl = `/storage/local_videos/${filename}`;
+            if (!seen.has(sourceUrl)) {
+              seen.add(sourceUrl);
+              const fullDiskPath = import_path.default.join(LOCAL_VIDEOS_DIR, filename);
+              let durationSec = 15;
+              if (import_fs.default.existsSync(fullDiskPath)) {
+                try {
+                  const durationStr = await executeCommand(`ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${fullDiskPath}"`);
+                  const d = parseFloat(durationStr.trim());
+                  if (!isNaN(d) && d > 0) {
+                    durationSec = d;
+                  }
+                } catch (e) {
+                  console.warn(`[Timeline] Failed to get duration for ${filename} during build, defaulting to 15s`, e);
+                }
+              }
+              uniqueFiles.push({
+                id: `${filename}_custom`,
+                provider: "local",
+                source_url: sourceUrl,
+                download_url: sourceUrl,
+                thumbnail_url: "/dist/assets/background.jpg",
+                duration_sec: durationSec,
+                local_path: `storage/local_videos/${filename}`
+              });
+            }
+          }
+        }
+      } else if (p.selected_media && p.selected_media.length > 0) {
+        for (const med of p.selected_media) {
+          if (!seen.has(med.source_url)) {
+            seen.add(med.source_url);
+            uniqueFiles.push(med);
+          }
+        }
+      }
+      if (uniqueFiles.length === 0) {
+        try {
+          const files = import_fs.default.readdirSync(LOCAL_VIDEOS_DIR);
+          const videoExtensions = [".mp4", ".mkv", ".avi", ".mov", ".webm"];
+          const availableLocalFiles = files.filter((f) => videoExtensions.includes(import_path.default.extname(f).toLowerCase()));
+          const chosenFiles = availableLocalFiles.length > 0 ? availableLocalFiles : ["nature_cinematic.mp4", "urban_streets.mp4", "retro_animation.mp4"];
+          for (const filename of chosenFiles) {
+            const sourceUrl = `/storage/local_videos/${filename}`;
+            if (!seen.has(sourceUrl)) {
+              seen.add(sourceUrl);
+              uniqueFiles.push({
+                id: `${filename}_fallback`,
+                provider: "local",
+                source_url: sourceUrl,
+                download_url: sourceUrl,
+                thumbnail_url: "/dist/assets/background.jpg",
+                duration_sec: 15,
+                local_path: `storage/local_videos/${filename}`
+              });
+            }
+          }
+        } catch (e) {
+          console.error("[Timeline] Failed to read fallback local videos:", e);
+        }
+      }
+      console.log(`[Timeline] Building continuous local video track from ${uniqueFiles.length} unique local files for total duration ${totalDurationSec}s`);
+      let currentStartSec = 0;
+      let itemId = 1;
+      videoItems = [];
+      while (currentStartSec < totalDurationSec) {
+        const medIndex = (itemId - 1) % uniqueFiles.length;
+        const med = uniqueFiles[medIndex];
+        const rawDuration = Number(med.duration_sec);
+        const fullDuration = isNaN(rawDuration) || rawDuration <= 0 ? 15 : rawDuration;
+        const usedDuration = Math.min(fullDuration, totalDurationSec - currentStartSec);
+        videoItems.push({
+          id: `item_${itemId}`,
+          media_id: med.id,
+          local_path: med.local_path,
+          asset_url: med.source_url,
+          thumbnail_url: med.thumbnail_url || "/dist/assets/background.jpg",
+          source_url: med.source_url,
+          start_sec: currentStartSec,
+          duration_sec: usedDuration,
           trim_start_sec: 0,
-          trim_end_sec: totalDurationSec,
-          segment_id: firstMedia.segment_id,
+          trim_end_sec: usedDuration,
+          segment_id: null,
           provider: "local"
-        }];
-      } else {
-        videoItems = p.selected_media.map((med, idx) => {
-          const seg = p.shot_plan?.segments?.find((s) => s.id === med.segment_id);
-          const startSec = seg ? seg.start_sec : idx * 5;
-          const durationSec = seg ? seg.target_duration_sec : 5;
-          return {
-            id: `item_${idx + 1}`,
-            media_id: med.id,
-            local_path: med.local_path,
-            asset_url: med.source_url,
-            thumbnail_url: med.thumbnail_url,
-            source_url: med.source_url,
-            start_sec: startSec,
-            duration_sec: durationSec,
-            trim_start_sec: 0,
-            trim_end_sec: durationSec,
-            segment_id: med.segment_id,
-            provider: med.provider
-          };
         });
+        currentStartSec += usedDuration;
+        itemId++;
       }
     } else {
       videoItems = (p.selected_media || []).map((med, idx) => {

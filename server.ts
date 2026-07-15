@@ -1547,17 +1547,82 @@ async function startServer() {
     let videoItems = [];
     const isLocalSource = (p.params?.video_source === "local" || p.video_source === "local" || (p.selected_media && p.selected_media[0]?.provider === "local"));
 
-    if (isLocalSource && p.selected_media && p.selected_media.length > 0) {
+    if (isLocalSource) {
       const uniqueFiles: any[] = [];
       const seen = new Set();
-      for (const med of p.selected_media) {
-        if (!seen.has(med.source_url)) {
-          seen.add(med.source_url);
-          uniqueFiles.push(med);
+      const chosenLocalFiles = p.params?.local_video_files || [];
+
+      if (chosenLocalFiles.length > 0) {
+        for (const filename of chosenLocalFiles) {
+          const existingMed = (p.selected_media || []).find((m: any) => path.basename(m.source_url) === filename);
+          if (existingMed) {
+            if (!seen.has(existingMed.source_url)) {
+              seen.add(existingMed.source_url);
+              uniqueFiles.push(existingMed);
+            }
+          } else {
+            const sourceUrl = `/storage/local_videos/${filename}`;
+            if (!seen.has(sourceUrl)) {
+              seen.add(sourceUrl);
+              const fullDiskPath = path.join(LOCAL_VIDEOS_DIR, filename);
+              let durationSec = 15;
+              if (fs.existsSync(fullDiskPath)) {
+                try {
+                  const durationStr = await executeCommand(`ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${fullDiskPath}"`);
+                  const d = parseFloat(durationStr.trim());
+                  if (!isNaN(d) && d > 0) {
+                    durationSec = d;
+                  }
+                } catch (e) {
+                  console.warn(`[Timeline] Failed to get duration for ${filename} during build, defaulting to 15s`, e);
+                }
+              }
+              uniqueFiles.push({
+                id: `${filename}_custom`,
+                provider: "local",
+                source_url: sourceUrl,
+                download_url: sourceUrl,
+                thumbnail_url: "/dist/assets/background.jpg",
+                duration_sec: durationSec,
+                local_path: `storage/local_videos/${filename}`
+              });
+            }
+          }
+        }
+      } else if (p.selected_media && p.selected_media.length > 0) {
+        for (const med of p.selected_media) {
+          if (!seen.has(med.source_url)) {
+            seen.add(med.source_url);
+            uniqueFiles.push(med);
+          }
         }
       }
+
       if (uniqueFiles.length === 0) {
-        uniqueFiles.push(...p.selected_media);
+        try {
+          const files = fs.readdirSync(LOCAL_VIDEOS_DIR);
+          const videoExtensions = [".mp4", ".mkv", ".avi", ".mov", ".webm"];
+          const availableLocalFiles = files.filter(f => videoExtensions.includes(path.extname(f).toLowerCase()));
+          const chosenFiles = availableLocalFiles.length > 0 ? availableLocalFiles : ["nature_cinematic.mp4", "urban_streets.mp4", "retro_animation.mp4"];
+          
+          for (const filename of chosenFiles) {
+            const sourceUrl = `/storage/local_videos/${filename}`;
+            if (!seen.has(sourceUrl)) {
+              seen.add(sourceUrl);
+              uniqueFiles.push({
+                id: `${filename}_fallback`,
+                provider: "local",
+                source_url: sourceUrl,
+                download_url: sourceUrl,
+                thumbnail_url: "/dist/assets/background.jpg",
+                duration_sec: 15,
+                local_path: `storage/local_videos/${filename}`
+              });
+            }
+          }
+        } catch (e) {
+          console.error("[Timeline] Failed to read fallback local videos:", e);
+        }
       }
 
       console.log(`[Timeline] Building continuous local video track from ${uniqueFiles.length} unique local files for total duration ${totalDurationSec}s`);
