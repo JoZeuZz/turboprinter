@@ -1232,12 +1232,73 @@ ${body}`;
     if (!p) {
       return res.status(404).json({ status: 404, message: "Project not found", data: null });
     }
-    const clipDuration = Number(req.body.target_duration_sec) || 5;
+    const clipDuration = Number(req.body.target_duration_sec) || Number(p.params?.video_clip_duration) || 5;
     const sentences = (p.script || p.topic || "").split(/[.!?]+/).map((s) => s.trim()).filter((s) => s.length > 5);
+    const rawTerms = p.params?.video_terms || p.video_terms || "";
+    let userTerms = [];
+    if (Array.isArray(rawTerms)) {
+      userTerms = rawTerms.map((t) => String(t).trim()).filter(Boolean);
+    } else if (typeof rawTerms === "string" && rawTerms.trim()) {
+      userTerms = rawTerms.split(",").map((t) => t.trim()).filter(Boolean);
+    }
+    console.log(`[Plan] Project ${req.params.id} loaded. Custom video_terms parsed:`, userTerms);
+    let searchQueriesForSegments = [];
+    let hasGeminiQueries = false;
+    if (process.env.GEMINI_API_KEY) {
+      try {
+        const prompt = `Analiza las siguientes oraciones de un gui\xF3n de video en idioma "${p.language || "es"}":
+${sentences.map((s, i) => `Segmento ${i + 1}: "${s}"`).join("\n")}
+
+Tema general del video: "${p.topic || ""}"
+Palabras clave/T\xE9rminos de video preferidos del usuario: "${userTerms.join(", ")}"
+
+Para cada segmento, genera exactamente de 1 a 3 palabras clave o frases cortas de b\xFAsqueda en INGL\xC9S s\xFAper relevantes, descriptivas y visuales para buscar videos de stock en Pexels que coincidan con la oraci\xF3n y el tema general.
+Es sumamente importante que las palabras clave de b\xFAsqueda est\xE9n en INGL\xC9S para que la API de Pexels funcione de la mejor manera.
+
+Devuelve estrictamente un arreglo JSON de arreglos de cadenas (strings), con exactamente un arreglo de palabras clave para cada uno de los ${sentences.length} segmentos.
+Ejemplo de formato de respuesta:
+[
+  ["vintage computer", "retro technology"],
+  ["group of people cheering", "celebration"]
+]
+No incluyas explicaciones, marcas de c\xF3digo markdown, ni texto adicional, solo el JSON puro.`;
+        const responseText = await generateGeminiContent(prompt);
+        const cleanedText = responseText.replace(/```json/gi, "").replace(/```/g, "").trim();
+        const parsed = JSON.parse(cleanedText);
+        if (Array.isArray(parsed) && parsed.length === sentences.length) {
+          searchQueriesForSegments = parsed;
+          hasGeminiQueries = true;
+          console.log("[Plan] Generated high-quality segment search queries using Gemini:", searchQueriesForSegments);
+        }
+      } catch (err) {
+        console.error("[Plan] Failed to generate search queries using Gemini, falling back to local heuristic:", err);
+      }
+    }
     const segments = sentences.map((sentence, idx) => {
-      const words = sentence.split(" ");
-      const firstWord = words[0] || "scenic";
-      const secondWord = words[1] || "beautiful";
+      let segmentQueries = [];
+      if (hasGeminiQueries && searchQueriesForSegments[idx]) {
+        segmentQueries = searchQueriesForSegments[idx];
+      } else {
+        if (userTerms.length > 0) {
+          const primaryTerm = userTerms[idx % userTerms.length];
+          segmentQueries.push(primaryTerm);
+          if (userTerms.length > 1) {
+            segmentQueries.push(userTerms[(idx + 1) % userTerms.length]);
+          }
+        }
+        const commonWords = /* @__PURE__ */ new Set(["el", "la", "los", "las", "un", "una", "unos", "unas", "de", "del", "al", "a", "en", "y", "o", "u", "con", "para", "por", "si", "no", "es", "son", "se", "su", "sus", "que", "como", "mas", "pero", "este", "esta", "estos", "estas"]);
+        const words = sentence.toLowerCase().replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, "").split(/\s+/).filter((w) => w.length > 3 && !commonWords.has(w));
+        if (words.length > 0) {
+          segmentQueries.push(words[0]);
+          if (words.length > 1) {
+            segmentQueries.push(words[1]);
+          }
+        }
+        if (segmentQueries.length === 0) {
+          segmentQueries.push("cinematic", "scenic");
+        }
+      }
+      segmentQueries = Array.from(new Set(segmentQueries.map((q) => q.trim()).filter(Boolean)));
       return {
         id: `seg_${idx + 1}`,
         order: idx + 1,
@@ -1245,8 +1306,8 @@ ${body}`;
         start_sec: idx * clipDuration,
         end_sec: (idx + 1) * clipDuration,
         target_duration_sec: clipDuration,
-        visual_goal: `Visual style representing: ${sentence}`,
-        search_queries: [firstWord, secondWord, "cinematic"]
+        visual_goal: `Estilo visual representando: ${sentence}`,
+        search_queries: segmentQueries
       };
     });
     p.shot_plan = {
@@ -1387,20 +1448,32 @@ ${body}`;
       }
     } else {
       const apiKey = getPexelsApiKey();
+      const reqOrientation = req.body.orientation || (p.params?.video_aspect === "16:9" ? "landscape" : "portrait");
+      const orientation = reqOrientation === "landscape" || reqOrientation === "portrait" || reqOrientation === "square" ? reqOrientation : "portrait";
       if (apiKey) {
-        console.log(`[Pexels] API Key found! Searching Pexels online...`);
+        console.log(`[Pexels] API Key found! Searching Pexels online with orientation "${orientation}"...`);
         const segments = p.shot_plan?.segments || [];
         for (let idx = 0; idx < segments.length; idx++) {
           const seg = segments[idx];
-          const query = seg.search_queries?.[0] || p.topic || "nature";
-          const results = await searchPexelsVideos(query, apiKey);
+          let results = [];
+          let successfulQuery = "";
+          const queries = seg.search_queries && seg.search_queries.length > 0 ? seg.search_queries : [p.topic || "nature"];
+          console.log(`[Pexels] Segment ${seg.id} queries to try:`, queries);
+          for (const q of queries) {
+            results = await searchPexelsVideos(q, apiKey, orientation);
+            if (results.length > 0) {
+              successfulQuery = q;
+              break;
+            }
+          }
           if (results.length > 0) {
+            console.log(`[Pexels] Segment ${seg.id} search succeeded for query "${successfulQuery}" with ${results.length} results.`);
             candidates.push(...results.map((r, i) => ({
               ...r,
               id: `${seg.id}_cand_${i + 1}`,
               segment_id: seg.id,
               score: 1 - i * 0.05,
-              score_reasons: [`Matches online search: ${query}`]
+              score_reasons: [`Matches online search: ${successfulQuery}`]
             })));
             selected.push({
               ...results[0],
@@ -1408,6 +1481,7 @@ ${body}`;
               segment_id: seg.id
             });
           } else {
+            console.log(`[Pexels] Segment ${seg.id} search failed for all queries. Falling back to sample video.`);
             const videoIndex = idx % SAMPLE_VIDEOS.length;
             const best = SAMPLE_VIDEOS[videoIndex];
             selected.push({
@@ -1598,25 +1672,47 @@ ${body}`;
         itemId++;
       }
     } else {
-      videoItems = (p.selected_media || []).map((med, idx) => {
-        const seg = p.shot_plan?.segments?.find((s) => s.id === med.segment_id);
-        const startSec = seg ? seg.start_sec : idx * 5;
-        const durationSec = seg ? seg.target_duration_sec : 5;
-        return {
-          id: `item_${idx + 1}`,
-          media_id: med.id,
-          local_path: med.local_path,
-          asset_url: med.source_url,
-          thumbnail_url: med.thumbnail_url,
-          source_url: med.source_url,
-          start_sec: startSec,
-          duration_sec: durationSec,
-          trim_start_sec: 0,
-          trim_end_sec: durationSec,
-          segment_id: med.segment_id,
-          provider: med.provider
-        };
-      });
+      const clipDuration = Number(p.params?.video_clip_duration) || Number(p.video_clip_duration) || 5;
+      let itemId = 1;
+      videoItems = [];
+      const segments = p.shot_plan?.segments || [];
+      console.log(`[Timeline] Building non-local video track. Clip duration setting: ${clipDuration}s. Total segments: ${segments.length}`);
+      for (let idx = 0; idx < segments.length; idx++) {
+        const seg = segments[idx];
+        const segStart = seg.start_sec !== void 0 ? seg.start_sec : idx * 5;
+        const segDuration = seg.target_duration_sec !== void 0 ? seg.target_duration_sec : 5;
+        const segCandidates = (p.media_candidates || []).filter((c) => c.segment_id === seg.id);
+        const primaryMedia = (p.selected_media || []).find((m) => m.segment_id === seg.id) || segCandidates[0] || SAMPLE_VIDEOS[idx % SAMPLE_VIDEOS.length];
+        let currentOffset = 0;
+        let candidateIdx = 0;
+        console.log(`[Timeline] Segment ${seg.id} duration: ${segDuration}s. Primary media id: ${primaryMedia.id}. Total candidates: ${segCandidates.length}`);
+        while (currentOffset < segDuration) {
+          const remaining = segDuration - currentOffset;
+          const usedDuration = Math.min(clipDuration, remaining);
+          let mediaToUse = primaryMedia;
+          if (currentOffset > 0 && segCandidates.length > 0) {
+            mediaToUse = segCandidates[candidateIdx % segCandidates.length];
+            candidateIdx++;
+          }
+          const trimStart = mediaToUse.id === primaryMedia.id ? currentOffset % (Number(mediaToUse.duration_sec) || 15) : 0;
+          videoItems.push({
+            id: `item_${itemId}`,
+            media_id: mediaToUse.id || `item_media_${itemId}`,
+            local_path: mediaToUse.local_path,
+            asset_url: mediaToUse.source_url || mediaToUse.asset_url,
+            thumbnail_url: mediaToUse.thumbnail_url,
+            source_url: mediaToUse.source_url || mediaToUse.asset_url,
+            start_sec: segStart + currentOffset,
+            duration_sec: usedDuration,
+            trim_start_sec: trimStart,
+            trim_end_sec: trimStart + usedDuration,
+            segment_id: seg.id,
+            provider: mediaToUse.provider || "pexels"
+          });
+          currentOffset += usedDuration;
+          itemId++;
+        }
+      }
     }
     const subtitleItems = [];
     (p.shot_plan?.segments || []).forEach((seg, idx) => {
