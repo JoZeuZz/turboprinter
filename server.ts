@@ -1401,9 +1401,15 @@ async function startServer() {
       const files = fs.readdirSync(LOCAL_VIDEOS_DIR);
       const videoExtensions = [".mp4", ".mkv", ".avi", ".mov", ".webm"];
       const availableLocalFiles = files.filter(f => videoExtensions.includes(path.extname(f).toLowerCase()));
-      const chosenFiles = (localFiles && localFiles.length > 0) ? localFiles : availableLocalFiles;
 
       const defaultLocalVideos = ["nature_cinematic.mp4", "urban_streets.mp4", "retro_animation.mp4"];
+      let filteredAvailable = availableLocalFiles;
+      const hasCustomFiles = availableLocalFiles.some(f => !defaultLocalVideos.includes(f));
+      if (hasCustomFiles) {
+        filteredAvailable = availableLocalFiles.filter(f => !defaultLocalVideos.includes(f));
+      }
+
+      const chosenFiles = (localFiles && localFiles.length > 0) ? localFiles : filteredAvailable;
       const finalChosen = chosenFiles.length > 0 ? chosenFiles : defaultLocalVideos;
 
       const segments = p.shot_plan?.segments || [];
@@ -1623,6 +1629,29 @@ async function startServer() {
         } catch (e) {
           console.error("[Timeline] Failed to read fallback local videos:", e);
         }
+      }
+
+      // If there are custom files on disk, exclude the default demo videos from uniqueFiles
+      const defaultLocalVideos = ["nature_cinematic.mp4", "urban_streets.mp4", "retro_animation.mp4"];
+      try {
+        const filesOnDisk = fs.readdirSync(LOCAL_VIDEOS_DIR);
+        const videoExtensions = [".mp4", ".mkv", ".avi", ".mov", ".webm"];
+        const diskFiles = filesOnDisk.filter(f => videoExtensions.includes(path.extname(f).toLowerCase()));
+        const hasCustomFilesOnDisk = diskFiles.some(f => !defaultLocalVideos.includes(f));
+        
+        if (hasCustomFilesOnDisk) {
+          const filteredUnique = uniqueFiles.filter(med => {
+            const filename = path.basename(med.source_url || med.asset_url || "");
+            return !defaultLocalVideos.includes(filename);
+          });
+          
+          if (filteredUnique.length > 0) {
+            uniqueFiles.length = 0;
+            uniqueFiles.push(...filteredUnique);
+          }
+        }
+      } catch (err) {
+        console.error("[Timeline] Failed to filter uniqueFiles against disk:", err);
       }
 
       console.log(`[Timeline] Building continuous local video track from ${uniqueFiles.length} unique local files for total duration ${totalDurationSec}s`);
