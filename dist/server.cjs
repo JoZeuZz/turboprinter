@@ -1319,11 +1319,21 @@ ${body}`;
       return res.status(404).json({ status: 404, message: "Project not found", data: null });
     }
     const videoSource = req.body.video_source || p.params?.video_source || p.video_source || "pexels";
+    if (!p.params) {
+      p.params = {};
+    }
+    p.params.video_source = videoSource;
+    p.video_source = videoSource;
+    if (req.body.local_video_files !== void 0) {
+      p.params.local_video_files = req.body.local_video_files;
+    }
+    projects.set(req.params.id, p);
     let selected = [];
     let candidates = [];
     if (videoSource === "local") {
       console.log(`[LocalVideo] Populating timeline media from local storage...`);
-      const localFiles = req.body.local_video_files || p.params?.local_video_files || [];
+      const localFiles = p.params.local_video_files || [];
+      console.log(`[LocalVideo] Selected files in configuration:`, localFiles);
       const files = import_fs.default.readdirSync(LOCAL_VIDEOS_DIR);
       const videoExtensions = [".mp4", ".mkv", ".avi", ".mov", ".webm"];
       const availableLocalFiles = files.filter((f) => videoExtensions.includes(import_path.default.extname(f).toLowerCase()));
@@ -1335,6 +1345,7 @@ ${body}`;
       }
       const chosenFiles = localFiles && localFiles.length > 0 ? localFiles : filteredAvailable;
       const finalChosen = chosenFiles.length > 0 ? chosenFiles : defaultLocalVideos2;
+      console.log(`[LocalVideo] Final chosen files list to cycle:`, finalChosen);
       const segments = p.shot_plan?.segments || [];
       for (let idx = 0; idx < segments.length; idx++) {
         const seg = segments[idx];
@@ -1357,6 +1368,7 @@ ${body}`;
           provider: "local",
           source_url: `/storage/local_videos/${filename}`,
           download_url: `/storage/local_videos/${filename}`,
+          local_path: `storage/local_videos/${filename}`,
           thumbnail_url: "/dist/assets/background.jpg",
           width: 1280,
           height: 720,
@@ -1465,12 +1477,16 @@ ${body}`;
       const uniqueFiles = [];
       const seen = /* @__PURE__ */ new Set();
       const chosenLocalFiles = p.params?.local_video_files || [];
+      console.log(`[Timeline] Building track. chosenLocalFiles:`, chosenLocalFiles, `selected_media count:`, p.selected_media?.length || 0);
       if (chosenLocalFiles.length > 0) {
         for (const filename of chosenLocalFiles) {
-          const existingMed = (p.selected_media || []).find((m) => import_path.default.basename(m.source_url) === filename);
+          const existingMed = (p.selected_media || []).find((m) => import_path.default.basename(m.source_url || m.asset_url || "") === filename);
           if (existingMed) {
             if (!seen.has(existingMed.source_url)) {
               seen.add(existingMed.source_url);
+              if (!existingMed.local_path) {
+                existingMed.local_path = `storage/local_videos/${filename}`;
+              }
               uniqueFiles.push(existingMed);
             }
           } else {
@@ -1504,7 +1520,7 @@ ${body}`;
         }
       } else if (p.selected_media && p.selected_media.length > 0) {
         for (const med of p.selected_media) {
-          if (!seen.has(med.source_url)) {
+          if (med.source_url && !seen.has(med.source_url)) {
             seen.add(med.source_url);
             uniqueFiles.push(med);
           }
@@ -1541,7 +1557,7 @@ ${body}`;
         const videoExtensions = [".mp4", ".mkv", ".avi", ".mov", ".webm"];
         const diskFiles = filesOnDisk.filter((f) => videoExtensions.includes(import_path.default.extname(f).toLowerCase()));
         const hasCustomFilesOnDisk = diskFiles.some((f) => !defaultLocalVideos2.includes(f));
-        if (hasCustomFilesOnDisk) {
+        if (hasCustomFilesOnDisk && chosenLocalFiles.length === 0) {
           const filteredUnique = uniqueFiles.filter((med) => {
             const filename = import_path.default.basename(med.source_url || med.asset_url || "");
             return !defaultLocalVideos2.includes(filename);

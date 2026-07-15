@@ -1409,12 +1409,25 @@ async function startServer() {
     }
 
     const videoSource = req.body.video_source || p.params?.video_source || p.video_source || "pexels";
+    
+    // Explicitly persist the active parameters into the project DB
+    if (!p.params) {
+      p.params = {};
+    }
+    p.params.video_source = videoSource;
+    p.video_source = videoSource;
+    if (req.body.local_video_files !== undefined) {
+      p.params.local_video_files = req.body.local_video_files;
+    }
+    projects.set(req.params.id, p);
+
     let selected: any[] = [];
     let candidates: any[] = [];
 
     if (videoSource === "local") {
       console.log(`[LocalVideo] Populating timeline media from local storage...`);
-      const localFiles = req.body.local_video_files || p.params?.local_video_files || [];
+      const localFiles = p.params.local_video_files || [];
+      console.log(`[LocalVideo] Selected files in configuration:`, localFiles);
       const files = fs.readdirSync(LOCAL_VIDEOS_DIR);
       const videoExtensions = [".mp4", ".mkv", ".avi", ".mov", ".webm"];
       const availableLocalFiles = files.filter(f => videoExtensions.includes(path.extname(f).toLowerCase()));
@@ -1428,6 +1441,7 @@ async function startServer() {
 
       const chosenFiles = (localFiles && localFiles.length > 0) ? localFiles : filteredAvailable;
       const finalChosen = chosenFiles.length > 0 ? chosenFiles : defaultLocalVideos;
+      console.log(`[LocalVideo] Final chosen files list to cycle:`, finalChosen);
 
       const segments = p.shot_plan?.segments || [];
       for (let idx = 0; idx < segments.length; idx++) {
@@ -1454,6 +1468,7 @@ async function startServer() {
           provider: "local",
           source_url: `/storage/local_videos/${filename}`,
           download_url: `/storage/local_videos/${filename}`,
+          local_path: `storage/local_videos/${filename}`,
           thumbnail_url: "/dist/assets/background.jpg",
           width: 1280,
           height: 720,
@@ -1574,13 +1589,18 @@ async function startServer() {
       const uniqueFiles: any[] = [];
       const seen = new Set();
       const chosenLocalFiles = p.params?.local_video_files || [];
+      console.log(`[Timeline] Building track. chosenLocalFiles:`, chosenLocalFiles, `selected_media count:`, p.selected_media?.length || 0);
 
       if (chosenLocalFiles.length > 0) {
         for (const filename of chosenLocalFiles) {
-          const existingMed = (p.selected_media || []).find((m: any) => path.basename(m.source_url) === filename);
+          const existingMed = (p.selected_media || []).find((m: any) => path.basename(m.source_url || m.asset_url || "") === filename);
           if (existingMed) {
             if (!seen.has(existingMed.source_url)) {
               seen.add(existingMed.source_url);
+              // Ensure local_path is correctly set on existing media
+              if (!existingMed.local_path) {
+                existingMed.local_path = `storage/local_videos/${filename}`;
+              }
               uniqueFiles.push(existingMed);
             }
           } else {
@@ -1614,7 +1634,7 @@ async function startServer() {
         }
       } else if (p.selected_media && p.selected_media.length > 0) {
         for (const med of p.selected_media) {
-          if (!seen.has(med.source_url)) {
+          if (med.source_url && !seen.has(med.source_url)) {
             seen.add(med.source_url);
             uniqueFiles.push(med);
           }
@@ -1648,7 +1668,8 @@ async function startServer() {
         }
       }
 
-      // If there are custom files on disk, exclude the default demo videos from uniqueFiles
+      // If there are custom files on disk, and the user did NOT explicitly select any local video files,
+      // exclude default demo videos from fallback uniqueFiles
       const defaultLocalVideos = ["nature_cinematic.mp4", "urban_streets.mp4", "retro_animation.mp4"];
       try {
         const filesOnDisk = fs.readdirSync(LOCAL_VIDEOS_DIR);
@@ -1656,7 +1677,7 @@ async function startServer() {
         const diskFiles = filesOnDisk.filter(f => videoExtensions.includes(path.extname(f).toLowerCase()));
         const hasCustomFilesOnDisk = diskFiles.some(f => !defaultLocalVideos.includes(f));
         
-        if (hasCustomFilesOnDisk) {
+        if (hasCustomFilesOnDisk && chosenLocalFiles.length === 0) {
           const filteredUnique = uniqueFiles.filter(med => {
             const filename = path.basename(med.source_url || med.asset_url || "");
             return !defaultLocalVideos.includes(filename);
