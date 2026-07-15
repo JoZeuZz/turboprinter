@@ -119,6 +119,7 @@ export function VideoConfigPanel() {
 
   const bgmOptions = [
     { value: "random", label: t("audioSubtitle.bgmRandom") },
+    { value: "contextual", label: "AI Contextual (Auto-select by script tone)" },
     { value: "", label: t("audioSubtitle.bgmNone") },
     ...bgmFiles.map((f) => ({ value: f.file, label: f.name })),
   ];
@@ -402,6 +403,8 @@ export function VideoConfigPanel() {
               value={
                 store.bgm_file === "" && store.bgm_type === "random"
                   ? "random"
+                  : store.bgm_type === "contextual"
+                  ? "contextual"
                   : (store.bgm_file ?? "")
               }
               options={bgmOptions}
@@ -409,12 +412,25 @@ export function VideoConfigPanel() {
                 if (e.target.value === "random") {
                   store.set("bgm_type", "random");
                   store.set("bgm_file", "");
+                } else if (e.target.value === "contextual") {
+                  store.set("bgm_type", "contextual");
+                  store.set("bgm_file", "");
                 } else {
                   store.set("bgm_type", "file");
                   store.set("bgm_file", e.target.value);
                 }
               }}
             />
+            {store.bgm_type === "contextual" && (
+              <p className="text-[11px] text-accent font-medium leading-relaxed -mt-1 pb-1">
+                ✨ <strong>AI Contextual (Option B) Active:</strong> The system matches background soundtracks based on your script, topics, and mood automatically.
+              </p>
+            )}
+            {store.bgm_type === "file" && store.bgm_file && (
+              <p className="text-[11px] text-muted font-medium leading-relaxed -mt-1 pb-1">
+                🎵 <strong>Manual (Option A) Active:</strong> You have selected a specific background track.
+              </p>
+            )}
             <Slider
               label={t("audioSubtitle.bgmVolume")}
               value={store.bgm_volume ?? 0.2}

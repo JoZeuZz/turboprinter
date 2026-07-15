@@ -79,9 +79,9 @@ try {
   console.error("Failed to initialize local videos folder:", err);
 }
 var BGM_FILES = [
-  { name: "Ambient Forest", size: 5410234, file: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" },
-  { name: "Cosmic Journey", size: 6109230, file: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3" },
-  { name: "Sunny Day Acoustic", size: 4892019, file: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3" }
+  { name: "Ambient Forest", size: 5410234, file: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3", tags: ["nature", "forest", "ambient", "calm", "slow", "relax", "meditation", "peaceful", "wood", "water", "tree", "river"] },
+  { name: "Cosmic Journey", size: 6109230, file: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3", tags: ["space", "cosmic", "journey", "synth", "futuristic", "tech", "modern", "energy", "inspirational", "fast", "electronic", "star"] },
+  { name: "Sunny Day Acoustic", size: 4892019, file: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3", tags: ["acoustic", "guitar", "happy", "sunny", "day", "cheerful", "organic", "warm", "people", "friend", "life", "fun"] }
 ];
 var SAMPLE_VIDEOS = [
   {
@@ -1319,8 +1319,13 @@ ${body}`;
       const files = import_fs.default.readdirSync(LOCAL_VIDEOS_DIR);
       const videoExtensions = [".mp4", ".mkv", ".avi", ".mov", ".webm"];
       const availableLocalFiles = files.filter((f) => videoExtensions.includes(import_path.default.extname(f).toLowerCase()));
-      const chosenFiles = localFiles && localFiles.length > 0 ? localFiles : availableLocalFiles;
       const defaultLocalVideos2 = ["nature_cinematic.mp4", "urban_streets.mp4", "retro_animation.mp4"];
+      let filteredAvailable = availableLocalFiles;
+      const hasCustomFiles = availableLocalFiles.some((f) => !defaultLocalVideos2.includes(f));
+      if (hasCustomFiles) {
+        filteredAvailable = availableLocalFiles.filter((f) => !defaultLocalVideos2.includes(f));
+      }
+      const chosenFiles = localFiles && localFiles.length > 0 ? localFiles : filteredAvailable;
       const finalChosen = chosenFiles.length > 0 ? chosenFiles : defaultLocalVideos2;
       const segments = p.shot_plan?.segments || [];
       for (let idx = 0; idx < segments.length; idx++) {
@@ -1521,6 +1526,25 @@ ${body}`;
         } catch (e) {
           console.error("[Timeline] Failed to read fallback local videos:", e);
         }
+      }
+      const defaultLocalVideos2 = ["nature_cinematic.mp4", "urban_streets.mp4", "retro_animation.mp4"];
+      try {
+        const filesOnDisk = import_fs.default.readdirSync(LOCAL_VIDEOS_DIR);
+        const videoExtensions = [".mp4", ".mkv", ".avi", ".mov", ".webm"];
+        const diskFiles = filesOnDisk.filter((f) => videoExtensions.includes(import_path.default.extname(f).toLowerCase()));
+        const hasCustomFilesOnDisk = diskFiles.some((f) => !defaultLocalVideos2.includes(f));
+        if (hasCustomFilesOnDisk) {
+          const filteredUnique = uniqueFiles.filter((med) => {
+            const filename = import_path.default.basename(med.source_url || med.asset_url || "");
+            return !defaultLocalVideos2.includes(filename);
+          });
+          if (filteredUnique.length > 0) {
+            uniqueFiles.length = 0;
+            uniqueFiles.push(...filteredUnique);
+          }
+        }
+      } catch (err) {
+        console.error("[Timeline] Failed to filter uniqueFiles against disk:", err);
       }
       console.log(`[Timeline] Building continuous local video track from ${uniqueFiles.length} unique local files for total duration ${totalDurationSec}s`);
       let currentStartSec = 0;
@@ -2256,7 +2280,67 @@ To run this application locally and render videos successfully, please:
       }
       const videoTrack = p.tracks?.find((tr) => tr.type === "video");
       const subtitleTrack = p.tracks?.find((tr) => tr.type === "subtitle");
-      const musicItem = p.selected_music?.[0];
+      let musicItem = p.selected_music?.[0];
+      if (!musicItem) {
+        const bgmType = p.params?.bgm_type || p.bgm_type || "none";
+        const bgmFile = p.params?.bgm_file || p.bgm_file;
+        const bgmVolume = p.params?.bgm_volume !== void 0 ? p.params.bgm_volume : p.bgm_volume !== void 0 ? p.bgm_volume : 0.2;
+        if (bgmType === "random") {
+          const randomIdx = Math.floor(Math.random() * BGM_FILES.length);
+          const randomFile = BGM_FILES[randomIdx];
+          musicItem = {
+            id: `bgm_random_${randomIdx}`,
+            provider: "local",
+            url: randomFile.file,
+            title: randomFile.name,
+            duration_sec: 180,
+            volume: bgmVolume
+          };
+          logTask(taskId, "INFO", "AUDIO_MIXER", `BGM Mode: Random. Selected soundtrack: "${randomFile.name}" at volume: ${bgmVolume}`);
+        } else if (bgmType === "contextual") {
+          const searchSubject = `${p.topic || ""} ${p.script || ""}`.toLowerCase();
+          let bestMatch = BGM_FILES[0];
+          let maxMatches = -1;
+          for (const file of BGM_FILES) {
+            let matches = 0;
+            if (file.tags) {
+              for (const tag of file.tags) {
+                if (searchSubject.includes(tag.toLowerCase())) {
+                  matches++;
+                }
+              }
+            }
+            if (matches > maxMatches) {
+              maxMatches = matches;
+              bestMatch = file;
+            }
+          }
+          musicItem = {
+            id: "bgm_contextual",
+            provider: "local",
+            url: bestMatch.file,
+            title: bestMatch.name,
+            duration_sec: 180,
+            volume: bgmVolume
+          };
+          logTask(taskId, "INFO", "AUDIO_MIXER", `BGM Mode: AI Contextual. Matched: "${bestMatch.name}" with score ${maxMatches} at volume: ${bgmVolume}`);
+        } else if (bgmFile && bgmType === "file") {
+          const matched = BGM_FILES.find((f) => f.file === bgmFile || f.name === bgmFile);
+          musicItem = {
+            id: "bgm_param",
+            provider: "local",
+            url: matched ? matched.file : bgmFile,
+            title: matched ? matched.name : import_path.default.basename(bgmFile),
+            duration_sec: 180,
+            volume: bgmVolume
+          };
+          logTask(taskId, "INFO", "AUDIO_MIXER", `BGM Mode: Manual. Selected soundtrack: "${musicItem.title}" at volume: ${bgmVolume}`);
+        } else {
+          logTask(taskId, "INFO", "AUDIO_MIXER", "BGM Mode: None or Disabled.");
+        }
+      } else {
+        logTask(taskId, "INFO", "AUDIO_MIXER", `Using existing selected music: "${musicItem.title}" at volume: ${musicItem.volume || 0.2}`);
+      }
       const clips = videoTrack?.items || [];
       if (clips.length === 0) {
         throw new Error("No video clips in the timeline to render.");
@@ -2437,15 +2521,15 @@ To run this application locally and render videos successfully, please:
       let audioFilter = "";
       const audioInputs = [];
       if (localNarrationPath && localMusicPath) {
-        audioInputs.push(`-i "${localNarrationPath}"`, `-i "${localMusicPath}"`);
-        const musicVolume = musicItem.volume || 0.2;
+        audioInputs.push(`-i "${localNarrationPath}"`, `-stream_loop -1 -i "${localMusicPath}"`);
+        const musicVolume = musicItem.volume !== void 0 ? musicItem.volume : 0.2;
         audioFilter = `[1:a]volume=1.0[v];[2:a]volume=${musicVolume}[m];[v][m]amix=inputs=2:duration=first[a]`;
       } else if (localNarrationPath) {
         audioInputs.push(`-i "${localNarrationPath}"`);
         audioFilter = `[1:a]volume=1.0[a]`;
       } else if (localMusicPath) {
-        audioInputs.push(`-i "${localMusicPath}"`);
-        const musicVolume = musicItem.volume || 0.2;
+        audioInputs.push(`-stream_loop -1 -i "${localMusicPath}"`);
+        const musicVolume = musicItem.volume !== void 0 ? musicItem.volume : 0.2;
         audioFilter = `[1:a]volume=${musicVolume}[a]`;
       }
       let mixCmd = "";
