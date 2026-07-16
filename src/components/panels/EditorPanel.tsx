@@ -1,6 +1,7 @@
 // webui-react/src/components/panels/EditorPanel.tsx
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Eye } from "lucide-react";
 import { VideoPreview } from "../editor/VideoPreview";
 import { ClipInspector } from "../editor/ClipInspector";
 import { Timeline } from "../editor/Timeline";
@@ -19,7 +20,7 @@ function isTypingTarget(target: EventTarget | null): boolean {
 export function EditorPanel() {
   const { t } = useTranslation();
   const projectStore = useProjectStore();
-  const { setPanel } = useProjectWorkspaceStore();
+  const { setPanel, videoUrls } = useProjectWorkspaceStore();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
 
@@ -153,9 +154,17 @@ export function EditorPanel() {
         <Button variant="ghost" size="sm" onClick={() => setPanel("config")}>
           {t("editor.backToConfig") || "← Volver a Configuración"}
         </Button>
-        <Button size="sm" onClick={handleRender}>
-          {t("editor.render")}
-        </Button>
+        <div className="flex items-center gap-2">
+          {videoUrls && videoUrls.length > 0 && (
+            <Button variant="ghost" size="sm" onClick={() => setPanel("done")} className="flex items-center gap-1.5 border-accent/20 text-accent hover:bg-accent/10">
+              <Eye className="h-3.5 w-3.5" />
+              {t("editor.viewFinalVideo") || "Ver video final"}
+            </Button>
+          )}
+          <Button size="sm" onClick={handleRender}>
+            {t("editor.render")}
+          </Button>
+        </div>
       </div>
     </div>
   );

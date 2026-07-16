@@ -208,7 +208,8 @@
       "ready": "Video listo",
       "none": "No se produjeron videos.",
       "back": "← Atrás",
-      "makeAnother": "Crear otro →"
+      "makeAnother": "Crear otro →",
+      "editClips": "Volver a Revisión"
     },
     "progressArea": { "generating": "Generando…", "done": "¡Listo! Videos abajo." },
     "result": { "title": "Resultados" }
@@ -284,6 +285,7 @@
     "notAvailable": "Editor no disponible — el modo de proyecto está deshabilitado o no es compatible con este servidor.",
     "backToReview": "← Volver a Revisión",
     "backToConfig": "← Volver a Configuración",
+    "viewFinalVideo": "Ver video final",
     "render": "Renderizar ▶"
   },
   "subtitles": {

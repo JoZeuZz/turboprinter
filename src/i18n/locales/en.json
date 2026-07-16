@@ -208,7 +208,8 @@
       "ready": "Video ready",
       "none": "No videos were produced.",
       "back": "← Back",
-      "makeAnother": "Make Another →"
+      "makeAnother": "Make Another →",
+      "editClips": "Back to Review"
     },
     "progressArea": { "generating": "Generating…", "done": "Done! Videos ready below." },
     "result": { "title": "Results" }
@@ -284,6 +285,7 @@
     "notAvailable": "Editor not available — project mode is disabled or not supported by this server.",
     "backToReview": "← Back to Review",
     "backToConfig": "← Back to Configuration",
+    "viewFinalVideo": "View final video",
     "render": "Render ▶"
   },
   "subtitles": {

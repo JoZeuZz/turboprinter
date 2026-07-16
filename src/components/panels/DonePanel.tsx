@@ -1,6 +1,6 @@
 // webui-react/src/components/panels/DonePanel.tsx
 import { useState } from "react";
-import { Download, RotateCcw, CheckCircle2, Youtube, Loader2, SlidersHorizontal } from "lucide-react";
+import { Download, RotateCcw, CheckCircle2, Youtube, Loader2, SlidersHorizontal, Scissors } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "../ui";
 import { useProjectWorkspaceStore } from "../../store/useProjectWorkspaceStore";
@@ -37,6 +37,10 @@ export function DonePanel() {
 
   const handleBack = () => {
     setPanel("config");
+  };
+
+  const handleEditClips = () => {
+    setPanel("editor");
   };
 
   const handleMakeAnother = () => {
@@ -138,6 +142,15 @@ export function DonePanel() {
           )}
 
           <div className="flex flex-col sm:flex-row gap-3 w-full justify-center">
+            <Button 
+              variant="ghost" 
+              onClick={handleEditClips}
+              className="flex items-center justify-center gap-2 border-accent/20 text-accent hover:bg-accent/10 hover:text-accent-hover"
+            >
+              <Scissors className="h-4 w-4" />
+              {t("panels.done.editClips") || "Volver a Revisión"}
+            </Button>
+
             <Button 
               variant="ghost" 
               onClick={handleBack}
