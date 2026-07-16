@@ -3361,8 +3361,10 @@ To run this application locally and render videos successfully, please:
 <fontconfig>
   <dir>${path.join(process.cwd(), "public", "fonts")}</dir>
   <dir>${path.join(process.cwd(), "resource", "fonts")}</dir>
+  <dir>/usr/share/fonts</dir>
+  <dir>/usr/local/share/fonts</dir>
   <cachedir>/tmp/fonts-cache-${taskId}</cachedir>
-  <config></config>
+  <include ignore_missing="yes">/etc/fonts/fonts.conf</include>
 </fontconfig>`;
         await fs.promises.writeFile(fontsConfPath, fontsConfXml, "utf8");
 

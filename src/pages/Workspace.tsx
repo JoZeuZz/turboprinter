@@ -66,14 +66,15 @@ export function Workspace() {
         const videoUrls = state.videos?.length
           ? state.videos
           : state.combined_videos ?? [];
-        if (videoUrls.length > 0) {
-          useProjectWorkspaceStore.setState({
-            videoUrls: [...new Set(videoUrls)],
-            panel: "done",
-          });
-        } else {
-          setPanel(state.has_timeline ? "editor" : "script");
-        }
+        
+        useProjectWorkspaceStore.setState({
+          videoUrls: [...new Set(videoUrls)],
+        });
+
+        // Always navigate to "editor" (revision) if a timeline exists, otherwise "script".
+        // This satisfies the requirement that clicking on a project navigates to the intermediate review screen
+        // instead of going straight to the final video.
+        setPanel(state.has_timeline ? "editor" : "script");
       })
       .catch(() => {
         if (!cancelled) {
