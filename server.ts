@@ -2550,8 +2550,6 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
       marginV = Math.round((styleParams.customPosition / 100) * refHeight);
     }
 
-    const isRounded = hasBg && styleParams.roundedBackground === true;
-
     // Define ASS animation override tags
     let animTags = "";
     const animType = styleParams.subtitleAnimation || "none";
@@ -2580,28 +2578,16 @@ WrapStyle: 0
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 `;
 
-    if (isRounded) {
-      // Style 1: BgStyle for the vector drawing (rounded rect) - use alignment 5 (middle-center) to scale and rotate from center
+    if (hasBg) {
+      // Style 1: BgStyle for the vector drawing (rounded or straight rect) - use alignment 5 (middle-center) to scale and rotate from center
       out += `Style: BgStyle,${assFont},${styleParams.fontSize},&H${assBgAlpha}${assBgColor},&H00000000,&HFF000000,&HFF000000,0,0,0,0,100,100,0,0,1,0,0,5,0,0,0,1\n`;
       
       // Style 2: Default for the foreground text
       const defaultOutline = styleParams.strokeWidth !== undefined ? styleParams.strokeWidth : 1.5;
       out += `Style: Default,${assFont},${styleParams.fontSize},&H00${textColor},&H00000000,&H00${strokeColor},&HFF000000,${isBold},0,0,0,100,100,0,0,1,${defaultOutline.toFixed(1)},0,${alignment},${marginLR},${marginLR},${marginV},1\n`;
     } else {
-      let borderStyle = 1; // 1 = Outline + Shadow, 3 = Opaque Box
       let outlineVal = styleParams.strokeWidth !== undefined ? styleParams.strokeWidth : 1.5;
-      let assBackColor = "FF000000"; // transparent shadow by default
-      let assOutlineColor = `00${strokeColor}`;
-
-      if (hasBg) {
-        borderStyle = 3;
-        outlineVal = Math.max(4, Math.round(styleParams.fontSize * 0.15)); // Padding around text inside box
-        assBackColor = `${assBgAlpha}${assBgColor}`;
-        // Make the outline of the box the same color as the box itself so it doesn't show a weird border line
-        assOutlineColor = `${assBgAlpha}${assBgColor}`;
-      }
-
-      out += `Style: Default,${assFont},${styleParams.fontSize},&H00${textColor},&H00000000,&H${assOutlineColor},&H${assBackColor},${isBold},0,0,0,100,100,0,0,${borderStyle},${outlineVal.toFixed(1)},0,${alignment},${marginLR},${marginLR},${marginV},1\n`;
+      out += `Style: Default,${assFont},${styleParams.fontSize},&H00${textColor},&H00000000,&H00${strokeColor},&HFF000000,${isBold},0,0,0,100,100,0,0,1,${outlineVal.toFixed(1)},0,${alignment},${marginLR},${marginLR},${marginV},1\n`;
     }
 
     out += `
@@ -2632,6 +2618,9 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     };
 
     const getRoundedRectPath = (w: number, h: number, r: number): string => {
+      if (r <= 0) {
+        return `m 0 0 l ${Math.round(w)} 0 l ${Math.round(w)} ${Math.round(h)} l 0 ${Math.round(h)}`;
+      }
       const kappa = 0.5522847498;
       
       // Top-left starting point after the top-left curve (at r, 0)
@@ -2761,7 +2750,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         centerY = refHeight / 2;
       }
 
-      if (isRounded) {
+      if (hasBg) {
         // Calculate the box dimensions
         const lines = text.split(/\\N/);
         let maxLineWidth = 0;
@@ -2777,7 +2766,9 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         const boxWidth = maxLineWidth + paddingX;
         const textHeight = lines.length * styleParams.fontSize * 1.15;
         const boxHeight = textHeight + paddingY;
-        const radius = Math.min(boxHeight / 2, styleParams.fontSize * 0.35);
+        const radius = styleParams.roundedBackground === true
+          ? Math.min(boxHeight / 2, styleParams.fontSize * 0.35)
+          : Math.round(styleParams.fontSize * 0.08); // small radius like rounded-sm
         
         // Determine the vertical start coordinate for the background box
         let boxY = refHeight - marginV - boxHeight;

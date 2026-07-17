@@ -1,6 +1,6 @@
 // webui-react/src/components/panels/VideoConfigPanel.tsx
 import { useState, useEffect } from "react";
-import { Eye, Wand2, Loader2 } from "lucide-react";
+import { Eye, Wand2, Loader2, Check } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import {
   TabBar,
@@ -20,6 +20,7 @@ import { useProjectWorkspaceStore } from "../../store/useProjectWorkspaceStore";
 import { useProjectStore } from "../../store/useProjectStore";
 import { videoApi } from "../../api/video";
 import { voiceApi } from "../../api/voice";
+import { projectsApi } from "../../api/projects";
 import { SubtitleFontGallery } from "../subtitles/SubtitleFontGallery";
 import { SubtitlePreview } from "../subtitles/SubtitlePreview";
 import { VoiceGallery } from "../voice/VoiceGallery";
@@ -172,6 +173,52 @@ export function VideoConfigPanel() {
       }
     } catch (err) {
       console.error("[VideoConfigPanel] Error during handleGenerate:", err);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleSaveAndBackToEditor = async () => {
+    console.log("[VideoConfigPanel] handleSaveAndBackToEditor triggered");
+    setIsSubmitting(true);
+    try {
+      const params = store.toParams();
+      const projectId = projectStore.projectId;
+      const currentProject = projectStore.project;
+      if (projectId && currentProject) {
+        console.log("[VideoConfigPanel] Saving params to server project before returning to editor", params);
+        await projectsApi.replaceTimeline(projectId, {
+          ...currentProject,
+          params,
+        });
+        await projectStore.open(projectId);
+      }
+      workspaceStore.setPanel("editor");
+    } catch (err) {
+      console.error("[VideoConfigPanel] Error during handleSaveAndBackToEditor:", err);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleBackToReview = async () => {
+    console.log("[VideoConfigPanel] handleBackToReview triggered");
+    setIsSubmitting(true);
+    try {
+      const params = store.toParams();
+      const projectId = projectStore.projectId;
+      const currentProject = projectStore.project;
+      if (projectId && currentProject) {
+        console.log("[VideoConfigPanel] Saving params to server project before returning to review", params);
+        await projectsApi.replaceTimeline(projectId, {
+          ...currentProject,
+          params,
+        });
+        await projectStore.open(projectId);
+      }
+      workspaceStore.setPanel("done");
+    } catch (err) {
+      console.error("[VideoConfigPanel] Error during handleBackToReview:", err);
     } finally {
       setIsSubmitting(false);
     }
@@ -632,30 +679,45 @@ export function VideoConfigPanel() {
       </div>
 
       <div className="shrink-0 border-t border-border pt-4">
-        <div className={hasReviewVideo ? "grid gap-2 sm:grid-cols-[auto_minmax(0,1fr)]" : ""}>
-        {hasReviewVideo && (
-          <Button
-            variant="ghost"
-            size="lg"
-            onClick={() => workspaceStore.setPanel("done")}
-          >
-            <Eye className="mr-2 h-4 w-4" />
-            {t("panels.videoConfig.backToReview")}
-          </Button>
-        )}
-        <Button
-          className="w-full"
-          size="lg"
-          onClick={handleGenerate}
-          disabled={isSubmitting || !store.video_subject.trim()}
-        >
-          {isSubmitting ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : (
-            <Wand2 className="mr-2 h-4 w-4" />
+        <div className="flex flex-col sm:flex-row gap-2 justify-end w-full">
+          {hasReviewVideo && (
+            <Button
+              variant="ghost"
+              size="lg"
+              onClick={handleBackToReview}
+              disabled={isSubmitting}
+            >
+              <Eye className="mr-2 h-4 w-4" />
+              {t("panels.videoConfig.backToReview")}
+            </Button>
           )}
-          {t("panels.videoConfig.generate")}
-        </Button>
+
+          {projectStore.projectId && projectStore.project?.tracks && projectStore.project.tracks.length > 0 && (
+            <Button
+              variant="ghost"
+              size="lg"
+              onClick={handleSaveAndBackToEditor}
+              disabled={isSubmitting}
+              className="border-accent text-accent hover:bg-accent/10 sm:w-auto"
+            >
+              <Check className="mr-2 h-4 w-4" />
+              {t("panels.videoConfig.applyAndBack") || "Aplicar y Volver al Editor"}
+            </Button>
+          )}
+
+          <Button
+            className="flex-1 sm:flex-none sm:min-w-[200px]"
+            size="lg"
+            onClick={handleGenerate}
+            disabled={isSubmitting || !store.video_subject.trim()}
+          >
+            {isSubmitting ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Wand2 className="mr-2 h-4 w-4" />
+            )}
+            {t("panels.videoConfig.generate")}
+          </Button>
         </div>
       </div>
     </section>
