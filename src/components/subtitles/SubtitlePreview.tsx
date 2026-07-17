@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { motion } from "motion/react";
 import { getSubtitleFontFamily, getSubtitleFontWeight } from "./SubtitleFontGallery";
 import { resolvePreviewStyle, PREVIEW_DIMS } from "../../lib/subtitlePreviewStyle";
 
@@ -14,6 +15,7 @@ interface SubtitlePreviewProps {
   textBackgroundColor?: boolean | string | null;
   roundedBackground?: boolean | null;
   subtitleBgStyle?: "solid" | "translucent" | "blur" | null;
+  subtitleAnimation?: "none" | "pop" | "fade" | "rotate" | null;
   sampleText?: string | null;
 }
 
@@ -48,6 +50,7 @@ export function SubtitlePreview({
   textBackgroundColor,
   roundedBackground,
   subtitleBgStyle,
+  subtitleAnimation,
   sampleText,
 }: SubtitlePreviewProps) {
   const { t } = useTranslation();
@@ -87,6 +90,30 @@ export function SubtitlePreview({
     }
   }
 
+  const animType = subtitleAnimation ?? "pop";
+  let motionProps = {};
+  if (enabled) {
+    if (animType === "pop") {
+      motionProps = {
+        initial: { scale: 0.8 },
+        animate: { scale: [0.8, 1.12, 1.0] },
+        transition: { duration: 0.18, times: [0, 0.5, 1], ease: "easeOut" },
+      };
+    } else if (animType === "fade") {
+      motionProps = {
+        initial: { opacity: 0 },
+        animate: { opacity: 1 },
+        transition: { duration: 0.15, ease: "easeOut" },
+      };
+    } else if (animType === "rotate") {
+      motionProps = {
+        initial: { scale: 0.8, rotate: -3.5 },
+        animate: { scale: [0.8, 1.12, 1.0], rotate: [-3.5, 2, 0] },
+        transition: { duration: 0.2, times: [0, 0.5, 1], ease: "easeOut" },
+      };
+    }
+  }
+
   return (
     <aside className="rounded-xl border border-border bg-base p-3 lg:sticky lg:top-2">
       <div className="mb-3 flex items-center justify-between">
@@ -116,11 +143,13 @@ export function SubtitlePreview({
           }`}
           style={positionStyle}
         >
-          <div
+          <motion.div
+            key={`${text}-${animType}-${textColor}-${fontName}-${fontSize}-${strokeColor}-${strokeWidth}-${roundedBackground}-${subtitleBgStyle}`}
             className={`inline-block max-w-full px-3 py-1.5 leading-tight transition-all ${
               previewStyle.background?.rounded ? "rounded-xl" : "rounded-sm"
             } ${subtitleBgStyle === "blur" ? "backdrop-blur-md border border-white/20" : ""}`}
             style={{ backgroundColor: finalBgColor }}
+            {...motionProps}
           >
             <span
               className="block break-words"
@@ -145,7 +174,7 @@ export function SubtitlePreview({
             >
               {text}
             </span>
-          </div>
+          </motion.div>
         </div>
       </div>
     </aside>

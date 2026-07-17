@@ -99,6 +99,13 @@ export function VideoConfigPanel() {
     { value: "custom", label: t("audioSubtitle.positionCustom") },
   ];
 
+  const ANIMATION_OPTIONS = [
+    { value: "none", label: "Ninguna" },
+    { value: "pop", label: "Efecto Pop (TikTok / Rebote)" },
+    { value: "fade", label: "Desvanecimiento" },
+    { value: "rotate", label: "Giro Dinámico (Tilt Pop)" },
+  ];
+
   useEffect(() => {
     videoApi.getBgmList().then((r) => setBgmFiles(r.files)).catch(() => {});
   }, []);
@@ -575,6 +582,14 @@ export function VideoConfigPanel() {
                     checked={store.rounded_subtitle_background ?? false}
                     onChange={(v) => store.set("rounded_subtitle_background", v)}
                   />
+                  <Select
+                    label="Animación de Subtítulos (ASS)"
+                    value={store.subtitle_animation ?? "pop"}
+                    options={ANIMATION_OPTIONS}
+                    onChange={(e) =>
+                      store.set("subtitle_animation", e.target.value as any)
+                    }
+                  />
                 </Collapsible>
               )}
           </>
@@ -595,6 +610,7 @@ export function VideoConfigPanel() {
             textBackgroundColor={store.text_background_color ?? true}
             roundedBackground={store.rounded_subtitle_background ?? false}
             subtitleBgStyle={store.subtitle_bg_style ?? "solid"}
+            subtitleAnimation={store.subtitle_animation ?? "pop"}
             sampleText={store.preview_text || store.video_script}
           />
           </div>

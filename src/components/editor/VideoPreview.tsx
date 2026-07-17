@@ -1,6 +1,7 @@
 // webui-react/src/components/editor/VideoPreview.tsx
 import { useEffect, useRef, useState } from "react";
 import { Play, Pause, SkipBack, SkipForward } from "lucide-react";
+import { motion } from "motion/react";
 import { useTranslation } from "react-i18next";
 import { formatTime } from "../../lib/time";
 import type { TimelineItem } from "../../api/types";
@@ -91,6 +92,7 @@ export function VideoPreview({ items, selectedId, onTimeUpdate }: VideoPreviewPr
   const textBackgroundColor = useVideoStore((s) => s.text_background_color) ?? true;
   const roundedBackground = useVideoStore((s) => s.rounded_subtitle_background) ?? false;
   const subtitleBgStyle = useVideoStore((s) => s.subtitle_bg_style) ?? "solid";
+  const subtitleAnimation = useVideoStore((s) => s.subtitle_animation) ?? "pop";
 
   useEffect(() => {
     if (!videoRef.current) return;
@@ -310,6 +312,28 @@ export function VideoPreview({ items, selectedId, onTimeUpdate }: VideoPreviewPr
     maxWidthClass = "max-w-[680px]";
   }
 
+  const animType = subtitleAnimation ?? "pop";
+  let motionProps = {};
+  if (animType === "pop") {
+    motionProps = {
+      initial: { scale: 0.8 },
+      animate: { scale: [0.8, 1.12, 1.0] },
+      transition: { duration: 0.18, times: [0, 0.5, 1], ease: "easeOut" },
+    };
+  } else if (animType === "fade") {
+    motionProps = {
+      initial: { opacity: 0 },
+      animate: { opacity: 1 },
+      transition: { duration: 0.15, ease: "easeOut" },
+    };
+  } else if (animType === "rotate") {
+    motionProps = {
+      initial: { scale: 0.8, rotate: -3.5 },
+      animate: { scale: [0.8, 1.12, 1.0], rotate: [-3.5, 2, 0] },
+      transition: { duration: 0.2, times: [0, 0.5, 1], ease: "easeOut" },
+    };
+  }
+
   return (
     <div className={`flex flex-col bg-black rounded-lg overflow-hidden shadow-lg shadow-black/40 h-full w-full mx-auto ${maxWidthClass}`}>
       {src ? (
@@ -337,11 +361,13 @@ export function VideoPreview({ items, selectedId, onTimeUpdate }: VideoPreviewPr
           )}
           {subtitleEnabled && activeSubtitle && activeSubtitle.text && (
             <div style={positionStyle}>
-              <div
+              <motion.div
+                key={`${activeSubtitle.id || activeSubtitle.text}-${animType}-${textColor}-${fontName}-${fontSize}-${strokeColor}-${strokeWidth}-${roundedBackground}-${subtitleBgStyle}`}
                 className={`inline-block max-w-full px-3 py-1.5 leading-tight transition-all ${borderStyleClass} ${
                   subtitleBgStyle === "blur" ? "backdrop-blur-md border border-white/20" : ""
                 }`}
                 style={bgStyle}
+                {...motionProps}
               >
                 <span
                   className="block break-words"
@@ -355,7 +381,7 @@ export function VideoPreview({ items, selectedId, onTimeUpdate }: VideoPreviewPr
                 >
                   {activeSubtitle.text}
                 </span>
-              </div>
+              </motion.div>
             </div>
           )}
         </div>

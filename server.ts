@@ -2445,6 +2445,7 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
       customPosition: number;
       subtitleBgStyle?: string;
       roundedBackground?: boolean;
+      subtitleAnimation?: string;
     }
   ): string => {
     const refHeight = 1920;
@@ -2534,6 +2535,17 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
 
     const isRounded = hasBg && styleParams.roundedBackground === true;
 
+    // Define ASS animation override tags
+    let animTags = "";
+    const animType = styleParams.subtitleAnimation || "none";
+    if (animType === "pop") {
+      animTags = "\\fscx80\\fscy80\\t(0,70,\\fscx114\\fscy114)\\t(70,140,\\fscx100\\fscy100)";
+    } else if (animType === "fade") {
+      animTags = "\\fad(120,120)";
+    } else if (animType === "rotate") {
+      animTags = "\\frz-3.5\\fscx80\\fscy80\\t(0,80,\\frz2\\fscx112\\fscy112)\\t(80,150,\\frz0\\fscx100\\fscy100)";
+    }
+
     // Determine font weight bold
     let isBold = 0;
     if (styleParams.fontName && styleParams.fontName.toLowerCase().includes("bold")) {
@@ -2552,8 +2564,8 @@ Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour,
 `;
 
     if (isRounded) {
-      // Style 1: BgStyle for the vector drawing (rounded rect) - use alignment 7 (top-left) to map drawing (0,0) exactly to pos(X,Y)
-      out += `Style: BgStyle,${assFont},${styleParams.fontSize},&H${assBgAlpha}${assBgColor},&H00000000,&HFF000000,&HFF000000,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1\n`;
+      // Style 1: BgStyle for the vector drawing (rounded rect) - use alignment 5 (middle-center) to scale and rotate from center
+      out += `Style: BgStyle,${assFont},${styleParams.fontSize},&H${assBgAlpha}${assBgColor},&H00000000,&HFF000000,&HFF000000,0,0,0,0,100,100,0,0,1,0,0,5,0,0,0,1\n`;
       
       // Style 2: Default for the foreground text
       const defaultOutline = styleParams.strokeWidth !== undefined ? styleParams.strokeWidth : 1.5;
@@ -2600,6 +2612,64 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         }
       }
       return width * fontSize;
+    };
+
+    const getCenteredRoundedRectPath = (w: number, h: number, r: number): string => {
+      const kappa = 0.5522847498;
+      const hw = w / 2;
+      const hh = h / 2;
+      
+      // Start at top-left curve end: x = -hw + r, y = -hh
+      let p = `m ${Math.round(-hw + r)} ${Math.round(-hh)} `;
+      // Line to top-right corner start: x = hw - r, y = -hh
+      p += `l ${Math.round(hw - r)} ${Math.round(-hh)} `;
+      
+      // Top-right corner curve to (hw, -hh + r)
+      const tr_x1 = Math.round(hw - r + r * kappa);
+      const tr_y1 = Math.round(-hh);
+      const tr_x2 = Math.round(hw);
+      const tr_y2 = Math.round(-hh + r - r * kappa);
+      const tr_x3 = Math.round(hw);
+      const tr_y3 = Math.round(-hh + r);
+      p += `b ${tr_x1} ${tr_y1} ${tr_x2} ${tr_y2} ${tr_x3} ${tr_y3} `;
+      
+      // Line to bottom-right corner start: x = hw, y = hh - r
+      p += `l ${Math.round(hw)} ${Math.round(hh - r)} `;
+      
+      // Bottom-right corner curve to (hw - r, hh)
+      const br_x1 = Math.round(hw);
+      const br_y1 = Math.round(hh - r + r * kappa);
+      const br_x2 = Math.round(hw - r + r * kappa);
+      const br_y2 = Math.round(hh);
+      const br_x3 = Math.round(hw - r);
+      const br_y3 = Math.round(hh);
+      p += `b ${br_x1} ${br_y1} ${br_x2} ${br_y2} ${br_x3} ${br_y3} `;
+      
+      // Line to bottom-left corner start: x = -hw + r, y = hh
+      p += `l ${Math.round(-hw + r)} ${Math.round(hh)} `;
+      
+      // Bottom-left corner curve to (-hw, hh - r)
+      const bl_x1 = Math.round(-hw + r - r * kappa);
+      const bl_y1 = Math.round(hh);
+      const bl_x2 = Math.round(-hw);
+      const bl_y2 = Math.round(hh - r + r * kappa);
+      const bl_x3 = Math.round(-hw);
+      const bl_y3 = Math.round(hh - r);
+      p += `b ${bl_x1} ${bl_y1} ${bl_x2} ${bl_y2} ${bl_x3} ${bl_y3} `;
+      
+      // Line to top-left corner start: x = -hw, y = -hh + r
+      p += `l ${Math.round(-hw)} ${Math.round(-hh + r)} `;
+      
+      // Top-left corner curve to (-hw + r, -hh)
+      const tl_x1 = Math.round(-hw);
+      const tl_y1 = Math.round(-hh + r - r * kappa);
+      const tl_x2 = Math.round(-hw + r - r * kappa);
+      const tl_y2 = Math.round(-hh);
+      const tl_x3 = Math.round(-hw + r);
+      const tl_y3 = Math.round(-hh);
+      p += `b ${tl_x1} ${tl_y1} ${tl_x2} ${tl_y2} ${tl_x3} ${tl_y3}`;
+      
+      return p;
     };
 
     const getRoundedRectPath = (w: number, h: number, r: number): string => {
@@ -2666,6 +2736,14 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
       const end = formatAssTime(startSec + durationSec);
       const text = (sub.text || "").replace(/\\n/g, "\\N").replace(/\n/g, "\\N"); // ASS uses \N for line breaks
       
+      const centerX = refWidth / 2;
+      let centerY = refHeight - marginV;
+      if (alignment === 8) {
+        centerY = marginV;
+      } else if (alignment === 5) {
+        centerY = refHeight / 2;
+      }
+
       if (isRounded) {
         // Calculate the box dimensions
         const lines = text.split(/\\N/);
@@ -2684,25 +2762,22 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         const boxHeight = textHeight + paddingY;
         const radius = Math.min(boxHeight / 2, styleParams.fontSize * 0.35);
         
-        // Calculate the center position
-        const centerX = refWidth / 2;
-        let centerY = refHeight - marginV - textHeight / 2;
+        // Calculate the center position specifically for the rounded box grouping
+        let boxCenterY = refHeight - marginV - textHeight / 2;
         if (alignment === 8) {
-          centerY = marginV + textHeight / 2;
+          boxCenterY = marginV + textHeight / 2;
         } else if (alignment === 5) {
-          centerY = refHeight / 2;
+          boxCenterY = refHeight / 2;
         }
         
-        const pathStr = getRoundedRectPath(boxWidth, boxHeight, radius);
-        const boxX = Math.round(centerX - boxWidth / 2);
-        const boxY = Math.round(centerY - boxHeight / 2);
+        const pathStr = getCenteredRoundedRectPath(boxWidth, boxHeight, radius);
         
-        // Output background box on Layer 0 using BgStyle with vector drawing tags aligned to (boxX, boxY) with \an7 (top-left)
-        out += `Dialogue: 0,${start},${end},BgStyle,,0,0,0,,{\\an7\\pos(${boxX},${boxY})\\p1}${pathStr}{\\p0}\n`;
+        // Output background box on Layer 0 using BgStyle with vector drawing tags aligned to center (centerX, boxCenterY) with \an5 (middle-center)
+        out += `Dialogue: 0,${start},${end},BgStyle,,0,0,0,,{\\an5\\pos(${centerX},${boxCenterY.toFixed(1)})${animTags}\\p1}${pathStr}{\\p0}\n`;
         // Output foreground text on Layer 1 using Default style, aligned to same center position
-        out += `Dialogue: 1,${start},${end},Default,,0,0,0,,{\\an5\\pos(${centerX},${centerY.toFixed(1)})}${text}\n`;
+        out += `Dialogue: 1,${start},${end},Default,,0,0,0,,{\\an5\\pos(${centerX},${boxCenterY.toFixed(1)})${animTags}}${text}\n`;
       } else {
-        out += `Dialogue: 0,${start},${end},Default,,0,0,0,,${text}\n`;
+        out += `Dialogue: 0,${start},${end},Default,,0,0,0,,{\\an${alignment}\\pos(${centerX},${centerY.toFixed(1)})${animTags}}${text}\n`;
       }
     }
 
@@ -3382,6 +3457,7 @@ To run this application locally and render videos successfully, please:
         const customPosParam = pParams.custom_position !== undefined ? pParams.custom_position : (p.custom_position !== undefined ? p.custom_position : 70);
         const subtitleBgStyleParam = pParams.subtitle_bg_style || p.subtitle_bg_style || "solid";
         const roundedBgParam = pParams.rounded_subtitle_background !== undefined ? pParams.rounded_subtitle_background : (p.rounded_subtitle_background !== undefined ? p.rounded_subtitle_background : false);
+        const subtitleAnimationParam = pParams.subtitle_animation || p.subtitle_animation || "pop";
 
         // Generate ASS file with exact styles
         const assFilePath = path.join(cacheDir, `subtitles_${taskId}.ass`);
@@ -3396,6 +3472,7 @@ To run this application locally and render videos successfully, please:
           customPosition: customPosParam,
           subtitleBgStyle: subtitleBgStyleParam,
           roundedBackground: roundedBgParam,
+          subtitleAnimation: subtitleAnimationParam,
         });
         await fs.promises.writeFile(assFilePath, assContent, "utf8");
 
