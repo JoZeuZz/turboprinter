@@ -1065,6 +1065,14 @@ async function startServer() {
     res.json({ status: 200, message: "ok", data: { files: BGM_FILES } });
   }));
   app.get("/api/v1/projects", wrap(async (req, res) => {
+    for (const [projectId, p] of Array.from(projects.entries())) {
+      if (p.project_folder_name) {
+        const folderPath = import_path.default.join(process.cwd(), "storage", "renders", p.project_folder_name);
+        if (!import_fs.default.existsSync(folderPath)) {
+          projects.delete(projectId);
+        }
+      }
+    }
     const list = Array.from(projects.values()).map((p) => ({
       project_id: p.project_id,
       topic: p.topic || "Untitled Project",
@@ -2243,7 +2251,6 @@ ${sub.text || ""}
       alignment = 8;
       marginV = Math.round(styleParams.customPosition / 100 * refHeight);
     }
-    const isRounded = hasBg && styleParams.roundedBackground === true;
     let animTags = "";
     const animType = styleParams.subtitleAnimation || "none";
     if (animType === "pop") {
@@ -2266,24 +2273,15 @@ WrapStyle: 0
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 `;
-    if (isRounded) {
+    if (hasBg) {
       out += `Style: BgStyle,${assFont},${styleParams.fontSize},&H${assBgAlpha}${assBgColor},&H00000000,&HFF000000,&HFF000000,0,0,0,0,100,100,0,0,1,0,0,5,0,0,0,1
 `;
       const defaultOutline = styleParams.strokeWidth !== void 0 ? styleParams.strokeWidth : 1.5;
       out += `Style: Default,${assFont},${styleParams.fontSize},&H00${textColor},&H00000000,&H00${strokeColor},&HFF000000,${isBold},0,0,0,100,100,0,0,1,${defaultOutline.toFixed(1)},0,${alignment},${marginLR},${marginLR},${marginV},1
 `;
     } else {
-      let borderStyle = 1;
       let outlineVal = styleParams.strokeWidth !== void 0 ? styleParams.strokeWidth : 1.5;
-      let assBackColor = "FF000000";
-      let assOutlineColor = `00${strokeColor}`;
-      if (hasBg) {
-        borderStyle = 3;
-        outlineVal = Math.max(4, Math.round(styleParams.fontSize * 0.15));
-        assBackColor = `${assBgAlpha}${assBgColor}`;
-        assOutlineColor = `${assBgAlpha}${assBgColor}`;
-      }
-      out += `Style: Default,${assFont},${styleParams.fontSize},&H00${textColor},&H00000000,&H${assOutlineColor},&H${assBackColor},${isBold},0,0,0,100,100,0,0,${borderStyle},${outlineVal.toFixed(1)},0,${alignment},${marginLR},${marginLR},${marginV},1
+      out += `Style: Default,${assFont},${styleParams.fontSize},&H00${textColor},&H00000000,&H00${strokeColor},&HFF000000,${isBold},0,0,0,100,100,0,0,1,${outlineVal.toFixed(1)},0,${alignment},${marginLR},${marginLR},${marginV},1
 `;
     }
     out += `
@@ -2311,6 +2309,9 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
       return width * fontSize;
     };
     const getRoundedRectPath = (w, h, r) => {
+      if (r <= 0) {
+        return `m 0 0 l ${Math.round(w)} 0 l ${Math.round(w)} ${Math.round(h)} l 0 ${Math.round(h)}`;
+      }
       const kappa = 0.5522847498;
       let p = `m ${Math.round(r)} 0 `;
       p += `l ${Math.round(w - r)} 0 `;
@@ -2399,7 +2400,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
       } else if (alignment === 5) {
         centerY = refHeight / 2;
       }
-      if (isRounded) {
+      if (hasBg) {
         const lines = text.split(/\\N/);
         let maxLineWidth = 0;
         for (const line of lines) {
@@ -2413,17 +2414,19 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         const boxWidth = maxLineWidth + paddingX;
         const textHeight = lines.length * styleParams.fontSize * 1.15;
         const boxHeight = textHeight + paddingY;
-        const radius = Math.min(boxHeight / 2, styleParams.fontSize * 0.35);
-        let boxCenterY = refHeight - marginV - textHeight / 2;
+        const radius = styleParams.roundedBackground === true ? Math.min(boxHeight / 2, styleParams.fontSize * 0.35) : Math.round(styleParams.fontSize * 0.08);
+        let boxY = refHeight - marginV - boxHeight;
         if (alignment === 8) {
-          boxCenterY = marginV + textHeight / 2;
+          boxY = marginV;
         } else if (alignment === 5) {
-          boxCenterY = refHeight / 2;
+          boxY = refHeight / 2 - boxHeight / 2;
         }
-        const pathStr = getCenteredRoundedRectPath(boxWidth, boxHeight, radius);
-        out += `Dialogue: 0,${start},${end},BgStyle,,0,0,0,,{\\an5\\pos(${centerX},${boxCenterY.toFixed(1)})${animTags}\\p1}${pathStr}{\\p0}
+        const boxX = centerX - boxWidth / 2;
+        const textY = boxY + paddingY / 2;
+        const pathStr = getRoundedRectPath(boxWidth, boxHeight, radius);
+        out += `Dialogue: 0,${start},${end},BgStyle,,0,0,0,,{\\an7\\pos(${boxX.toFixed(1)},${boxY.toFixed(1)})${animTags}\\p1}${pathStr}{\\p0}
 `;
-        out += `Dialogue: 1,${start},${end},Default,,0,0,0,,{\\an5\\pos(${centerX},${boxCenterY.toFixed(1)})${animTags}}${text}
+        out += `Dialogue: 1,${start},${end},Default,,0,0,0,,{\\an8\\pos(${centerX},${textY.toFixed(1)})${animTags}}${text}
 `;
       } else {
         out += `Dialogue: 0,${start},${end},Default,,0,0,0,,{\\an${alignment}\\pos(${centerX},${centerY.toFixed(1)})${animTags}}${text}

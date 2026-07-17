@@ -165,8 +165,8 @@ export function Timeline({
           </div>
 
           {/* Video track */}
-          <div className="flex items-center gap-1 px-3 py-2">
-            <span className="sticky left-0 z-30 flex w-14 shrink-0 items-center gap-1 bg-base text-[10px] uppercase tracking-wide text-muted">
+          <div className="flex items-center gap-0 px-3 py-2 border-b border-border/40">
+            <span className="sticky left-0 z-30 flex w-14 shrink-0 items-center gap-1 bg-base text-[10px] uppercase tracking-wide text-muted mr-1">
               <Film className="h-3 w-3" /> Video
             </span>
             {orderedItems.length > 0 && (
@@ -190,49 +190,63 @@ export function Timeline({
           </div>
 
           {/* Audio track */}
-          <div className="flex items-center gap-1 px-3 py-1.5">
-            <span className="sticky left-0 z-30 flex w-14 shrink-0 items-center gap-1 bg-base text-[10px] uppercase tracking-wide text-muted">
+          <div className="relative h-12 px-3 border-b border-border/40 flex items-center">
+            <span className="sticky left-0 z-30 flex w-14 shrink-0 items-center gap-1 bg-base text-[10px] uppercase tracking-wide text-muted mr-1">
               <Music className="h-3 w-3" /> Audio
             </span>
-            {(audioTrack?.items ?? []).map((item) => (
-              <button
-                type="button"
-                key={item.id}
-                onClick={() => onSelect(item.id)}
-                data-testid={`audio-${item.id}`}
-                className={`h-8 shrink-0 rounded border px-2 flex items-center text-[10px] transition-all truncate select-none ${
-                  selectedId === item.id
-                    ? "border-accent bg-accent/20 ring-1 ring-accent text-foreground font-medium"
-                    : "border-border bg-surface hover:border-accent/50 text-muted-foreground hover:bg-surface/80"
-                }`}
-                style={{ width: `${Math.max(item.duration_sec * pxPerSecond, 40)}px` }}
-              >
-                <span className="truncate w-full text-left font-mono">{item.text || `${item.duration_sec.toFixed(1)}s`}</span>
-              </button>
-            ))}
+            <div className="absolute inset-y-0 left-0 right-0 pointer-events-none">
+              <div className="relative w-full h-full" style={{ marginLeft: `${LEFT_OFFSET_PX}px` }}>
+                {(audioTrack?.items ?? []).map((item) => (
+                  <button
+                    type="button"
+                    key={item.id}
+                    onClick={() => onSelect(item.id)}
+                    data-testid={`audio-${item.id}`}
+                    className={`absolute top-2 h-8 rounded border px-2 flex items-center text-[10px] transition-all truncate select-none pointer-events-auto ${
+                      selectedId === item.id
+                        ? "border-accent bg-accent/20 ring-1 ring-accent text-foreground font-medium"
+                        : "border-border bg-surface hover:border-accent/50 text-muted-foreground hover:bg-surface/80"
+                    }`}
+                    style={{
+                      left: `${item.start_sec * pxPerSecond}px`,
+                      width: `${Math.max(item.duration_sec * pxPerSecond, 40)}px`,
+                    }}
+                  >
+                    <span className="truncate w-full text-left font-mono">{item.text || `${item.duration_sec.toFixed(1)}s`}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
 
           {/* Subtitle track */}
-          <div className="flex items-center gap-1 px-3 py-1.5">
-            <span className="sticky left-0 z-30 flex w-14 shrink-0 items-center gap-1 bg-base text-[10px] uppercase tracking-wide text-muted">
+          <div className="relative h-10 px-3 border-b border-border/40 flex items-center">
+            <span className="sticky left-0 z-30 flex w-14 shrink-0 items-center gap-1 bg-base text-[10px] uppercase tracking-wide text-muted mr-1">
               <Captions className="h-3 w-3" /> Subs
             </span>
-            {(subtitleTrack?.items ?? []).map((item) => (
-              <button
-                type="button"
-                key={item.id}
-                onClick={() => onSelect(item.id)}
-                data-testid={`subtitle-${item.id}`}
-                className={`h-6 shrink-0 rounded border px-2 flex items-center text-[10px] transition-all truncate select-none ${
-                  selectedId === item.id
-                    ? "border-accent bg-accent/20 ring-1 ring-accent text-foreground font-medium"
-                    : "border-border/60 bg-surface/60 hover:border-accent/40 text-muted-foreground hover:bg-surface/80"
-                }`}
-                style={{ width: `${Math.max(item.duration_sec * pxPerSecond, 40)}px` }}
-              >
-                <span className="truncate w-full text-left font-mono">{item.text || `${item.duration_sec.toFixed(1)}s`}</span>
-              </button>
-            ))}
+            <div className="absolute inset-y-0 left-0 right-0 pointer-events-none">
+              <div className="relative w-full h-full" style={{ marginLeft: `${LEFT_OFFSET_PX}px` }}>
+                {(subtitleTrack?.items ?? []).map((item) => (
+                  <button
+                    type="button"
+                    key={item.id}
+                    onClick={() => onSelect(item.id)}
+                    data-testid={`subtitle-${item.id}`}
+                    className={`absolute top-2 h-6 rounded border px-2 flex items-center text-[10px] transition-all truncate select-none pointer-events-auto ${
+                      selectedId === item.id
+                        ? "border-accent bg-accent/20 ring-1 ring-accent text-foreground font-medium"
+                        : "border-border/60 bg-surface/60 hover:border-accent/40 text-muted-foreground hover:bg-surface/80"
+                    }`}
+                    style={{
+                      left: `${item.start_sec * pxPerSecond}px`,
+                      width: `${Math.max(item.duration_sec * pxPerSecond, 40)}px`,
+                    }}
+                  >
+                    <span className="truncate w-full text-left font-mono">{item.text || `${item.duration_sec.toFixed(1)}s`}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       </div>
