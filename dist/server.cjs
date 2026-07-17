@@ -1080,7 +1080,15 @@ async function startServer() {
       if (!process.env.GEMINI_API_KEY) {
         throw new Error("No Gemini API key configured. Please set GEMINI_API_KEY.");
       }
-      const prompt = `Escribe un gui\xF3n de video cautivador, detallado y narrativo sobre "${topic}" en idioma ${language}. Es CR\xCDTICO que el gui\xF3n tenga exactamente ${paragraph_number} p\xE1rrafos bien estructurados, completos y detallados (cada p\xE1rrafo debe ser lo suficientemente largo y descriptivo, \xF3ptimo para narrar una historia o un documental). Separa cada p\xE1rrafo estrictamente con dos saltos de l\xEDnea (\\n\\n). Devuelve SOLAMENTE el texto del gui\xF3n, sin t\xEDtulos, introducciones ni comentarios adicionales.`;
+      const prompt = `Escribe un gui\xF3n para un video de TikTok sobre "${topic}" en idioma ${language}.
+El objetivo es que el espectador sienta que alguien le est\xE1 contando una historia fascinante cara a cara.
+Usa un tono cercano, natural y conversacional. Escribe con palabras simples, evitando tecnicismos, frases demasiado largas o vocabulario rebuscado. Si aparece un concepto dif\xEDcil, expl\xEDcalo de forma sencilla sin perder el ritmo.
+Haz que el relato despierte curiosidad desde las primeras l\xEDneas y mantenga la tensi\xF3n durante todo el video. Alterna momentos de sorpresa, intriga y reflexi\xF3n cuando sea apropiado, pero sin exagerar ni inventar hechos.
+No escribas como un art\xEDculo de Wikipedia ni como un documental acad\xE9mico. Escribe como un buen narrador que sabe mantener la atenci\xF3n de quien escucha.
+Es CR\xCDTICO que el gui\xF3n tenga EXACTAMENTE ${paragraph_number} p\xE1rrafos, separados \xFAnicamente por dos saltos de l\xEDnea (\\n\\n).
+Cada p\xE1rrafo debe desarrollar una parte de la historia de forma completa, con descripciones f\xE1ciles de imaginar y transiciones naturales hacia el siguiente.
+No repitas informaci\xF3n. No uses relleno. Cada frase debe aportar algo interesante.
+Devuelve \xDANICAMENTE el texto del gui\xF3n, sin t\xEDtulos, encabezados, listas, notas ni comentarios adicionales.`;
       scriptText = await generateGeminiContent(prompt);
     }
     const newProject = {
@@ -2339,6 +2347,45 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
       p += `b ${tl_x1} ${tl_y1} ${tl_x2} ${tl_y2} ${tl_x3} ${tl_y3}`;
       return p;
     };
+    const getCenteredRoundedRectPath = (w, h, r) => {
+      const kappa = 0.5522847498;
+      const hw = w / 2;
+      const hh = h / 2;
+      let p = `m ${Math.round(-hw + r)} ${Math.round(-hh)} `;
+      p += `l ${Math.round(hw - r)} ${Math.round(-hh)} `;
+      const tr_x1 = Math.round(hw - r + r * kappa);
+      const tr_y1 = Math.round(-hh);
+      const tr_x2 = Math.round(hw);
+      const tr_y2 = Math.round(-hh + r - r * kappa);
+      const tr_x3 = Math.round(hw);
+      const tr_y3 = Math.round(-hh + r);
+      p += `b ${tr_x1} ${tr_y1} ${tr_x2} ${tr_y2} ${tr_x3} ${tr_y3} `;
+      p += `l ${Math.round(hw)} ${Math.round(hh - r)} `;
+      const br_x1 = Math.round(hw);
+      const br_y1 = Math.round(hh - r + r * kappa);
+      const br_x2 = Math.round(hw - r + r * kappa);
+      const br_y2 = Math.round(hh);
+      const br_x3 = Math.round(hw - r);
+      const br_y3 = Math.round(hh);
+      p += `b ${br_x1} ${br_y1} ${br_x2} ${br_y2} ${br_x3} ${br_y3} `;
+      p += `l ${Math.round(-hw + r)} ${Math.round(hh)} `;
+      const bl_x1 = Math.round(-hw + r - r * kappa);
+      const bl_y1 = Math.round(hh);
+      const bl_x2 = Math.round(-hw);
+      const bl_y2 = Math.round(hh - r + r * kappa);
+      const bl_x3 = Math.round(-hw);
+      const bl_y3 = Math.round(hh - r);
+      p += `b ${bl_x1} ${bl_y1} ${bl_x2} ${bl_y2} ${bl_x3} ${bl_y3} `;
+      p += `l ${Math.round(-hw)} ${Math.round(-hh + r)} `;
+      const tl_x1 = Math.round(-hw);
+      const tl_y1 = Math.round(-hh + r - r * kappa);
+      const tl_x2 = Math.round(-hw + r - r * kappa);
+      const tl_y2 = Math.round(-hh);
+      const tl_x3 = Math.round(-hw + r);
+      const tl_y3 = Math.round(-hh);
+      p += `b ${tl_x1} ${tl_y1} ${tl_x2} ${tl_y2} ${tl_x3} ${tl_y3}`;
+      return p;
+    };
     for (const sub of subtitles) {
       const startSec = Number(sub.start_sec) || 0;
       const durationSec = Number(sub.duration_sec) || 5;
@@ -2373,7 +2420,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         } else if (alignment === 5) {
           boxCenterY = refHeight / 2;
         }
-        const pathStr = getRoundedRectPath(boxWidth, boxHeight, radius);
+        const pathStr = getCenteredRoundedRectPath(boxWidth, boxHeight, radius);
         out += `Dialogue: 0,${start},${end},BgStyle,,0,0,0,,{\\an5\\pos(${centerX},${boxCenterY.toFixed(1)})${animTags}\\p1}${pathStr}{\\p0}
 `;
         out += `Dialogue: 1,${start},${end},Default,,0,0,0,,{\\an5\\pos(${centerX},${boxCenterY.toFixed(1)})${animTags}}${text}

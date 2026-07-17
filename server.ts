@@ -1143,7 +1143,15 @@ async function startServer() {
       if (!process.env.GEMINI_API_KEY) {
         throw new Error("No Gemini API key configured. Please set GEMINI_API_KEY.");
       }
-      const prompt = `Escribe un guión de video cautivador, detallado y narrativo sobre "${topic}" en idioma ${language}. Es CRÍTICO que el guión tenga exactamente ${paragraph_number} párrafos bien estructurados, completos y detallados (cada párrafo debe ser lo suficientemente largo y descriptivo, óptimo para narrar una historia o un documental). Separa cada párrafo estrictamente con dos saltos de línea (\\n\\n). Devuelve SOLAMENTE el texto del guión, sin títulos, introducciones ni comentarios adicionales.`;
+      const prompt = `Escribe un guión para un video de TikTok sobre "${topic}" en idioma ${language}.
+El objetivo es que el espectador sienta que alguien le está contando una historia fascinante cara a cara.
+Usa un tono cercano, natural y conversacional. Escribe con palabras simples, evitando tecnicismos, frases demasiado largas o vocabulario rebuscado. Si aparece un concepto difícil, explícalo de forma sencilla sin perder el ritmo.
+Haz que el relato despierte curiosidad desde las primeras líneas y mantenga la tensión durante todo el video. Alterna momentos de sorpresa, intriga y reflexión cuando sea apropiado, pero sin exagerar ni inventar hechos.
+No escribas como un artículo de Wikipedia ni como un documental académico. Escribe como un buen narrador que sabe mantener la atención de quien escucha.
+Es CRÍTICO que el guión tenga EXACTAMENTE ${paragraph_number} párrafos, separados únicamente por dos saltos de línea (\\n\\n).
+Cada párrafo debe desarrollar una parte de la historia de forma completa, con descripciones fáciles de imaginar y transiciones naturales hacia el siguiente.
+No repitas información. No uses relleno. Cada frase debe aportar algo interesante.
+Devuelve ÚNICAMENTE el texto del guión, sin títulos, encabezados, listas, notas ni comentarios adicionales.`;
       scriptText = await generateGeminiContent(prompt);
     }
 
@@ -2670,6 +2678,64 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
       return p;
     };
 
+    const getCenteredRoundedRectPath = (w: number, h: number, r: number): string => {
+      const kappa = 0.5522847498;
+      const hw = w / 2;
+      const hh = h / 2;
+      
+      // Start at top-left curve end: x = -hw + r, y = -hh
+      let p = `m ${Math.round(-hw + r)} ${Math.round(-hh)} `;
+      // Line to top-right corner start: x = hw - r, y = -hh
+      p += `l ${Math.round(hw - r)} ${Math.round(-hh)} `;
+      
+      // Top-right corner curve to (hw, -hh + r)
+      const tr_x1 = Math.round(hw - r + r * kappa);
+      const tr_y1 = Math.round(-hh);
+      const tr_x2 = Math.round(hw);
+      const tr_y2 = Math.round(-hh + r - r * kappa);
+      const tr_x3 = Math.round(hw);
+      const tr_y3 = Math.round(-hh + r);
+      p += `b ${tr_x1} ${tr_y1} ${tr_x2} ${tr_y2} ${tr_x3} ${tr_y3} `;
+      
+      // Line to bottom-right corner start: x = hw, y = hh - r
+      p += `l ${Math.round(hw)} ${Math.round(hh - r)} `;
+      
+      // Bottom-right corner curve to (hw - r, hh)
+      const br_x1 = Math.round(hw);
+      const br_y1 = Math.round(hh - r + r * kappa);
+      const br_x2 = Math.round(hw - r + r * kappa);
+      const br_y2 = Math.round(hh);
+      const br_x3 = Math.round(hw - r);
+      const br_y3 = Math.round(hh);
+      p += `b ${br_x1} ${br_y1} ${br_x2} ${br_y2} ${br_x3} ${br_y3} `;
+      
+      // Line to bottom-left corner start: x = -hw + r, y = hh
+      p += `l ${Math.round(-hw + r)} ${Math.round(hh)} `;
+      
+      // Bottom-left corner curve to (-hw, hh - r)
+      const bl_x1 = Math.round(-hw + r - r * kappa);
+      const bl_y1 = Math.round(hh);
+      const bl_x2 = Math.round(-hw);
+      const bl_y2 = Math.round(hh - r + r * kappa);
+      const bl_x3 = Math.round(-hw);
+      const bl_y3 = Math.round(hh - r);
+      p += `b ${bl_x1} ${bl_y1} ${bl_x2} ${bl_y2} ${bl_x3} ${bl_y3} `;
+      
+      // Line to top-left corner start: x = -hw, y = -hh + r
+      p += `l ${Math.round(-hw)} ${Math.round(-hh + r)} `;
+      
+      // Top-left corner curve to (-hw + r, -hh)
+      const tl_x1 = Math.round(-hw);
+      const tl_y1 = Math.round(-hh + r - r * kappa);
+      const tl_x2 = Math.round(-hw + r - r * kappa);
+      const tl_y2 = Math.round(-hh);
+      const tl_x3 = Math.round(-hw + r);
+      const tl_y3 = Math.round(-hh);
+      p += `b ${tl_x1} ${tl_y1} ${tl_x2} ${tl_y2} ${tl_x3} ${tl_y3}`;
+      
+      return p;
+    };
+
     // Dialogue events
     for (const sub of subtitles) {
       const startSec = Number(sub.start_sec) || 0;
@@ -2712,7 +2778,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
           boxCenterY = refHeight / 2;
         }
         
-        const pathStr = getRoundedRectPath(boxWidth, boxHeight, radius);
+        const pathStr = getCenteredRoundedRectPath(boxWidth, boxHeight, radius);
         
         // Output background box on Layer 0 using BgStyle with vector drawing tags aligned to center (centerX, boxCenterY) with \an5 (middle-center)
         out += `Dialogue: 0,${start},${end},BgStyle,,0,0,0,,{\\an5\\pos(${centerX},${boxCenterY.toFixed(1)})${animTags}\\p1}${pathStr}{\\p0}\n`;
