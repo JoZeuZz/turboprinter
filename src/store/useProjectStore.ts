@@ -260,6 +260,7 @@ export const useProjectStore = create<ProjectStoreState>()(
             const narration = await projectsApi.synthesizeNarration(projectId, {
               voice_name: params.voice_name,
               voice_rate: params.voice_rate,
+              voice_volume: params.voice_volume,
               subtitle_enabled: params.subtitle_enabled,
             });
             console.log("[ProjectStore] Narration synthesized successfully:", narration);

@@ -492,10 +492,16 @@ function getJSStyleDateString(): string {
   return `${dayName} ${monthName} ${dateNum} ${year} ${hours}:${minutes}:${seconds} GMT+0000 (Coordinated Universal Time)`;
 }
 
-function synthesizeSpeechWithEdge(voiceName: string, text: string, defaultLang: string = "es"): Promise<Buffer> {
+function synthesizeSpeechWithEdge(
+  voiceName: string,
+  text: string,
+  defaultLang: string = "es",
+  voiceRate: number = 1.0,
+  voiceVolume: number = 1.0
+): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const { voice, lang } = getEdgeVoiceAndLang(voiceName, defaultLang);
-    console.log(`[EdgeTTS] Requesting voice: "${voice}" (lang: "${lang}") for text: "${text.substring(0, 60)}..."`);
+    console.log(`[EdgeTTS] Requesting voice: "${voice}" (lang: "${lang}", rate: ${voiceRate}, volume: ${voiceVolume}) for text: "${text.substring(0, 60)}..."`);
     
     const requestId = Array.from({ length: 32 }, () => Math.floor(Math.random() * 16).toString(16)).join("");
     const secMsGec = generateSecMsGec();
@@ -535,7 +541,16 @@ function synthesizeSpeechWithEdge(voiceName: string, text: string, defaultLang: 
       ws.send(configMsg);
 
       const cleanText = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-      const ssml = `<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='${lang}'><voice name='${voice}'><prosody pitch='+0Hz' rate='+0%' volume='+0%'>${cleanText}</prosody></voice></speak>`;
+      
+      // Calculate SSML relative percentage for rate (speed)
+      const ratePct = Math.round((voiceRate - 1.0) * 100);
+      const rateStr = ratePct >= 0 ? `+${ratePct}%` : `${ratePct}%`;
+
+      // Calculate SSML relative percentage for volume
+      const volPct = Math.round((voiceVolume - 1.0) * 100);
+      const volStr = volPct >= 0 ? `+${volPct}%` : `${volPct}%`;
+
+      const ssml = `<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='${lang}'><voice name='${voice}'><prosody pitch='+0Hz' rate='${rateStr}' volume='${volStr}'>${cleanText}</prosody></voice></speak>`;
       const ssmlMsg = `X-RequestId:${requestId}\r\nContent-Type:application/ssml+xml\r\nX-Timestamp:${timestampStr}Z\r\nPath:ssml\r\n\r\n${ssml}`;
       ws.send(ssmlMsg);
     });
@@ -585,9 +600,15 @@ function synthesizeSpeechWithEdge(voiceName: string, text: string, defaultLang: 
   });
 }
 
-async function synthesizeSpeech(voiceName: string, text: string, defaultLang: string = "es"): Promise<Buffer> {
+async function synthesizeSpeech(
+  voiceName: string,
+  text: string,
+  defaultLang: string = "es",
+  voiceRate: number = 1.0,
+  voiceVolume: number = 1.0
+): Promise<Buffer> {
   try {
-    return await synthesizeSpeechWithEdge(voiceName, text, defaultLang);
+    return await synthesizeSpeechWithEdge(voiceName, text, defaultLang, voiceRate, voiceVolume);
   } catch (err) {
     console.warn(`[SpeechSynthesis] Edge TTS failed for voice "${voiceName}", falling back to Google TTS:`, err);
     const { lang } = getEdgeVoiceAndLang(voiceName, defaultLang);
@@ -846,6 +867,8 @@ async function startServer() {
   app.post("/api/v1/voices/preview", wrap(async (req: any, res: any) => {
     const voice_name = req.body.voice_name || "";
     const text = req.body.text || "Hola, probando esta voz.";
+    const voice_rate = req.body.voice_rate !== undefined ? req.body.voice_rate : 1.0;
+    const voice_volume = req.body.voice_volume !== undefined ? req.body.voice_volume : 1.0;
 
     let tl = "es"; // default to Spanish
     const voiceNameLower = voice_name.toLowerCase();
@@ -877,7 +900,7 @@ async function startServer() {
     }
 
     try {
-      const audioBuffer = await synthesizeSpeech(voice_name, text, tl);
+      const audioBuffer = await synthesizeSpeech(voice_name, text, tl, voice_rate, voice_volume);
       res.setHeader("Content-Type", "audio/mpeg");
       res.send(audioBuffer);
     } catch (err) {
@@ -2030,6 +2053,8 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
 
     const voice_name = req.body.voice_name || "es-ES-AlvaroNeural-Male";
     const subtitle_enabled = req.body.subtitle_enabled !== false;
+    const voice_rate = req.body.voice_rate !== undefined ? req.body.voice_rate : 1.0;
+    const voice_volume = req.body.voice_volume !== undefined ? req.body.voice_volume : 1.0;
 
     // Resolve Google Translate TTS language code
     let tl = p.language || "es";
@@ -2090,7 +2115,7 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
       const wavPath = path.join(cacheDir, `narration_chunk_${projectId}_${idx}.wav`);
       
       try {
-        const audioBuffer = await synthesizeSpeech(voice_name, text, tl);
+        const audioBuffer = await synthesizeSpeech(voice_name, text, tl, voice_rate, voice_volume);
         await fs.promises.writeFile(destPath, audioBuffer);
         localPaths.push(destPath);
         
@@ -3401,16 +3426,17 @@ To run this application locally and render videos successfully, please:
       let audioFilter = "";
       const audioInputs: string[] = [];
 
+      const voiceVolume = p.params?.voice_volume !== undefined ? p.params.voice_volume : (p.voice_volume !== undefined ? p.voice_volume : 1.0);
+      const musicVolume = musicItem?.volume !== undefined ? musicItem.volume : (p.params?.bgm_volume !== undefined ? p.params.bgm_volume : (p.bgm_volume !== undefined ? p.bgm_volume : 0.2));
+
       if (localNarrationPath && localMusicPath) {
         audioInputs.push(`-i "${localNarrationPath}"`, `-stream_loop -1 -i "${localMusicPath}"`);
-        const musicVolume = musicItem.volume !== undefined ? musicItem.volume : 0.2;
-        audioFilter = `[1:a]volume=1.0[v];[2:a]volume=${musicVolume}[m];[v][m]amix=inputs=2:duration=first[a]`;
+        audioFilter = `[1:a]volume=${voiceVolume}[v];[2:a]volume=${musicVolume}[m];[v][m]amix=inputs=2:duration=first[a]`;
       } else if (localNarrationPath) {
         audioInputs.push(`-i "${localNarrationPath}"`);
-        audioFilter = `[1:a]volume=1.0[a]`;
+        audioFilter = `[1:a]volume=${voiceVolume}[a]`;
       } else if (localMusicPath) {
         audioInputs.push(`-stream_loop -1 -i "${localMusicPath}"`);
-        const musicVolume = musicItem.volume !== undefined ? musicItem.volume : 0.2;
         audioFilter = `[1:a]volume=${musicVolume}[a]`;
       }
 

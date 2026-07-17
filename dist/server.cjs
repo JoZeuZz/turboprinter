@@ -470,10 +470,10 @@ function getJSStyleDateString() {
   const seconds = String(d.getUTCSeconds()).padStart(2, "0");
   return `${dayName} ${monthName} ${dateNum} ${year} ${hours}:${minutes}:${seconds} GMT+0000 (Coordinated Universal Time)`;
 }
-function synthesizeSpeechWithEdge(voiceName, text, defaultLang = "es") {
+function synthesizeSpeechWithEdge(voiceName, text, defaultLang = "es", voiceRate = 1, voiceVolume = 1) {
   return new Promise((resolve, reject) => {
     const { voice, lang } = getEdgeVoiceAndLang(voiceName, defaultLang);
-    console.log(`[EdgeTTS] Requesting voice: "${voice}" (lang: "${lang}") for text: "${text.substring(0, 60)}..."`);
+    console.log(`[EdgeTTS] Requesting voice: "${voice}" (lang: "${lang}", rate: ${voiceRate}, volume: ${voiceVolume}) for text: "${text.substring(0, 60)}..."`);
     const requestId = Array.from({ length: 32 }, () => Math.floor(Math.random() * 16).toString(16)).join("");
     const secMsGec = generateSecMsGec();
     const wsUrl = `wss://speech.platform.bing.com/consumer/speech/synthesize/readaloud/edge/v1?TrustedClientToken=${TRUSTED_CLIENT_TOKEN}&ConnectionId=${requestId}&Sec-MS-GEC=${secMsGec}&Sec-MS-GEC-Version=${SEC_MS_GEC_VERSION}`;
@@ -510,7 +510,11 @@ Path:speech.config\r
 ${configPayload}`;
       ws.send(configMsg);
       const cleanText = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-      const ssml = `<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='${lang}'><voice name='${voice}'><prosody pitch='+0Hz' rate='+0%' volume='+0%'>${cleanText}</prosody></voice></speak>`;
+      const ratePct = Math.round((voiceRate - 1) * 100);
+      const rateStr = ratePct >= 0 ? `+${ratePct}%` : `${ratePct}%`;
+      const volPct = Math.round((voiceVolume - 1) * 100);
+      const volStr = volPct >= 0 ? `+${volPct}%` : `${volPct}%`;
+      const ssml = `<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='${lang}'><voice name='${voice}'><prosody pitch='+0Hz' rate='${rateStr}' volume='${volStr}'>${cleanText}</prosody></voice></speak>`;
       const ssmlMsg = `X-RequestId:${requestId}\r
 Content-Type:application/ssml+xml\r
 X-Timestamp:${timestampStr}Z\r
@@ -560,9 +564,9 @@ ${ssml}`;
     }, 15e3);
   });
 }
-async function synthesizeSpeech(voiceName, text, defaultLang = "es") {
+async function synthesizeSpeech(voiceName, text, defaultLang = "es", voiceRate = 1, voiceVolume = 1) {
   try {
-    return await synthesizeSpeechWithEdge(voiceName, text, defaultLang);
+    return await synthesizeSpeechWithEdge(voiceName, text, defaultLang, voiceRate, voiceVolume);
   } catch (err) {
     console.warn(`[SpeechSynthesis] Edge TTS failed for voice "${voiceName}", falling back to Google TTS:`, err);
     const { lang } = getEdgeVoiceAndLang(voiceName, defaultLang);
@@ -791,6 +795,8 @@ async function startServer() {
   app.post("/api/v1/voices/preview", wrap(async (req, res) => {
     const voice_name = req.body.voice_name || "";
     const text = req.body.text || "Hola, probando esta voz.";
+    const voice_rate = req.body.voice_rate !== void 0 ? req.body.voice_rate : 1;
+    const voice_volume = req.body.voice_volume !== void 0 ? req.body.voice_volume : 1;
     let tl = "es";
     const voiceNameLower = voice_name.toLowerCase();
     if (voiceNameLower.includes("en-") || voiceNameLower.includes("us-") || voiceNameLower.includes("guy") || voiceNameLower.includes("jenny") || voiceNameLower.includes("alex") || voiceNameLower.includes("anna") || voiceNameLower.includes("bella") || voiceNameLower.includes("benjamin") || voiceNameLower.includes("charles") || voiceNameLower.includes("claire") || voiceNameLower.includes("david") || voiceNameLower.includes("diana") || voiceNameLower.includes("milo") || voiceNameLower.includes("dean") || voiceNameLower.includes("chloe") || voiceNameLower.includes("mia") || voiceNameLower.includes("puck") || voiceNameLower.includes("charon") || voiceNameLower.includes("zephyr")) {
@@ -818,7 +824,7 @@ async function startServer() {
       }
     }
     try {
-      const audioBuffer = await synthesizeSpeech(voice_name, text, tl);
+      const audioBuffer = await synthesizeSpeech(voice_name, text, tl, voice_rate, voice_volume);
       res.setHeader("Content-Type", "audio/mpeg");
       res.send(audioBuffer);
     } catch (err) {
@@ -1840,6 +1846,8 @@ No incluyas explicaciones, marcas de c\xF3digo markdown, ni texto adicional, sol
     }
     const voice_name = req.body.voice_name || "es-ES-AlvaroNeural-Male";
     const subtitle_enabled = req.body.subtitle_enabled !== false;
+    const voice_rate = req.body.voice_rate !== void 0 ? req.body.voice_rate : 1;
+    const voice_volume = req.body.voice_volume !== void 0 ? req.body.voice_volume : 1;
     let tl = p.language || "es";
     const voiceNameLower = voice_name.toLowerCase();
     if (voiceNameLower.includes("en-") || voiceNameLower.includes("us-") || voiceNameLower.includes("guy") || voiceNameLower.includes("jenny") || voiceNameLower.includes("alex") || voiceNameLower.includes("anna") || voiceNameLower.includes("bella") || voiceNameLower.includes("benjamin") || voiceNameLower.includes("charles") || voiceNameLower.includes("claire") || voiceNameLower.includes("david") || voiceNameLower.includes("diana") || voiceNameLower.includes("milo") || voiceNameLower.includes("dean") || voiceNameLower.includes("chloe") || voiceNameLower.includes("mia") || voiceNameLower.includes("puck") || voiceNameLower.includes("charon") || voiceNameLower.includes("zephyr")) {
@@ -1884,7 +1892,7 @@ No incluyas explicaciones, marcas de c\xF3digo markdown, ni texto adicional, sol
       const destPath = import_path.default.join(cacheDir, `narration_chunk_${projectId}_${idx}.mp3`);
       const wavPath = import_path.default.join(cacheDir, `narration_chunk_${projectId}_${idx}.wav`);
       try {
-        const audioBuffer = await synthesizeSpeech(voice_name, text, tl);
+        const audioBuffer = await synthesizeSpeech(voice_name, text, tl, voice_rate, voice_volume);
         await import_fs.default.promises.writeFile(destPath, audioBuffer);
         localPaths.push(destPath);
         await executeCommand(`ffmpeg -y -i "${destPath}" -acodec pcm_s16le -ar 44100 -ac 2 "${wavPath}"`);
@@ -2953,16 +2961,16 @@ To run this application locally and render videos successfully, please:
       const audioMixedOutput = import_path.default.join(cacheDir, `audio_mixed_${taskId}.mp4`);
       let audioFilter = "";
       const audioInputs = [];
+      const voiceVolume = p.params?.voice_volume !== void 0 ? p.params.voice_volume : p.voice_volume !== void 0 ? p.voice_volume : 1;
+      const musicVolume = musicItem?.volume !== void 0 ? musicItem.volume : p.params?.bgm_volume !== void 0 ? p.params.bgm_volume : p.bgm_volume !== void 0 ? p.bgm_volume : 0.2;
       if (localNarrationPath && localMusicPath) {
         audioInputs.push(`-i "${localNarrationPath}"`, `-stream_loop -1 -i "${localMusicPath}"`);
-        const musicVolume = musicItem.volume !== void 0 ? musicItem.volume : 0.2;
-        audioFilter = `[1:a]volume=1.0[v];[2:a]volume=${musicVolume}[m];[v][m]amix=inputs=2:duration=first[a]`;
+        audioFilter = `[1:a]volume=${voiceVolume}[v];[2:a]volume=${musicVolume}[m];[v][m]amix=inputs=2:duration=first[a]`;
       } else if (localNarrationPath) {
         audioInputs.push(`-i "${localNarrationPath}"`);
-        audioFilter = `[1:a]volume=1.0[a]`;
+        audioFilter = `[1:a]volume=${voiceVolume}[a]`;
       } else if (localMusicPath) {
         audioInputs.push(`-stream_loop -1 -i "${localMusicPath}"`);
-        const musicVolume = musicItem.volume !== void 0 ? musicItem.volume : 0.2;
         audioFilter = `[1:a]volume=${musicVolume}[a]`;
       }
       let mixCmd = "";

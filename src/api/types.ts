@@ -490,6 +490,7 @@ export interface TimelineBuildResponse {
 export interface NarrationRequest {
   voice_name?: string;
   voice_rate?: number;
+  voice_volume?: number;
   subtitle_enabled?: boolean;
 }
 
