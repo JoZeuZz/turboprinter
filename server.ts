@@ -1126,6 +1126,15 @@ async function startServer() {
 
   // 5. Projects APIs
   app.get("/api/v1/projects", wrap(async (req: any, res: any) => {
+    // Automatically clean up projects whose storage folders have been deleted
+    for (const [projectId, p] of Array.from(projects.entries())) {
+      if (p.project_folder_name) {
+        const folderPath = path.join(process.cwd(), "storage", "renders", p.project_folder_name);
+        if (!fs.existsSync(folderPath)) {
+          projects.delete(projectId);
+        }
+      }
+    }
     const list = Array.from(projects.values()).map(p => ({
       project_id: p.project_id,
       topic: p.topic || "Untitled Project",
@@ -2736,6 +2745,63 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
       return p;
     };
 
+    const getTopCenteredRoundedRectPath = (w: number, h: number, r: number): string => {
+      const kappa = 0.5522847498;
+      const hw = w / 2;
+      
+      // Start at top-left corner end: x = -hw + r, y = 0
+      let p = `m ${Math.round(-hw + r)} 0 `;
+      // Line to top-right corner start: x = hw - r, y = 0
+      p += `l ${Math.round(hw - r)} 0 `;
+      
+      // Top-right corner curve to (hw, r)
+      const tr_x1 = Math.round(hw - r + r * kappa);
+      const tr_y1 = 0;
+      const tr_x2 = Math.round(hw);
+      const tr_y2 = Math.round(r - r * kappa);
+      const tr_x3 = Math.round(hw);
+      const tr_y3 = Math.round(r);
+      p += `b ${tr_x1} ${tr_y1} ${tr_x2} ${tr_y2} ${tr_x3} ${tr_y3} `;
+      
+      // Line to bottom-right corner start: x = hw, y = h - r
+      p += `l ${Math.round(hw)} ${Math.round(h - r)} `;
+      
+      // Bottom-right corner curve to (hw - r, h)
+      const br_x1 = Math.round(hw);
+      const br_y1 = Math.round(h - r + r * kappa);
+      const br_x2 = Math.round(hw - r + r * kappa);
+      const br_y2 = Math.round(h);
+      const br_x3 = Math.round(hw - r);
+      const br_y3 = Math.round(h);
+      p += `b ${br_x1} ${br_y1} ${br_x2} ${br_y2} ${br_x3} ${br_y3} `;
+      
+      // Line to bottom-left corner start: x = -hw + r, y = h
+      p += `l ${Math.round(-hw + r)} ${Math.round(h)} `;
+      
+      // Bottom-left corner curve to (-hw, h - r)
+      const bl_x1 = Math.round(-hw + r - r * kappa);
+      const bl_y1 = Math.round(h);
+      const bl_x2 = Math.round(-hw);
+      const bl_y2 = Math.round(h - r + r * kappa);
+      const bl_x3 = Math.round(-hw);
+      const bl_y3 = Math.round(h - r);
+      p += `b ${bl_x1} ${bl_y1} ${bl_x2} ${bl_y2} ${bl_x3} ${bl_y3} `;
+      
+      // Line to top-left corner start: x = -hw, y = r
+      p += `l ${Math.round(-hw)} ${Math.round(r)} `;
+      
+      // Top-left corner curve to (-hw + r, 0)
+      const tl_x1 = Math.round(-hw);
+      const tl_y1 = Math.round(r - r * kappa);
+      const tl_x2 = Math.round(-hw + r - r * kappa);
+      const tl_y2 = 0;
+      const tl_x3 = Math.round(-hw + r);
+      const tl_y3 = 0;
+      p += `b ${tl_x1} ${tl_y1} ${tl_x2} ${tl_y2} ${tl_x3} ${tl_y3}`;
+      
+      return p;
+    };
+
     // Dialogue events
     for (const sub of subtitles) {
       const startSec = Number(sub.start_sec) || 0;
@@ -2770,8 +2836,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         const boxHeight = textHeight + paddingY;
         const radius = Math.min(boxHeight / 2, styleParams.fontSize * 0.35);
         
-        // Calculate coordinates for Option B (Unified top-left alignment with \an7)
-        const boxX = centerX - boxWidth / 2;
+        // Calculate coordinates for top-center alignment with \an8
         let boxY = refHeight - marginV - boxHeight;
         if (alignment === 8) {
           boxY = marginV;
@@ -2779,15 +2844,14 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
           boxY = refHeight / 2 - boxHeight / 2;
         }
         
-        const textX = boxX + paddingX / 2;
         const textY = boxY + paddingY / 2;
         
-        const pathStr = getRoundedRectPath(boxWidth, boxHeight, radius);
+        const pathStr = getTopCenteredRoundedRectPath(boxWidth, boxHeight, radius);
         
-        // Output background box on Layer 0 using BgStyle with vector drawing tags aligned to top-left (boxX, boxY) with \an7
-        out += `Dialogue: 0,${start},${end},BgStyle,,0,0,0,,{\\an7\\pos(${boxX.toFixed(1)},${boxY.toFixed(1)})${animTags}\\p1}${pathStr}{\\p0}\n`;
-        // Output foreground text on Layer 1 using Default style, aligned to top-left (textX, textY) with \an7
-        out += `Dialogue: 1,${start},${end},Default,,0,0,0,,{\\an7\\pos(${textX.toFixed(1)},${textY.toFixed(1)})${animTags}}${text}\n`;
+        // Output background box on Layer 0 using BgStyle with vector drawing tags aligned to top-center (centerX, boxY) with \an8
+        out += `Dialogue: 0,${start},${end},BgStyle,,0,0,0,,{\\an8\\pos(${centerX},${boxY.toFixed(1)})${animTags}\\p1}${pathStr}{\\p0}\n`;
+        // Output foreground text on Layer 1 using Default style, aligned to top-center (centerX, textY) with \an8
+        out += `Dialogue: 1,${start},${end},Default,,0,0,0,,{\\an8\\pos(${centerX},${textY.toFixed(1)})${animTags}}${text}\n`;
       } else {
         out += `Dialogue: 0,${start},${end},Default,,0,0,0,,{\\an${alignment}\\pos(${centerX},${centerY.toFixed(1)})${animTags}}${text}\n`;
       }
