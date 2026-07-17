@@ -27,6 +27,16 @@ export function VideoSettingsPanel() {
       .getLocalVideos()
       .then((res) => {
         setLocalVideos(res.files);
+        // Ensure that there is a valid selection if local videos exist
+        const availableNames = res.files.map((v: any) => v.name);
+        const currentSelection = store.local_video_files ?? [];
+        const validSelection = currentSelection.filter((name: string) => availableNames.includes(name));
+        
+        if (res.files.length > 0 && validSelection.length === 0) {
+          store.set("local_video_files", [res.files[0].name]);
+        } else if (currentSelection.length !== validSelection.length) {
+          store.set("local_video_files", validSelection);
+        }
       })
       .catch((err) => {
         console.error("Failed to load local videos:", err);
@@ -190,14 +200,16 @@ export function VideoSettingsPanel() {
             {localVideos.map((video) => {
               const isSelected = (store.local_video_files ?? []).includes(video.name);
               const sizeInMB = (video.size / (1024 * 1024)).toFixed(2);
+              const cbId = `settings-cb-${video.name}`;
               return (
-                <label
+                <div
                   key={video.name}
-                  className={`flex items-center justify-between p-2 hover:bg-surface cursor-pointer select-none transition-colors ${store.video_source !== "local" ? "cursor-not-allowed" : ""}`}
+                  className={`flex items-center justify-between p-2 hover:bg-surface select-none transition-colors ${store.video_source !== "local" ? "cursor-not-allowed" : ""}`}
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
                     <input
                       type="checkbox"
+                      id={cbId}
                       disabled={store.video_source !== "local"}
                       checked={isSelected}
                       onChange={() => {
@@ -208,16 +220,19 @@ export function VideoSettingsPanel() {
                           store.set("local_video_files", [...current, video.name]);
                         }
                       }}
-                      className="h-4.5 w-4.5 rounded border-border text-accent focus:ring-accent disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="h-4.5 w-4.5 rounded border-border text-accent focus:ring-accent disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                     />
-                    <span className="text-xs font-medium text-foreground truncate">
+                    <label
+                      htmlFor={cbId}
+                      className={`text-xs font-medium text-foreground truncate py-1 pr-4 select-none ${store.video_source === "local" ? "cursor-pointer" : "cursor-not-allowed"}`}
+                    >
                       {video.name}
-                    </span>
+                    </label>
                   </div>
                   <span className="text-[10px] text-muted shrink-0 ml-4 font-mono">
                     {sizeInMB} MB
                   </span>
-                </label>
+                </div>
               );
             })}
           </div>
