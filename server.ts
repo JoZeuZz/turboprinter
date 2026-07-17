@@ -2770,20 +2770,24 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         const boxHeight = textHeight + paddingY;
         const radius = Math.min(boxHeight / 2, styleParams.fontSize * 0.35);
         
-        // Calculate the center position specifically for the rounded box grouping
-        let boxCenterY = refHeight - marginV - textHeight / 2;
+        // Calculate coordinates for Option B (Unified top-left alignment with \an7)
+        const boxX = centerX - boxWidth / 2;
+        let boxY = refHeight - marginV - boxHeight;
         if (alignment === 8) {
-          boxCenterY = marginV + textHeight / 2;
+          boxY = marginV;
         } else if (alignment === 5) {
-          boxCenterY = refHeight / 2;
+          boxY = refHeight / 2 - boxHeight / 2;
         }
         
-        const pathStr = getCenteredRoundedRectPath(boxWidth, boxHeight, radius);
+        const textX = boxX + paddingX / 2;
+        const textY = boxY + paddingY / 2;
         
-        // Output background box on Layer 0 using BgStyle with vector drawing tags aligned to center (centerX, boxCenterY) with \an5 (middle-center)
-        out += `Dialogue: 0,${start},${end},BgStyle,,0,0,0,,{\\an5\\pos(${centerX},${boxCenterY.toFixed(1)})${animTags}\\p1}${pathStr}{\\p0}\n`;
-        // Output foreground text on Layer 1 using Default style, aligned to same center position
-        out += `Dialogue: 1,${start},${end},Default,,0,0,0,,{\\an5\\pos(${centerX},${boxCenterY.toFixed(1)})${animTags}}${text}\n`;
+        const pathStr = getRoundedRectPath(boxWidth, boxHeight, radius);
+        
+        // Output background box on Layer 0 using BgStyle with vector drawing tags aligned to top-left (boxX, boxY) with \an7
+        out += `Dialogue: 0,${start},${end},BgStyle,,0,0,0,,{\\an7\\pos(${boxX.toFixed(1)},${boxY.toFixed(1)})${animTags}\\p1}${pathStr}{\\p0}\n`;
+        // Output foreground text on Layer 1 using Default style, aligned to top-left (textX, textY) with \an7
+        out += `Dialogue: 1,${start},${end},Default,,0,0,0,,{\\an7\\pos(${textX.toFixed(1)},${textY.toFixed(1)})${animTags}}${text}\n`;
       } else {
         out += `Dialogue: 0,${start},${end},Default,,0,0,0,,{\\an${alignment}\\pos(${centerX},${centerY.toFixed(1)})${animTags}}${text}\n`;
       }
