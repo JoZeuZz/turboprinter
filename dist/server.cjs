@@ -2302,45 +2302,6 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
       }
       return width * fontSize;
     };
-    const getCenteredRoundedRectPath = (w, h, r) => {
-      const kappa = 0.5522847498;
-      const hw = w / 2;
-      const hh = h / 2;
-      let p = `m ${Math.round(-hw + r)} ${Math.round(-hh)} `;
-      p += `l ${Math.round(hw - r)} ${Math.round(-hh)} `;
-      const tr_x1 = Math.round(hw - r + r * kappa);
-      const tr_y1 = Math.round(-hh);
-      const tr_x2 = Math.round(hw);
-      const tr_y2 = Math.round(-hh + r - r * kappa);
-      const tr_x3 = Math.round(hw);
-      const tr_y3 = Math.round(-hh + r);
-      p += `b ${tr_x1} ${tr_y1} ${tr_x2} ${tr_y2} ${tr_x3} ${tr_y3} `;
-      p += `l ${Math.round(hw)} ${Math.round(hh - r)} `;
-      const br_x1 = Math.round(hw);
-      const br_y1 = Math.round(hh - r + r * kappa);
-      const br_x2 = Math.round(hw - r + r * kappa);
-      const br_y2 = Math.round(hh);
-      const br_x3 = Math.round(hw - r);
-      const br_y3 = Math.round(hh);
-      p += `b ${br_x1} ${br_y1} ${br_x2} ${br_y2} ${br_x3} ${br_y3} `;
-      p += `l ${Math.round(-hw + r)} ${Math.round(hh)} `;
-      const bl_x1 = Math.round(-hw + r - r * kappa);
-      const bl_y1 = Math.round(hh);
-      const bl_x2 = Math.round(-hw);
-      const bl_y2 = Math.round(hh - r + r * kappa);
-      const bl_x3 = Math.round(-hw);
-      const bl_y3 = Math.round(hh - r);
-      p += `b ${bl_x1} ${bl_y1} ${bl_x2} ${bl_y2} ${bl_x3} ${bl_y3} `;
-      p += `l ${Math.round(-hw)} ${Math.round(-hh + r)} `;
-      const tl_x1 = Math.round(-hw);
-      const tl_y1 = Math.round(-hh + r - r * kappa);
-      const tl_x2 = Math.round(-hw + r - r * kappa);
-      const tl_y2 = Math.round(-hh);
-      const tl_x3 = Math.round(-hw + r);
-      const tl_y3 = Math.round(-hh);
-      p += `b ${tl_x1} ${tl_y1} ${tl_x2} ${tl_y2} ${tl_x3} ${tl_y3}`;
-      return p;
-    };
     const getRoundedRectPath = (w, h, r) => {
       const kappa = 0.5522847498;
       let p = `m ${Math.round(r)} 0 `;
@@ -2412,7 +2373,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         } else if (alignment === 5) {
           boxCenterY = refHeight / 2;
         }
-        const pathStr = getCenteredRoundedRectPath(boxWidth, boxHeight, radius);
+        const pathStr = getRoundedRectPath(boxWidth, boxHeight, radius);
         out += `Dialogue: 0,${start},${end},BgStyle,,0,0,0,,{\\an5\\pos(${centerX},${boxCenterY.toFixed(1)})${animTags}\\p1}${pathStr}{\\p0}
 `;
         out += `Dialogue: 1,${start},${end},Default,,0,0,0,,{\\an5\\pos(${centerX},${boxCenterY.toFixed(1)})${animTags}}${text}
