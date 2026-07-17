@@ -94,15 +94,14 @@ export function VideoConfigPanel() {
 
   const POSITION_OPTIONS = [
     { value: "bottom", label: t("audioSubtitle.positionBottom") },
-    { value: "top", label: t("audioSubtitle.positionTop") },
     { value: "center", label: t("audioSubtitle.positionCenter") },
+    { value: "top", label: t("audioSubtitle.positionTop") },
     { value: "custom", label: t("audioSubtitle.positionCustom") },
   ];
 
   const ANIMATION_OPTIONS = [
     { value: "none", label: "Ninguna" },
     { value: "pop", label: "Efecto Pop (TikTok / Rebote)" },
-    { value: "fade", label: "Desvanecimiento" },
     { value: "rotate", label: "Giro Dinámico (Tilt Pop)" },
   ];
 

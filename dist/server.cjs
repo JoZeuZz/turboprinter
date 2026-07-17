@@ -2236,6 +2236,15 @@ ${sub.text || ""}
       marginV = Math.round(styleParams.customPosition / 100 * refHeight);
     }
     const isRounded = hasBg && styleParams.roundedBackground === true;
+    let animTags = "";
+    const animType = styleParams.subtitleAnimation || "none";
+    if (animType === "pop") {
+      animTags = "\\fscx80\\fscy80\\t(0,70,\\fscx114\\fscy114)\\t(70,140,\\fscx100\\fscy100)";
+    } else if (animType === "fade") {
+      animTags = "\\fad(120,120)";
+    } else if (animType === "rotate") {
+      animTags = "\\frz-3.5\\fscx80\\fscy80\\t(0,80,\\frz2\\fscx112\\fscy112)\\t(80,150,\\frz0\\fscx100\\fscy100)";
+    }
     let isBold = 0;
     if (styleParams.fontName && styleParams.fontName.toLowerCase().includes("bold")) {
       isBold = -1;
@@ -2250,7 +2259,7 @@ WrapStyle: 0
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 `;
     if (isRounded) {
-      out += `Style: BgStyle,${assFont},${styleParams.fontSize},&H${assBgAlpha}${assBgColor},&H00000000,&HFF000000,&HFF000000,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1
+      out += `Style: BgStyle,${assFont},${styleParams.fontSize},&H${assBgAlpha}${assBgColor},&H00000000,&HFF000000,&HFF000000,0,0,0,0,100,100,0,0,1,0,0,5,0,0,0,1
 `;
       const defaultOutline = styleParams.strokeWidth !== void 0 ? styleParams.strokeWidth : 1.5;
       out += `Style: Default,${assFont},${styleParams.fontSize},&H00${textColor},&H00000000,&H00${strokeColor},&HFF000000,${isBold},0,0,0,100,100,0,0,1,${defaultOutline.toFixed(1)},0,${alignment},${marginLR},${marginLR},${marginV},1
@@ -2292,6 +2301,45 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         }
       }
       return width * fontSize;
+    };
+    const getCenteredRoundedRectPath = (w, h, r) => {
+      const kappa = 0.5522847498;
+      const hw = w / 2;
+      const hh = h / 2;
+      let p = `m ${Math.round(-hw + r)} ${Math.round(-hh)} `;
+      p += `l ${Math.round(hw - r)} ${Math.round(-hh)} `;
+      const tr_x1 = Math.round(hw - r + r * kappa);
+      const tr_y1 = Math.round(-hh);
+      const tr_x2 = Math.round(hw);
+      const tr_y2 = Math.round(-hh + r - r * kappa);
+      const tr_x3 = Math.round(hw);
+      const tr_y3 = Math.round(-hh + r);
+      p += `b ${tr_x1} ${tr_y1} ${tr_x2} ${tr_y2} ${tr_x3} ${tr_y3} `;
+      p += `l ${Math.round(hw)} ${Math.round(hh - r)} `;
+      const br_x1 = Math.round(hw);
+      const br_y1 = Math.round(hh - r + r * kappa);
+      const br_x2 = Math.round(hw - r + r * kappa);
+      const br_y2 = Math.round(hh);
+      const br_x3 = Math.round(hw - r);
+      const br_y3 = Math.round(hh);
+      p += `b ${br_x1} ${br_y1} ${br_x2} ${br_y2} ${br_x3} ${br_y3} `;
+      p += `l ${Math.round(-hw + r)} ${Math.round(hh)} `;
+      const bl_x1 = Math.round(-hw + r - r * kappa);
+      const bl_y1 = Math.round(hh);
+      const bl_x2 = Math.round(-hw);
+      const bl_y2 = Math.round(hh - r + r * kappa);
+      const bl_x3 = Math.round(-hw);
+      const bl_y3 = Math.round(hh - r);
+      p += `b ${bl_x1} ${bl_y1} ${bl_x2} ${bl_y2} ${bl_x3} ${bl_y3} `;
+      p += `l ${Math.round(-hw)} ${Math.round(-hh + r)} `;
+      const tl_x1 = Math.round(-hw);
+      const tl_y1 = Math.round(-hh + r - r * kappa);
+      const tl_x2 = Math.round(-hw + r - r * kappa);
+      const tl_y2 = Math.round(-hh);
+      const tl_x3 = Math.round(-hw + r);
+      const tl_y3 = Math.round(-hh);
+      p += `b ${tl_x1} ${tl_y1} ${tl_x2} ${tl_y2} ${tl_x3} ${tl_y3}`;
+      return p;
     };
     const getRoundedRectPath = (w, h, r) => {
       const kappa = 0.5522847498;
@@ -2336,6 +2384,13 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
       const start = formatAssTime(startSec);
       const end = formatAssTime(startSec + durationSec);
       const text = (sub.text || "").replace(/\\n/g, "\\N").replace(/\n/g, "\\N");
+      const centerX = refWidth / 2;
+      let centerY = refHeight - marginV;
+      if (alignment === 8) {
+        centerY = marginV;
+      } else if (alignment === 5) {
+        centerY = refHeight / 2;
+      }
       if (isRounded) {
         const lines = text.split(/\\N/);
         let maxLineWidth = 0;
@@ -2351,22 +2406,19 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         const textHeight = lines.length * styleParams.fontSize * 1.15;
         const boxHeight = textHeight + paddingY;
         const radius = Math.min(boxHeight / 2, styleParams.fontSize * 0.35);
-        const centerX = refWidth / 2;
-        let centerY = refHeight - marginV - textHeight / 2;
+        let boxCenterY = refHeight - marginV - textHeight / 2;
         if (alignment === 8) {
-          centerY = marginV + textHeight / 2;
+          boxCenterY = marginV + textHeight / 2;
         } else if (alignment === 5) {
-          centerY = refHeight / 2;
+          boxCenterY = refHeight / 2;
         }
-        const pathStr = getRoundedRectPath(boxWidth, boxHeight, radius);
-        const boxX = Math.round(centerX - boxWidth / 2);
-        const boxY = Math.round(centerY - boxHeight / 2);
-        out += `Dialogue: 0,${start},${end},BgStyle,,0,0,0,,{\\an7\\pos(${boxX},${boxY})\\p1}${pathStr}{\\p0}
+        const pathStr = getCenteredRoundedRectPath(boxWidth, boxHeight, radius);
+        out += `Dialogue: 0,${start},${end},BgStyle,,0,0,0,,{\\an5\\pos(${centerX},${boxCenterY.toFixed(1)})${animTags}\\p1}${pathStr}{\\p0}
 `;
-        out += `Dialogue: 1,${start},${end},Default,,0,0,0,,{\\an5\\pos(${centerX},${centerY.toFixed(1)})}${text}
+        out += `Dialogue: 1,${start},${end},Default,,0,0,0,,{\\an5\\pos(${centerX},${boxCenterY.toFixed(1)})${animTags}}${text}
 `;
       } else {
-        out += `Dialogue: 0,${start},${end},Default,,0,0,0,,${text}
+        out += `Dialogue: 0,${start},${end},Default,,0,0,0,,{\\an${alignment}\\pos(${centerX},${centerY.toFixed(1)})${animTags}}${text}
 `;
       }
     }
@@ -2951,6 +3003,7 @@ To run this application locally and render videos successfully, please:
         const customPosParam = pParams.custom_position !== void 0 ? pParams.custom_position : p.custom_position !== void 0 ? p.custom_position : 70;
         const subtitleBgStyleParam = pParams.subtitle_bg_style || p.subtitle_bg_style || "solid";
         const roundedBgParam = pParams.rounded_subtitle_background !== void 0 ? pParams.rounded_subtitle_background : p.rounded_subtitle_background !== void 0 ? p.rounded_subtitle_background : false;
+        const subtitleAnimationParam = pParams.subtitle_animation || p.subtitle_animation || "pop";
         const assFilePath = import_path.default.join(cacheDir, `subtitles_${taskId}.ass`);
         const assContent = generateAss(subtitles, resWidth, resHeight, {
           fontName: fontNameParam,
@@ -2962,7 +3015,8 @@ To run this application locally and render videos successfully, please:
           position: subtitlePosParam,
           customPosition: customPosParam,
           subtitleBgStyle: subtitleBgStyleParam,
-          roundedBackground: roundedBgParam
+          roundedBackground: roundedBgParam,
+          subtitleAnimation: subtitleAnimationParam
         });
         await import_fs.default.promises.writeFile(assFilePath, assContent, "utf8");
         const srtOutput = import_path.default.join(renderDir, `render_${projectId}.mp4`);
