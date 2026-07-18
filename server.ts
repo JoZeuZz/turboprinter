@@ -193,7 +193,7 @@ const SAMPLE_VIDEOS = [
 ];
 
 // Helper to call Gemini if API Key is set
-async function generateGeminiContent(prompt: string, jsonMode = false): Promise<string> {
+async function generateGeminiContent(prompt: string, jsonMode = false, systemInstruction?: string): Promise<string> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     throw new Error("No Gemini API key configured. Set GEMINI_API_KEY.");
@@ -211,7 +211,10 @@ async function generateGeminiContent(prompt: string, jsonMode = false): Promise<
     const response = await ai.models.generateContent({
       model: "gemini-3.1-flash-lite",
       contents: prompt,
-      config: jsonMode ? { responseMimeType: "application/json" } : undefined,
+      config: {
+        ...(jsonMode ? { responseMimeType: "application/json" } : {}),
+        ...(systemInstruction ? { systemInstruction } : {}),
+      },
     });
 
     return response.text || "";
@@ -929,13 +932,25 @@ async function startServer() {
 
   // 3. LLM APIs (Scripts & Terms)
   app.post("/api/v1/scripts", wrap(async (req: any, res: any) => {
-    const { video_subject, video_language = "es", paragraph_number = 3 } = req.body;
+    const {
+      video_subject,
+      video_language = "es",
+      paragraph_number = 3,
+      video_script_prompt = "",
+      custom_system_prompt = ""
+    } = req.body;
+
     if (!process.env.GEMINI_API_KEY) {
       throw new Error("No Gemini API key configured. Please set GEMINI_API_KEY.");
     }
 
-    const prompt = `Escribe un guión de video cautivador, detallado y narrativo sobre "${video_subject}" en idioma ${video_language}. Es CRÍTICO que el guión tenga exactamente ${paragraph_number} párrafos bien estructurados, completos y detallados (cada párrafo debe ser lo suficientemente largo y descriptivo, óptimo para narrar una historia o un documental). Separa cada párrafo estrictamente con dos saltos de línea (\\n\\n). Devuelve SOLAMENTE el texto del guión, sin títulos, introducciones ni comentarios adicionales.`;
-    const scriptText = await generateGeminiContent(prompt);
+    let prompt = `Escribe un guión de video sobre "${video_subject}" en idioma ${video_language}. Es CRÍTICO que el guión tenga exactamente ${paragraph_number} párrafos bien estructurados, completos y detallados (cada párrafo debe ser lo suficientemente largo y descriptivo, óptimo para narrar una historia o un documental). Separa cada párrafo estrictamente con dos saltos de línea (\\n\\n). Devuelve SOLAMENTE el texto del guión, sin títulos, introducciones ni comentarios adicionales.`;
+
+    if (video_script_prompt) {
+      prompt += `\n\nInstrucciones adicionales para el guión:\n${video_script_prompt}`;
+    }
+
+    const scriptText = await generateGeminiContent(prompt, false, custom_system_prompt || undefined);
 
     res.json({ status: 200, message: "ok", data: { video_script: scriptText } });
   }));

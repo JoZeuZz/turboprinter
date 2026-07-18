@@ -68,3 +68,10 @@ skills-lock.json
 .superpowers/
 plans/
 specs/
+
+# Environment files
+.env
+.env.production
+.env.local
+.env.*.local
+

@@ -52,107 +52,107 @@ const SYSTEM_PRESETS: VideoPreset[] = [
     video_source: "pexels",
     local_video_files: [],
     tts_provider: "azure-tts-v1",
-    voice_name: "es-ES-AlvaroNeural",
+    voice_name: "es-MX-AlvaroNeural",
     voice_volume: 1.0,
-    voice_rate: 0.90,
+    voice_rate: 0.98,
     bgm_type: "random",
     bgm_file: "",
-    bgm_volume: 0.15,
+    bgm_volume: 0.07,
     subtitle_enabled: true,
-    subtitle_position: "center",
-    custom_position: 50,
-    font_name: "Charm-Bold.ttf",
-    font_size: 65,
-    text_fore_color: "#FF3B30",
+    subtitle_position: "bottom",
+    custom_position: 70,
+    font_name: "STHeitiMedium.ttc",
+    font_size: 60,
+    text_fore_color: "#FFFFFF",
     stroke_color: "#000000",
     stroke_width: 2.5,
     text_background_color: false,
     rounded_subtitle_background: false,
   },
   {
-    id: "system-facts",
-    name: "facts",
+    id: "system-comedy",
+    name: "comedy",
     isSystem: true,
     video_aspect: "9:16",
-    video_concat_mode: "sequential",
-    video_transition_mode: "SlideIn",
-    video_clip_duration: 4,
-    match_materials_to_script: true,
-    video_source: "pexels",
-    local_video_files: [],
-    tts_provider: "azure-tts-v1",
-    voice_name: "es-MX-JorgeNeural",
-    voice_volume: 1.0,
-    voice_rate: 1.15,
-    bgm_type: "random",
-    bgm_file: "",
-    bgm_volume: 0.20,
-    subtitle_enabled: true,
-    subtitle_position: "custom",
-    custom_position: 55,
-    font_name: "UTM Kabel KY.ttf",
-    font_size: 70,
-    text_fore_color: "#FFD60A",
-    stroke_color: "#000000",
-    stroke_width: 3.0,
-    text_background_color: "#000000",
-    rounded_subtitle_background: true,
-  },
-  {
-    id: "system-mystery",
-    name: "mystery",
-    isSystem: true,
-    video_aspect: "16:9",
     video_concat_mode: "random",
     video_transition_mode: "FadeIn",
-    video_clip_duration: 7,
+    video_clip_duration: 5,
     match_materials_to_script: true,
     video_source: "pexels",
     local_video_files: [],
     tts_provider: "azure-tts-v1",
-    voice_name: "es-MX-AlvaroNeural",
+    voice_name: "es-ES-AlvaroNeural",
     voice_volume: 1.0,
-    voice_rate: 0.95,
+    voice_rate: 1.15,
     bgm_type: "random",
     bgm_file: "",
     bgm_volume: 0.12,
     subtitle_enabled: true,
     subtitle_position: "bottom",
     custom_position: 70,
+    font_name: "UTM Kabel KY.ttf",
+    font_size: 60,
+    text_fore_color: "#FFD60A",
+    stroke_color: "#000000",
+    stroke_width: 3.0,
+    text_background_color: false,
+    rounded_subtitle_background: false,
+  },
+  {
+    id: "system-curiosities",
+    name: "curiosities",
+    isSystem: true,
+    video_aspect: "9:16",
+    video_concat_mode: "random",
+    video_transition_mode: "FadeIn",
+    video_clip_duration: 5,
+    match_materials_to_script: true,
+    video_source: "pexels",
+    local_video_files: [],
+    tts_provider: "azure-tts-v1",
+    voice_name: "es-MX-JorgeNeural",
+    voice_volume: 1.0,
+    voice_rate: 1.08,
+    bgm_type: "random",
+    bgm_file: "",
+    bgm_volume: 0.10,
+    subtitle_enabled: true,
+    subtitle_position: "bottom",
+    custom_position: 70,
     font_name: "STHeitiMedium.ttc",
-    font_size: 50,
-    text_fore_color: "#E5E5EA",
-    stroke_color: "#1C1C1E",
+    font_size: 60,
+    text_fore_color: "#00F0FF",
+    stroke_color: "#000000",
     stroke_width: 2.0,
     text_background_color: false,
     rounded_subtitle_background: false,
   },
   {
-    id: "system-meditation",
-    name: "meditation",
+    id: "system-confessions",
+    name: "confessions",
     isSystem: true,
-    video_aspect: "16:9",
+    video_aspect: "9:16",
     video_concat_mode: "random",
     video_transition_mode: "FadeIn",
-    video_clip_duration: 8,
-    match_materials_to_script: false,
+    video_clip_duration: 5,
+    match_materials_to_script: true,
     video_source: "pexels",
     local_video_files: [],
     tts_provider: "azure-tts-v1",
-    voice_name: "es-ES-ElviraNeural",
-    voice_volume: 0.8,
-    voice_rate: 0.85,
+    voice_name: "es-MX-DaliaNeural",
+    voice_volume: 1.0,
+    voice_rate: 1.10,
     bgm_type: "random",
     bgm_file: "",
-    bgm_volume: 0.35,
+    bgm_volume: 0.09,
     subtitle_enabled: true,
     subtitle_position: "bottom",
-    custom_position: 75,
-    font_name: "Charm-Regular.ttf",
-    font_size: 55,
-    text_fore_color: "#F0F4C3",
-    stroke_color: "#37474F",
-    stroke_width: 1.0,
+    custom_position: 70,
+    font_name: "STHeitiMedium.ttc",
+    font_size: 60,
+    text_fore_color: "#FFFFFF",
+    stroke_color: "#000000",
+    stroke_width: 2.0,
     text_background_color: false,
     rounded_subtitle_background: false,
   },
@@ -183,13 +183,13 @@ export const usePresetStore = create<PresetStoreState>()(
       defaultPresetId: null,
       autoSaveConfigAfterGeneration: true,
 
-      setActivePresetId: (id) => set({ activePresetId: id }),
+      setActivePresetId: (id: string | null) => set({ activePresetId: id }),
       
-      setDefaultPresetId: (id) => set({ defaultPresetId: id }),
+      setDefaultPresetId: (id: string | null) => set({ defaultPresetId: id }),
 
-      setAutoSaveConfigAfterGeneration: (enabled) => set({ autoSaveConfigAfterGeneration: enabled }),
+      setAutoSaveConfigAfterGeneration: (enabled: boolean) => set({ autoSaveConfigAfterGeneration: enabled }),
 
-      savePreset: (name, values) => {
+      savePreset: (name: string, values: Omit<VideoPreset, "id" | "name" | "isSystem">) => {
         const id = "custom-" + Date.now();
         const newPreset: VideoPreset = {
           ...values,
@@ -197,16 +197,16 @@ export const usePresetStore = create<PresetStoreState>()(
           name,
           isSystem: false,
         };
-        set((state) => ({
+        set((state: PresetStoreState) => ({
           presets: [...state.presets, newPreset],
           activePresetId: id,
         }));
         return id;
       },
 
-      updatePreset: (id, values) => {
-        set((state) => ({
-          presets: state.presets.map((p) => {
+      updatePreset: (id: string, values: Partial<Omit<VideoPreset, "id" | "isSystem">>) => {
+        set((state: PresetStoreState) => ({
+          presets: state.presets.map((p: VideoPreset) => {
             if (p.id === id) {
               // System presets can't be renamed, but their configuration can be modified or we can update custom presets fully.
               if (p.isSystem) {
@@ -219,8 +219,8 @@ export const usePresetStore = create<PresetStoreState>()(
         }));
       },
 
-      duplicatePreset: (id, copyLabel) => {
-        const source = get().presets.find((p) => p.id === id);
+      duplicatePreset: (id: string, copyLabel: string) => {
+        const source = get().presets.find((p: VideoPreset) => p.id === id);
         if (!source) return "";
         
         const newId = "custom-" + Date.now();
@@ -232,16 +232,16 @@ export const usePresetStore = create<PresetStoreState>()(
           isSystem: false, // Duplicated presets are always custom
         };
         
-        set((state) => ({
+        set((state: PresetStoreState) => ({
           presets: [...state.presets, newPreset],
           activePresetId: newId,
         }));
         return newId;
       },
 
-      deletePreset: (id) => {
-        set((state) => {
-          const nextPresets = state.presets.filter((p) => p.id !== id);
+      deletePreset: (id: string) => {
+        set((state: PresetStoreState) => {
+          const nextPresets = state.presets.filter((p: VideoPreset) => p.id !== id);
           const nextActive = state.activePresetId === id ? null : state.activePresetId;
           const nextDefault = state.defaultPresetId === id ? null : state.defaultPresetId;
           return {
@@ -263,6 +263,16 @@ export const usePresetStore = create<PresetStoreState>()(
     {
       name: "mpt-presets",
       storage: createJSONStorage(() => localStorage),
+      merge: (persistedState: any, currentState: any) => {
+        if (!persistedState) return currentState;
+        // Keep custom presets from persisted state, but replace system presets with current SYSTEM_PRESETS
+        const customPresets = (persistedState.presets || []).filter((p: any) => !p.isSystem);
+        return {
+          ...currentState,
+          ...persistedState,
+          presets: [...SYSTEM_PRESETS, ...customPresets],
+        };
+      },
     }
   )
 );

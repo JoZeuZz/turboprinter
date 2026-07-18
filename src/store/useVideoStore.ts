@@ -44,6 +44,7 @@ const DEFAULTS: VideoParams & VideoStoreExtras = {
   video_script_prompt: "",
   custom_system_prompt: "",
   local_video_files: [],
+  video_niche: "terror",
   tts_provider: "azure-tts-v1",
   preview_text: "Este es un texto de ejemplo para probar la sintesis de voz.",
 };

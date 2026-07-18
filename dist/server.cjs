@@ -205,7 +205,7 @@ var SAMPLE_VIDEOS = [
     title: "Tropical Shoreline"
   }
 ];
-async function generateGeminiContent(prompt, jsonMode = false) {
+async function generateGeminiContent(prompt, jsonMode = false, systemInstruction) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     throw new Error("No Gemini API key configured. Set GEMINI_API_KEY.");
@@ -222,7 +222,10 @@ async function generateGeminiContent(prompt, jsonMode = false) {
     const response = await ai.models.generateContent({
       model: "gemini-3.1-flash-lite",
       contents: prompt,
-      config: jsonMode ? { responseMimeType: "application/json" } : void 0
+      config: {
+        ...jsonMode ? { responseMimeType: "application/json" } : {},
+        ...systemInstruction ? { systemInstruction } : {}
+      }
     });
     return response.text || "";
   } catch (err) {
@@ -894,12 +897,24 @@ async function startServer() {
     }
   }));
   app.post("/api/v1/scripts", wrap(async (req, res) => {
-    const { video_subject, video_language = "es", paragraph_number = 3 } = req.body;
+    const {
+      video_subject,
+      video_language = "es",
+      paragraph_number = 3,
+      video_script_prompt = "",
+      custom_system_prompt = ""
+    } = req.body;
     if (!process.env.GEMINI_API_KEY) {
       throw new Error("No Gemini API key configured. Please set GEMINI_API_KEY.");
     }
-    const prompt = `Escribe un gui\xF3n de video cautivador, detallado y narrativo sobre "${video_subject}" en idioma ${video_language}. Es CR\xCDTICO que el gui\xF3n tenga exactamente ${paragraph_number} p\xE1rrafos bien estructurados, completos y detallados (cada p\xE1rrafo debe ser lo suficientemente largo y descriptivo, \xF3ptimo para narrar una historia o un documental). Separa cada p\xE1rrafo estrictamente con dos saltos de l\xEDnea (\\n\\n). Devuelve SOLAMENTE el texto del gui\xF3n, sin t\xEDtulos, introducciones ni comentarios adicionales.`;
-    const scriptText = await generateGeminiContent(prompt);
+    let prompt = `Escribe un gui\xF3n de video sobre "${video_subject}" en idioma ${video_language}. Es CR\xCDTICO que el gui\xF3n tenga exactamente ${paragraph_number} p\xE1rrafos bien estructurados, completos y detallados (cada p\xE1rrafo debe ser lo suficientemente largo y descriptivo, \xF3ptimo para narrar una historia o un documental). Separa cada p\xE1rrafo estrictamente con dos saltos de l\xEDnea (\\n\\n). Devuelve SOLAMENTE el texto del gui\xF3n, sin t\xEDtulos, introducciones ni comentarios adicionales.`;
+    if (video_script_prompt) {
+      prompt += `
+
+Instrucciones adicionales para el gui\xF3n:
+${video_script_prompt}`;
+    }
+    const scriptText = await generateGeminiContent(prompt, false, custom_system_prompt || void 0);
     res.json({ status: 200, message: "ok", data: { video_script: scriptText } });
   }));
   app.post("/api/v1/terms", wrap(async (req, res) => {

@@ -44,6 +44,7 @@ export interface VideoParams {
   video_script_prompt?: string;
   custom_system_prompt?: string;
   local_video_files?: string[];
+  video_niche?: string;
 }
 
 export const TASK_STATE_FAILED = -1 as const;
