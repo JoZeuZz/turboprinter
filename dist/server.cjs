@@ -1873,8 +1873,9 @@ No incluyas explicaciones, marcas de c\xF3digo markdown, ni texto adicional, sol
       tl = "es";
     }
     if (!p.project_folder_name) {
+      const themeFolder = sanitizeFolderName(p.topic || "general");
       const folderName = `${sanitizeFolderName(p.topic || p.project_id || "project")}_${getFormattedDateTime()}`;
-      p.project_folder_name = folderName;
+      p.project_folder_name = `${themeFolder}/${folderName}`;
       projects.set(projectId, p);
     }
     const projectFolder = import_path.default.join(process.cwd(), "storage", "renders", p.project_folder_name);
@@ -2780,8 +2781,9 @@ To run this application locally and render videos successfully, please:
         throw new Error("No video clips in the timeline to render.");
       }
       if (!p.project_folder_name) {
+        const themeFolder = sanitizeFolderName(p.topic || "general");
         const folderName = `${sanitizeFolderName(p.topic || p.project_id || "project")}_${getFormattedDateTime()}`;
-        p.project_folder_name = folderName;
+        p.project_folder_name = `${themeFolder}/${folderName}`;
         projects.set(projectId, p);
       }
       const projectFolder = import_path.default.join(process.cwd(), "storage", "renders", p.project_folder_name);

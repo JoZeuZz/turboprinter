@@ -2084,8 +2084,9 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
 
     // Ensure we have a project_folder_name
     if (!p.project_folder_name) {
+      const themeFolder = sanitizeFolderName(p.topic || 'general');
       const folderName = `${sanitizeFolderName(p.topic || p.project_id || 'project')}_${getFormattedDateTime()}`;
-      p.project_folder_name = folderName;
+      p.project_folder_name = `${themeFolder}/${folderName}`;
       projects.set(projectId, p);
     }
 
@@ -3198,8 +3199,9 @@ To run this application locally and render videos successfully, please:
 
       // Ensure we have a project_folder_name
       if (!p.project_folder_name) {
+        const themeFolder = sanitizeFolderName(p.topic || 'general');
         const folderName = `${sanitizeFolderName(p.topic || p.project_id || 'project')}_${getFormattedDateTime()}`;
-        p.project_folder_name = folderName;
+        p.project_folder_name = `${themeFolder}/${folderName}`;
         projects.set(projectId, p);
       }
 
