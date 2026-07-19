@@ -147,7 +147,7 @@ export function SubtitlePreview({
             key={`${text}-${animType}-${textColor}-${fontName}-${fontSize}-${strokeColor}-${strokeWidth}-${roundedBackground}-${subtitleBgStyle}`}
             className={`inline-block max-w-full px-3 py-1.5 leading-tight transition-all ${
               previewStyle.background?.rounded ? "rounded-xl" : "rounded-sm"
-            } ${subtitleBgStyle === "blur" ? "backdrop-blur-md border border-white/20" : ""}`}
+            } ${subtitleBgStyle === "blur" && textBackgroundColor !== false ? "backdrop-blur-md border border-white/20" : ""}`}
             style={{ backgroundColor: finalBgColor }}
             {...motionProps}
           >

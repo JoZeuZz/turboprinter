@@ -364,7 +364,7 @@ export function VideoPreview({ items, selectedId, onTimeUpdate }: VideoPreviewPr
               <motion.div
                 key={`${activeSubtitle.id || activeSubtitle.text}-${animType}-${textColor}-${fontName}-${fontSize}-${strokeColor}-${strokeWidth}-${roundedBackground}-${subtitleBgStyle}`}
                 className={`inline-block max-w-full px-3 py-1.5 leading-tight transition-all ${borderStyleClass} ${
-                  subtitleBgStyle === "blur" ? "backdrop-blur-md border border-white/20" : ""
+                  subtitleBgStyle === "blur" && textBackgroundColor !== false ? "backdrop-blur-md border border-white/20" : ""
                 }`}
                 style={bgStyle}
                 {...motionProps}
