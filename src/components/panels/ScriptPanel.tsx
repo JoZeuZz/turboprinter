@@ -110,7 +110,17 @@ export function ScriptPanel() {
     setIsContinuing(true);
     setError(null);
     try {
-      if (!projectStore.projectId) {
+      if (projectStore.projectId) {
+        console.log("[ScriptPanel] Updating existing project on continue:", projectStore.projectId);
+        await projectsApi.replaceTimeline(projectStore.projectId, {
+          project_id: projectStore.projectId,
+          script: store.video_script ?? "",
+          topic: store.video_subject,
+          language: store.video_language ?? "es",
+          params: store.toParams(),
+        } as any);
+        await projectStore.open(projectStore.projectId);
+      } else {
         console.log("[ScriptPanel] No projectId found. Creating project from manual input...");
         const { project_id } = await projectsApi.createFromScript({
           script: store.video_script ?? "",
@@ -124,7 +134,7 @@ export function ScriptPanel() {
       }
       workspaceStore.setPanel("config");
     } catch (projectError) {
-      console.error("[ScriptPanel] Failed to auto-create project:", projectError);
+      console.error("[ScriptPanel] Failed to auto-create or update project:", projectError);
       if (!(projectError instanceof ApiError && projectError.status === 404)) {
         setError(projectError instanceof Error ? projectError.message : String(projectError));
       } else {
@@ -173,14 +183,26 @@ export function ScriptPanel() {
       }
 
       try {
-        const { project_id } = await projectsApi.createFromScript({
-          script: video_script,
-          language: store.video_language,
-          topic: store.video_subject,
-        });
-        await projectStore.open(project_id);
-        removeDraft(currentDraftId);
-        navigate(`/project/${project_id}`, { replace: true });
+        if (projectStore.projectId) {
+          console.log("[ScriptPanel] Updating existing project after generation:", projectStore.projectId);
+          await projectsApi.replaceTimeline(projectStore.projectId, {
+            project_id: projectStore.projectId,
+            script: video_script,
+            topic: store.video_subject,
+            language: store.video_language ?? "es",
+            params: store.toParams(),
+          } as any);
+          await projectStore.open(projectStore.projectId);
+        } else {
+          const { project_id } = await projectsApi.createFromScript({
+            script: video_script,
+            language: store.video_language,
+            topic: store.video_subject,
+          });
+          await projectStore.open(project_id);
+          removeDraft(currentDraftId);
+          navigate(`/project/${project_id}`, { replace: true });
+        }
       } catch (projectError) {
         if (!(projectError instanceof ApiError && projectError.status === 404)) {
           throw projectError;

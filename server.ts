@@ -1359,6 +1359,13 @@ Devuelve ÚNICAMENTE el texto del guión, sin títulos, encabezados, listas, not
       return res.status(404).json({ status: 404, message: "Project not found", data: null });
     }
     const updated = { ...p, ...req.body };
+    const oldNiche = p.params?.video_niche;
+    const newNiche = updated.params?.video_niche;
+    if (!updated.project_folder_name || (newNiche && oldNiche !== newNiche)) {
+      const themeFolder = sanitizeFolderName(newNiche || updated.topic || 'general');
+      const folderName = `${sanitizeFolderName(updated.topic || updated.project_id || 'project')}_${getFormattedDateTime()}`;
+      updated.project_folder_name = `${themeFolder}/${folderName}`;
+    }
     updated.updated_at = new Date().toISOString();
     projects.set(req.params.id, updated);
     res.json({ status: 200, message: "ok", data: { project_id: p.project_id } });
@@ -2088,7 +2095,7 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
 
     // Ensure we have a project_folder_name
     if (!p.project_folder_name) {
-      const themeFolder = sanitizeFolderName(p.topic || 'general');
+      const themeFolder = sanitizeFolderName(p.params?.video_niche || p.topic || 'general');
       const folderName = `${sanitizeFolderName(p.topic || p.project_id || 'project')}_${getFormattedDateTime()}`;
       p.project_folder_name = `${themeFolder}/${folderName}`;
       projects.set(projectId, p);
@@ -3203,7 +3210,7 @@ To run this application locally and render videos successfully, please:
 
       // Ensure we have a project_folder_name
       if (!p.project_folder_name) {
-        const themeFolder = sanitizeFolderName(p.topic || 'general');
+        const themeFolder = sanitizeFolderName(p.params?.video_niche || p.topic || 'general');
         const folderName = `${sanitizeFolderName(p.topic || p.project_id || 'project')}_${getFormattedDateTime()}`;
         p.project_folder_name = `${themeFolder}/${folderName}`;
         projects.set(projectId, p);
