@@ -1,6 +1,6 @@
 // webui-react/src/components/panels/VideoConfigPanel.tsx
 import { useState, useEffect } from "react";
-import { Eye, Wand2, Loader2, Check } from "lucide-react";
+import { Eye, Wand2, Loader2, Check, Save } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import {
   TabBar,
@@ -41,6 +41,65 @@ export function VideoConfigPanel() {
   const [voiceLoadError, setVoiceLoadError] = useState<string | null>(null);
   const store = useVideoStore();
   const { config } = useConfigStore();
+  const presetStore = usePresetStore();
+
+  const handleCancelPresetEdit = () => {
+    const backup = presetStore.editingPresetBackup;
+    if (backup) {
+      Object.keys(backup).forEach((k) => {
+        store.set(k as any, backup[k]);
+      });
+    }
+    presetStore.setEditingPresetBackup(null);
+    presetStore.setIsEditingPreset(false);
+  };
+
+  const handleSavePresetEdit = () => {
+    const activeId = presetStore.activePresetId;
+    if (!activeId) return;
+
+    // Gather current values from store
+    const keys = [
+      "video_aspect",
+      "video_concat_mode",
+      "video_transition_mode",
+      "video_clip_duration",
+      "match_materials_to_script",
+      "video_source",
+      "local_video_files",
+      "tts_provider",
+      "voice_name",
+      "voice_volume",
+      "voice_rate",
+      "bgm_type",
+      "bgm_file",
+      "bgm_volume",
+      "subtitle_enabled",
+      "subtitle_position",
+      "custom_position",
+      "font_name",
+      "font_size",
+      "text_fore_color",
+      "stroke_color",
+      "stroke_width",
+      "text_background_color",
+      "rounded_subtitle_background",
+      "subtitle_bg_style",
+      "subtitle_animation",
+    ];
+
+    const updatedValues: any = {};
+    const storeAny = store as any;
+    keys.forEach((k) => {
+      if (storeAny[k] !== undefined) {
+        updatedValues[k] = storeAny[k];
+      }
+    });
+
+    presetStore.updatePreset(activeId, updatedValues);
+    presetStore.setEditingPresetBackup(null);
+    presetStore.setIsEditingPreset(false);
+  };
 
   const [localVideos, setLocalVideos] = useState<{ name: string; size: number; path: string }[]>([]);
   const [loadingLocalVideos, setLoadingLocalVideos] = useState(false);
@@ -243,7 +302,39 @@ export function VideoConfigPanel() {
         </Button>
       </div>
 
-      <TabBar tabs={TABS} active={tab} onChange={setTab} />
+      <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-border/50 gap-2 mb-2">
+        <TabBar tabs={TABS} active={tab} onChange={setTab} />
+        {/* Save/Cancel buttons opposite the tab choices */}
+        <div className="flex items-center gap-2 pb-2 md:pb-0 justify-end">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleCancelPresetEdit}
+            disabled={!presetStore.isEditingPreset}
+            className={`text-xs h-8 px-3 transition-all ${
+              presetStore.isEditingPreset
+                ? "text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                : "text-muted-foreground/30 bg-transparent cursor-not-allowed opacity-30"
+            }`}
+          >
+            {t("presets.cancel") || "Cancelar"}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleSavePresetEdit}
+            disabled={!presetStore.isEditingPreset}
+            className={`text-xs h-8 px-3 gap-1.5 transition-all ${
+              presetStore.isEditingPreset
+                ? "border-accent/40 bg-accent/15 text-accent hover:bg-accent/25"
+                : "border-border bg-background text-muted-foreground/30 cursor-not-allowed opacity-30"
+            }`}
+          >
+            <Save className="h-3.5 w-3.5" />
+            {t("presets.save") || "Guardar"}
+          </Button>
+        </div>
+      </div>
 
       <div className="min-h-0 overflow-hidden py-4">
         <div className="grid h-full min-h-0 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(220px,260px)]">

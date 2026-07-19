@@ -8,7 +8,8 @@ import {
   Save, 
   Edit2, 
   Check, 
-  X
+  X,
+  Sliders
 } from "lucide-react";
 import { usePresetStore, type VideoPreset } from "../../store/usePresetStore";
 import { useVideoStore } from "../../store/useVideoStore";
@@ -131,6 +132,63 @@ export function PresetManager() {
   const selectedPreset = presets.find((p) => p.id === activePresetId) || null;
   const hasModified = selectedPreset ? !settingsMatchPreset(videoStore, selectedPreset) : false;
 
+  const handleToggleEditPreset = () => {
+    const nextState = !presetStore.isEditingPreset;
+    if (nextState) {
+      // Entering edit mode
+      // Capture backup of current store values
+      const keys = [
+        "video_aspect",
+        "video_concat_mode",
+        "video_transition_mode",
+        "video_clip_duration",
+        "match_materials_to_script",
+        "video_source",
+        "local_video_files",
+        "tts_provider",
+        "voice_name",
+        "voice_volume",
+        "voice_rate",
+        "bgm_type",
+        "bgm_file",
+        "bgm_volume",
+        "subtitle_enabled",
+        "subtitle_position",
+        "custom_position",
+        "font_name",
+        "font_size",
+        "text_fore_color",
+        "stroke_color",
+        "stroke_width",
+        "text_background_color",
+        "rounded_subtitle_background",
+        "subtitle_bg_style",
+        "subtitle_animation",
+      ];
+      const videoStoreAny = videoStore as any;
+      const backup: any = {};
+      keys.forEach((k) => {
+        if (videoStoreAny[k] !== undefined) {
+          backup[k] = videoStoreAny[k];
+        }
+      });
+      presetStore.setEditingPresetBackup(backup);
+      presetStore.setIsEditingPreset(true);
+      showToast(t("presets.editingModeOn") || "Modo edición de preset activado. Ajusta los parámetros en las pestañas superiores.");
+    } else {
+      // Exiting edit mode (Cancelling)
+      const backup = presetStore.editingPresetBackup;
+      if (backup) {
+        Object.keys(backup).forEach((k) => {
+          videoStore.set(k as any, backup[k]);
+        });
+      }
+      presetStore.setEditingPresetBackup(null);
+      presetStore.setIsEditingPreset(false);
+      showToast(t("presets.editingModeOff") || "Edición de preset cancelada.");
+    }
+  };
+
   // Load default preset on mount if no active preset and settings are clean defaults
   useEffect(() => {
     if (!activePresetId && defaultPresetId) {
@@ -144,6 +202,8 @@ export function PresetManager() {
   }, []);
 
   const handleSelectPreset = (id: string) => {
+    presetStore.setIsEditingPreset(false);
+    presetStore.setEditingPresetBackup(null);
     if (!id) {
       presetStore.setActivePresetId(null);
       return;
@@ -355,6 +415,21 @@ export function PresetManager() {
           {/* Actions for Selected Preset */}
           {selectedPreset && !isSavingNew && !isRenaming && (
             <>
+              {/* Edit preset parameters button */}
+              <button
+                id="btn-edit-preset-params"
+                type="button"
+                onClick={handleToggleEditPreset}
+                title={presetStore.isEditingPreset ? "Cancelar edición de preset" : "Editar parámetros del preset"}
+                className={`inline-flex h-8 w-8 items-center justify-center rounded-lg border transition-colors ${
+                  presetStore.isEditingPreset
+                    ? "border-accent/40 bg-accent/15 text-accent hover:bg-accent/25"
+                    : "border-border bg-background text-muted hover:text-foreground hover:bg-surface-hover"
+                }`}
+              >
+                <Sliders className="h-4 w-4" />
+              </button>
+
               {/* Overwrite / Update button for Custom presets when modified */}
               {hasModified && !selectedPreset.isSystem && (
                 <button
@@ -426,6 +501,22 @@ export function PresetManager() {
           )}
         </div>
       </div>
+
+      {/* Parameters Editor Mode is active notification bar */}
+      {presetStore.isEditingPreset && selectedPreset && (
+        <div className="rounded-lg border border-accent/20 bg-accent/5 p-3 flex items-center justify-between animate-fadeIn">
+          <div className="flex items-center gap-2">
+            <Sliders className="h-4 w-4 text-accent animate-pulse" />
+            <div className="text-xs">
+              <span className="font-semibold text-accent">{t("presets.editingTitle") || "Editando Preset"}: </span>
+              <span className="text-foreground">{selectedPreset.isSystem ? t(`presets.${selectedPreset.name}`) : selectedPreset.name}</span>
+            </div>
+          </div>
+          <span className="text-[10px] text-muted-foreground italic hidden sm:inline">
+            {t("presets.editHint") || "Usa las pestañas superiores para cambiar valores y luego haz clic en Guardar arriba."}
+          </span>
+        </div>
+      )}
 
       {/* Save New Preset Dialog Inline */}
       {isSavingNew && (

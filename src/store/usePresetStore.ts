@@ -36,6 +36,8 @@ export interface VideoPreset {
   stroke_width: number;
   text_background_color: string | boolean;
   rounded_subtitle_background: boolean;
+  subtitle_bg_style?: "solid" | "translucent" | "blur";
+  subtitle_animation?: "none" | "pop" | "fade" | "rotate";
 }
 
 // System-defined presets
@@ -163,6 +165,8 @@ interface PresetStoreState {
   activePresetId: string | null;
   defaultPresetId: string | null;
   autoSaveConfigAfterGeneration: boolean;
+  isEditingPreset: boolean;
+  editingPresetBackup: any | null;
   
   // Actions
   setActivePresetId: (id: string | null) => void;
@@ -173,6 +177,8 @@ interface PresetStoreState {
   duplicatePreset: (id: string, copyLabel: string) => string;
   deletePreset: (id: string) => void;
   resetPresets: () => void;
+  setIsEditingPreset: (enabled: boolean) => void;
+  setEditingPresetBackup: (backup: any | null) => void;
 }
 
 export const usePresetStore = create<PresetStoreState>()(
@@ -182,6 +188,8 @@ export const usePresetStore = create<PresetStoreState>()(
       activePresetId: null,
       defaultPresetId: null,
       autoSaveConfigAfterGeneration: true,
+      isEditingPreset: false,
+      editingPresetBackup: null,
 
       setActivePresetId: (id: string | null) => set({ activePresetId: id }),
       
@@ -257,20 +265,38 @@ export const usePresetStore = create<PresetStoreState>()(
           presets: SYSTEM_PRESETS,
           activePresetId: null,
           defaultPresetId: null,
+          isEditingPreset: false,
+          editingPresetBackup: null,
         });
       },
+
+      setIsEditingPreset: (enabled: boolean) => set({ isEditingPreset: enabled }),
+      setEditingPresetBackup: (backup: any | null) => set({ editingPresetBackup: backup }),
     }),
     {
       name: "mpt-presets",
       storage: createJSONStorage(() => localStorage),
+      partialize: (state) => {
+        const { isEditingPreset, editingPresetBackup, ...rest } = state;
+        return rest;
+      },
       merge: (persistedState: any, currentState: any) => {
         if (!persistedState) return currentState;
-        // Keep custom presets from persisted state, but replace system presets with current SYSTEM_PRESETS
+        // Keep custom presets from persisted state
         const customPresets = (persistedState.presets || []).filter((p: any) => !p.isSystem);
+        // Load system presets, but merge any user-modified values that might be in the persisted state
+        const persistedSystemPresets = (persistedState.presets || []).filter((p: any) => p.isSystem);
+        const mergedSystemPresets = SYSTEM_PRESETS.map((sys) => {
+          const persisted = persistedSystemPresets.find((p: any) => p.id === sys.id);
+          if (persisted) {
+            return { ...sys, ...persisted };
+          }
+          return sys;
+        });
         return {
           ...currentState,
           ...persistedState,
-          presets: [...SYSTEM_PRESETS, ...customPresets],
+          presets: [...mergedSystemPresets, ...customPresets],
         };
       },
     }
