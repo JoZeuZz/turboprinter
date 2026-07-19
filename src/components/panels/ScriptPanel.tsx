@@ -19,7 +19,7 @@ const NICHE_SYSTEM_PROMPTS: Record<string, string> = {
 
 Sigue rigurosamente las siguientes directrices técnicas de escritura:
 - No incluyas ningún tipo de acotaciones técnicas, sugerencias de efectos de sonido, descripciones de escenas visuales ni nombres de locutores entre paréntesis o corchetes. El output que generes debe consistir única y exclusivamente en el texto continuo que será leído de manera literal por el motor de síntesis de voz (TTS).
-- Estructura el relato para que su lectura dure aproximadamente cincuenta y cinco segundos, limitando la extensión total a un rango estricto de entre 125 y 135 palabras.
+- Estructura el relato de forma que cada párrafo tenga una extensión estricta de entre 45 y 55 palabras (aproximadamente de 15 a 20 segundos de lectura por párrafo). La longitud total del guion debe crecer de manera lineal y proporcional con el número de párrafos solicitado, manteniendo la consistencia en el tamaño de cada párrafo.
 - Utiliza una sintaxis basada en frases extremadamente cortas y contundentes. Evita cláusulas subordinadas o explicaciones largas.
 - El gancho de los primeros dos segundos de vídeo debe ser directo e inquietante, apelando a miedos universales o a secretos perturbadores que involucren al espectador de inmediato.
 - Emplea un tono de narración sombrío, clínico y perturbador, seleccionando palabras que evoquen aislamiento, oscuridad y duda psicológica.
@@ -31,7 +31,7 @@ Genera el guion en idioma español a continuación:`,
 
 Sigue rigurosamente las siguientes directrices técnicas de escritura:
 - Proporciona única y exclusivamente las líneas de diálogo que procesará el sintetizador de voz (TTS). No agregues notas como "(risas)", "(pausa)", "(sonido de aplauso)", ni indicaciones sobre la expresión física del narrador.
-- Limita la extensión total del guion a un rango estricto de entre 120 y 130 palabras para que pueda ser narrado de forma ágil y rápida en un tiempo estimado de cuarenta y cinco segundos de lectura acelerada.
+- Limita la extensión de cada párrafo individual a un rango estricto de entre 40 y 50 palabras para garantizar una lectura ágil y rápida (aproximadamente de 12 a 15 segundos por párrafo). El guion debe incrementar su longitud y profundidad de forma lineal y proporcional con la cantidad de párrafos requerida.
 - Estructura el guion de tal manera que haya un remate de humor (punchline) cada doce o quince palabras, manteniendo el dinamismo de la narración de inicio a fin.
 - El gancho de apertura en los primeros tres segundos de vídeo debe plantear una queja o una observación mundana pero exagerada hasta el absurdo absoluto.
 - Utiliza una voz narrativa que proyecte sarcasmo, ligereza e incredulidad, recurriendo a comparaciones locas o jerga común de internet que conecte con la juventud de manera orgánica.
@@ -43,7 +43,7 @@ Genera el guion en idioma español a continuación:`,
 
 Sigue rigurosamente las siguientes directrices técnicas de escritura:
 - El texto generado debe estar libre de introducciones del tipo "Hola a todos", títulos de secciones, subtítulos de estructura o marcas de producción entre corchetes. Debe ser un flujo limpio de prosa diseñado para ser leído de principio a fin por el motor TTS sin interrupción alguna.
-- Ajusta la cantidad total de palabras a un rango de entre 135 y 145 palabras, asegurando que la densidad de información se adapte perfectamente a cincuenta segundos de lectura informativa y profesional.
+- Ajusta la cantidad de palabras de cada párrafo individual a un rango estricto de entre 45 y 55 palabras para asegurar una lectura informativa y profesional (aproximadamente de 15 a 20 segundos por párrafo). El guion total debe ser proporcionalmente más largo y profundo a mayor número de párrafos solicitados, escalando linealmente.
 - Diseña la narrativa bajo la metodología de revelación escalonada: plantea un misterio o contradice una creencia popular en los primeros segundos, explica el mecanismo científico real con analogías sencillas y cierra con una conclusión de alto impacto.
 - Integra palabras de alta carga atencional que despierten la curiosidad instantánea del espectador, manteniendo un registro riguroso, informativo y de absoluta precisión científica.
 - El gancho inicial debe desafiar el sentido común del espectador de inmediato, logrando que sientan la necesidad de aprender la explicación detrás de la premisa planteada.
@@ -55,7 +55,7 @@ Genera el guion en idioma español a continuación:`,
 
 Sigue rigurosamente las siguientes directrices técnicas de escritura:
 - Produce un guion que contenga únicamente las palabras que hablará la voz sintetizada. No incluyas presentaciones iniciales como "Hoy les traigo este caso", firmas del relato ni acotaciones explicativas de la emoción de la voz entre paréntesis.
-- Restringe la extensión del texto a un rango de entre 130 y 140 palabras, garantizando una duración aproximada de cincuenta segundos de lectura fluida e intensa.
+- Restringe la extensión de cada párrafo individual a un rango de entre 45 y 55 palabras, garantizando una lectura fluida e intensa (aproximadamente de 15 a 20 segundos por párrafo). La longitud total del relato debe crecer de forma lineal y proporcional según la cantidad de párrafos solicitada.
 - Escribe toda la narrativa en primera persona del singular, adoptando un tono de confesión de alta urgencia emocional, confidencialidad y sorpresa absoluta.
 - La primera frase del guion debe funcionar como un gancho drástico que declare el conflicto principal del drama sin dar explicaciones iniciales, obligando al usuario a quedarse para entender cómo se llegó a ese punto extremo.
 - Organiza la revelación del drama de forma dosificada, presentando el detonante, la reacción y el punto de no retorno de la situación personal descrita.
