@@ -944,7 +944,10 @@ async function startServer() {
       throw new Error("No Gemini API key configured. Please set GEMINI_API_KEY.");
     }
 
-    let prompt = `Escribe un guión de video sobre "${video_subject}" en idioma ${video_language}. Es CRÍTICO que el guión tenga exactamente ${paragraph_number} párrafos bien estructurados, completos y detallados (cada párrafo debe ser lo suficientemente largo y descriptivo, óptimo para narrar una historia o un documental). Separa cada párrafo estrictamente con dos saltos de línea (\\n\\n). Devuelve SOLAMENTE el texto del guión, sin títulos, introducciones ni comentarios adicionales.`;
+    let prompt = `Escribe un guión de video sobre "${video_subject}" en idioma ${video_language}. Es CRÍTICO que el guión tenga exactamente ${paragraph_number} párrafos bien estructurados, completos y detallados.
+Cada párrafo debe ser sustancial y desarrollado por completo (aproximadamente de 50 a 70 palabras por párrafo, compuesto por 3 a 5 oraciones ricas y descriptivas, óptimo para narrar una historia o un documental).
+A medida que aumenta el número de párrafos, el guión general debe ser proporcionalmente más largo; no reduzcas la longitud de los párrafos individuales al tener más párrafos. Cada uno debe mantener la misma profundidad y extensión de forma consistente.
+Separa cada párrafo estrictamente con dos saltos de línea (\\n\\n). Devuelve SOLAMENTE el texto del guión, sin títulos, introducciones ni comentarios adicionales.`;
 
     if (video_script_prompt) {
       prompt += `\n\nInstrucciones adicionales para el guión:\n${video_script_prompt}`;
@@ -1196,7 +1199,8 @@ Usa un tono cercano, natural y conversacional. Escribe con palabras simples, evi
 Haz que el relato despierte curiosidad desde las primeras líneas y mantenga la tensión durante todo el video. Alterna momentos de sorpresa, intriga y reflexión cuando sea apropiado, pero sin exagerar ni inventar hechos.
 No escribas como un artículo de Wikipedia ni como un documental académico. Escribe como un buen narrador que sabe mantener la atención de quien escucha.
 Es CRÍTICO que el guión tenga EXACTAMENTE ${paragraph_number} párrafos, separados únicamente por dos saltos de línea (\\n\\n).
-Cada párrafo debe desarrollar una parte de la historia de forma completa, con descripciones fáciles de imaginar y transiciones naturales hacia el siguiente.
+Cada párrafo debe ser sustancial y desarrollado por completo (aproximadamente de 50 a 70 palabras por párrafo, compuesto por 3 a 5 oraciones ricas y descriptivas).
+A medida que aumenta el número de párrafos, el guión general debe ser proporcionalmente más largo; bajo ninguna circunstancia acortes ni apresures los párrafos individuales al tener más de ellos. Cada párrafo debe mantener la misma profundidad, extensión y desarrollo completo de una parte de la historia con transiciones naturales hacia el siguiente.
 No repitas información. No uses relleno. Cada frase debe aportar algo interesante.
 Devuelve ÚNICAMENTE el texto del guión, sin títulos, encabezados, listas, notas ni comentarios adicionales.`;
       scriptText = await generateGeminiContent(prompt);

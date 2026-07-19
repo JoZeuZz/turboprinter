@@ -907,7 +907,10 @@ async function startServer() {
     if (!process.env.GEMINI_API_KEY) {
       throw new Error("No Gemini API key configured. Please set GEMINI_API_KEY.");
     }
-    let prompt = `Escribe un gui\xF3n de video sobre "${video_subject}" en idioma ${video_language}. Es CR\xCDTICO que el gui\xF3n tenga exactamente ${paragraph_number} p\xE1rrafos bien estructurados, completos y detallados (cada p\xE1rrafo debe ser lo suficientemente largo y descriptivo, \xF3ptimo para narrar una historia o un documental). Separa cada p\xE1rrafo estrictamente con dos saltos de l\xEDnea (\\n\\n). Devuelve SOLAMENTE el texto del gui\xF3n, sin t\xEDtulos, introducciones ni comentarios adicionales.`;
+    let prompt = `Escribe un gui\xF3n de video sobre "${video_subject}" en idioma ${video_language}. Es CR\xCDTICO que el gui\xF3n tenga exactamente ${paragraph_number} p\xE1rrafos bien estructurados, completos y detallados.
+Cada p\xE1rrafo debe ser sustancial y desarrollado por completo (aproximadamente de 50 a 70 palabras por p\xE1rrafo, compuesto por 3 a 5 oraciones ricas y descriptivas, \xF3ptimo para narrar una historia o un documental).
+A medida que aumenta el n\xFAmero de p\xE1rrafos, el gui\xF3n general debe ser proporcionalmente m\xE1s largo; no reduzcas la longitud de los p\xE1rrafos individuales al tener m\xE1s p\xE1rrafos. Cada uno debe mantener la misma profundidad y extensi\xF3n de forma consistente.
+Separa cada p\xE1rrafo estrictamente con dos saltos de l\xEDnea (\\n\\n). Devuelve SOLAMENTE el texto del gui\xF3n, sin t\xEDtulos, introducciones ni comentarios adicionales.`;
     if (video_script_prompt) {
       prompt += `
 
@@ -1115,7 +1118,8 @@ Usa un tono cercano, natural y conversacional. Escribe con palabras simples, evi
 Haz que el relato despierte curiosidad desde las primeras l\xEDneas y mantenga la tensi\xF3n durante todo el video. Alterna momentos de sorpresa, intriga y reflexi\xF3n cuando sea apropiado, pero sin exagerar ni inventar hechos.
 No escribas como un art\xEDculo de Wikipedia ni como un documental acad\xE9mico. Escribe como un buen narrador que sabe mantener la atenci\xF3n de quien escucha.
 Es CR\xCDTICO que el gui\xF3n tenga EXACTAMENTE ${paragraph_number} p\xE1rrafos, separados \xFAnicamente por dos saltos de l\xEDnea (\\n\\n).
-Cada p\xE1rrafo debe desarrollar una parte de la historia de forma completa, con descripciones f\xE1ciles de imaginar y transiciones naturales hacia el siguiente.
+Cada p\xE1rrafo debe ser sustancial y desarrollado por completo (aproximadamente de 50 a 70 palabras por p\xE1rrafo, compuesto por 3 a 5 oraciones ricas y descriptivas).
+A medida que aumenta el n\xFAmero de p\xE1rrafos, el gui\xF3n general debe ser proporcionalmente m\xE1s largo; bajo ninguna circunstancia acortes ni apresures los p\xE1rrafos individuales al tener m\xE1s de ellos. Cada p\xE1rrafo debe mantener la misma profundidad, extensi\xF3n y desarrollo completo de una parte de la historia con transiciones naturales hacia el siguiente.
 No repitas informaci\xF3n. No uses relleno. Cada frase debe aportar algo interesante.
 Devuelve \xDANICAMENTE el texto del gui\xF3n, sin t\xEDtulos, encabezados, listas, notas ni comentarios adicionales.`;
       scriptText = await generateGeminiContent(prompt);
