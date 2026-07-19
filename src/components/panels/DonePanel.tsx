@@ -48,6 +48,38 @@ export function DonePanel() {
     setPanel("script");
   };
 
+  const videoSubject = useVideoStore((s) => s.video_subject) || "";
+
+  const getDownloadFilename = () => {
+    let name = videoSubject;
+    const colonIndex = name.indexOf(":");
+    const commaIndex = name.indexOf(",");
+
+    let splitIndex = -1;
+    if (colonIndex !== -1 && commaIndex !== -1) {
+      splitIndex = Math.min(colonIndex, commaIndex);
+    } else if (colonIndex !== -1) {
+      splitIndex = colonIndex;
+    } else if (commaIndex !== -1) {
+      splitIndex = commaIndex;
+    }
+
+    if (splitIndex !== -1) {
+      name = name.substring(0, splitIndex);
+    }
+
+    name = name.trim();
+    if (!name) {
+      return "video.mp4";
+    }
+
+    // Sanitize characters not allowed in file names
+    const sanitized = name.replace(/[\\/:*?"<>|]/g, "").trim();
+    return sanitized ? `${sanitized}.mp4` : "video.mp4";
+  };
+
+  const downloadFilename = getDownloadFilename();
+
   return (
     <div className="flex h-full w-full max-w-4xl mx-auto flex-col items-center justify-center gap-6 px-6 py-8 text-center">
       <div className="space-y-2 max-w-xl">
@@ -76,31 +108,37 @@ export function DonePanel() {
             maxWidthClass = "max-w-sm sm:max-w-md";
           }
 
-          return videoUrls.map((url) => (
-            <div
-              key={url}
-              className={`w-full ${maxWidthClass} mx-auto rounded-2xl overflow-hidden border border-border bg-neutral-900/60 shadow-2xl p-2 transition-all duration-300 hover:shadow-accent/5 hover:border-accent/20`}
-            >
-              <div className={`relative rounded-xl overflow-hidden bg-black flex items-center justify-center ${aspectClass}`} style={{ display: "contents" }}>
-                <video
-                  src={url}
-                  controls
-                  {...{ referrerPolicy: "no-referrer" }}
-                  className="w-full h-full object-contain mx-auto block"
-                />
+          return videoUrls.map((url, index) => {
+            const filename = videoUrls.length > 1 
+              ? downloadFilename.replace(".mp4", `_${index + 1}.mp4`) 
+              : downloadFilename;
+
+            return (
+              <div
+                key={url}
+                className={`w-full ${maxWidthClass} mx-auto rounded-2xl overflow-hidden border border-border bg-neutral-900/60 shadow-2xl p-2 transition-all duration-300 hover:shadow-accent/5 hover:border-accent/20`}
+              >
+                <div className={`relative rounded-xl overflow-hidden bg-black flex items-center justify-center ${aspectClass}`} style={{ display: "contents" }}>
+                  <video
+                    src={url}
+                    controls
+                    {...{ referrerPolicy: "no-referrer" }}
+                    className="w-full h-full object-contain mx-auto block"
+                  />
+                </div>
+                <div className="flex items-center justify-center gap-2 px-3 py-3 border-t border-border/50 mt-2 bg-surface/30 rounded-lg">
+                  <a
+                    href={url}
+                    download={filename}
+                    className="inline-flex items-center gap-1.5 text-xs text-accent hover:text-accent-hover font-medium bg-accent/10 px-3 py-1.5 rounded-md transition-colors"
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                    {t("common.download")}
+                  </a>
+                </div>
               </div>
-              <div className="flex items-center justify-center gap-2 px-3 py-3 border-t border-border/50 mt-2 bg-surface/30 rounded-lg">
-                <a
-                  href={url}
-                  download
-                  className="inline-flex items-center gap-1.5 text-xs text-accent hover:text-accent-hover font-medium bg-accent/10 px-3 py-1.5 rounded-md transition-colors"
-                >
-                  <Download className="h-3.5 w-3.5" />
-                  {t("common.download")}
-                </a>
-              </div>
-            </div>
-          ));
+            );
+          });
         })()
       )}
 
