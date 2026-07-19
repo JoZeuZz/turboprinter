@@ -77,6 +77,20 @@ export function ScriptPanel() {
   const [isContinuing, setIsContinuing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const getWordCount = (text: string) => {
+    if (!text) return 0;
+    return text.trim().split(/\s+/).filter(Boolean).length;
+  };
+
+  const getEstimatedDuration = (text: string) => {
+    const words = getWordCount(text);
+    const seconds = Math.ceil((words / 140) * 60);
+    return seconds;
+  };
+
+  const wordCount = getWordCount(store.video_script ?? "");
+  const estimatedSeconds = getEstimatedDuration(store.video_script ?? "");
+
   // Prefill default niche and prompt on mount if empty
   useState(() => {
     if (!store.video_niche) {
@@ -263,6 +277,37 @@ export function ScriptPanel() {
         onChange={(e) => store.set("video_script", e.target.value)}
         rows={8}
       />
+
+      {store.video_script && (
+        <div className="rounded-md bg-secondary/30 border border-border/50 p-3 mt-1 space-y-2 text-xs text-muted-foreground">
+          <div className="flex items-center justify-between">
+            <span className="font-medium text-foreground/90">{t("panels.script.estimatedDurationLabel")}</span>
+            <span className="font-semibold text-foreground bg-primary/10 border border-primary/25 px-2 py-0.5 rounded-full">
+              {estimatedSeconds}s (~{wordCount} {t("panels.script.words")})
+            </span>
+          </div>
+          <div className="w-full bg-secondary rounded-full h-1.5 overflow-hidden">
+            <div 
+              className={`h-full transition-all duration-300 ${
+                estimatedSeconds > 120 
+                  ? "bg-red-500" 
+                  : estimatedSeconds > 90 
+                    ? "bg-amber-500" 
+                    : "bg-emerald-500"
+              }`}
+              style={{ width: `${Math.min((estimatedSeconds / 120) * 100, 100)}%` }}
+            />
+          </div>
+          <div className="flex flex-col gap-1 sm:flex-row sm:justify-between text-[10px] text-muted-foreground/80 leading-relaxed">
+            <span>{t("panels.script.speedReference")}</span>
+            {estimatedSeconds > 90 && (
+              <span className="text-amber-500 font-medium">
+                {t("panels.script.splitSuggestion")}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
 
       <Textarea
         label={t("panels.script.keywords")}

@@ -135,7 +135,11 @@
       "autoDetect": "Detección automática",
       "generate": "Generar guion",
       "continueToSettings": "Continuar a Configuración →",
-      "failed": "No se pudo generar el guion"
+      "failed": "No se pudo generar el guion",
+      "estimatedDurationLabel": "Duración estimada de narración:",
+      "words": "palabras",
+      "speedReference": "Basado en velocidad de ~140 palabras/minuto.",
+      "splitSuggestion": "Tip: ¡Se recomienda dividir el guion si supera los 90s!"
     },
     "videoConfig": {
       "advanced": "Avanzado",

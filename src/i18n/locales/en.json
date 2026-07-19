@@ -135,7 +135,11 @@
       "autoDetect": "Auto detect",
       "generate": "Generate Script",
       "continueToSettings": "Continue to Settings →",
-      "failed": "Failed to generate script"
+      "failed": "Failed to generate script",
+      "estimatedDurationLabel": "Estimated narration duration:",
+      "words": "words",
+      "speedReference": "Based on speed of ~140 words/minute.",
+      "splitSuggestion": "Tip: Consider splitting the script if it exceeds 90s!"
     },
     "videoConfig": {
       "advanced": "Advanced",
