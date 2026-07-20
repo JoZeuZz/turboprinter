@@ -45,8 +45,10 @@ export function DonePanel() {
     const cleaned = getInitialTitle(videoSubject);
     return cleaned || "Mi YouTube Short";
   });
-  const [ytDescription, setYtDescription] = useState(videoScript || "");
+  const [ytDescription, setYtDescription] = useState("");
   const [privacyStatus, setPrivacyStatus] = useState<"private" | "unlisted" | "public">("public");
+
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   const [uploadStatus, setUploadStatus] = useState<"idle" | "uploading" | "success" | "error">("idle");
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -72,10 +74,7 @@ export function DonePanel() {
           video_script: videoScript,
         });
         if (res.hashtags) {
-          setYtDescription((prev) => {
-            if (prev.includes(res.hashtags)) return prev;
-            return prev ? `${prev}\n\n${res.hashtags}` : res.hashtags;
-          });
+          setYtDescription(res.hashtags);
         }
       } catch (err) {
         console.error("Error auto-generating hashtags on mount:", err);
@@ -101,10 +100,7 @@ export function DonePanel() {
         video_script: videoScript,
       });
       if (res.hashtags) {
-        setYtDescription((prev) => {
-          if (prev.includes(res.hashtags)) return prev;
-          return prev ? `${prev}\n\n${res.hashtags}` : res.hashtags;
-        });
+        setYtDescription(res.hashtags);
       }
     } catch (err: any) {
       console.error(err);
@@ -247,71 +243,6 @@ export function DonePanel() {
 
       {videoUrls.length > 0 && (
         <div className="w-full max-w-md space-y-4">
-          {/* YouTube Details Config */}
-          {isYoutubeLinked && uploadStatus !== "success" && uploadStatus !== "uploading" && (
-            <div className="text-left bg-surface/50 p-4 rounded-xl border border-border/80 space-y-3">
-              <div className="flex items-center gap-2 pb-1 border-b border-border/30">
-                <Youtube className="h-4 w-4 text-red-500" />
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-foreground">
-                  Detalles de YouTube Short
-                </h3>
-              </div>
-              <Input
-                label="Título del Short (Máx 100 caracteres)"
-                value={ytTitle}
-                onChange={(e) => setYtTitle(e.target.value.substring(0, 100))}
-                placeholder="Introduce un título llamativo"
-                className="text-xs"
-              />
-              <div className="flex flex-col gap-1.5">
-                <Textarea
-                  label="Descripción del Short"
-                  value={ytDescription}
-                  onChange={(e) => setYtDescription(e.target.value)}
-                  placeholder="Añade descripción y hashtags"
-                  rows={4}
-                  className="text-xs"
-                />
-                <div className="flex items-center justify-between">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="text-[10px] h-7 text-accent/80 hover:text-accent flex items-center gap-1.5 px-2 bg-accent/5 hover:bg-accent/10 border border-accent/10 rounded-md"
-                    onClick={handleGenerateHashtagsManual}
-                    disabled={generatingHashtags || loadingAutoHashtags}
-                  >
-                    {generatingHashtags || loadingAutoHashtags ? (
-                      <Loader2 className="h-3 w-3 animate-spin" />
-                    ) : (
-                      <Sparkles className="h-3 w-3" />
-                    )}
-                    Generar Hashtags con IA (Palabras Clave)
-                  </Button>
-                  {loadingAutoHashtags && (
-                    <span className="text-[10px] text-muted-foreground animate-pulse">
-                      Autogenerando hashtags...
-                    </span>
-                  )}
-                </div>
-                {hashtagsError && (
-                  <p className="text-[10px] text-red-400">{hashtagsError}</p>
-                )}
-              </div>
-              <Select
-                label="Visibilidad en YouTube"
-                value={privacyStatus}
-                onChange={(e) => setPrivacyStatus(e.target.value as any)}
-                options={[
-                  { value: "private", label: "Privado (Solo tú)" },
-                  { value: "unlisted", label: "Oculto (Cualquiera con el enlace)" },
-                  { value: "public", label: "Público (Todo el mundo)" },
-                ]}
-                className="text-xs"
-              />
-            </div>
-          )}
-
           {/* YouTube Upload Status Card */}
           {(uploadStatus !== "idle" || uploadError) && (
             <div className={`rounded-xl border p-4 text-left transition-all duration-300 ${
@@ -391,7 +322,7 @@ export function DonePanel() {
             </Button>
 
             <Button
-              onClick={handleYoutubeUpload}
+              onClick={() => setIsModalOpen(true)}
               disabled={!isYoutubeLinked || uploadStatus === "uploading" || uploadStatus === "success"}
               className={`flex-1 flex items-center justify-center gap-2 font-medium ${
                 isYoutubeLinked 
@@ -423,6 +354,103 @@ export function DonePanel() {
               ℹ️ {t("panels.review.notLinkedYoutube")}
             </p>
           )}
+        </div>
+      )}
+
+      {/* YouTube Detail Form Pop-up Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+          <div className="bg-neutral-900 border border-neutral-800 rounded-2xl w-full max-w-lg p-6 shadow-2xl text-left space-y-4 relative">
+            <div className="flex items-center justify-between pb-3 border-b border-neutral-800">
+              <div className="flex items-center gap-2">
+                <Youtube className="h-5 w-5 text-red-500" />
+                <h3 className="text-sm font-bold uppercase tracking-wider text-foreground">
+                  Detalles de YouTube Short
+                </h3>
+              </div>
+              <button 
+                onClick={() => setIsModalOpen(false)} 
+                className="text-muted-foreground hover:text-foreground text-sm font-semibold px-2 py-1 rounded hover:bg-neutral-800"
+              >
+                ✕
+              </button>
+            </div>
+
+            <Input
+              label="Título del Short (Máx 100 caracteres)"
+              value={ytTitle}
+              onChange={(e) => setYtTitle(e.target.value.substring(0, 100))}
+              placeholder="Introduce un título llamativo"
+              className="text-xs"
+            />
+
+            <div className="flex flex-col gap-1.5">
+              <Textarea
+                label="Descripción del Short (Solo Hashtags)"
+                value={ytDescription}
+                onChange={(e) => setYtDescription(e.target.value)}
+                placeholder="Añade descripción y hashtags"
+                rows={4}
+                className="text-xs"
+              />
+              <div className="flex items-center justify-between">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="text-[10px] h-7 text-accent/80 hover:text-accent flex items-center gap-1.5 px-2 bg-accent/5 hover:bg-accent/10 border border-accent/10 rounded-md"
+                  onClick={handleGenerateHashtagsManual}
+                  disabled={generatingHashtags || loadingAutoHashtags}
+                >
+                  {generatingHashtags || loadingAutoHashtags ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <Sparkles className="h-3 w-3" />
+                  )}
+                  Generar Hashtags con IA (Palabras Clave)
+                </Button>
+                {loadingAutoHashtags && (
+                  <span className="text-[10px] text-muted-foreground animate-pulse">
+                    Autogenerando hashtags...
+                  </span>
+                )}
+              </div>
+              {hashtagsError && (
+                <p className="text-[10px] text-red-400">{hashtagsError}</p>
+              )}
+            </div>
+
+            <Select
+              label="Visibilidad en YouTube"
+              value={privacyStatus}
+              onChange={(e) => setPrivacyStatus(e.target.value as any)}
+              options={[
+                { value: "private", label: "Privado (Solo tú)" },
+                { value: "unlisted", label: "Oculto (Cualquiera con el enlace)" },
+                { value: "public", label: "Público (Todo el mundo)" },
+              ]}
+              className="text-xs"
+            />
+
+            <div className="flex gap-3 justify-end pt-3 border-t border-neutral-800">
+              <Button 
+                variant="ghost" 
+                onClick={() => setIsModalOpen(false)}
+                className="text-xs py-1.5 h-9"
+              >
+                Cancelar
+              </Button>
+              <Button 
+                onClick={() => {
+                  setIsModalOpen(false);
+                  handleYoutubeUpload();
+                }}
+                className="bg-red-600 hover:bg-red-700 text-white text-xs py-1.5 h-9"
+              >
+                Confirmar y Subir
+              </Button>
+            </div>
+          </div>
         </div>
       )}
     </div>
