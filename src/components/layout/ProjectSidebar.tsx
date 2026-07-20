@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Clock3, PlusCircle, Settings } from "lucide-react";
+import { Clock3, PlusCircle, Settings, ChevronDown, Plus, Youtube, Check } from "lucide-react";
 import { NavLink, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { ApiError } from "../../api/client";
@@ -9,6 +9,9 @@ import { useProjectStore } from "../../store/useProjectStore";
 import { useProjectWorkspaceStore } from "../../store/useProjectWorkspaceStore";
 import { useVideoStore } from "../../store/useVideoStore";
 import { SidebarRowMenu } from "./SidebarRowMenu";
+import { videoApi } from "../../api/video";
+import { useConfigStore } from "../../store/useConfigStore";
+import { configApi } from "../../api/config";
 
 interface ProjectRow {
   project_id: string;
@@ -39,6 +42,76 @@ export function ProjectSidebar() {
   // Enter->commitRename->setRenamingId(null)->onBlur chain don't double-fire.
   const renameResolutionRef = useRef<"idle" | "committed" | "cancelled">("idle");
 
+  // YouTube Switcher States
+  const [youtubeChannels, setYoutubeChannels] = useState<Array<{ channelId: string; channelName: string }>>([]);
+  const [activeChannelId, setActiveChannelId] = useState<string | null>(null);
+  const [activeChannelName, setActiveChannelName] = useState<string | null>(null);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isLinking, setIsLinking] = useState(false);
+  const { setConfig } = useConfigStore();
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const getProfileGradient = (channelId: string) => {
+    const gradients = [
+      "from-red-500 to-rose-600 text-white",
+      "from-indigo-500 to-violet-600 text-white",
+      "from-emerald-500 to-teal-600 text-white",
+      "from-amber-500 to-orange-600 text-white",
+      "from-cyan-500 to-blue-600 text-white",
+      "from-fuchsia-500 to-pink-600 text-white",
+    ];
+    if (!channelId) return "from-zinc-600 to-zinc-700 text-zinc-300";
+    let hash = 0;
+    for (let i = 0; i < channelId.length; i++) {
+      hash = channelId.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const index = Math.abs(hash) % gradients.length;
+    return gradients[index];
+  };
+
+  const fetchYouTubeStatus = () => {
+    videoApi.getYouTubeStatus()
+      .then((res) => {
+        if (res.is_linked) {
+          setYoutubeChannels(res.channels || []);
+          setActiveChannelId(res.active_channel_id || null);
+          setActiveChannelName(res.channel_name || null);
+        } else {
+          setYoutubeChannels([]);
+          setActiveChannelId(null);
+          setActiveChannelName(null);
+        }
+      })
+      .catch(console.error);
+  };
+
+  const handleSelectChannel = async (channelId: string) => {
+    try {
+      await videoApi.selectYouTubeChannel(channelId);
+      fetchYouTubeStatus();
+      const cfg = await configApi.get();
+      setConfig(cfg);
+      setIsDropdownOpen(false);
+    } catch (e) {
+      console.error("Error selecting channel from sidebar:", e);
+    }
+  };
+
+  const handleConnectChannel = async () => {
+    setIsLinking(true);
+    try {
+      const { url } = await videoApi.getYouTubeAuthUrl();
+      const popup = window.open(url, "youtube_oauth", "width=600,height=700");
+      if (!popup) {
+        alert("Por favor habilita las ventanas emergentes (popups) para vincular tu canal de YouTube.");
+      }
+    } catch (err: any) {
+      alert(err.message || "Error al obtener URL de autenticación.");
+    } finally {
+      setIsLinking(false);
+    }
+  };
+
   const refreshProjects = () => {
     projectsApi
       .listProjects(30)
@@ -51,6 +124,32 @@ export function ProjectSidebar() {
   useEffect(() => {
     refreshProjects();
   }, [location.pathname, taskId, taskState, topic]);
+
+  useEffect(() => {
+    fetchYouTubeStatus();
+
+    // Listen for OAuth messages from popup to reload status automatically
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data?.type === "YOUTUBE_AUTH_SUCCESS") {
+        fetchYouTubeStatus();
+        configApi.get().then(setConfig).catch(console.error);
+      }
+    };
+    window.addEventListener("message", handleMessage);
+
+    // Close dropdown on click outside
+    const handleOutsideClick = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleOutsideClick);
+
+    return () => {
+      window.removeEventListener("message", handleMessage);
+      document.removeEventListener("mousedown", handleOutsideClick);
+    };
+  }, [setConfig]);
 
   const handleNew = () => {
     workspaceReset();
@@ -157,11 +256,106 @@ export function ProjectSidebar() {
 
   return (
     <nav className="flex h-screen w-48 flex-col border-r border-border bg-surface">
-      <div className="flex items-center gap-2 px-4 py-3 border-b border-border">
-        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-accent text-xs font-bold text-white">
-          TP
-        </div>
-        <span className="text-sm font-semibold text-foreground truncate">TurboPrinter</span>
+      {/* Netflix-style YouTube profile switcher */}
+      <div className="relative border-b border-border" ref={dropdownRef}>
+        {youtubeChannels.length > 0 ? (
+          <button
+            onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+            className="flex w-full items-center gap-2 px-3 py-2.5 hover:bg-surface-2 transition-all text-left outline-none group animate-fade-in"
+          >
+            <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded bg-gradient-to-br ${getProfileGradient(activeChannelId || "")} text-[11px] font-bold uppercase shadow-sm select-none`}>
+              {activeChannelName ? activeChannelName.slice(0, 2) : "YT"}
+            </div>
+            <div className="flex-1 min-w-0">
+              <span className="block text-xs font-semibold text-foreground truncate group-hover:text-red-400 transition-colors leading-tight">
+                {activeChannelName}
+              </span>
+              <span className="block text-[9px] text-zinc-500 truncate mt-0.5">
+                Cambiar canal
+              </span>
+            </div>
+            <ChevronDown className={`h-3.5 w-3.5 text-zinc-500 shrink-0 transition-transform duration-200 ${isDropdownOpen ? "rotate-180" : ""}`} />
+          </button>
+        ) : (
+          <button
+            onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+            className="flex w-full items-center gap-2 px-3 py-2.5 hover:bg-surface-2 transition-all text-left outline-none group animate-fade-in"
+          >
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-gradient-to-br from-zinc-700 to-zinc-800 text-[10px] font-bold text-zinc-400 shadow-sm select-none border border-neutral-800">
+              <Youtube className="h-3.5 w-3.5 text-zinc-400" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <span className="block text-xs font-semibold text-zinc-400 truncate leading-tight group-hover:text-red-400 transition-colors">
+                Vincular YouTube
+              </span>
+              <span className="block text-[9px] text-zinc-500 truncate mt-0.5">
+                Sin canal activo
+              </span>
+            </div>
+            <ChevronDown className={`h-3.5 w-3.5 text-zinc-500 shrink-0 transition-transform duration-200 ${isDropdownOpen ? "rotate-180" : ""}`} />
+          </button>
+        )}
+
+        {isDropdownOpen && (
+          <div className="absolute left-1.5 right-1.5 top-[calc(100%-4px)] z-50 rounded-xl border border-neutral-800 bg-neutral-950/95 backdrop-blur-md p-2 shadow-2xl animate-in fade-in slide-in-from-top-1 duration-150">
+            <span className="block text-[9px] font-bold uppercase tracking-wider text-zinc-500 px-2 py-1 mb-1 select-none">
+              {youtubeChannels.length > 0 ? "Cambiar de Perfil" : "YouTube no vinculado"}
+            </span>
+            {youtubeChannels.length > 0 ? (
+              <div className="space-y-1 max-h-48 overflow-y-auto">
+                {youtubeChannels.map((ch) => {
+                  const isActive = ch.channelId === activeChannelId;
+                  return (
+                    <button
+                      key={ch.channelId}
+                      onClick={() => !isActive && handleSelectChannel(ch.channelId)}
+                      className={`flex w-full items-center gap-2 px-2 py-1.5 rounded-lg text-left text-xs transition-colors group/item ${
+                        isActive 
+                          ? "bg-red-500/10 text-red-400 font-medium" 
+                          : "text-zinc-300 hover:bg-neutral-800/60"
+                      }`}
+                    >
+                      <div className={`flex h-5 w-5 shrink-0 items-center justify-center rounded bg-gradient-to-br ${getProfileGradient(ch.channelId)} text-[9px] font-bold uppercase`}>
+                        {ch.channelName.slice(0, 2)}
+                      </div>
+                      <span className="flex-1 truncate">{ch.channelName}</span>
+                      {isActive && <Check className="h-3 w-3 text-red-500 shrink-0" />}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <button
+                onClick={handleConnectChannel}
+                disabled={isLinking}
+                className="flex w-full items-center gap-2 px-2 py-2 rounded-lg text-left text-xs bg-red-600/10 border border-red-500/20 text-red-400 hover:bg-red-600/20 transition-all font-medium mb-1"
+              >
+                <Youtube className="h-3.5 w-3.5 shrink-0 text-red-500" />
+                <span>{isLinking ? "Conectando..." : "Vincular Primer Canal"}</span>
+              </button>
+            )}
+
+            <div className="mt-1.5 pt-1.5 border-t border-neutral-800 space-y-1">
+              {youtubeChannels.length > 0 && (
+                <button
+                  onClick={handleConnectChannel}
+                  disabled={isLinking}
+                  className="flex w-full items-center gap-2 px-2 py-1.5 rounded-lg text-left text-xs text-zinc-400 hover:text-zinc-100 hover:bg-neutral-800/60 transition-colors"
+                >
+                  <Plus className="h-3.5 w-3.5 shrink-0" />
+                  <span>{isLinking ? "Vinculando..." : "Vincular otro canal"}</span>
+                </button>
+              )}
+              <button
+                onClick={() => setIsDropdownOpen(false)}
+                className="flex w-full items-center gap-2 px-2 py-1.5 rounded-lg text-left text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+              >
+                <span className="w-3.5 flex justify-center text-center text-[10px]">✕</span>
+                <span>Cancelar</span>
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto p-2">
