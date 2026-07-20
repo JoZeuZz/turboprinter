@@ -7,6 +7,8 @@ import { useProjectWorkspaceStore } from "../../store/useProjectWorkspaceStore";
 import { useConfigStore } from "../../store/useConfigStore";
 import { useVideoStore } from "../../store/useVideoStore";
 import { videoApi } from "../../api/video";
+import { configApi } from "../../api/config";
+
 
 export function DonePanel() {
   const { t } = useTranslation();
@@ -58,6 +60,20 @@ export function DonePanel() {
   const [loadingAutoHashtags, setLoadingAutoHashtags] = useState(false);
   const [generatingHashtags, setGeneratingHashtags] = useState(false);
   const [hashtagsError, setHashtagsError] = useState<string | null>(null);
+
+  const { setConfig } = useConfigStore();
+
+  // Load latest configuration on mount to ensure YouTube linked status is correct
+  useEffect(() => {
+    configApi
+      .get()
+      .then((cfg) => {
+        setConfig(cfg);
+      })
+      .catch((err) => {
+        console.error("Error fetching config on DonePanel mount:", err);
+      });
+  }, [setConfig]);
 
   // Auto-generate hashtags on mount (Option 1)
   useEffect(() => {
