@@ -208,7 +208,12 @@ async function generateGeminiContent(prompt: string, jsonMode = false, systemIns
     if (systemInstruction) {
       messages.push({ role: "system", content: systemInstruction });
     }
-    messages.push({ role: "user", content: prompt });
+    
+    let finalPrompt = prompt;
+    if (jsonMode && (llmProvider === "lmstudio" || !apiBase.includes("api.openai.com"))) {
+      finalPrompt += "\n\nCRITICAL: Return ONLY a valid JSON object. Do not include any explanations, markdown code block backticks (like ```json), or text before or after the JSON.";
+    }
+    messages.push({ role: "user", content: finalPrompt });
 
     try {
       const response = await fetch(`${apiBase}/chat/completions`, {
@@ -221,7 +226,7 @@ async function generateGeminiContent(prompt: string, jsonMode = false, systemIns
           model,
           messages,
           temperature: 0.7,
-          ...(jsonMode ? { response_format: { type: "json_object" } } : {})
+          ...(jsonMode && apiBase.includes("api.openai.com") ? { response_format: { type: "json_object" } } : {})
         })
       });
 
@@ -231,7 +236,10 @@ async function generateGeminiContent(prompt: string, jsonMode = false, systemIns
       }
 
       const data: any = await response.json();
-      const text = data.choices?.[0]?.message?.content || "";
+      let text = data.choices?.[0]?.message?.content || "";
+      if (jsonMode) {
+        text = text.replace(/```json/gi, "").replace(/```/g, "").trim();
+      }
       return text;
     } catch (err: any) {
       console.error("Failed calling LM Studio/OpenAI API:", err);
@@ -1219,7 +1227,8 @@ async function startServer() {
       custom_system_prompt = ""
     } = req.body;
 
-    if (!process.env.GEMINI_API_KEY) {
+    const llmProvider = process.env.LLM_PROVIDER || "gemini";
+    if (llmProvider === "gemini" && !process.env.GEMINI_API_KEY) {
       throw new Error("No Gemini API key configured. Please set GEMINI_API_KEY.");
     }
 
@@ -1244,7 +1253,8 @@ Separa cada párrafo estrictamente con dos saltos de línea (\\n\\n). Devuelve S
 
   app.post("/api/v1/terms", wrap(async (req: any, res: any) => {
     const { video_subject, video_script = "" } = req.body;
-    if (!process.env.GEMINI_API_KEY) {
+    const llmProvider = process.env.LLM_PROVIDER || "gemini";
+    if (llmProvider === "gemini" && !process.env.GEMINI_API_KEY) {
       throw new Error("No Gemini API key configured. Please set GEMINI_API_KEY.");
     }
 
@@ -1258,7 +1268,8 @@ Separa cada párrafo estrictamente con dos saltos de línea (\\n\\n). Devuelve S
 
   app.post("/api/v1/hashtags", wrap(async (req: any, res: any) => {
     const { video_terms, video_subject = "", video_script = "" } = req.body;
-    if (!process.env.GEMINI_API_KEY) {
+    const llmProvider = process.env.LLM_PROVIDER || "gemini";
+    if (llmProvider === "gemini" && !process.env.GEMINI_API_KEY) {
       throw new Error("No Gemini API key configured. Please set GEMINI_API_KEY.");
     }
 
@@ -2188,7 +2199,8 @@ Instrucciones:
 
     let scriptText = "";
     if (generate_script) {
-      if (!process.env.GEMINI_API_KEY) {
+      const llmProvider = process.env.LLM_PROVIDER || "gemini";
+      if (llmProvider === "gemini" && !process.env.GEMINI_API_KEY) {
         throw new Error("No Gemini API key configured. Please set GEMINI_API_KEY.");
       }
       const prompt = `Escribe un guión para un video de TikTok sobre "${topic}" en idioma ${language}.
@@ -2395,7 +2407,8 @@ Devuelve ÚNICAMENTE el texto del guión, sin títulos, encabezados, listas, not
     let searchQueriesForSegments: string[][] = [];
     let hasGeminiQueries = false;
 
-    if (process.env.GEMINI_API_KEY) {
+    const currentLlmProvider = process.env.LLM_PROVIDER || "gemini";
+    if (process.env.GEMINI_API_KEY || currentLlmProvider === "lmstudio" || currentLlmProvider === "openai") {
       try {
         const prompt = `Analiza las siguientes oraciones de un guión de video en idioma "${p.language || "es"}":
 ${sentences.map((s, i) => `Segmento ${i + 1}: "${s}"`).join("\n")}

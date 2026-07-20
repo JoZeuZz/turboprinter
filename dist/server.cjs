@@ -217,7 +217,11 @@ async function generateGeminiContent(prompt, jsonMode = false, systemInstruction
     if (systemInstruction) {
       messages.push({ role: "system", content: systemInstruction });
     }
-    messages.push({ role: "user", content: prompt });
+    let finalPrompt = prompt;
+    if (jsonMode && (llmProvider === "lmstudio" || !apiBase.includes("api.openai.com"))) {
+      finalPrompt += "\n\nCRITICAL: Return ONLY a valid JSON object. Do not include any explanations, markdown code block backticks (like ```json), or text before or after the JSON.";
+    }
+    messages.push({ role: "user", content: finalPrompt });
     try {
       const response = await fetch(`${apiBase}/chat/completions`, {
         method: "POST",
@@ -229,7 +233,7 @@ async function generateGeminiContent(prompt, jsonMode = false, systemInstruction
           model,
           messages,
           temperature: 0.7,
-          ...jsonMode ? { response_format: { type: "json_object" } } : {}
+          ...jsonMode && apiBase.includes("api.openai.com") ? { response_format: { type: "json_object" } } : {}
         })
       });
       if (!response.ok) {
@@ -237,7 +241,10 @@ async function generateGeminiContent(prompt, jsonMode = false, systemInstruction
         throw new Error(`LM Studio / OpenAI returned error status ${response.status}: ${errorText}`);
       }
       const data = await response.json();
-      const text = data.choices?.[0]?.message?.content || "";
+      let text = data.choices?.[0]?.message?.content || "";
+      if (jsonMode) {
+        text = text.replace(/```json/gi, "").replace(/```/g, "").trim();
+      }
       return text;
     } catch (err) {
       console.error("Failed calling LM Studio/OpenAI API:", err);
@@ -1152,7 +1159,8 @@ async function startServer() {
       video_script_prompt = "",
       custom_system_prompt = ""
     } = req.body;
-    if (!process.env.GEMINI_API_KEY) {
+    const llmProvider = process.env.LLM_PROVIDER || "gemini";
+    if (llmProvider === "gemini" && !process.env.GEMINI_API_KEY) {
       throw new Error("No Gemini API key configured. Please set GEMINI_API_KEY.");
     }
     let prompt = `Escribe un gui\xF3n de video sobre "${video_subject}" en idioma ${video_language}. Es CR\xCDTICO que el gui\xF3n tenga exactamente ${paragraph_number} p\xE1rrafos bien estructurados, completos y detallados.
@@ -1176,7 +1184,8 @@ ${video_script_prompt}`;
   }));
   app.post("/api/v1/terms", wrap(async (req, res) => {
     const { video_subject, video_script = "" } = req.body;
-    if (!process.env.GEMINI_API_KEY) {
+    const llmProvider = process.env.LLM_PROVIDER || "gemini";
+    if (llmProvider === "gemini" && !process.env.GEMINI_API_KEY) {
       throw new Error("No Gemini API key configured. Please set GEMINI_API_KEY.");
     }
     const prompt = `Analiza el siguiente gui\xF3n de video y genera una lista de exactamente 5 t\xE9rminos de b\xFAsqueda en ingl\xE9s (para buscar videos de stock relevantes). Devuelve una respuesta JSON con el formato: { "terms": ["term1", "term2", ...] }. Gui\xF3n: ${video_script}`;
@@ -1187,7 +1196,8 @@ ${video_script_prompt}`;
   }));
   app.post("/api/v1/hashtags", wrap(async (req, res) => {
     const { video_terms, video_subject = "", video_script = "" } = req.body;
-    if (!process.env.GEMINI_API_KEY) {
+    const llmProvider = process.env.LLM_PROVIDER || "gemini";
+    if (llmProvider === "gemini" && !process.env.GEMINI_API_KEY) {
       throw new Error("No Gemini API key configured. Please set GEMINI_API_KEY.");
     }
     const keywords = Array.isArray(video_terms) ? video_terms.join(", ") : video_terms || "";
@@ -1956,7 +1966,8 @@ Instrucciones:
     const projectId = "proj_" + Math.random().toString(36).substring(2, 9);
     let scriptText = "";
     if (generate_script) {
-      if (!process.env.GEMINI_API_KEY) {
+      const llmProvider = process.env.LLM_PROVIDER || "gemini";
+      if (llmProvider === "gemini" && !process.env.GEMINI_API_KEY) {
         throw new Error("No Gemini API key configured. Please set GEMINI_API_KEY.");
       }
       const prompt = `Escribe un gui\xF3n para un video de TikTok sobre "${topic}" en idioma ${language}.
@@ -2139,7 +2150,8 @@ ${body}`;
     console.log(`[Plan] Project ${req.params.id} loaded. Custom video_terms parsed:`, userTerms);
     let searchQueriesForSegments = [];
     let hasGeminiQueries = false;
-    if (process.env.GEMINI_API_KEY) {
+    const currentLlmProvider = process.env.LLM_PROVIDER || "gemini";
+    if (process.env.GEMINI_API_KEY || currentLlmProvider === "lmstudio" || currentLlmProvider === "openai") {
       try {
         const prompt = `Analiza las siguientes oraciones de un gui\xF3n de video en idioma "${p.language || "es"}":
 ${sentences.map((s, i) => `Segmento ${i + 1}: "${s}"`).join("\n")}
