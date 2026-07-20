@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Trash } from "lucide-react";
 import { configApi } from "../api/config";
 import type { EditableConfig } from "../api/types";
 import { Button, Checkbox, Collapsible, Input, Select, Textarea } from "../components/ui";
@@ -49,6 +50,21 @@ export function Settings() {
   const [saved, setSaved] = useState(false);
   const [linkingYoutube, setLinkingYoutube] = useState(false);
 
+  const [youtubeChannels, setYoutubeChannels] = useState<Array<{ channelId: string; channelName: string }>>([]);
+  const [activeChannelId, setActiveChannelId] = useState<string | null>(null);
+
+  const fetchYouTubeStatus = () => {
+    videoApi.getYouTubeStatus().then((res) => {
+      if (res.is_linked) {
+        setYoutubeChannels(res.channels || []);
+        setActiveChannelId(res.active_channel_id || null);
+      } else {
+        setYoutubeChannels([]);
+        setActiveChannelId(null);
+      }
+    }).catch(console.error);
+  };
+
   // Listen for message from popup
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
@@ -69,6 +85,8 @@ export function Settings() {
             },
           };
         });
+        // Reload status
+        fetchYouTubeStatus();
         // Also sync store config
         configApi.get().then((cfg) => {
           setConfig(cfg);
@@ -80,41 +98,64 @@ export function Settings() {
   }, [setConfig]);
 
   const handleYoutubeConnect = async () => {
-    if (draft?.youtube?.is_linked) {
-      // Disconnect
-      try {
-        await videoApi.disconnectYouTube();
-        setDraft((curr) => {
-          if (!curr) return null;
-          return {
-            ...curr,
-            youtube: {
-              ...curr.youtube,
-              is_linked: false,
-              channel_name: "",
-            },
-          };
-        });
-        configApi.get().then((cfg) => {
-          setConfig(cfg);
-        });
-      } catch (err) {
-        console.error("Error disconnect:", err);
+    setLinkingYoutube(true);
+    try {
+      const { url } = await videoApi.getYouTubeAuthUrl();
+      const popup = window.open(url, "youtube_oauth", "width=600,height=700");
+      if (!popup) {
+        alert("Por favor habilita las ventanas emergentes (popups) para vincular tu canal de YouTube.");
       }
-    } else {
-      // Connect (popup)
-      setLinkingYoutube(true);
-      try {
-        const { url } = await videoApi.getYouTubeAuthUrl();
-        const popup = window.open(url, "youtube_oauth", "width=600,height=700");
-        if (!popup) {
-          alert("Por favor habilita las ventanas emergentes (popups) para vincular tu canal de YouTube.");
-        }
-      } catch (err: any) {
-        alert(err.message || "Error al obtener URL de autenticación. Verifica que tengas las credenciales en .env.");
-      } finally {
-        setLinkingYoutube(false);
-      }
+    } catch (err: any) {
+      alert(err.message || "Error al obtener URL de autenticación. Verifica que tengas las credenciales en .env.");
+    } finally {
+      setLinkingYoutube(false);
+    }
+  };
+
+  const handleSelectChannel = async (channelId: string) => {
+    try {
+      await videoApi.selectYouTubeChannel(channelId);
+      fetchYouTubeStatus();
+      const cfg = await configApi.get();
+      setConfig(cfg);
+      setDraft(cfg.settings);
+    } catch (e) {
+      console.error("Error selecting channel:", e);
+    }
+  };
+
+  const handleDisconnectChannel = async (channelId: string) => {
+    try {
+      await videoApi.disconnectYouTubeChannel(channelId);
+      fetchYouTubeStatus();
+      const cfg = await configApi.get();
+      setConfig(cfg);
+      setDraft(cfg.settings);
+    } catch (e) {
+      console.error("Error disconnecting channel:", e);
+    }
+  };
+
+  const handleFullYoutubeDisconnect = async () => {
+    try {
+      await videoApi.disconnectYouTube();
+      setDraft((curr) => {
+        if (!curr) return null;
+        return {
+          ...curr,
+          youtube: {
+            ...curr.youtube,
+            is_linked: false,
+            channel_name: "",
+          },
+        };
+      });
+      setYoutubeChannels([]);
+      setActiveChannelId(null);
+      const cfg = await configApi.get();
+      setConfig(cfg);
+    } catch (err) {
+      console.error("Error full disconnect:", err);
     }
   };
 
@@ -126,6 +167,7 @@ export function Settings() {
         setDraft(cfg.settings);
         setOriginalDraft(cfg.settings);
         setError(null);
+        fetchYouTubeStatus();
       })
       .catch((err) => setError(err instanceof Error ? err.message : t("settings.loadError")))
       .finally(() => setLoading(false));
@@ -363,31 +405,99 @@ export function Settings() {
             value={draft.youtube?.channel_name ?? ""}
             onChange={(e) => updateField("youtube", "channel_name", e.target.value)}
             placeholder="e.g. @MiCanalShorts"
+            className="hidden" // No longer needed as we auto-fetch and display list of real channels, but keep it hidden to preserve config model
           />
-          <div className="flex flex-col justify-end space-y-1">
-            <span className="text-xs font-medium text-muted">{t("settings.fields.youtubeStatus")}</span>
-            <div className="flex items-center gap-3">
+          <div className="flex flex-col space-y-2 col-span-2 mt-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-zinc-300">Conexión con YouTube</span>
               <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-semibold ring-1 ring-inset ${
                 draft.youtube?.is_linked 
                   ? "bg-green-500/10 text-green-400 ring-green-500/20" 
                   : "bg-red-500/10 text-red-400 ring-red-500/20"
               }`}>
-                {draft.youtube?.is_linked ? t("settings.fields.youtubeLinked") : t("settings.fields.youtubeNotLinked")}
+                {draft.youtube?.is_linked ? `${youtubeChannels.length} Canal(es) Vinculado(s)` : t("settings.fields.youtubeNotLinked")}
               </span>
-               <Button
+            </div>
+
+            {/* If linked, show the lists of channels */}
+            {draft.youtube?.is_linked && youtubeChannels.length > 0 && (
+              <div className="space-y-2 border border-neutral-800/80 bg-neutral-900/40 p-3 rounded-xl mt-1">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 block mb-1">
+                  Cuentas / Canales Vinculados (Haz clic en uno para activarlo)
+                </span>
+                <div className="grid gap-2">
+                  {youtubeChannels.map((ch) => {
+                    const isActive = ch.channelId === activeChannelId;
+                    return (
+                      <div 
+                        key={ch.channelId} 
+                        onClick={() => !isActive && handleSelectChannel(ch.channelId)}
+                        className={`flex items-center justify-between p-3 rounded-xl border transition-all cursor-pointer ${
+                          isActive 
+                            ? 'bg-red-950/20 border-red-500/40 hover:bg-red-950/30' 
+                            : 'bg-neutral-950/40 border-neutral-800 hover:bg-neutral-800/40'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className={`h-2.5 w-2.5 rounded-full ${isActive ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]' : 'bg-zinc-600'}`} />
+                          <div className="flex flex-col">
+                            <span className="text-xs font-semibold text-zinc-100">{ch.channelName}</span>
+                            <span className="text-[10px] font-mono text-zinc-500">{ch.channelId}</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                          {isActive ? (
+                            <span className="text-[10px] font-bold text-red-400 bg-red-950/40 border border-red-500/30 px-2 py-0.5 rounded-md uppercase tracking-wider">
+                              Activo
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              className="text-[10px] text-zinc-400 hover:text-zinc-200 bg-zinc-950/60 hover:bg-zinc-800 border border-zinc-800 px-2.5 py-1 rounded-md transition-colors"
+                              onClick={() => handleSelectChannel(ch.channelId)}
+                            >
+                              Activar
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            className="p-1.5 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors border border-transparent"
+                            onClick={() => handleDisconnectChannel(ch.channelId)}
+                            title="Desvincular este canal"
+                          >
+                            <Trash className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            <div className="flex gap-3 pt-2">
+              <Button
                 type="button"
-                variant={draft.youtube?.is_linked ? "ghost" : "primary"}
+                variant="primary"
                 size="sm"
                 onClick={handleYoutubeConnect}
                 disabled={linkingYoutube}
+                className="bg-red-600 hover:bg-red-700 text-white text-xs h-8"
               >
-                {linkingYoutube 
-                  ? "Conectando..." 
-                  : draft.youtube?.is_linked 
-                    ? t("settings.fields.youtubeUnlinkBtn") 
-                    : t("settings.fields.youtubeLinkBtn")
-                }
+                {linkingYoutube ? "Conectando..." : draft.youtube?.is_linked ? "Vincular Otro Canal" : "Vincular Canal de YouTube"}
               </Button>
+
+              {draft.youtube?.is_linked && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleFullYoutubeDisconnect}
+                  className="border border-neutral-800 text-xs text-zinc-400 hover:text-red-400 hover:bg-red-500/10 h-8"
+                >
+                  Desvincular Todos
+                </Button>
+              )}
             </div>
           </div>
         </div>

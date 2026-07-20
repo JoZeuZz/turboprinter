@@ -39,13 +39,25 @@ export const videoApi = {
     }),
 
   getYouTubeStatus: () =>
-    apiFetch<{ is_linked: boolean; channel_name: string | null }>("/youtube/status"),
+    apiFetch<{ is_linked: boolean; channel_name: string | null; active_channel_id?: string | null; channels?: Array<{ channelId: string; channelName: string }> }>("/youtube/status"),
 
   getYouTubeAuthUrl: () =>
     apiFetch<{ url: string }>("/youtube/auth-url"),
 
   disconnectYouTube: () =>
     apiFetch<void>("/youtube/disconnect", { method: "POST" }),
+
+  selectYouTubeChannel: (channelId: string) =>
+    apiFetch<{ status: number; message: string; activeChannelId: string }>("/youtube/select-channel", {
+      method: "POST",
+      body: JSON.stringify({ channelId }),
+    }),
+
+  disconnectYouTubeChannel: (channelId: string) =>
+    apiFetch<{ status: number; message: string }>("/youtube/disconnect-channel", {
+      method: "POST",
+      body: JSON.stringify({ channelId }),
+    }),
 
   uploadToYouTube: (params: { videoUrl: string; title: string; description: string; privacyStatus?: "public" | "private" | "unlisted"; publishAt?: string }) =>
     apiFetch<{ videoId: string; url: string }>("/youtube/upload", {

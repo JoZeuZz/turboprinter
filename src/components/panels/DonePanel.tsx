@@ -18,6 +18,9 @@ export function DonePanel() {
   const [localIsYoutubeLinked, setLocalIsYoutubeLinked] = useState<boolean | null>(null);
   const [localYoutubeChannel, setLocalYoutubeChannel] = useState<string>("");
 
+  const [channels, setChannels] = useState<Array<{ channelId: string; channelName: string }>>([]);
+  const [activeChannelId, setActiveChannelId] = useState<string | null>(null);
+
   const isYoutubeLinked = localIsYoutubeLinked !== null ? localIsYoutubeLinked : !!config?.settings?.youtube?.is_linked;
   const youtubeChannel = localYoutubeChannel || config?.settings?.youtube?.channel_name || "";
 
@@ -75,6 +78,36 @@ export function DonePanel() {
 
   const { setConfig } = useConfigStore();
 
+  // Helper to fetch direct YouTube details
+  const fetchYouTubeStatus = () => {
+    videoApi.getYouTubeStatus()
+      .then((res) => {
+        if (res.is_linked) {
+          setLocalIsYoutubeLinked(true);
+          setLocalYoutubeChannel(res.channel_name || "");
+          setChannels(res.channels || []);
+          setActiveChannelId(res.active_channel_id || null);
+        } else {
+          setLocalIsYoutubeLinked(false);
+          setLocalYoutubeChannel("");
+          setChannels([]);
+          setActiveChannelId(null);
+        }
+      })
+      .catch((err) => {
+        console.error("Error fetching direct youtube status on DonePanel:", err);
+      });
+  };
+
+  const handleSelectChannel = async (channelId: string) => {
+    try {
+      await videoApi.selectYouTubeChannel(channelId);
+      fetchYouTubeStatus();
+    } catch (e) {
+      console.error("Error switching channel from DonePanel:", e);
+    }
+  };
+
   // Load latest configuration on mount to ensure YouTube linked status is correct
   useEffect(() => {
     configApi
@@ -90,20 +123,7 @@ export function DonePanel() {
         console.error("Error fetching config on DonePanel mount:", err);
       });
 
-    // Directly query YouTube linked status as a fallback guarantee
-    videoApi.getYouTubeStatus()
-      .then((res) => {
-        if (res.is_linked) {
-          setLocalIsYoutubeLinked(true);
-          setLocalYoutubeChannel(res.channel_name || "");
-        } else {
-          setLocalIsYoutubeLinked(false);
-          setLocalYoutubeChannel("");
-        }
-      })
-      .catch((err) => {
-        console.error("Error fetching direct youtube status on DonePanel mount:", err);
-      });
+    fetchYouTubeStatus();
   }, [setConfig]);
 
   // Auto-generate hashtags on mount (Option 1)
@@ -442,6 +462,23 @@ export function DonePanel() {
               active={activeTab}
               onChange={(key) => setActiveTab(key as any)}
             />
+
+            {channels.length > 1 && (
+              <Select
+                label="Subir al Canal de YouTube"
+                value={activeChannelId || ""}
+                onChange={(e) => handleSelectChannel(e.target.value)}
+                options={channels.map((ch) => ({ value: ch.channelId, label: ch.channelName }))}
+                className="text-xs font-medium"
+              />
+            )}
+
+            {channels.length === 1 && (
+              <div className="text-[11px] bg-neutral-950/40 border border-neutral-800/80 px-3 py-2 rounded-xl flex items-center justify-between">
+                <span className="text-zinc-400">Canal destino:</span>
+                <span className="text-zinc-200 font-bold">{channels[0].channelName}</span>
+              </div>
+            )}
 
             <Input
               label="Título del Short (Máx 100 caracteres)"

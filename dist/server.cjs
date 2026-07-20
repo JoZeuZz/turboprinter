@@ -658,8 +658,17 @@ async function startServer() {
     if (import_fs.default.existsSync(credsPath)) {
       try {
         const data = JSON.parse(import_fs.default.readFileSync(credsPath, "utf8"));
-        globalConfig.settings.youtube.is_linked = true;
-        globalConfig.settings.youtube.channel_name = data.channelName || "";
+        let channels = data.channels || [];
+        let activeChannelId = data.activeChannelId || null;
+        let channelName = data.channelName || "";
+        if (channels.length === 0 && data.tokens) {
+          const channelId = "legacy";
+          activeChannelId = channelId;
+          channels = [{ channelId, channelName: data.channelName || "Mi Canal de YouTube", tokens: data.tokens }];
+        }
+        const activeChannel = channels.find((c) => c.channelId === activeChannelId) || channels[0];
+        globalConfig.settings.youtube.is_linked = channels.length > 0;
+        globalConfig.settings.youtube.channel_name = activeChannel ? activeChannel.channelName : channelName;
       } catch (e) {
         globalConfig.settings.youtube.is_linked = false;
         globalConfig.settings.youtube.channel_name = "";
@@ -1055,12 +1064,14 @@ Instrucciones:
     const { tokens } = await oauth2Client.getToken(code);
     oauth2Client.setCredentials(tokens);
     let channelName = "Mi Canal de YouTube";
+    let channelId = "unknown";
     try {
       const youtube = import_googleapis.google.youtube({ version: "v3", auth: oauth2Client });
       const response = await youtube.channels.list({
-        part: ["snippet"],
+        part: ["id", "snippet"],
         mine: true
       });
+      channelId = response.data.items?.[0]?.id || "unknown";
       channelName = response.data.items?.[0]?.snippet?.title || "Mi Canal de YouTube";
     } catch (err) {
       console.error("Error al obtener informaci\xF3n del canal:", err);
@@ -1069,10 +1080,35 @@ Instrucciones:
     if (!import_fs.default.existsSync(storageDir)) {
       import_fs.default.mkdirSync(storageDir, { recursive: true });
     }
-    import_fs.default.writeFileSync(
-      import_path.default.join(storageDir, "youtube-credentials.json"),
-      JSON.stringify({ tokens, channelName }, null, 2)
-    );
+    const credsPath = import_path.default.join(storageDir, "youtube-credentials.json");
+    let credData = {
+      activeChannelId: channelId,
+      channels: []
+    };
+    if (import_fs.default.existsSync(credsPath)) {
+      try {
+        const existing = JSON.parse(import_fs.default.readFileSync(credsPath, "utf8"));
+        let channels = existing.channels || [];
+        if (channels.length === 0 && existing.tokens) {
+          channels = [{ channelId: "legacy", channelName: existing.channelName || "Mi Canal de YouTube", tokens: existing.tokens }];
+        }
+        credData.channels = channels;
+        credData.activeChannelId = existing.activeChannelId || channelId;
+      } catch (e) {
+        console.error("Error reading existing credentials:", e);
+      }
+    }
+    const existingIndex = credData.channels.findIndex((c) => c.channelId === channelId);
+    if (existingIndex > -1) {
+      credData.channels[existingIndex].tokens = tokens;
+      credData.channels[existingIndex].channelName = channelName;
+    } else {
+      credData.channels.push({ channelId, channelName, tokens });
+    }
+    if (!credData.activeChannelId || credData.activeChannelId === "unknown" || credData.channels.length === 1) {
+      credData.activeChannelId = channelId;
+    }
+    import_fs.default.writeFileSync(credsPath, JSON.stringify(credData, null, 2));
     res.send(`
       <html>
         <head>
@@ -1085,7 +1121,7 @@ Instrucciones:
         </head>
         <body>
           <h2>\xA1Autenticaci\xF3n Exitosa!</h2>
-          <p>Tu cuenta de YouTube ha sido vinculada correctamente.</p>
+          <p>Tu cuenta de YouTube has sido vinculada correctamente (${channelName}).</p>
           <p>Esta ventana se cerrar\xE1 autom\xE1ticamente en unos segundos...</p>
           <script>
             if (window.opener) {
@@ -1102,13 +1138,32 @@ Instrucciones:
   app.get("/api/v1/youtube/status", wrap(async (req, res) => {
     const credsPath = import_path.default.join(process.cwd(), "storage", "youtube-credentials.json");
     if (!import_fs.default.existsSync(credsPath)) {
-      return res.json({ status: 200, message: "ok", data: { is_linked: false, channel_name: null } });
+      return res.json({ status: 200, message: "ok", data: { is_linked: false, channel_name: null, active_channel_id: null, channels: [] } });
     }
     try {
       const data = JSON.parse(import_fs.default.readFileSync(credsPath, "utf8"));
-      return res.json({ status: 200, message: "ok", data: { is_linked: true, channel_name: data.channelName } });
+      let channels = data.channels || [];
+      let activeChannelId = data.activeChannelId || null;
+      let channelName = data.channelName || null;
+      if (channels.length === 0 && data.tokens) {
+        const channelId = "legacy";
+        activeChannelId = channelId;
+        channels = [{ channelId, channelName: data.channelName || "Mi Canal de YouTube", tokens: data.tokens }];
+      }
+      const activeChannel = channels.find((c) => c.channelId === activeChannelId) || channels[0];
+      const activeName = activeChannel ? activeChannel.channelName : channelName;
+      return res.json({
+        status: 200,
+        message: "ok",
+        data: {
+          is_linked: channels.length > 0,
+          channel_name: activeName,
+          active_channel_id: activeChannel ? activeChannel.channelId : null,
+          channels: channels.map((c) => ({ channelId: c.channelId, channelName: c.channelName }))
+        }
+      });
     } catch (e) {
-      return res.json({ status: 200, message: "ok", data: { is_linked: false, channel_name: null } });
+      return res.json({ status: 200, message: "ok", data: { is_linked: false, channel_name: null, active_channel_id: null, channels: [] } });
     }
   }));
   app.post("/api/v1/youtube/disconnect", wrap(async (req, res) => {
@@ -1117,6 +1172,69 @@ Instrucciones:
       import_fs.default.unlinkSync(credsPath);
     }
     return res.json({ status: 200, message: "ok" });
+  }));
+  app.post("/api/v1/youtube/select-channel", wrap(async (req, res) => {
+    const { channelId } = req.body;
+    if (!channelId) {
+      return res.status(400).json({ status: 400, message: "Falta el channelId." });
+    }
+    const credsPath = import_path.default.join(process.cwd(), "storage", "youtube-credentials.json");
+    if (!import_fs.default.existsSync(credsPath)) {
+      return res.status(404).json({ status: 404, message: "No se encontraron credenciales de YouTube." });
+    }
+    try {
+      const data = JSON.parse(import_fs.default.readFileSync(credsPath, "utf8"));
+      let channels = data.channels || [];
+      if (channels.length === 0 && data.tokens) {
+        const cId = "legacy";
+        data.activeChannelId = cId;
+        data.channels = [{ channelId: cId, channelName: data.channelName || "Mi Canal de YouTube", tokens: data.tokens }];
+        channels = data.channels;
+      }
+      const found = channels.find((c) => c.channelId === channelId);
+      if (!found) {
+        return res.status(404).json({ status: 404, message: "Canal no encontrado en las cuentas vinculadas." });
+      }
+      data.activeChannelId = channelId;
+      import_fs.default.writeFileSync(credsPath, JSON.stringify(data, null, 2));
+      return res.json({ status: 200, message: "ok", activeChannelId: channelId });
+    } catch (e) {
+      return res.status(500).json({ status: 500, message: e.message });
+    }
+  }));
+  app.post("/api/v1/youtube/disconnect-channel", wrap(async (req, res) => {
+    const { channelId } = req.body;
+    if (!channelId) {
+      return res.status(400).json({ status: 400, message: "Falta el channelId." });
+    }
+    const credsPath = import_path.default.join(process.cwd(), "storage", "youtube-credentials.json");
+    if (!import_fs.default.existsSync(credsPath)) {
+      return res.status(404).json({ status: 404, message: "No se encontraron credenciales de YouTube." });
+    }
+    try {
+      const data = JSON.parse(import_fs.default.readFileSync(credsPath, "utf8"));
+      let channels = data.channels || [];
+      if (channels.length === 0 && data.tokens) {
+        const cId = "legacy";
+        data.activeChannelId = cId;
+        data.channels = [{ channelId: cId, channelName: data.channelName || "Mi Canal de YouTube", tokens: data.tokens }];
+        channels = data.channels;
+      }
+      data.channels = channels.filter((c) => c.channelId !== channelId);
+      if (data.activeChannelId === channelId) {
+        data.activeChannelId = data.channels.length > 0 ? data.channels[0].channelId : null;
+      }
+      if (data.channels.length === 0) {
+        if (import_fs.default.existsSync(credsPath)) {
+          import_fs.default.unlinkSync(credsPath);
+        }
+      } else {
+        import_fs.default.writeFileSync(credsPath, JSON.stringify(data, null, 2));
+      }
+      return res.json({ status: 200, message: "ok" });
+    } catch (e) {
+      return res.status(500).json({ status: 500, message: e.message });
+    }
   }));
   app.post("/api/v1/youtube/upload", wrap(async (req, res) => {
     const { videoUrl, title, description, privacyStatus = "private", publishAt } = req.body;
@@ -1128,13 +1246,24 @@ Instrucciones:
       return res.status(401).json({ status: 401, message: "YouTube no est\xE1 vinculado. Por favor, vinc\xFAlalo primero." });
     }
     const cred = JSON.parse(import_fs.default.readFileSync(credsPath, "utf8"));
+    let channels = cred.channels || [];
+    let activeChannelId = cred.activeChannelId || null;
+    if (channels.length === 0 && cred.tokens) {
+      const channelId = "legacy";
+      activeChannelId = channelId;
+      channels = [{ channelId, channelName: cred.channelName || "Mi Canal de YouTube", tokens: cred.tokens }];
+    }
+    const activeChannel = channels.find((c) => c.channelId === activeChannelId) || channels[0];
+    if (!activeChannel) {
+      return res.status(401).json({ status: 401, message: "YouTube no est\xE1 vinculado o el canal activo no existe." });
+    }
     const clientId = process.env.YOUTUBE_CLIENT_ID;
     const clientSecret = process.env.YOUTUBE_CLIENT_SECRET;
     const redirectUri = getRedirectUri(req);
     const oauth2Client = new import_googleapis.google.auth.OAuth2(clientId, clientSecret, redirectUri);
-    oauth2Client.setCredentials(cred.tokens);
+    oauth2Client.setCredentials(activeChannel.tokens);
     oauth2Client.on("tokens", (newTokens) => {
-      cred.tokens = { ...cred.tokens, ...newTokens };
+      activeChannel.tokens = { ...activeChannel.tokens, ...newTokens };
       import_fs.default.writeFileSync(credsPath, JSON.stringify(cred, null, 2));
     });
     const youtube = import_googleapis.google.youtube({ version: "v3", auth: oauth2Client });
