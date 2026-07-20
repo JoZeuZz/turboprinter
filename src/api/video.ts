@@ -31,4 +31,10 @@ export const videoApi = {
       body: formData,
     });
   },
+
+  generateHashtags: (params: { video_terms: string | string[]; video_subject?: string; video_script?: string }) =>
+    apiFetch<{ hashtags: string }>("/hashtags", {
+      method: "POST",
+      body: JSON.stringify(params),
+    }),
 };

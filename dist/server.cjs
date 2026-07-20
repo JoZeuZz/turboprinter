@@ -908,8 +908,8 @@ async function startServer() {
       throw new Error("No Gemini API key configured. Please set GEMINI_API_KEY.");
     }
     let prompt = `Escribe un gui\xF3n de video sobre "${video_subject}" en idioma ${video_language}. Es CR\xCDTICO que el gui\xF3n tenga exactamente ${paragraph_number} p\xE1rrafos bien estructurados, completos y detallados.
-Cada p\xE1rrafo debe ser sustancial y desarrollado por completo (aproximadamente de 50 a 70 palabras por p\xE1rrafo, compuesto por 3 a 5 oraciones ricas y descriptivas, \xF3ptimo para narrar una historia o un documental).
-A medida que aumenta el n\xFAmero de p\xE1rrafos, el gui\xF3n general debe ser proporcionalmente m\xE1s largo; no reduzcas la longitud de los p\xE1rrafos individuales al tener m\xE1s p\xE1rrafos. Cada uno debe mantener la misma profundidad y extensi\xF3n de forma consistente.
+Cada p\xE1rrafo debe ser sustancial y desarrollado por completo (debe tener un rango estricto de entre 45 y 55 palabras por p\xE1rrafo, compuesto por 3 a 5 oraciones ricas y descriptivas, \xF3ptimo para narrar una historia o un documental).
+La longitud total del gui\xF3n completo debe ser de aproximadamente ${paragraph_number * 45} a ${paragraph_number * 55} palabras en total. A medida que aumenta el n\xFAmero de p\xE1rrafos, el gui\xF3n general debe ser proporcionalmente m\xE1s largo de forma lineal y acumulativa (por ejemplo, 3 p\xE1rrafos deben sumar unas 150 palabras en total, y 4 p\xE1rrafos deben sumar unas 200 palabras en total). No reduzcas la longitud de los p\xE1rrafos individuales al tener m\xE1s p\xE1rrafos; cada uno de ellos debe mantener de forma consistente la profundidad, extensi\xF3n y cantidad de palabras especificadas.
 Separa cada p\xE1rrafo estrictamente con dos saltos de l\xEDnea (\\n\\n). Devuelve SOLAMENTE el texto del gui\xF3n, sin t\xEDtulos, introducciones ni comentarios adicionales.`;
     if (video_script_prompt) {
       prompt += `
@@ -917,7 +917,13 @@ Separa cada p\xE1rrafo estrictamente con dos saltos de l\xEDnea (\\n\\n). Devuel
 Instrucciones adicionales para el gui\xF3n:
 ${video_script_prompt}`;
     }
-    const scriptText = await generateGeminiContent(prompt, false, custom_system_prompt || void 0);
+    let finalSystemPrompt = custom_system_prompt;
+    if (finalSystemPrompt && paragraph_number) {
+      finalSystemPrompt += `
+
+[INSTRUCCI\xD3N DE PRIORIDAD ABSOLUTA PARA EL N\xDAMERO DE P\xC1RRAFOS]: El usuario ha solicitado exactamente ${paragraph_number} p\xE1rrafos. Ignora cualquier restricci\xF3n de l\xEDmite de palabras total anterior (como "extensi\xF3n total de entre 120 y 140 palabras" o similar). En su lugar, aplica ese l\xEDmite de palabras a cada p\xE1rrafo de manera individual (es decir, cada uno de los ${paragraph_number} p\xE1rrafos debe tener unas 45-55 palabras de forma consistente). El guion completo debe crecer de manera lineal y proporcional (aproximadamente de ${paragraph_number * 45} a ${paragraph_number * 55} palabras en total) para asegurar que la duraci\xF3n de la locuci\xF3n aumente seg\xFAn la cantidad de p\xE1rrafos solicitados.`;
+    }
+    const scriptText = await generateGeminiContent(prompt, false, finalSystemPrompt || void 0);
     res.json({ status: 200, message: "ok", data: { video_script: scriptText } });
   }));
   app.post("/api/v1/terms", wrap(async (req, res) => {
@@ -930,6 +936,32 @@ ${video_script_prompt}`;
     const parsed = JSON.parse(resp);
     const terms = parsed.terms || [];
     res.json({ status: 200, message: "ok", data: { video_terms: terms } });
+  }));
+  app.post("/api/v1/hashtags", wrap(async (req, res) => {
+    const { video_terms, video_subject = "", video_script = "" } = req.body;
+    if (!process.env.GEMINI_API_KEY) {
+      throw new Error("No Gemini API key configured. Please set GEMINI_API_KEY.");
+    }
+    const keywords = Array.isArray(video_terms) ? video_terms.join(", ") : video_terms || "";
+    const prompt = `Genera hashtags de alto impacto para la descripci\xF3n de un YouTube Short.
+Palabras clave (keywords): ${keywords}
+Tema del video: ${video_subject}
+Gui\xF3n: ${video_script}
+
+Instrucciones:
+- Genera hashtags de alto impacto para YouTube Shorts, combinando ingl\xE9s y espa\xF1ol de forma \xF3ptima para audiencia hispana.
+- Todos los hashtags deben estar en min\xFAsculas.
+- El formato final debe ser una sola l\xEDnea de hashtags separados por un espacio, por ejemplo: "#hashtag1 #hashtag2 #hashtag3" (sin comas ni saltos de l\xEDnea).
+- Devuelve la respuesta en formato JSON estructurado: { "hashtags": "#hashtag1 #hashtag2 #hashtag3" }`;
+    const resp = await generateGeminiContent(prompt, true);
+    let hashtags = "";
+    try {
+      const parsed = JSON.parse(resp);
+      hashtags = parsed.hashtags || "";
+    } catch (e) {
+      hashtags = resp.trim();
+    }
+    res.json({ status: 200, message: "ok", data: { hashtags } });
   }));
   const logTask = (taskId, level, category, message) => {
     const t = tasks.get(taskId);

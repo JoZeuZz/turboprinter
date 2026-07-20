@@ -1,10 +1,11 @@
 // webui-react/src/components/panels/ScriptPanel.tsx
 import { useState } from "react";
-import { Wand2 } from "lucide-react";
+import { Wand2, Hash, Copy, Check, Sparkles } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { ApiError } from "../../api/client";
 import { projectsApi } from "../../api/projects";
+import { videoApi } from "../../api/video";
 import { Button, Input, Select, Textarea, Collapsible } from "../ui";
 import { useProjectHistoryStore } from "../../store/useProjectHistoryStore";
 import { useProjectStore } from "../../store/useProjectStore";
@@ -76,6 +77,41 @@ export function ScriptPanel() {
   const [generating, setGenerating] = useState(false);
   const [isContinuing, setIsContinuing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [hashtags, setHashtags] = useState<string>("");
+  const [generatingHashtags, setGeneratingHashtags] = useState(false);
+  const [hashtagsError, setHashtagsError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const handleGenerateHashtags = async () => {
+    const terms = store.video_terms;
+    if (!terms || (Array.isArray(terms) && terms.length === 0)) {
+      setHashtagsError("Por favor introduce algunas palabras clave primero.");
+      return;
+    }
+    setGeneratingHashtags(true);
+    setHashtagsError(null);
+    try {
+      const res = await videoApi.generateHashtags({
+        video_terms: terms,
+        video_subject: store.video_subject,
+        video_script: store.video_script,
+      });
+      setHashtags(res.hashtags);
+    } catch (err: any) {
+      console.error(err);
+      setHashtagsError(err.message || "Error al generar hashtags");
+    } finally {
+      setGeneratingHashtags(false);
+    }
+  };
+
+  const handleCopyHashtags = () => {
+    if (!hashtags) return;
+    navigator.clipboard.writeText(hashtags);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   const getWordCount = (text: string) => {
     if (!text) return 0;
@@ -330,6 +366,75 @@ export function ScriptPanel() {
           </div>
         </div>
       )}
+
+      {/* Hashtag Generator Block */}
+      <div className="rounded-lg border border-border/80 bg-surface/50 p-4 space-y-3 mt-1 shadow-sm">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5">
+            <Hash className="h-4 w-4 text-accent" />
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-foreground">
+              Hashtags Sugeridos
+            </h4>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleGenerateHashtags}
+            disabled={generatingHashtags || !store.video_terms || (Array.isArray(store.video_terms) && store.video_terms.length === 0)}
+            className="h-7 text-[11px] px-2.5 gap-1.5 text-accent hover:text-accent/80 hover:bg-accent/10 border border-accent/20"
+          >
+            {generatingHashtags ? (
+              <>
+                <Hash className="h-3.5 w-3.5 animate-spin" />
+                Generando...
+              </>
+            ) : (
+              <>
+                <Sparkles className="h-3.5 w-3.5" />
+                Generar Hashtags
+              </>
+            )}
+          </Button>
+        </div>
+
+        {hashtagsError && (
+          <p className="text-[11px] text-red-400 font-medium">
+            {hashtagsError}
+          </p>
+        )}
+
+        {hashtags ? (
+          <div className="flex flex-col gap-2 rounded-md bg-background/50 border border-border/40 p-3">
+            <p className="font-mono text-xs text-foreground/90 select-all leading-relaxed whitespace-pre-wrap">
+              {hashtags}
+            </p>
+            <div className="flex justify-end pt-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleCopyHashtags}
+                className="h-7 text-[10px] px-2.5 gap-1.5 text-muted-foreground hover:text-foreground hover:bg-surface-hover border border-border/40"
+              >
+                {copied ? (
+                  <>
+                    <Check className="h-3 w-3 text-green-400" />
+                    ¡Copiado!
+                  </>
+                ) : (
+                  <>
+                    <Copy className="h-3 w-3" />
+                    Copiar Hashtags
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <p className="text-[11px] text-muted-foreground italic">
+            Genera hashtags optimizados para YouTube Shorts en base a tus palabras clave.
+          </p>
+        )}
+      </div>
 
       <Textarea
         label={t("panels.script.keywords")}

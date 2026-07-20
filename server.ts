@@ -977,6 +977,36 @@ Separa cada párrafo estrictamente con dos saltos de línea (\\n\\n). Devuelve S
     res.json({ status: 200, message: "ok", data: { video_terms: terms } });
   }));
 
+  app.post("/api/v1/hashtags", wrap(async (req: any, res: any) => {
+    const { video_terms, video_subject = "", video_script = "" } = req.body;
+    if (!process.env.GEMINI_API_KEY) {
+      throw new Error("No Gemini API key configured. Please set GEMINI_API_KEY.");
+    }
+
+    const keywords = Array.isArray(video_terms) ? video_terms.join(", ") : (video_terms || "");
+    const prompt = `Genera hashtags de alto impacto para la descripción de un YouTube Short.
+Palabras clave (keywords): ${keywords}
+Tema del video: ${video_subject}
+Guión: ${video_script}
+
+Instrucciones:
+- Genera hashtags de alto impacto para YouTube Shorts, combinando inglés y español de forma óptima para audiencia hispana.
+- Todos los hashtags deben estar en minúsculas.
+- El formato final debe ser una sola línea de hashtags separados por un espacio, por ejemplo: "#hashtag1 #hashtag2 #hashtag3" (sin comas ni saltos de línea).
+- Devuelve la respuesta en formato JSON estructurado: { "hashtags": "#hashtag1 #hashtag2 #hashtag3" }`;
+
+    const resp = await generateGeminiContent(prompt, true);
+    let hashtags = "";
+    try {
+      const parsed = JSON.parse(resp);
+      hashtags = parsed.hashtags || "";
+    } catch (e) {
+      hashtags = resp.trim();
+    }
+
+    res.json({ status: 200, message: "ok", data: { hashtags } });
+  }));
+
   // 4. Tasks APIs (Videos generator)
   const logTask = (taskId: string, level: "INFO" | "SUCCESS" | "WARNING" | "ERROR", category: string, message: string) => {
     const t = tasks.get(taskId);
