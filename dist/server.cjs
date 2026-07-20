@@ -1119,7 +1119,7 @@ Instrucciones:
     return res.json({ status: 200, message: "ok" });
   }));
   app.post("/api/v1/youtube/upload", wrap(async (req, res) => {
-    const { videoUrl, title, description, privacyStatus = "private" } = req.body;
+    const { videoUrl, title, description, privacyStatus = "private", publishAt } = req.body;
     if (!videoUrl) {
       return res.status(400).json({ status: 400, message: "Falta el videoUrl del video a subir." });
     }
@@ -1153,7 +1153,8 @@ Instrucciones:
           // People & Blogs
         },
         status: {
-          privacyStatus: privacyStatus || "private",
+          privacyStatus: publishAt ? "private" : privacyStatus || "private",
+          publishAt: publishAt || void 0,
           selfDeclaredMadeForKids: false
         }
       },

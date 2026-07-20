@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { Download, RotateCcw, CheckCircle2, Youtube, Loader2, SlidersHorizontal, Scissors, Sparkles } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { Button, Input, Textarea, Select } from "../ui";
+import { Button, Input, Textarea, Select, TabBar } from "../ui";
 import { useProjectWorkspaceStore } from "../../store/useProjectWorkspaceStore";
 import { useConfigStore } from "../../store/useConfigStore";
 import { useVideoStore } from "../../store/useVideoStore";
@@ -15,8 +15,11 @@ export function DonePanel() {
   const { videoUrls, reset, setPanel } = useProjectWorkspaceStore();
   const { config } = useConfigStore();
 
-  const isYoutubeLinked = !!config?.settings?.youtube?.is_linked;
-  const youtubeChannel = config?.settings?.youtube?.channel_name || "";
+  const [localIsYoutubeLinked, setLocalIsYoutubeLinked] = useState<boolean | null>(null);
+  const [localYoutubeChannel, setLocalYoutubeChannel] = useState<string>("");
+
+  const isYoutubeLinked = localIsYoutubeLinked !== null ? localIsYoutubeLinked : !!config?.settings?.youtube?.is_linked;
+  const youtubeChannel = localYoutubeChannel || config?.settings?.youtube?.channel_name || "";
 
   const videoSubject = useVideoStore((s) => s.video_subject) || "";
   const videoScript = useVideoStore((s) => s.video_script) || "";
@@ -52,6 +55,15 @@ export function DonePanel() {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
 
+  // Scheduling states
+  const [activeTab, setActiveTab] = useState<"now" | "schedule">("now");
+  const [publishDate, setPublishDate] = useState(() => {
+    const tom = new Date();
+    tom.setDate(tom.getDate() + 1);
+    return tom.toISOString().split("T")[0]; // YYYY-MM-DD
+  });
+  const [publishTime, setPublishTime] = useState("12:00");
+
   const [uploadStatus, setUploadStatus] = useState<"idle" | "uploading" | "success" | "error">("idle");
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -69,9 +81,28 @@ export function DonePanel() {
       .get()
       .then((cfg) => {
         setConfig(cfg);
+        if (cfg?.settings?.youtube) {
+          setLocalIsYoutubeLinked(!!cfg.settings.youtube.is_linked);
+          setLocalYoutubeChannel(cfg.settings.youtube.channel_name || "");
+        }
       })
       .catch((err) => {
         console.error("Error fetching config on DonePanel mount:", err);
+      });
+
+    // Directly query YouTube linked status as a fallback guarantee
+    videoApi.getYouTubeStatus()
+      .then((res) => {
+        if (res.is_linked) {
+          setLocalIsYoutubeLinked(true);
+          setLocalYoutubeChannel(res.channel_name || "");
+        } else {
+          setLocalIsYoutubeLinked(false);
+          setLocalYoutubeChannel("");
+        }
+      })
+      .catch((err) => {
+        console.error("Error fetching direct youtube status on DonePanel mount:", err);
       });
   }, [setConfig]);
 
@@ -136,11 +167,21 @@ export function DonePanel() {
     try {
       const videoUrl = videoUrls[0];
       setUploadProgress(45);
+
+      let publishAt: string | undefined = undefined;
+      if (activeTab === "schedule") {
+        const [year, month, day] = publishDate.split("-").map(Number);
+        const [hour, minute] = publishTime.split(":").map(Number);
+        const localDate = new Date(year, month - 1, day, hour, minute);
+        publishAt = localDate.toISOString();
+      }
+
       const res = await videoApi.uploadToYouTube({
         videoUrl,
         title: ytTitle || "YouTube Short",
         description: ytDescription || "",
-        privacyStatus,
+        privacyStatus: activeTab === "now" ? privacyStatus : "private",
+        publishAt,
       });
       setUploadProgress(100);
       setUploadStatus("success");
@@ -392,6 +433,16 @@ export function DonePanel() {
               </button>
             </div>
 
+            {/* TabBar to choose publishing mode */}
+            <TabBar
+              tabs={[
+                { key: "now", label: "Publicar Ahora" },
+                { key: "schedule", label: "Programar Publicación" },
+              ]}
+              active={activeTab}
+              onChange={(key) => setActiveTab(key as any)}
+            />
+
             <Input
               label="Título del Short (Máx 100 caracteres)"
               value={ytTitle}
@@ -436,17 +487,46 @@ export function DonePanel() {
               )}
             </div>
 
-            <Select
-              label="Visibilidad en YouTube"
-              value={privacyStatus}
-              onChange={(e) => setPrivacyStatus(e.target.value as any)}
-              options={[
-                { value: "private", label: "Privado (Solo tú)" },
-                { value: "unlisted", label: "Oculto (Cualquiera con el enlace)" },
-                { value: "public", label: "Público (Todo el mundo)" },
-              ]}
-              className="text-xs"
-            />
+            {activeTab === "now" ? (
+              <Select
+                label="Visibilidad en YouTube"
+                value={privacyStatus}
+                onChange={(e) => setPrivacyStatus(e.target.value as any)}
+                options={[
+                  { value: "private", label: "Privado (Solo tú)" },
+                  { value: "unlisted", label: "Oculto (Cualquiera con el enlace)" },
+                  { value: "public", label: "Público (Todo el mundo)" },
+                ]}
+                className="text-xs"
+              />
+            ) : (
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-4">
+                  <Input
+                    type="date"
+                    label="Fecha de Publicación"
+                    value={publishDate}
+                    onChange={(e) => setPublishDate(e.target.value)}
+                    className="text-xs"
+                  />
+                  <Input
+                    type="time"
+                    label="Hora de Publicación"
+                    value={publishTime}
+                    onChange={(e) => setPublishTime(e.target.value)}
+                    className="text-xs"
+                  />
+                </div>
+                <div className="text-[11px] text-zinc-400 bg-neutral-950/40 border border-neutral-800/80 p-3 rounded-xl flex flex-col gap-1 leading-relaxed">
+                  <span className="text-zinc-300 font-semibold flex items-center gap-1">
+                    ⏰ Programación:
+                  </span>
+                  <span>
+                    El video se subirá inicialmente en estado <strong>Privado</strong> y se publicará como <strong>Público</strong> de forma automática en el momento indicado (con respecto a tu hora local).
+                  </span>
+                </div>
+              </div>
+            )}
 
             <div className="flex gap-3 justify-end pt-3 border-t border-neutral-800">
               <Button 
@@ -463,7 +543,7 @@ export function DonePanel() {
                 }}
                 className="bg-red-600 hover:bg-red-700 text-white text-xs py-1.5 h-9"
               >
-                Confirmar y Subir
+                {activeTab === "now" ? "Confirmar y Subir" : "Confirmar y Programar"}
               </Button>
             </div>
           </div>

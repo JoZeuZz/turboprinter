@@ -1192,7 +1192,7 @@ Instrucciones:
 
   // YouTube Video Upload Endpoint
   app.post("/api/v1/youtube/upload", wrap(async (req: any, res: any) => {
-    const { videoUrl, title, description, privacyStatus = "private" } = req.body;
+    const { videoUrl, title, description, privacyStatus = "private", publishAt } = req.body;
     if (!videoUrl) {
       return res.status(400).json({ status: 400, message: "Falta el videoUrl del video a subir." });
     }
@@ -1234,7 +1234,8 @@ Instrucciones:
           categoryId: "22" // People & Blogs
         },
         status: {
-          privacyStatus: privacyStatus || "private",
+          privacyStatus: publishAt ? "private" : (privacyStatus || "private"),
+          publishAt: publishAt || undefined,
           selfDeclaredMadeForKids: false
         }
       },

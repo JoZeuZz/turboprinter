@@ -47,7 +47,7 @@ export const videoApi = {
   disconnectYouTube: () =>
     apiFetch<void>("/youtube/disconnect", { method: "POST" }),
 
-  uploadToYouTube: (params: { videoUrl: string; title: string; description: string; privacyStatus?: "public" | "private" | "unlisted" }) =>
+  uploadToYouTube: (params: { videoUrl: string; title: string; description: string; privacyStatus?: "public" | "private" | "unlisted"; publishAt?: string }) =>
     apiFetch<{ videoId: string; url: string }>("/youtube/upload", {
       method: "POST",
       body: JSON.stringify(params),
