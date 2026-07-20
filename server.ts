@@ -6,6 +6,7 @@ import { createServer as createViteServer } from "vite";
 import WebSocket from "ws";
 import crypto from "crypto";
 import { GoogleGenAI } from "@google/genai";
+import { google } from "googleapis";
 import multer from "multer";
 
 // Load .env variables manually if they exist
@@ -711,6 +712,20 @@ async function startServer() {
 
   // 1. Config APIs
   app.get("/api/v1/config", wrap(async (req: any, res: any) => {
+    const credsPath = path.join(process.cwd(), "storage", "youtube-credentials.json");
+    if (fs.existsSync(credsPath)) {
+      try {
+        const data = JSON.parse(fs.readFileSync(credsPath, "utf8"));
+        globalConfig.settings.youtube.is_linked = true;
+        globalConfig.settings.youtube.channel_name = data.channelName || "";
+      } catch (e) {
+        globalConfig.settings.youtube.is_linked = false;
+        globalConfig.settings.youtube.channel_name = "";
+      }
+    } else {
+      globalConfig.settings.youtube.is_linked = false;
+      globalConfig.settings.youtube.channel_name = "";
+    }
     res.json({ status: 200, message: "ok", data: globalConfig });
   }));
 
@@ -1005,6 +1020,192 @@ Instrucciones:
     }
 
     res.json({ status: 200, message: "ok", data: { hashtags } });
+  }));
+
+  // Helper to dynamically build redirect URI for YouTube OAuth
+  const getRedirectUri = (req: any) => {
+    const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'http';
+    const host = req.headers['x-forwarded-host'] || req.headers.host;
+    return `${protocol}://${host}/api/v1/youtube/callback`;
+  };
+
+  // YouTube OAuth URL Endpoint
+  app.get("/api/v1/youtube/auth-url", wrap(async (req: any, res: any) => {
+    const clientId = process.env.YOUTUBE_CLIENT_ID;
+    const clientSecret = process.env.YOUTUBE_CLIENT_SECRET;
+    if (!clientId || !clientSecret) {
+      return res.status(400).json({
+        status: 400,
+        message: "Las credenciales YOUTUBE_CLIENT_ID o YOUTUBE_CLIENT_SECRET no están configuradas en el archivo .env."
+      });
+    }
+
+    const redirectUri = getRedirectUri(req);
+    const oauth2Client = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
+    const authUrl = oauth2Client.generateAuthUrl({
+      access_type: "offline",
+      scope: [
+        "https://www.googleapis.com/auth/youtube.upload",
+        "https://www.googleapis.com/auth/youtube.readonly"
+      ],
+      prompt: "consent"
+    });
+
+    res.json({ status: 200, message: "ok", data: { url: authUrl } });
+  }));
+
+  // YouTube OAuth Callback Route
+  app.get("/api/v1/youtube/callback", wrap(async (req: any, res: any) => {
+    const { code } = req.query;
+    if (!code) {
+      return res.status(400).send("Código de autorización faltante.");
+    }
+
+    const clientId = process.env.YOUTUBE_CLIENT_ID;
+    const clientSecret = process.env.YOUTUBE_CLIENT_SECRET;
+    const redirectUri = getRedirectUri(req);
+
+    const oauth2Client = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
+    const { tokens } = await oauth2Client.getToken(code as string);
+    oauth2Client.setCredentials(tokens);
+
+    // Fetch channel info
+    let channelName = "Mi Canal de YouTube";
+    try {
+      const youtube = google.youtube({ version: "v3", auth: oauth2Client });
+      const response = await youtube.channels.list({
+        part: ["snippet"],
+        mine: true
+      });
+      channelName = response.data.items?.[0]?.snippet?.title || "Mi Canal de YouTube";
+    } catch (err) {
+      console.error("Error al obtener información del canal:", err);
+    }
+
+    // Save credentials to local storage
+    const storageDir = path.join(process.cwd(), "storage");
+    if (!fs.existsSync(storageDir)) {
+      fs.mkdirSync(storageDir, { recursive: true });
+    }
+
+    fs.writeFileSync(
+      path.join(storageDir, "youtube-credentials.json"),
+      JSON.stringify({ tokens, channelName }, null, 2)
+    );
+
+    // Send postMessage to closing popup
+    res.send(`
+      <html>
+        <head>
+          <title>Autenticación Exitosa</title>
+          <style>
+            body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background-color: #121214; color: #ffffff; margin: 0; }
+            h2 { color: #10B981; }
+            p { color: #A1A1AA; }
+          </style>
+        </head>
+        <body>
+          <h2>¡Autenticación Exitosa!</h2>
+          <p>Tu cuenta de YouTube ha sido vinculada correctamente.</p>
+          <p>Esta ventana se cerrará automáticamente en unos segundos...</p>
+          <script>
+            if (window.opener) {
+              window.opener.postMessage({ type: 'YOUTUBE_AUTH_SUCCESS', channelName: ${JSON.stringify(channelName)} }, '*');
+              setTimeout(() => { window.close(); }, 1500);
+            } else {
+              window.location.href = '/';
+            }
+          </script>
+        </body>
+      </html>
+    `);
+  }));
+
+  // YouTube OAuth Status Endpoint
+  app.get("/api/v1/youtube/status", wrap(async (req: any, res: any) => {
+    const credsPath = path.join(process.cwd(), "storage", "youtube-credentials.json");
+    if (!fs.existsSync(credsPath)) {
+      return res.json({ status: 200, message: "ok", data: { is_linked: false, channel_name: null } });
+    }
+
+    try {
+      const data = JSON.parse(fs.readFileSync(credsPath, "utf8"));
+      return res.json({ status: 200, message: "ok", data: { is_linked: true, channel_name: data.channelName } });
+    } catch (e) {
+      return res.json({ status: 200, message: "ok", data: { is_linked: false, channel_name: null } });
+    }
+  }));
+
+  // YouTube OAuth Disconnect Endpoint
+  app.post("/api/v1/youtube/disconnect", wrap(async (req: any, res: any) => {
+    const credsPath = path.join(process.cwd(), "storage", "youtube-credentials.json");
+    if (fs.existsSync(credsPath)) {
+      fs.unlinkSync(credsPath);
+    }
+    return res.json({ status: 200, message: "ok" });
+  }));
+
+  // YouTube Video Upload Endpoint
+  app.post("/api/v1/youtube/upload", wrap(async (req: any, res: any) => {
+    const { videoUrl, title, description, privacyStatus = "private" } = req.body;
+    if (!videoUrl) {
+      return res.status(400).json({ status: 400, message: "Falta el videoUrl del video a subir." });
+    }
+
+    const credsPath = path.join(process.cwd(), "storage", "youtube-credentials.json");
+    if (!fs.existsSync(credsPath)) {
+      return res.status(401).json({ status: 401, message: "YouTube no está vinculado. Por favor, vincúlalo primero." });
+    }
+
+    const cred = JSON.parse(fs.readFileSync(credsPath, "utf8"));
+    const clientId = process.env.YOUTUBE_CLIENT_ID;
+    const clientSecret = process.env.YOUTUBE_CLIENT_SECRET;
+    const redirectUri = getRedirectUri(req);
+
+    const oauth2Client = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
+    oauth2Client.setCredentials(cred.tokens);
+
+    // Handle token refresh events automatically
+    oauth2Client.on("tokens", (newTokens) => {
+      cred.tokens = { ...cred.tokens, ...newTokens };
+      fs.writeFileSync(credsPath, JSON.stringify(cred, null, 2));
+    });
+
+    const youtube = google.youtube({ version: "v3", auth: oauth2Client });
+
+    // Locate file on disk
+    const filePath = path.join(process.cwd(), videoUrl);
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ status: 404, message: `No se encontró el archivo de video en el disco: ${filePath}` });
+    }
+
+    const response = await youtube.videos.insert({
+      part: ["snippet", "status"],
+      requestBody: {
+        snippet: {
+          title: title || "YouTube Short",
+          description: description || "Creado con MoneyPrinter Turbo",
+          tags: ["shorts", "moneyprinter", "turbo"],
+          categoryId: "22" // People & Blogs
+        },
+        status: {
+          privacyStatus: privacyStatus || "private",
+          selfDeclaredMadeForKids: false
+        }
+      },
+      media: {
+        body: fs.createReadStream(filePath)
+      }
+    });
+
+    res.json({
+      status: 200,
+      message: "ok",
+      data: {
+        videoId: response.data.id,
+        url: `https://youtu.be/${response.data.id}`
+      }
+    });
   }));
 
   // 4. Tasks APIs (Videos generator)

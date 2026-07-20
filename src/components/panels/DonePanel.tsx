@@ -1,11 +1,12 @@
 // webui-react/src/components/panels/DonePanel.tsx
-import { useState } from "react";
-import { Download, RotateCcw, CheckCircle2, Youtube, Loader2, SlidersHorizontal, Scissors } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Download, RotateCcw, CheckCircle2, Youtube, Loader2, SlidersHorizontal, Scissors, Sparkles } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { Button } from "../ui";
+import { Button, Input, Textarea, Select } from "../ui";
 import { useProjectWorkspaceStore } from "../../store/useProjectWorkspaceStore";
 import { useConfigStore } from "../../store/useConfigStore";
 import { useVideoStore } from "../../store/useVideoStore";
+import { videoApi } from "../../api/video";
 
 export function DonePanel() {
   const { t } = useTranslation();
@@ -15,24 +16,128 @@ export function DonePanel() {
   const isYoutubeLinked = !!config?.settings?.youtube?.is_linked;
   const youtubeChannel = config?.settings?.youtube?.channel_name || "";
 
+  const videoSubject = useVideoStore((s) => s.video_subject) || "";
+  const videoScript = useVideoStore((s) => s.video_script) || "";
+  const videoTerms = useVideoStore((s) => s.video_terms) || "";
+
+  const getInitialTitle = (subject: string) => {
+    let name = subject;
+    const colonIndex = name.indexOf(":");
+    const commaIndex = name.indexOf(",");
+
+    let splitIndex = -1;
+    if (colonIndex !== -1 && commaIndex !== -1) {
+      splitIndex = Math.min(colonIndex, commaIndex);
+    } else if (colonIndex !== -1) {
+      splitIndex = colonIndex;
+    } else if (commaIndex !== -1) {
+      splitIndex = commaIndex;
+    }
+
+    if (splitIndex !== -1) {
+      name = name.substring(0, splitIndex);
+    }
+
+    return name.trim().substring(0, 100);
+  };
+
+  const [ytTitle, setYtTitle] = useState(() => {
+    const cleaned = getInitialTitle(videoSubject);
+    return cleaned || "Mi YouTube Short";
+  });
+  const [ytDescription, setYtDescription] = useState(videoScript || "");
+  const [privacyStatus, setPrivacyStatus] = useState<"private" | "unlisted" | "public">("public");
+
   const [uploadStatus, setUploadStatus] = useState<"idle" | "uploading" | "success" | "error">("idle");
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadedUrl, setUploadedUrl] = useState<string | null>(null);
 
-  const handleYoutubeUpload = () => {
+  const [loadingAutoHashtags, setLoadingAutoHashtags] = useState(false);
+  const [generatingHashtags, setGeneratingHashtags] = useState(false);
+  const [hashtagsError, setHashtagsError] = useState<string | null>(null);
+
+  // Auto-generate hashtags on mount (Option 1)
+  useEffect(() => {
     if (!isYoutubeLinked) return;
-    setUploadStatus("uploading");
-    setUploadProgress(0);
+    const termsStr = Array.isArray(videoTerms) ? videoTerms.join(", ") : videoTerms;
+    if (!termsStr || termsStr.trim().length === 0) return;
 
-    const interval = setInterval(() => {
-      setUploadProgress((prev) => {
-        if (prev >= 100) {
-          clearInterval(interval);
-          setUploadStatus("success");
-          return 100;
+    const fetchAutoHashtags = async () => {
+      setLoadingAutoHashtags(true);
+      try {
+        const res = await videoApi.generateHashtags({
+          video_terms: videoTerms,
+          video_subject: videoSubject,
+          video_script: videoScript,
+        });
+        if (res.hashtags) {
+          setYtDescription((prev) => {
+            if (prev.includes(res.hashtags)) return prev;
+            return prev ? `${prev}\n\n${res.hashtags}` : res.hashtags;
+          });
         }
-        return prev + 10;
+      } catch (err) {
+        console.error("Error auto-generating hashtags on mount:", err);
+      } finally {
+        setLoadingAutoHashtags(false);
+      }
+    };
+    fetchAutoHashtags();
+  }, [isYoutubeLinked, videoTerms, videoSubject, videoScript]);
+
+  const handleGenerateHashtagsManual = async () => {
+    const termsStr = Array.isArray(videoTerms) ? videoTerms.join(", ") : videoTerms;
+    if (!termsStr || termsStr.trim().length === 0) {
+      setHashtagsError("No hay palabras clave disponibles para generar hashtags.");
+      return;
+    }
+    setGeneratingHashtags(true);
+    setHashtagsError(null);
+    try {
+      const res = await videoApi.generateHashtags({
+        video_terms: videoTerms,
+        video_subject: videoSubject,
+        video_script: videoScript,
       });
-    }, 250);
+      if (res.hashtags) {
+        setYtDescription((prev) => {
+          if (prev.includes(res.hashtags)) return prev;
+          return prev ? `${prev}\n\n${res.hashtags}` : res.hashtags;
+        });
+      }
+    } catch (err: any) {
+      console.error(err);
+      setHashtagsError(err.message || "Error al generar hashtags");
+    } finally {
+      setGeneratingHashtags(false);
+    }
+  };
+
+  const handleYoutubeUpload = async () => {
+    if (!isYoutubeLinked || videoUrls.length === 0) return;
+    setUploadStatus("uploading");
+    setUploadProgress(15);
+    setUploadError(null);
+    setUploadedUrl(null);
+
+    try {
+      const videoUrl = videoUrls[0];
+      setUploadProgress(45);
+      const res = await videoApi.uploadToYouTube({
+        videoUrl,
+        title: ytTitle || "YouTube Short",
+        description: ytDescription || "",
+        privacyStatus,
+      });
+      setUploadProgress(100);
+      setUploadStatus("success");
+      setUploadedUrl(res.url);
+    } catch (err: any) {
+      console.error(err);
+      setUploadError(err.message || "Error al subir video a YouTube");
+      setUploadStatus("error");
+    }
   };
 
   const handleBack = () => {
@@ -47,8 +152,6 @@ export function DonePanel() {
     reset();
     setPanel("script");
   };
-
-  const videoSubject = useVideoStore((s) => s.video_subject) || "";
 
   const getDownloadFilename = () => {
     let name = videoSubject;
@@ -144,36 +247,125 @@ export function DonePanel() {
 
       {videoUrls.length > 0 && (
         <div className="w-full max-w-md space-y-4">
+          {/* YouTube Details Config */}
+          {isYoutubeLinked && uploadStatus !== "success" && uploadStatus !== "uploading" && (
+            <div className="text-left bg-surface/50 p-4 rounded-xl border border-border/80 space-y-3">
+              <div className="flex items-center gap-2 pb-1 border-b border-border/30">
+                <Youtube className="h-4 w-4 text-red-500" />
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-foreground">
+                  Detalles de YouTube Short
+                </h3>
+              </div>
+              <Input
+                label="Título del Short (Máx 100 caracteres)"
+                value={ytTitle}
+                onChange={(e) => setYtTitle(e.target.value.substring(0, 100))}
+                placeholder="Introduce un título llamativo"
+                className="text-xs"
+              />
+              <div className="flex flex-col gap-1.5">
+                <Textarea
+                  label="Descripción del Short"
+                  value={ytDescription}
+                  onChange={(e) => setYtDescription(e.target.value)}
+                  placeholder="Añade descripción y hashtags"
+                  rows={4}
+                  className="text-xs"
+                />
+                <div className="flex items-center justify-between">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="text-[10px] h-7 text-accent/80 hover:text-accent flex items-center gap-1.5 px-2 bg-accent/5 hover:bg-accent/10 border border-accent/10 rounded-md"
+                    onClick={handleGenerateHashtagsManual}
+                    disabled={generatingHashtags || loadingAutoHashtags}
+                  >
+                    {generatingHashtags || loadingAutoHashtags ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <Sparkles className="h-3 w-3" />
+                    )}
+                    Generar Hashtags con IA (Palabras Clave)
+                  </Button>
+                  {loadingAutoHashtags && (
+                    <span className="text-[10px] text-muted-foreground animate-pulse">
+                      Autogenerando hashtags...
+                    </span>
+                  )}
+                </div>
+                {hashtagsError && (
+                  <p className="text-[10px] text-red-400">{hashtagsError}</p>
+                )}
+              </div>
+              <Select
+                label="Visibilidad en YouTube"
+                value={privacyStatus}
+                onChange={(e) => setPrivacyStatus(e.target.value as any)}
+                options={[
+                  { value: "private", label: "Privado (Solo tú)" },
+                  { value: "unlisted", label: "Oculto (Cualquiera con el enlace)" },
+                  { value: "public", label: "Público (Todo el mundo)" },
+                ]}
+                className="text-xs"
+              />
+            </div>
+          )}
+
           {/* YouTube Upload Status Card */}
-          {uploadStatus !== "idle" && (
+          {(uploadStatus !== "idle" || uploadError) && (
             <div className={`rounded-xl border p-4 text-left transition-all duration-300 ${
               uploadStatus === "uploading" 
-                ? "bg-accent/5 border-accent/20" 
+                ? "bg-accent/5 border-accent/20 animate-pulse" 
+                : uploadStatus === "error"
+                ? "bg-red-500/5 border-red-500/20"
                 : "bg-green-500/5 border-green-500/20"
             }`}>
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs font-semibold text-foreground">
                   {uploadStatus === "uploading" 
-                    ? t("panels.review.uploadingToYoutube", { progress: uploadProgress })
+                    ? `Subiendo a YouTube (${uploadProgress}%)`
+                    : uploadStatus === "error"
+                    ? "Error en la subida"
                     : t("panels.review.uploadSuccess")
                   }
                 </span>
                 {uploadStatus === "uploading" ? (
                   <Loader2 className="h-4 w-4 animate-spin text-accent" />
+                ) : uploadStatus === "error" ? (
+                  <span className="text-red-500 text-xs">❌</span>
                 ) : (
                   <CheckCircle2 className="h-4 w-4 text-green-500" />
                 )}
               </div>
-              {uploadStatus === "uploading" ? (
+              {uploadStatus === "uploading" && (
                 <div className="w-full bg-border rounded-full h-1.5 overflow-hidden">
                   <div 
                     className="bg-accent h-full transition-all duration-300 ease-out" 
                     style={{ width: `${uploadProgress}%` }}
                   />
                 </div>
-              ) : (
-                <p className="text-xs text-muted-foreground">
-                  {t("panels.review.uploadChannelInfo", { channel: youtubeChannel })}
+              )}
+              {uploadStatus === "success" && (
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">
+                    {t("panels.review.uploadChannelInfo", { channel: youtubeChannel })}
+                  </p>
+                  {uploadedUrl && (
+                    <a
+                      href={uploadedUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-block text-xs font-semibold text-accent hover:underline mt-1 bg-accent/10 px-2 py-1 rounded"
+                    >
+                      🔗 Ver Short en YouTube
+                    </a>
+                  )}
+                </div>
+              )}
+              {uploadStatus === "error" && (
+                <p className="text-xs text-red-400 font-medium">
+                  {uploadError}
                 </p>
               )}
             </div>
@@ -212,7 +404,7 @@ export function DonePanel() {
               {uploadStatus === "success" 
                 ? t("panels.review.uploadSuccess") 
                 : uploadStatus === "uploading"
-                ? t("panels.review.uploadingToYoutube", { progress: uploadProgress })
+                ? `Subiendo...`
                 : t("panels.review.uploadToYoutube")
               }
             </Button>

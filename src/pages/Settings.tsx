@@ -5,6 +5,7 @@ import type { EditableConfig } from "../api/types";
 import { Button, Checkbox, Collapsible, Input, Select, Textarea } from "../components/ui";
 import { LanguageSelector } from "../components/settings/LanguageSelector";
 import { useConfigStore } from "../store/useConfigStore";
+import { videoApi } from "../api/video";
 
 type SectionName = keyof EditableConfig;
 
@@ -46,6 +47,76 @@ export function Settings() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [linkingYoutube, setLinkingYoutube] = useState(false);
+
+  // Listen for message from popup
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      const origin = event.origin;
+      if (!origin.endsWith('.run.app') && !origin.includes('localhost')) {
+        return;
+      }
+      if (event.data?.type === 'YOUTUBE_AUTH_SUCCESS') {
+        const channelName = event.data?.channelName || "Canal de YouTube Vinculado";
+        setDraft((curr) => {
+          if (!curr) return null;
+          return {
+            ...curr,
+            youtube: {
+              ...curr.youtube,
+              is_linked: true,
+              channel_name: channelName,
+            },
+          };
+        });
+        // Also sync store config
+        configApi.get().then((cfg) => {
+          setConfig(cfg);
+        });
+      }
+    };
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [setConfig]);
+
+  const handleYoutubeConnect = async () => {
+    if (draft?.youtube?.is_linked) {
+      // Disconnect
+      try {
+        await videoApi.disconnectYouTube();
+        setDraft((curr) => {
+          if (!curr) return null;
+          return {
+            ...curr,
+            youtube: {
+              ...curr.youtube,
+              is_linked: false,
+              channel_name: "",
+            },
+          };
+        });
+        configApi.get().then((cfg) => {
+          setConfig(cfg);
+        });
+      } catch (err) {
+        console.error("Error disconnect:", err);
+      }
+    } else {
+      // Connect (popup)
+      setLinkingYoutube(true);
+      try {
+        const { url } = await videoApi.getYouTubeAuthUrl();
+        const popup = window.open(url, "youtube_oauth", "width=600,height=700");
+        if (!popup) {
+          alert("Por favor habilita las ventanas emergentes (popups) para vincular tu canal de YouTube.");
+        }
+      } catch (err: any) {
+        alert(err.message || "Error al obtener URL de autenticación. Verifica que tengas las credenciales en .env.");
+      } finally {
+        setLinkingYoutube(false);
+      }
+    }
+  };
 
   useEffect(() => {
     configApi
@@ -303,21 +374,19 @@ export function Settings() {
               }`}>
                 {draft.youtube?.is_linked ? t("settings.fields.youtubeLinked") : t("settings.fields.youtubeNotLinked")}
               </span>
-              <Button
+               <Button
                 type="button"
                 variant={draft.youtube?.is_linked ? "ghost" : "primary"}
                 size="sm"
-                onClick={() => {
-                  const isLinked = !draft.youtube?.is_linked;
-                  updateField("youtube", "is_linked", isLinked);
-                  if (isLinked) {
-                    if (!draft.youtube?.channel_name) {
-                      updateField("youtube", "channel_name", "@MiCanalShorts");
-                    }
-                  }
-                }}
+                onClick={handleYoutubeConnect}
+                disabled={linkingYoutube}
               >
-                {draft.youtube?.is_linked ? t("settings.fields.youtubeUnlinkBtn") : t("settings.fields.youtubeLinkBtn")}
+                {linkingYoutube 
+                  ? "Conectando..." 
+                  : draft.youtube?.is_linked 
+                    ? t("settings.fields.youtubeUnlinkBtn") 
+                    : t("settings.fields.youtubeLinkBtn")
+                }
               </Button>
             </div>
           </div>

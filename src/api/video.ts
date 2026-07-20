@@ -37,4 +37,19 @@ export const videoApi = {
       method: "POST",
       body: JSON.stringify(params),
     }),
+
+  getYouTubeStatus: () =>
+    apiFetch<{ is_linked: boolean; channel_name: string | null }>("/youtube/status"),
+
+  getYouTubeAuthUrl: () =>
+    apiFetch<{ url: string }>("/youtube/auth-url"),
+
+  disconnectYouTube: () =>
+    apiFetch<void>("/youtube/disconnect", { method: "POST" }),
+
+  uploadToYouTube: (params: { videoUrl: string; title: string; description: string; privacyStatus?: "public" | "private" | "unlisted" }) =>
+    apiFetch<{ videoId: string; url: string }>("/youtube/upload", {
+      method: "POST",
+      body: JSON.stringify(params),
+    }),
 };
