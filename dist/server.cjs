@@ -668,6 +668,8 @@ async function startServer() {
       globalConfig.settings.youtube.is_linked = false;
       globalConfig.settings.youtube.channel_name = "";
     }
+    globalConfig.settings.youtube.client_id = process.env.YOUTUBE_CLIENT_ID || "";
+    globalConfig.settings.youtube.api_key = process.env.YOUTUBE_CLIENT_SECRET || "";
     res.json({ status: 200, message: "ok", data: globalConfig });
   }));
   app.get("/api/v1/local-videos", wrap(async (req, res) => {
@@ -707,6 +709,43 @@ async function startServer() {
   }));
   app.put("/api/v1/config", wrap(async (req, res) => {
     globalConfig.settings = { ...globalConfig.settings, ...req.body };
+    if (req.body.youtube) {
+      const updates = {};
+      if (req.body.youtube.client_id !== void 0) {
+        updates["YOUTUBE_CLIENT_ID"] = req.body.youtube.client_id;
+      }
+      if (req.body.youtube.api_key !== void 0) {
+        updates["YOUTUBE_CLIENT_SECRET"] = req.body.youtube.api_key;
+      }
+      if (Object.keys(updates).length > 0) {
+        try {
+          const envPath = import_path.default.join(process.cwd(), ".env");
+          let content = "";
+          if (import_fs.default.existsSync(envPath)) {
+            content = import_fs.default.readFileSync(envPath, "utf-8");
+          }
+          let lines = content.split(/\r?\n/);
+          for (const [key, val] of Object.entries(updates)) {
+            let found = false;
+            for (let i = 0; i < lines.length; i++) {
+              if (lines[i].trim().startsWith(`${key}=`)) {
+                lines[i] = `${key}=${val}`;
+                found = true;
+                break;
+              }
+            }
+            if (!found) {
+              lines.push(`${key}=${val}`);
+            }
+            process.env[key] = val;
+          }
+          import_fs.default.writeFileSync(envPath, lines.join("\n"), "utf-8");
+          console.log("[Config] Updated .env file with YouTube credentials from UI save:", Object.keys(updates));
+        } catch (err) {
+          console.error("[Config] Failed to update .env file with YouTube credentials:", err);
+        }
+      }
+    }
     res.json({ status: 200, message: "ok", data: globalConfig });
   }));
   app.get("/api/v1/voices", wrap(async (req, res) => {
