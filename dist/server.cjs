@@ -207,9 +207,46 @@ var SAMPLE_VIDEOS = [
   }
 ];
 async function generateGeminiContent(prompt, jsonMode = false, systemInstruction) {
+  const llmProvider = process.env.LLM_PROVIDER || "gemini";
+  if (llmProvider === "lmstudio" || llmProvider === "openai") {
+    const apiBase = process.env.OPENAI_API_BASE || "http://localhost:1234/v1";
+    const apiKey2 = process.env.OPENAI_API_KEY || "lm-studio";
+    const model = process.env.OPENAI_MODEL || "loaded-model";
+    console.log(`[LLM] Directing generation to local OpenAI/LM Studio endpoint: ${apiBase}`);
+    const messages = [];
+    if (systemInstruction) {
+      messages.push({ role: "system", content: systemInstruction });
+    }
+    messages.push({ role: "user", content: prompt });
+    try {
+      const response = await fetch(`${apiBase}/chat/completions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${apiKey2}`
+        },
+        body: JSON.stringify({
+          model,
+          messages,
+          temperature: 0.7,
+          ...jsonMode ? { response_format: { type: "json_object" } } : {}
+        })
+      });
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`LM Studio / OpenAI returned error status ${response.status}: ${errorText}`);
+      }
+      const data = await response.json();
+      const text = data.choices?.[0]?.message?.content || "";
+      return text;
+    } catch (err) {
+      console.error("Failed calling LM Studio/OpenAI API:", err);
+      throw err;
+    }
+  }
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    throw new Error("No Gemini API key configured. Set GEMINI_API_KEY.");
+    throw new Error("No Gemini API key configured. Set GEMINI_API_KEY or configure LLM_PROVIDER=lmstudio.");
   }
   try {
     const ai = new import_genai.GoogleGenAI({
