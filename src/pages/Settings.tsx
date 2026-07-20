@@ -49,9 +49,13 @@ export function Settings() {
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [linkingYoutube, setLinkingYoutube] = useState(false);
+  const [linkingTiktok, setLinkingTiktok] = useState(false);
 
   const [youtubeChannels, setYoutubeChannels] = useState<Array<{ channelId: string; channelName: string }>>([]);
   const [activeChannelId, setActiveChannelId] = useState<string | null>(null);
+
+  const [tiktokChannels, setTiktokChannels] = useState<Array<{ channelId: string; channelName: string; username?: string; avatarUrl?: string }>>([]);
+  const [activeTiktokChannelId, setActiveTiktokChannelId] = useState<string | null>(null);
 
   const fetchYouTubeStatus = () => {
     videoApi.getYouTubeStatus().then((res) => {
@@ -61,6 +65,18 @@ export function Settings() {
       } else {
         setYoutubeChannels([]);
         setActiveChannelId(null);
+      }
+    }).catch(console.error);
+  };
+
+  const fetchTikTokStatus = () => {
+    videoApi.getTikTokStatus().then((res) => {
+      if (res.is_linked) {
+        setTiktokChannels(res.channels || []);
+        setActiveTiktokChannelId(res.active_channel_id || null);
+      } else {
+        setTiktokChannels([]);
+        setActiveTiktokChannelId(null);
       }
     }).catch(console.error);
   };
@@ -85,9 +101,24 @@ export function Settings() {
             },
           };
         });
-        // Reload status
         fetchYouTubeStatus();
-        // Also sync store config
+        configApi.get().then((cfg) => {
+          setConfig(cfg);
+        });
+      } else if (event.data?.type === 'TIKTOK_AUTH_SUCCESS') {
+        const channelName = event.data?.channelName || "Cuenta de TikTok Vinculada";
+        setDraft((curr) => {
+          if (!curr) return null;
+          return {
+            ...curr,
+            tiktok: {
+              ...(curr.tiktok || { client_id: "", client_secret: "" }),
+              is_linked: true,
+              channel_name: channelName,
+            },
+          };
+        });
+        fetchTikTokStatus();
         configApi.get().then((cfg) => {
           setConfig(cfg);
         });
@@ -112,6 +143,21 @@ export function Settings() {
     }
   };
 
+  const handleTiktokConnect = async () => {
+    setLinkingTiktok(true);
+    try {
+      const { url } = await videoApi.getTikTokAuthUrl();
+      const popup = window.open(url, "tiktok_oauth", "width=600,height=700");
+      if (!popup) {
+        alert("Por favor habilita las ventanas emergentes (popups) para vincular tu cuenta de TikTok.");
+      }
+    } catch (err: any) {
+      alert(err.message || "Error al obtener URL de autenticación de TikTok. Verifica que tengas las credenciales en .env.");
+    } finally {
+      setLinkingTiktok(false);
+    }
+  };
+
   const handleSelectChannel = async (channelId: string) => {
     try {
       await videoApi.selectYouTubeChannel(channelId);
@@ -124,6 +170,18 @@ export function Settings() {
     }
   };
 
+  const handleSelectTiktokChannel = async (channelId: string) => {
+    try {
+      await videoApi.selectTikTokChannel(channelId);
+      fetchTikTokStatus();
+      const cfg = await configApi.get();
+      setConfig(cfg);
+      setDraft(cfg.settings);
+    } catch (e) {
+      console.error("Error selecting TikTok channel:", e);
+    }
+  };
+
   const handleDisconnectChannel = async (channelId: string) => {
     try {
       await videoApi.disconnectYouTubeChannel(channelId);
@@ -133,6 +191,18 @@ export function Settings() {
       setDraft(cfg.settings);
     } catch (e) {
       console.error("Error disconnecting channel:", e);
+    }
+  };
+
+  const handleDisconnectTiktokChannel = async (channelId: string) => {
+    try {
+      await videoApi.disconnectTikTokChannel(channelId);
+      fetchTikTokStatus();
+      const cfg = await configApi.get();
+      setConfig(cfg);
+      setDraft(cfg.settings);
+    } catch (e) {
+      console.error("Error disconnecting TikTok channel:", e);
     }
   };
 
@@ -159,6 +229,29 @@ export function Settings() {
     }
   };
 
+  const handleFullTiktokDisconnect = async () => {
+    try {
+      await videoApi.disconnectTikTok();
+      setDraft((curr) => {
+        if (!curr) return null;
+        return {
+          ...curr,
+          tiktok: {
+            ...(curr.tiktok || { client_id: "", client_secret: "" }),
+            is_linked: false,
+            channel_name: "",
+          },
+        };
+      });
+      setTiktokChannels([]);
+      setActiveTiktokChannelId(null);
+      const cfg = await configApi.get();
+      setConfig(cfg);
+    } catch (err) {
+      console.error("Error full disconnect TikTok:", err);
+    }
+  };
+
   useEffect(() => {
     configApi
       .get()
@@ -168,6 +261,7 @@ export function Settings() {
         setOriginalDraft(cfg.settings);
         setError(null);
         fetchYouTubeStatus();
+        fetchTikTokStatus();
       })
       .catch((err) => setError(err instanceof Error ? err.message : t("settings.loadError")))
       .finally(() => setLoading(false));
@@ -496,6 +590,153 @@ export function Settings() {
                   className="border border-neutral-800 text-xs text-zinc-400 hover:text-red-400 hover:bg-red-500/10 h-8"
                 >
                   Desvincular Todos
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+      </Collapsible>
+
+      <Collapsible title="TikTok Integración">
+        <p className="mb-3 text-xs text-muted">
+          Configura tus credenciales de la API de TikTok Developer para habilitar la vinculación de cuentas y publicación directa de videos.
+        </p>
+        <div className="grid gap-4 md:grid-cols-2">
+          <Input
+            label="TikTok Client Key"
+            value={draft.tiktok?.client_key ?? ""}
+            onChange={(e) => updateField("tiktok", "client_key", e.target.value)}
+            placeholder="e.g. aw9xxxxxxxxxxxxxx"
+          />
+          <SecretInput
+            label="TikTok Client Secret"
+            value={draft.tiktok?.client_secret ?? ""}
+            onChange={(value) => updateField("tiktok", "client_secret", value)}
+          />
+
+          <div className="col-span-2 border-t border-neutral-800/85 my-1" />
+          <div className="col-span-2 space-y-2">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-300">Verificación de Dominio / URL de TikTok</h4>
+            <p className="text-[11px] text-zinc-400 leading-normal">
+              Si TikTok muestra "This URL is not verified", selecciona el método de verificación <strong>"URL prefix (signature file)"</strong> en la consola de TikTok Developer. Copia el nombre del archivo y el código que te da TikTok y pégalos aquí abajo para que nuestro servidor los aloje automáticamente:
+            </p>
+            <div className="grid gap-4 md:grid-cols-2">
+              <Input
+                label="Nombre del Archivo de Verificación"
+                value={draft.tiktok?.verification_filename ?? ""}
+                onChange={(e) => updateField("tiktok", "verification_filename", e.target.value)}
+                placeholder="e.g. tiktok-developer-verification.txt o tiktok_xxxxxxxx.txt"
+              />
+              <Input
+                label="Código / Contenido del Archivo"
+                value={draft.tiktok?.verification_content ?? ""}
+                onChange={(e) => updateField("tiktok", "verification_content", e.target.value)}
+                placeholder="Pega aquí el código/texto de verificación largo"
+              />
+            </div>
+          </div>
+
+          <div className="col-span-2 border-t border-neutral-800/85 my-1" />
+          <div className="flex flex-col space-y-2 col-span-2 mt-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-zinc-300">Conexión con TikTok</span>
+              <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-semibold ring-1 ring-inset ${
+                draft.tiktok?.is_linked 
+                  ? "bg-cyan-500/10 text-cyan-400 ring-cyan-500/20" 
+                  : "bg-red-500/10 text-red-400 ring-red-500/20"
+              }`}>
+                {draft.tiktok?.is_linked ? `${tiktokChannels.length} Cuenta(s) Vinculada(s)` : "No Vinculado"}
+              </span>
+            </div>
+
+            {/* If linked, show the lists of channels */}
+            {draft.tiktok?.is_linked && tiktokChannels.length > 0 && (
+              <div className="space-y-2 border border-neutral-800/80 bg-neutral-900/40 p-3 rounded-xl mt-1">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 block mb-1">
+                  Cuentas / Perfiles Vinculados (Haz clic en uno para activarlo)
+                </span>
+                <div className="grid gap-2">
+                  {tiktokChannels.map((ch) => {
+                    const isActive = ch.channelId === activeTiktokChannelId;
+                    return (
+                      <div 
+                        key={ch.channelId} 
+                        onClick={() => !isActive && handleSelectTiktokChannel(ch.channelId)}
+                        className={`flex items-center justify-between p-3 rounded-xl border transition-all cursor-pointer ${
+                          isActive 
+                            ? 'bg-cyan-950/20 border-cyan-500/40 hover:bg-cyan-950/30' 
+                            : 'bg-neutral-950/40 border-neutral-800 hover:bg-neutral-800/40'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          {ch.avatarUrl ? (
+                            <img
+                              src={ch.avatarUrl}
+                              alt={ch.channelName}
+                              referrerPolicy="no-referrer"
+                              className="h-6 w-6 rounded-md object-cover border border-neutral-800 shadow-sm"
+                            />
+                          ) : (
+                            <div className={`h-2.5 w-2.5 rounded-full ${isActive ? 'bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.5)]' : 'bg-zinc-600'}`} />
+                          )}
+                          <div className="flex flex-col">
+                            <span className="text-xs font-semibold text-zinc-100">{ch.channelName}</span>
+                            {ch.username && (
+                              <span className="text-[10px] text-zinc-400">@{ch.username}</span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                          {isActive ? (
+                            <span className="text-[10px] font-bold text-cyan-400 bg-cyan-950/40 border border-cyan-500/30 px-2 py-0.5 rounded-md uppercase tracking-wider">
+                              Activo
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              className="text-[10px] text-zinc-400 hover:text-zinc-200 bg-zinc-950/60 hover:bg-zinc-800 border border-zinc-800 px-2.5 py-1 rounded-md transition-colors"
+                              onClick={() => handleSelectTiktokChannel(ch.channelId)}
+                            >
+                              Activar
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            className="p-1.5 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors border border-transparent"
+                            onClick={() => handleDisconnectTiktokChannel(ch.channelId)}
+                            title="Desvincular esta cuenta"
+                          >
+                            <Trash className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            <div className="flex gap-3 pt-2">
+              <Button
+                type="button"
+                variant="primary"
+                size="sm"
+                onClick={handleTiktokConnect}
+                disabled={linkingTiktok}
+                className="bg-zinc-950 hover:bg-zinc-900 border border-neutral-800 text-cyan-400 text-xs h-8"
+              >
+                {linkingTiktok ? "Conectando..." : draft.tiktok?.is_linked ? "Vincular Otra Cuenta" : "Vincular Cuenta de TikTok"}
+              </Button>
+
+              {draft.tiktok?.is_linked && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleFullTiktokDisconnect}
+                  className="border border-neutral-800 text-xs text-zinc-400 hover:text-red-400 hover:bg-red-500/10 h-8"
+                >
+                  Desvincular Todas
                 </Button>
               )}
             </div>

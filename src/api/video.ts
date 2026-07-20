@@ -64,4 +64,31 @@ export const videoApi = {
       method: "POST",
       body: JSON.stringify(params),
     }),
+
+  getTikTokStatus: () =>
+    apiFetch<{ is_linked: boolean; channel_name: string | null; active_channel_id?: string | null; channels?: Array<{ channelId: string; channelName: string; username?: string; avatarUrl?: string }> }>("/tiktok/status"),
+
+  getTikTokAuthUrl: () =>
+    apiFetch<{ url: string }>("/tiktok/auth-url"),
+
+  disconnectTikTok: () =>
+    apiFetch<void>("/tiktok/disconnect", { method: "POST" }),
+
+  selectTikTokChannel: (channelId: string) =>
+    apiFetch<{ status: number; message: string; activeChannelId: string }>("/tiktok/select-channel", {
+      method: "POST",
+      body: JSON.stringify({ channelId }),
+    }),
+
+  disconnectTikTokChannel: (channelId: string) =>
+    apiFetch<{ status: number; message: string }>("/tiktok/disconnect-channel", {
+      method: "POST",
+      body: JSON.stringify({ channelId }),
+    }),
+
+  uploadToTikTok: (params: { videoUrl: string; title: string }) =>
+    apiFetch<{ publishId: string; url: string }>("/tiktok/upload", {
+      method: "POST",
+      body: JSON.stringify(params),
+    }),
 };

@@ -1,6 +1,6 @@
 // webui-react/src/components/panels/DonePanel.tsx
 import { useState, useEffect } from "react";
-import { Download, RotateCcw, CheckCircle2, Youtube, Loader2, SlidersHorizontal, Scissors, Sparkles } from "lucide-react";
+import { Download, RotateCcw, CheckCircle2, Youtube, Loader2, SlidersHorizontal, Scissors, Sparkles, Music as Tiktok } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button, Input, Textarea, Select, TabBar } from "../ui";
 import { useProjectWorkspaceStore } from "../../store/useProjectWorkspaceStore";
@@ -23,6 +23,15 @@ export function DonePanel() {
 
   const isYoutubeLinked = localIsYoutubeLinked !== null ? localIsYoutubeLinked : !!config?.settings?.youtube?.is_linked;
   const youtubeChannel = localYoutubeChannel || config?.settings?.youtube?.channel_name || "";
+
+  // TikTok specific states
+  const [localIsTiktokLinked, setLocalIsTiktokLinked] = useState<boolean | null>(null);
+  const [localTiktokChannel, setLocalTiktokChannel] = useState<string>("");
+  const [tiktokChannels, setTiktokChannels] = useState<Array<{ channelId: string; channelName: string; username?: string; avatarUrl?: string }>>([]);
+  const [activeTiktokChannelId, setActiveTiktokChannelId] = useState<string | null>(null);
+
+  const isTiktokLinked = localIsTiktokLinked !== null ? localIsTiktokLinked : !!config?.settings?.tiktok?.is_linked;
+  const tiktokChannel = localTiktokChannel || config?.settings?.tiktok?.channel_name || "";
 
   const videoSubject = useVideoStore((s) => s.video_subject) || "";
   const videoScript = useVideoStore((s) => s.video_script) || "";
@@ -56,7 +65,13 @@ export function DonePanel() {
   const [ytDescription, setYtDescription] = useState("");
   const [privacyStatus, setPrivacyStatus] = useState<"private" | "unlisted" | "public">("public");
 
+  const [tiktokTitle, setTiktokTitle] = useState(() => {
+    const cleaned = getInitialTitle(videoSubject);
+    return cleaned || "Mi TikTok Video";
+  });
+
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isTiktokModalOpen, setIsTiktokModalOpen] = useState(false);
 
   // Scheduling states
   const [activeTab, setActiveTab] = useState<"now" | "schedule">("now");
@@ -71,6 +86,12 @@ export function DonePanel() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadedUrl, setUploadedUrl] = useState<string | null>(null);
+
+  // TikTok Upload states
+  const [tiktokUploadStatus, setTiktokUploadStatus] = useState<"idle" | "uploading" | "success" | "error">("idle");
+  const [tiktokUploadProgress, setTiktokUploadProgress] = useState(0);
+  const [tiktokUploadError, setTiktokUploadError] = useState<string | null>(null);
+  const [tiktokUploadedUrl, setTiktokUploadedUrl] = useState<string | null>(null);
 
   const [loadingAutoHashtags, setLoadingAutoHashtags] = useState(false);
   const [generatingHashtags, setGeneratingHashtags] = useState(false);
@@ -99,6 +120,27 @@ export function DonePanel() {
       });
   };
 
+  // Helper to fetch direct TikTok details
+  const fetchTikTokStatus = () => {
+    videoApi.getTikTokStatus()
+      .then((res) => {
+        if (res.is_linked) {
+          setLocalIsTiktokLinked(true);
+          setLocalTiktokChannel(res.channel_name || "");
+          setTiktokChannels(res.channels || []);
+          setActiveTiktokChannelId(res.active_channel_id || null);
+        } else {
+          setLocalIsTiktokLinked(false);
+          setLocalTiktokChannel("");
+          setTiktokChannels([]);
+          setActiveTiktokChannelId(null);
+        }
+      })
+      .catch((err) => {
+        console.error("Error fetching direct tiktok status on DonePanel:", err);
+      });
+  };
+
   const handleSelectChannel = async (channelId: string) => {
     try {
       await videoApi.selectYouTubeChannel(channelId);
@@ -108,7 +150,16 @@ export function DonePanel() {
     }
   };
 
-  // Load latest configuration on mount to ensure YouTube linked status is correct
+  const handleSelectTiktokChannel = async (channelId: string) => {
+    try {
+      await videoApi.selectTikTokChannel(channelId);
+      fetchTikTokStatus();
+    } catch (e) {
+      console.error("Error switching TikTok channel from DonePanel:", e);
+    }
+  };
+
+  // Load latest configuration on mount to ensure linked status is correct
   useEffect(() => {
     configApi
       .get()
@@ -118,12 +169,17 @@ export function DonePanel() {
           setLocalIsYoutubeLinked(!!cfg.settings.youtube.is_linked);
           setLocalYoutubeChannel(cfg.settings.youtube.channel_name || "");
         }
+        if (cfg?.settings?.tiktok) {
+          setLocalIsTiktokLinked(!!cfg.settings.tiktok.is_linked);
+          setLocalTiktokChannel(cfg.settings.tiktok.channel_name || "");
+        }
       })
       .catch((err) => {
         console.error("Error fetching config on DonePanel mount:", err);
       });
 
     fetchYouTubeStatus();
+    fetchTikTokStatus();
   }, [setConfig]);
 
   // Auto-generate hashtags on mount (Option 1)
@@ -210,6 +266,31 @@ export function DonePanel() {
       console.error(err);
       setUploadError(err.message || "Error al subir video a YouTube");
       setUploadStatus("error");
+    }
+  };
+
+  const handleTiktokUpload = async () => {
+    if (!isTiktokLinked || videoUrls.length === 0) return;
+    setTiktokUploadStatus("uploading");
+    setTiktokUploadProgress(15);
+    setTiktokUploadError(null);
+    setTiktokUploadedUrl(null);
+
+    try {
+      const videoUrl = videoUrls[0];
+      setTiktokUploadProgress(45);
+
+      const res = await videoApi.uploadToTikTok({
+        videoUrl,
+        title: tiktokTitle || "TikTok Video",
+      });
+      setTiktokUploadProgress(100);
+      setTiktokUploadStatus("success");
+      setTiktokUploadedUrl(res.url || null);
+    } catch (err: any) {
+      console.error(err);
+      setTiktokUploadError(err.message || "Error al subir video a TikTok");
+      setTiktokUploadStatus("error");
     }
   };
 
@@ -334,7 +415,7 @@ export function DonePanel() {
                   {uploadStatus === "uploading" 
                     ? `Subiendo a YouTube (${uploadProgress}%)`
                     : uploadStatus === "error"
-                    ? "Error en la subida"
+                    ? "Error en la subida a YouTube"
                     : t("panels.review.uploadSuccess")
                   }
                 </span>
@@ -379,29 +460,71 @@ export function DonePanel() {
             </div>
           )}
 
-          <div className="flex flex-col sm:flex-row gap-3 w-full justify-center">
-            <Button 
-              variant="ghost" 
-              onClick={handleEditClips}
-              className="flex items-center justify-center gap-2 border-accent/20 text-accent hover:bg-accent/10 hover:text-accent-hover"
-            >
-              <Scissors className="h-4 w-4" />
-              {t("panels.done.editClips") || "Volver a Revisión"}
-            </Button>
+          {/* TikTok Upload Status Card */}
+          {(tiktokUploadStatus !== "idle" || tiktokUploadError) && (
+            <div className={`rounded-xl border p-4 text-left transition-all duration-300 ${
+              tiktokUploadStatus === "uploading" 
+                ? "bg-cyan-500/5 border-cyan-500/20 animate-pulse" 
+                : tiktokUploadStatus === "error"
+                ? "bg-red-500/5 border-red-500/20"
+                : "bg-green-500/5 border-green-500/20"
+            }`}>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-semibold text-foreground">
+                  {tiktokUploadStatus === "uploading" 
+                    ? `Subiendo a TikTok (${tiktokUploadProgress}%)`
+                    : tiktokUploadStatus === "error"
+                    ? "Error en la subida a TikTok"
+                    : "Publicado en TikTok con éxito"
+                  }
+                </span>
+                {tiktokUploadStatus === "uploading" ? (
+                  <Loader2 className="h-4 w-4 animate-spin text-cyan-400" />
+                ) : tiktokUploadStatus === "error" ? (
+                  <span className="text-red-500 text-xs">❌</span>
+                ) : (
+                  <CheckCircle2 className="h-4 w-4 text-green-500" />
+                )}
+              </div>
+              {tiktokUploadStatus === "uploading" && (
+                <div className="w-full bg-border rounded-full h-1.5 overflow-hidden">
+                  <div 
+                    className="bg-cyan-400 h-full transition-all duration-300 ease-out" 
+                    style={{ width: `${tiktokUploadProgress}%` }}
+                  />
+                </div>
+              )}
+              {tiktokUploadStatus === "success" && (
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">
+                    Subido a la cuenta de TikTok: <strong>{tiktokChannel}</strong>
+                  </p>
+                  {tiktokUploadedUrl && (
+                    <a
+                      href={tiktokUploadedUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-block text-xs font-semibold text-cyan-400 hover:underline mt-1 bg-cyan-950/40 border border-cyan-800/40 px-2 py-1 rounded"
+                    >
+                      🔗 Ver Video en TikTok
+                    </a>
+                  )}
+                </div>
+              )}
+              {tiktokUploadStatus === "error" && (
+                <p className="text-xs text-red-400 font-medium">
+                  {tiktokUploadError}
+                </p>
+              )}
+            </div>
+          )}
 
-            <Button 
-              variant="ghost" 
-              onClick={handleBack}
-              className="flex items-center justify-center gap-2"
-            >
-              <SlidersHorizontal className="h-4 w-4" />
-              {t("panels.review.editSettings")}
-            </Button>
-
+          {/* Platform Upload Buttons (YouTube + TikTok) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
             <Button
               onClick={() => setIsModalOpen(true)}
               disabled={!isYoutubeLinked || uploadStatus === "uploading" || uploadStatus === "success"}
-              className={`flex-1 flex items-center justify-center gap-2 font-medium ${
+              className={`flex items-center justify-center gap-2 font-medium py-2.5 rounded-xl transition-all ${
                 isYoutubeLinked 
                   ? "bg-red-600 hover:bg-red-700 text-white focus:ring-red-500" 
                   : "bg-muted/50 text-muted-foreground cursor-not-allowed hover:bg-muted/50 border border-border"
@@ -417,19 +540,64 @@ export function DonePanel() {
               }
             </Button>
 
+            <Button
+              onClick={() => setIsTiktokModalOpen(true)}
+              disabled={!isTiktokLinked || tiktokUploadStatus === "uploading" || tiktokUploadStatus === "success"}
+              className={`flex items-center justify-center gap-2 font-medium py-2.5 rounded-xl transition-all ${
+                isTiktokLinked 
+                  ? "bg-zinc-950 hover:bg-zinc-900 border border-neutral-800 text-cyan-400 focus:ring-cyan-500" 
+                  : "bg-muted/50 text-muted-foreground cursor-not-allowed hover:bg-muted/50 border border-border"
+              }`}
+              title={!isTiktokLinked ? "TikTok no vinculado" : undefined}
+            >
+              <Tiktok className="h-4 w-4" />
+              {tiktokUploadStatus === "success" 
+                ? "Subido a TikTok" 
+                : tiktokUploadStatus === "uploading"
+                ? `Subiendo...`
+                : "Subir a TikTok"
+              }
+            </Button>
+          </div>
+
+          {/* Secondary Actions */}
+          <div className="flex flex-wrap gap-2.5 w-full justify-center pt-2">
+            <Button 
+              variant="ghost" 
+              onClick={handleEditClips}
+              className="flex items-center justify-center gap-2 border-accent/20 text-accent hover:bg-accent/10 hover:text-accent-hover px-4 py-2"
+            >
+              <Scissors className="h-4 w-4" />
+              {t("panels.done.editClips") || "Volver a Revisión"}
+            </Button>
+
+            <Button 
+              variant="ghost" 
+              onClick={handleBack}
+              className="flex items-center justify-center gap-2 px-4 py-2"
+            >
+              <SlidersHorizontal className="h-4 w-4" />
+              {t("panels.review.editSettings")}
+            </Button>
+
             <Button 
               onClick={handleMakeAnother} 
-              className="flex items-center justify-center gap-2"
+              className="flex items-center justify-center gap-2 px-4 py-2"
             >
               <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
               {t("panels.done.makeAnother")}
             </Button>
           </div>
 
-          {!isYoutubeLinked && (
-            <p className="text-xs text-muted-foreground text-center bg-muted/30 py-2 px-4 rounded-lg border border-border/50 max-w-sm mx-auto">
-              ℹ️ {t("panels.review.notLinkedYoutube")}
-            </p>
+          {(!isYoutubeLinked || !isTiktokLinked) && (
+            <div className="text-xs text-muted-foreground text-center bg-muted/30 py-3 px-4 rounded-xl border border-border/50 max-w-sm mx-auto space-y-1">
+              {!isYoutubeLinked && (
+                <p>ℹ️ {t("panels.review.notLinkedYoutube")}</p>
+              )}
+              {!isTiktokLinked && (
+                <p>ℹ️ TikTok no está vinculado. Vincúlalo en Ajustes para publicar directamente.</p>
+              )}
+            </div>
           )}
         </div>
       )}
@@ -581,6 +749,106 @@ export function DonePanel() {
                 className="bg-red-600 hover:bg-red-700 text-white text-xs py-1.5 h-9"
               >
                 {activeTab === "now" ? "Confirmar y Subir" : "Confirmar y Programar"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TikTok Detail Form Pop-up Modal */}
+      {isTiktokModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+          <div className="bg-neutral-900 border border-neutral-800 rounded-2xl w-full max-w-lg p-6 shadow-2xl text-left space-y-4 relative">
+            <div className="flex items-center justify-between pb-3 border-b border-neutral-800">
+              <div className="flex items-center gap-2">
+                <Tiktok className="h-5 w-5 text-cyan-400" />
+                <h3 className="text-sm font-bold uppercase tracking-wider text-foreground">
+                  Detalles del Video de TikTok
+                </h3>
+              </div>
+              <button 
+                onClick={() => setIsTiktokModalOpen(false)} 
+                className="text-muted-foreground hover:text-foreground text-sm font-semibold px-2 py-1 rounded hover:bg-neutral-800"
+              >
+                ✕
+              </button>
+            </div>
+
+            {tiktokChannels.length > 1 && (
+              <Select
+                label="Subir a la Cuenta de TikTok"
+                value={activeTiktokChannelId || ""}
+                onChange={(e) => handleSelectTiktokChannel(e.target.value)}
+                options={tiktokChannels.map((ch) => ({ value: ch.channelId, label: ch.channelName }))}
+                className="text-xs font-medium"
+              />
+            )}
+
+            {tiktokChannels.length === 1 && (
+              <div className="text-[11px] bg-neutral-950/40 border border-neutral-800/80 px-3 py-2 rounded-xl flex items-center justify-between">
+                <span className="text-zinc-400">Cuenta de destino:</span>
+                <span className="text-zinc-200 font-bold">{tiktokChannels[0].channelName}</span>
+              </div>
+            )}
+
+            <div className="flex flex-col gap-1.5">
+              <Textarea
+                label="Texto de Publicación / Descripción del Video"
+                value={tiktokTitle}
+                onChange={(e) => setTiktokTitle(e.target.value)}
+                placeholder="Añade descripción y hashtags para TikTok"
+                rows={4}
+                className="text-xs"
+              />
+              <div className="flex items-center justify-between">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="text-[10px] h-7 text-cyan-400 hover:text-cyan-300 flex items-center gap-1.5 px-2 bg-cyan-950/20 hover:bg-cyan-900/30 border border-cyan-800/20 rounded-md"
+                  onClick={handleGenerateHashtagsManual}
+                  disabled={generatingHashtags || loadingAutoHashtags}
+                >
+                  {generatingHashtags || loadingAutoHashtags ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <Sparkles className="h-3 w-3" />
+                  )}
+                  Generar Hashtags con IA
+                </Button>
+                {loadingAutoHashtags && (
+                  <span className="text-[10px] text-muted-foreground animate-pulse">
+                    Autogenerando hashtags...
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="text-[11px] text-zinc-400 bg-neutral-950/40 border border-neutral-800/80 p-3 rounded-xl flex flex-col gap-1 leading-relaxed">
+              <span className="text-zinc-300 font-semibold flex items-center gap-1">
+                📌 Nota de TikTok API:
+              </span>
+              <span>
+                El video se subirá a tu bandeja de borradores en tu app de TikTok, donde podrás publicarlo inmediatamente de forma segura y directa.
+              </span>
+            </div>
+
+            <div className="flex gap-3 justify-end pt-3 border-t border-neutral-800">
+              <Button 
+                variant="ghost" 
+                onClick={() => setIsTiktokModalOpen(false)}
+                className="text-xs py-1.5 h-9"
+              >
+                Cancelar
+              </Button>
+              <Button 
+                onClick={() => {
+                  setIsTiktokModalOpen(false);
+                  handleTiktokUpload();
+                }}
+                className="bg-cyan-500 hover:bg-cyan-600 text-zinc-950 text-xs py-1.5 h-9 font-bold"
+              >
+                Confirmar y Subir a TikTok
               </Button>
             </div>
           </div>

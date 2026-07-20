@@ -172,6 +172,16 @@ export interface EditableConfig {
     is_linked: boolean;
     client_id: string;
   };
+  tiktok: {
+    client_id: string;
+    client_key?: string;
+    client_secret: string;
+    is_linked: boolean;
+    account_name: string;
+    channel_name?: string;
+    verification_filename?: string;
+    verification_content?: string;
+  };
 }
 
 export interface BgmFile {
