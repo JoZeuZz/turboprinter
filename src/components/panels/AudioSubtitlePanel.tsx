@@ -1,6 +1,7 @@
 // webui-react/src/components/panels/AudioSubtitlePanel.tsx
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Play, Pause } from "lucide-react";
 import {
   Select,
   Slider,
@@ -30,6 +31,9 @@ export function AudioSubtitlePanel() {
   const { t } = useTranslation();
   const store = useVideoStore();
   const [bgmFiles, setBgmFiles] = useState<BgmFile[]>([]);
+  const [previewTrack, setPreviewTrack] = useState<string | null>(null);
+  const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
+  const [playTimeout, setPlayTimeout] = useState<any>(null);
 
   const POSITION_OPTIONS = [
     { value: "bottom", label: t("audioSubtitle.positionBottom") },
@@ -47,6 +51,59 @@ export function AudioSubtitlePanel() {
   useEffect(() => {
     videoApi.getBgmList().then((r) => setBgmFiles(r.files)).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    return () => {
+      if (audioElement) {
+        audioElement.pause();
+      }
+      if (playTimeout) {
+        clearTimeout(playTimeout);
+      }
+    };
+  }, [audioElement, playTimeout]);
+
+  const togglePlayBgm = (url: string) => {
+    if (previewTrack === url) {
+      if (audioElement) {
+        audioElement.pause();
+      }
+      if (playTimeout) {
+        clearTimeout(playTimeout);
+      }
+      setPreviewTrack(null);
+      setAudioElement(null);
+      setPlayTimeout(null);
+    } else {
+      if (audioElement) {
+        audioElement.pause();
+      }
+      if (playTimeout) {
+        clearTimeout(playTimeout);
+      }
+
+      const audio = new Audio(url);
+      audio.volume = 0.4;
+      setPreviewTrack(url);
+      setAudioElement(audio);
+
+      audio.play().catch((err) => console.log("Audio play error:", err));
+
+      const timeoutId = setTimeout(() => {
+        audio.pause();
+        setPreviewTrack(null);
+        setAudioElement(null);
+      }, 6000); // 6-second preview limit
+
+      setPlayTimeout(timeoutId);
+
+      audio.onended = () => {
+        clearTimeout(timeoutId);
+        setPreviewTrack(null);
+        setAudioElement(null);
+      };
+    }
+  };
 
   const bgmOptions = [
     { value: "random", label: t("audioSubtitle.bgmRandom") },
@@ -122,6 +179,80 @@ export function AudioSubtitlePanel() {
         <p className="text-[11px] text-muted font-medium leading-relaxed -mt-2 pb-1">
           🎵 <strong>Manual (Option A) Active:</strong> You have selected a specific background track.
         </p>
+      )}
+
+      {/* Manual Track Selection List with Preview */}
+      {bgmFiles.length > 0 && (
+        <div className="flex flex-col gap-1.5 -mt-1 pb-1">
+          <label className="text-xs font-semibold text-foreground/80">
+            Escuchar fragmento (6s) y seleccionar:
+          </label>
+          <div className="space-y-1.5 max-h-[180px] overflow-y-auto pr-1">
+            {bgmFiles.map((file) => {
+              const isSelected = store.bgm_type === "file" && store.bgm_file === file.file;
+              const isPlaying = previewTrack === file.file;
+
+              return (
+                <div
+                  key={file.file}
+                  onClick={() => {
+                    store.set("bgm_type", "file");
+                    store.set("bgm_file", file.file);
+                  }}
+                  className={`flex items-center justify-between p-2 rounded-lg border transition-all cursor-pointer ${
+                    isSelected
+                      ? "border-accent bg-accent/5 shadow-[0_0_8px_rgba(var(--accent-rgb),0.12)]"
+                      : "border-border bg-surface-2 hover:border-accent/40"
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        togglePlayBgm(file.file);
+                      }}
+                      className={`flex items-center justify-center w-7 h-7 rounded-full transition-all shrink-0 ${
+                        isPlaying
+                          ? "bg-accent text-accent-foreground animate-pulse"
+                          : "bg-surface-3 text-foreground hover:bg-accent hover:text-accent-foreground"
+                      }`}
+                      title="Escuchar fragmento (6s)"
+                    >
+                      {isPlaying ? (
+                        <Pause className="h-3.5 w-3.5" />
+                      ) : (
+                        <Play className="h-3.5 w-3.5 ml-0.5" />
+                      )}
+                    </button>
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-semibold text-foreground truncate">
+                        {file.name}
+                      </p>
+                      <p className="text-[9px] text-muted truncate">
+                        {(file.size / (1024 * 1024)).toFixed(2)} MB
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <div
+                      className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center transition-all ${
+                        isSelected
+                          ? "border-accent bg-accent"
+                          : "border-muted"
+                      }`}
+                    >
+                      {isSelected && (
+                        <div className="w-1.5 h-1.5 rounded-full bg-accent-foreground" />
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       )}
 
       <Slider
