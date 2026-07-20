@@ -158,7 +158,8 @@
       "subtitleBackground": "Subtitle background",
       "backgroundColor": "Background Color",
       "generate": "Generate Video",
-      "backToReview": "View final video"
+      "backToReview": "View final video",
+      "applyAndBack": "Apply and Back to Editor"
     },
     "review": {
       "notAvailable": "Review not available — rendering directly",
@@ -394,6 +395,7 @@
     "placeholder": "e.g., Spooky Stories",
     "edit": "Edit Preset",
     "save": "Save",
+    "cancel": "Cancel",
     "duplicate": "Duplicate",
     "delete": "Delete",
     "setDefault": "Set as default",

@@ -158,7 +158,8 @@
       "subtitleBackground": "Fondo de subtítulos",
       "backgroundColor": "Color de fondo",
       "generate": "Generar video",
-      "backToReview": "Ver video final"
+      "backToReview": "Ver video final",
+      "applyAndBack": "Aplicar y Volver al Editor"
     },
     "review": {
       "notAvailable": "Revisión no disponible — renderizando directamente",
@@ -394,6 +395,7 @@
     "placeholder": "Ej. Historias de Terror",
     "edit": "Editar Preset",
     "save": "Guardar",
+    "cancel": "Cancelar",
     "duplicate": "Duplicar",
     "delete": "Eliminar",
     "setDefault": "Hacer por defecto",
