@@ -193,6 +193,20 @@ const SAMPLE_VIDEOS = [
   }
 ];
 
+function cleanScriptSymbols(text: string): string {
+  if (!text) return "";
+  return text
+    // Remove asterisks (*) and underscores (_) used for markdown bold/italic
+    .replace(/[\*_]/g, "")
+    // Remove various types of quotation marks: ", “, ”, «, », ‘, ’, '
+    .replace(/["“”«»‘’']/g, "")
+    // Remove parentheses, brackets and braces: (, ), [, ], {, }
+    .replace(/[()[\]{}]/g, "")
+    // Clean up any double spaces that might have been introduced
+    .replace(/ {2,}/g, " ")
+    .trim();
+}
+
 // Helper to call LLM (Gemini or local/OpenAI compatible server)
 async function generateGeminiContent(prompt: string, jsonMode = false, systemInstruction?: string): Promise<string> {
   const llmProvider = process.env.LLM_PROVIDER || "gemini";
@@ -1235,7 +1249,9 @@ async function startServer() {
     let prompt = `Escribe un guión de video sobre "${video_subject}" en idioma ${video_language}. Es CRÍTICO que el guión tenga exactamente ${paragraph_number} párrafos bien estructurados, completos y detallados.
 Cada párrafo debe ser sustancial y desarrollado por completo (debe tener un rango estricto de entre 45 y 55 palabras por párrafo, compuesto por 3 a 5 oraciones ricas y descriptivas, óptimo para narrar una historia o un documental).
 La longitud total del guión completo debe ser de aproximadamente ${paragraph_number * 45} a ${paragraph_number * 55} palabras en total. A medida que aumenta el número de párrafos, el guión general debe ser proporcionalmente más largo de forma lineal y acumulativa (por ejemplo, 3 párrafos deben sumar unas 150 palabras en total, y 4 párrafos deben sumar unas 200 palabras en total). No reduzcas la longitud de los párrafos individuales al tener más párrafos; cada uno de ellos debe mantener de forma consistente la profundidad, extensión y cantidad de palabras especificadas.
-Separa cada párrafo estrictamente con dos saltos de línea (\\n\\n). Devuelve SOLAMENTE el texto del guión, sin títulos, introducciones ni comentarios adicionales.`;
+Separa cada párrafo estrictamente con dos saltos de línea (\\n\\n). Devuelve SOLAMENTE el texto del guión, sin títulos, introducciones ni comentarios adicionales.
+
+CRÍTICO: No utilices NINGÚN tipo de formato de texto como asteriscos (* o **), comillas (" o “ o ”) o palabras entre paréntesis o corchetes, ya que el guión se usará directamente con un generador de voz automática y estos caracteres provocan lecturas raras. Escribe solo texto limpio y natural.`;
 
     if (video_script_prompt) {
       prompt += `\n\nInstrucciones adicionales para el guión:\n${video_script_prompt}`;
@@ -1246,7 +1262,8 @@ Separa cada párrafo estrictamente con dos saltos de línea (\\n\\n). Devuelve S
       finalSystemPrompt += `\n\n[INSTRUCCIÓN DE PRIORIDAD ABSOLUTA PARA EL NÚMERO DE PÁRRAFOS]: El usuario ha solicitado exactamente ${paragraph_number} párrafos. Ignora cualquier restricción de límite de palabras total anterior (como "extensión total de entre 120 y 140 palabras" o similar). En su lugar, aplica ese límite de palabras a cada párrafo de manera individual (es decir, cada uno de los ${paragraph_number} párrafos debe tener unas 45-55 palabras de forma consistente). El guion completo debe crecer de manera lineal y proporcional (aproximadamente de ${paragraph_number * 45} a ${paragraph_number * 55} palabras en total) para asegurar que la duración de la locución aumente según la cantidad de párrafos solicitados.`;
     }
 
-    const scriptText = await generateGeminiContent(prompt, false, finalSystemPrompt || undefined);
+    const rawScript = await generateGeminiContent(prompt, false, finalSystemPrompt || undefined);
+    const scriptText = cleanScriptSymbols(rawScript);
 
     res.json({ status: 200, message: "ok", data: { video_script: scriptText } });
   }));
@@ -2212,8 +2229,11 @@ Es CRÍTICO que el guión tenga EXACTAMENTE ${paragraph_number} párrafos, separ
 Cada párrafo debe ser sustancial y desarrollado por completo (aproximadamente de 50 a 70 palabras por párrafo, compuesto por 3 a 5 oraciones ricas y descriptivas).
 A medida que aumenta el número de párrafos, el guión general debe ser proporcionalmente más largo; bajo ninguna circunstancia acortes ni apresures los párrafos individuales al tener más de ellos. Cada párrafo debe mantener la misma profundidad, extensión y desarrollo completo de una parte de la historia con transiciones naturales hacia el siguiente.
 No repitas información. No uses relleno. Cada frase debe aportar algo interesante.
-Devuelve ÚNICAMENTE el texto del guión, sin títulos, encabezados, listas, notas ni comentarios adicionales.`;
-      scriptText = await generateGeminiContent(prompt);
+Devuelve ÚNICAMENTE el texto del guión, sin títulos, encabezados, listas, notas ni comentarios adicionales.
+
+CRÍTICO: No utilices NINGÚN tipo de formato de texto como asteriscos (* o **), comillas (" o “ o ”) o palabras entre paréntesis o corchetes, ya que el guión se usará directamente con un generador de voz automática y estos caracteres provocan lecturas raras. Escribe solo texto limpio y natural.`;
+      const rawScript = await generateGeminiContent(prompt);
+      scriptText = cleanScriptSymbols(rawScript);
     }
 
     const newProject = {
@@ -2249,7 +2269,7 @@ Devuelve ÚNICAMENTE el texto del guión, sin títulos, encabezados, listas, not
       project_id: projectId,
       topic: topic || "Guión de Video",
       language: language,
-      script: script,
+      script: cleanScriptSymbols(script),
       has_script: true,
       has_shot_plan: false,
       has_selected_media: false,
@@ -2273,7 +2293,7 @@ Devuelve ÚNICAMENTE el texto del guión, sin títulos, encabezados, listas, not
   app.post("/api/v1/projects/from-reddit", wrap(async (req: any, res: any) => {
     const { url, title, body, language = "es" } = req.body;
     const projectId = "proj_" + Math.random().toString(36).substring(2, 9);
-    const script = `${title}\n\n${body}`;
+    const script = cleanScriptSymbols(`${title}\n\n${body}`);
 
     const newProject = {
       project_id: projectId,
@@ -2367,6 +2387,9 @@ Devuelve ÚNICAMENTE el texto del guión, sin títulos, encabezados, listas, not
     const p = projects.get(req.params.id);
     if (!p) {
       return res.status(404).json({ status: 404, message: "Project not found", data: null });
+    }
+    if (req.body && req.body.script) {
+      req.body.script = cleanScriptSymbols(req.body.script);
     }
     const updated = { ...p, ...req.body };
     const oldNiche = p.params?.video_niche;
