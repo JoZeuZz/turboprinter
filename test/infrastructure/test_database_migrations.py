@@ -34,3 +34,19 @@ def test_apply_pending_applies_jobs_migration(tmp_path):
 
     inspector = inspect(engine)
     assert "jobs" in inspector.get_table_names()
+
+
+def test_metrics_migration_adds_expanded_columns():
+    from sqlalchemy import text
+    from app.infrastructure.database.engine import get_engine
+
+    with get_engine().connect() as connection:
+        rows = connection.execute(text("PRAGMA table_info(metrics_snapshots)")).fetchall()
+    columns = {row[1] for row in rows}
+
+    assert "external_video_id" in columns
+    assert "platform" in columns
+    assert "collected_at" in columns
+    assert "age_window" in columns
+    assert "impressions" in columns
+    assert "metadata_json" in columns

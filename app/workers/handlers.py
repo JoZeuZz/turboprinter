@@ -4,13 +4,15 @@ import json
 from typing import Callable
 
 from app.application.services.media_aggregator import MediaAggregator
+from app.application.services.metrics import MetricsService
 from app.application.services.publication_service import PublicationService
 from app.application.services.project_lifecycle import create_project
 from app.application.services.project_preflight import ProjectPreflightService
 from app.application.services.shot_planner import ShotPlanner
 from app.application.services.timeline_builder import TimelineBuilder
+from app.domain.operational.models import AGE_WINDOWS, Job
+from app.infrastructure.database.repositories.publications import PublicationRepository
 from app.application.workflows.render_project import render_project_from_store
-from app.domain.operational.models import Job
 from app.infrastructure.llm.structured_output import LiteLLMStructuredProvider
 from app.infrastructure.media_providers.local_provider import LocalLibraryProvider
 from app.infrastructure.media_providers.stock_providers import (
@@ -180,6 +182,25 @@ def handle_publish_video(job: Job) -> None:
         raise RuntimeError(publication.error or "publication failed")
 
 
+def handle_collect_metrics(job: Job) -> None:
+    payload = _payload(job)
+    provider_name = payload.get("provider", "stub")
+    age_windows = payload.get("age_windows") or list(AGE_WINDOWS)
+    publication_repo = PublicationRepository()
+    if payload.get("publication_id"):
+        publication = publication_repo.get(str(payload["publication_id"]))
+        if publication is None:
+            raise ValueError("publication not found")
+        publications = [publication]
+    elif payload.get("workspace_id"):
+        publications = publication_repo.list_filtered(workspace_id=str(payload["workspace_id"]), status="published", limit=500)
+    else:
+        publications = publication_repo.list_filtered(status="published", limit=500)
+    service = MetricsService()
+    for publication in publications:
+        service.collect_for_publication(publication, provider_name=provider_name, age_windows=list(age_windows))
+
+
 HANDLERS: dict[str, Callable[[Job], None]] = {
     "generate_project": handle_generate_project,
     "plan_project": handle_plan_project,
@@ -189,4 +210,5 @@ HANDLERS: dict[str, Callable[[Job], None]] = {
     "render_project": handle_render_project,
     "full_project_pipeline": handle_full_project_pipeline,
     "publish_video": handle_publish_video,
+    "collect_metrics": handle_collect_metrics,
 }

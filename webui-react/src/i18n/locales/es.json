@@ -61,6 +61,18 @@
     "dryRunPublish": "Dry-run publish",
     "openPanel": "Publicar"
   },
+  "metrics": {
+    "open": "Métricas",
+    "ageWindow": "Ventana",
+    "views": "Vistas",
+    "viewsShort": "vistas",
+    "impressions": "Impresiones",
+    "ctr": "CTR",
+    "save": "Guardar métricas",
+    "workspaceSummary": "Resumen de métricas",
+    "loadSummary": "Ver métricas",
+    "empty": "Sin métricas todavía"
+  },
   "sidebar": {
     "newProject": "Nuevo proyecto",
     "draft": "Borrador",

@@ -48,15 +48,27 @@ class Publication(BaseModel):
     created_at: datetime = Field(default_factory=_utcnow)
 
 
+AGE_WINDOWS: tuple[str, ...] = ("2h", "6h", "24h", "48h", "7d", "28d")
+
+
 class MetricsSnapshot(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid4()))
     publication_id: str
-    captured_at: datetime = Field(default_factory=_utcnow)
+    external_video_id: str | None = None
+    platform: str = "youtube"
+    collected_at: datetime = Field(default_factory=_utcnow)
+    age_window: str = "24h"
     views: int | None = None
+    impressions: int | None = None
+    ctr: float | None = None
+    average_view_duration: float | None = None
+    average_view_percentage: float | None = None
     likes: int | None = None
     comments: int | None = None
-    shares: int | None = None
-    raw_json: str | None = None
+    subscribers_gained: int | None = None
+    estimated_revenue: float | None = None
+    rpm: float | None = None
+    metadata: dict = Field(default_factory=dict)
 
 
 class Experiment(BaseModel):

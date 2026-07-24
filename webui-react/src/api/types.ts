@@ -777,3 +777,61 @@ export interface DraftPublicationRequest {
 export interface PublishPublicationRequest {
   dry_run?: boolean | null;
 }
+
+export interface MetricsSnapshot {
+  id: string;
+  publication_id: string;
+  external_video_id: string | null;
+  platform: string;
+  collected_at: string;
+  age_window: string;
+  views: number | null;
+  impressions: number | null;
+  ctr: number | null;
+  average_view_duration: number | null;
+  average_view_percentage: number | null;
+  likes: number | null;
+  comments: number | null;
+  subscribers_gained: number | null;
+  estimated_revenue: number | null;
+  rpm: number | null;
+  metadata: Record<string, unknown>;
+}
+
+export interface ManualMetricsRequest {
+  age_window: string;
+  views?: number | null;
+  impressions?: number | null;
+  ctr?: number | null;
+  average_view_duration?: number | null;
+  average_view_percentage?: number | null;
+  likes?: number | null;
+  comments?: number | null;
+  subscribers_gained?: number | null;
+  estimated_revenue?: number | null;
+  rpm?: number | null;
+}
+
+export interface MetricsTotals {
+  snapshots: number;
+  views: number;
+  impressions: number;
+  ctr: number | null;
+  average_view_percentage: number | null;
+  likes: number;
+  comments: number;
+  subscribers_gained: number;
+  estimated_revenue: number;
+  rpm: number | null;
+}
+
+export interface MetricsGroupRow extends MetricsTotals {
+  key: string;
+}
+
+export interface WorkspaceMetricsSummary {
+  workspace_id: string;
+  totals: MetricsTotals;
+  groups: Record<string, MetricsGroupRow[]>;
+  snapshots: MetricsSnapshot[];
+}

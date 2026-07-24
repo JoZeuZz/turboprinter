@@ -6,6 +6,7 @@ import { PlusCircle } from "lucide-react";
 import { Button, Input, Select } from "../components/ui";
 import { useWorkspacesStore } from "../store/useWorkspacesStore";
 import { useJobsStore } from "../store/useJobsStore";
+import { useMetricsStore } from "../store/useMetricsStore";
 import type { Workspace, WorkspaceUpsertRequest } from "../api/types";
 
 const LANGUAGE_OPTIONS = [
@@ -39,11 +40,13 @@ export function Workspaces() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { workspaces, fetchAll, create, update, remove } = useWorkspacesStore();
+  const { workspaceSummaries, loadWorkspaceSummary } = useMetricsStore();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<FormState>(toFormState());
   const [formError, setFormError] = useState<string | null>(null);
   const [pipelineTopics, setPipelineTopics] = useState<Record<string, string>>({});
+  const [openSummaryId, setOpenSummaryId] = useState<string | null>(null);
 
   useEffect(() => {
     void fetchAll();
@@ -128,6 +131,16 @@ export function Workspaces() {
                   <Button variant="ghost" size="sm" onClick={() => void handleRunPipeline(w)}>
                     {t("channels.runPipeline")}
                   </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setOpenSummaryId(openSummaryId === w.id ? null : w.id);
+                      void loadWorkspaceSummary(w.id);
+                    }}
+                  >
+                    {t("metrics.loadSummary")}
+                  </Button>
                   <Button variant="ghost" size="sm" onClick={() => openEditForm(w)}>
                     {t("channels.edit")}
                   </Button>
@@ -135,6 +148,30 @@ export function Workspaces() {
                     {t("channels.delete")}
                   </Button>
                 </div>
+                {openSummaryId === w.id && (
+                  <div className="basis-full rounded-md border border-border bg-background/40 p-3 text-xs text-muted">
+                    <div className="font-medium text-foreground">{t("metrics.workspaceSummary")}</div>
+                    {workspaceSummaries[w.id] ? (
+                      <div className="mt-2 overflow-x-auto">
+                        <div className="mb-2">{workspaceSummaries[w.id].totals.views} {t("metrics.viewsShort")}</div>
+                        <table className="w-full text-left">
+                          <thead><tr><th>Group</th><th>Key</th><th>Views</th><th>CTR</th></tr></thead>
+                          <tbody>
+                            {Object.entries(workspaceSummaries[w.id].groups).flatMap(([group, rows]) =>
+                              rows.map((row) => (
+                                <tr key={`${group}:${row.key}`}>
+                                  <td>{group}</td><td>{row.key}</td><td>{row.views}</td><td>{row.ctr ?? "-"}</td>
+                                </tr>
+                              ))
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <div className="mt-2">{t("metrics.empty")}</div>
+                    )}
+                  </div>
+                )}
               </li>
             ))}
           </ul>

@@ -181,3 +181,15 @@ def test_run_full_pipeline_404s_on_missing_project_id(client):
         json={"project_id": "does-not-exist", "language": "es"},
     )
     assert r.status_code == 404
+
+
+def test_create_collect_metrics_job(client):
+    c, _store = client
+    r = c.post(
+        "/api/v1/jobs",
+        json={"type": "collect_metrics", "workspace_id": "ws-1", "payload": {"provider": "stub"}},
+    )
+
+    assert r.status_code == 200
+    job = r.json()["data"]["job"]
+    assert job["type"] == "collect_metrics"

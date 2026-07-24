@@ -13,6 +13,7 @@ from app.controllers.v1 import (
     config,
     jobs,
     llm,
+    metrics,
     projects,
     prompt_templates,
     publications,
@@ -32,3 +33,4 @@ root_api_router.include_router(prompt_templates.router)
 root_api_router.include_router(system.router)
 root_api_router.include_router(jobs.router)
 root_api_router.include_router(publications.router)
+root_api_router.include_router(metrics.router)

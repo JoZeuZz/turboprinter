@@ -61,6 +61,18 @@
     "dryRunPublish": "Dry-run publish",
     "openPanel": "Publish"
   },
+  "metrics": {
+    "open": "Metrics",
+    "ageWindow": "Window",
+    "views": "Views",
+    "viewsShort": "views",
+    "impressions": "Impressions",
+    "ctr": "CTR",
+    "save": "Save metrics",
+    "workspaceSummary": "Metrics summary",
+    "loadSummary": "View metrics",
+    "empty": "No metrics yet"
+  },
   "sidebar": {
     "newProject": "New Project",
     "draft": "Draft",
