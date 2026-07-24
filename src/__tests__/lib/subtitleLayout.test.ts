@@ -5,10 +5,16 @@ import {
   formatAssTime,
   resolveLayoutFractions,
   resolveBackgroundColors,
+  resolveBackgroundSpec,
+  backgroundSpecToCss,
+  normalizeColor,
   buildAnimTags,
   estimateLineWidth,
   getRoundedRectPath,
   generateAss,
+  splitTextIntoTikTokSubtitles,
+  formatSrtTime,
+  generateSrt,
 } from "../../lib/subtitleLayout";
 import { resolvePreviewStyle, PREVIEW_DIMS } from "../../lib/subtitlePreviewStyle";
 
@@ -194,6 +200,151 @@ describe("generateAss", () => {
       baseStyle
     );
     expect(out).toContain("linea1\\Nlinea2");
+  });
+});
+
+describe("normalizeColor", () => {
+  it("returns the trimmed color when present", () => {
+    expect(normalizeColor(" #ff8800 ", "#FFFFFF")).toBe("#ff8800");
+  });
+  it("falls back on empty, blank, null or undefined", () => {
+    expect(normalizeColor("", "#FFFFFF")).toBe("#FFFFFF");
+    expect(normalizeColor("   ", "#000000")).toBe("#000000");
+    expect(normalizeColor(null, "#000000")).toBe("#000000");
+    expect(normalizeColor(undefined, "#FFFFFF")).toBe("#FFFFFF");
+  });
+});
+
+describe("resolveBackgroundSpec", () => {
+  it("boolean true with solid style gives an opaque black box", () => {
+    expect(resolveBackgroundSpec(true, "solid")).toEqual({
+      enabled: true,
+      r: 0,
+      g: 0,
+      b: 0,
+      assAlpha: 0,
+    });
+  });
+  it("hex color parses to rgb components", () => {
+    expect(resolveBackgroundSpec("#123456", "solid")).toEqual({
+      enabled: true,
+      r: 18,
+      g: 52,
+      b: 86,
+      assAlpha: 0,
+    });
+  });
+  it("translucent forces 50% when the color was opaque", () => {
+    expect(resolveBackgroundSpec(true, "translucent").assAlpha).toBe(128);
+  });
+  it("rgba string keeps its own alpha under translucent style", () => {
+    expect(resolveBackgroundSpec("rgba(0, 0, 0, 0.5)", "translucent").assAlpha).toBe(128);
+  });
+  it("blur overrides to a translucent white box", () => {
+    expect(resolveBackgroundSpec(true, "blur")).toEqual({
+      enabled: true,
+      r: 255,
+      g: 255,
+      b: 255,
+      assAlpha: 192,
+    });
+  });
+  it("false, transparent and none disable the background", () => {
+    expect(resolveBackgroundSpec(false, "solid").enabled).toBe(false);
+    expect(resolveBackgroundSpec("transparent", "solid").enabled).toBe(false);
+    expect(resolveBackgroundSpec("none", "solid").enabled).toBe(false);
+  });
+});
+
+describe("backgroundSpecToCss", () => {
+  it("solid black spec becomes fully opaque rgba", () => {
+    expect(backgroundSpecToCss(resolveBackgroundSpec(true, "solid"))).toBe("rgba(0, 0, 0, 1)");
+  });
+  it("blur spec becomes translucent white rgba", () => {
+    expect(backgroundSpecToCss(resolveBackgroundSpec(true, "blur"))).toBe(
+      "rgba(255, 255, 255, 0.25)"
+    );
+  });
+  it("translucent spec halves the opacity", () => {
+    expect(backgroundSpecToCss(resolveBackgroundSpec("#000000", "translucent"))).toBe(
+      "rgba(0, 0, 0, 0.5)"
+    );
+  });
+  it("disabled spec yields null", () => {
+    expect(backgroundSpecToCss(resolveBackgroundSpec(false, "solid"))).toBeNull();
+  });
+});
+
+describe("resolveBackgroundColors stays consistent with the canonical spec", () => {
+  it("derives the same ASS alpha hex as the spec", () => {
+    expect(resolveBackgroundColors(true, "blur").alpha).toBe("C0");
+    expect(resolveBackgroundColors(true, "translucent").alpha).toBe("80");
+  });
+});
+
+describe("splitTextIntoTikTokSubtitles", () => {
+  it("returns empty for blank text", () => {
+    expect(splitTextIntoTikTokSubtitles("", 0, 5, "seg_1", "sub_1")).toEqual([]);
+    expect(splitTextIntoTikTokSubtitles("   ", 0, 5, "seg_1", "sub_1")).toEqual([]);
+  });
+  it("groups words in cues of up to 3 with proportional timing", () => {
+    const cues = splitTextIntoTikTokSubtitles("uno dos tres cuatro cinco", 10, 5, "seg_1", "sub_1");
+    expect(cues).toHaveLength(2);
+    expect(cues[0]).toMatchObject({
+      id: "sub_1_part_1",
+      text: "uno dos tres",
+      start_sec: 10,
+      duration_sec: 3,
+      segment_id: "seg_1",
+    });
+    expect(cues[1]).toMatchObject({
+      id: "sub_1_part_2",
+      text: "cuatro cinco",
+      start_sec: 13,
+      duration_sec: 2,
+    });
+  });
+  it("merges a lone trailing word into the previous cue", () => {
+    const cues = splitTextIntoTikTokSubtitles("uno dos tres cuatro", 0, 4, "seg_1", "sub_1");
+    expect(cues).toHaveLength(1);
+    expect(cues[0].text).toBe("uno dos tres cuatro");
+  });
+  it("splits CJK text per character without spaces", () => {
+    const cues = splitTextIntoTikTokSubtitles("你好世界啊", 0, 5, "seg_1", "sub_1");
+    expect(cues).toHaveLength(2);
+    expect(cues[0].text).toBe("你好世");
+    expect(cues[1].text).toBe("界啊");
+  });
+});
+
+describe("formatSrtTime", () => {
+  it("formats seconds as HH:MM:SS,mmm", () => {
+    expect(formatSrtTime(3661.5)).toBe("01:01:01,500");
+    expect(formatSrtTime(0)).toBe("00:00:00,000");
+  });
+});
+
+describe("generateSrt", () => {
+  it("emits numbered blocks with arrow separators", () => {
+    const srt = generateSrt([
+      { start_sec: 0, duration_sec: 2, text: "Hola" },
+      { start_sec: 2, duration_sec: 3, text: "mundo" },
+    ]);
+    expect(srt).toContain("1\n00:00:00,000 --> 00:00:02,000\nHola\n");
+    expect(srt).toContain("2\n00:00:02,000 --> 00:00:05,000\nmundo\n");
+  });
+});
+
+describe("generateAss color fallbacks", () => {
+  it("blank stroke color falls back to black, blank text color to white", () => {
+    const out = generateAss(oneCue, 1080, 1920, {
+      ...baseStyle,
+      textColor: "",
+      strokeColor: "  ",
+    });
+    const defaultStyle = out.split("\n").find((l) => l.startsWith("Style: Default"));
+    expect(defaultStyle).toContain("&H00FFFFFF"); // primary: white fallback
+    expect(defaultStyle).toContain("&H00000000"); // outline: black fallback
   });
 });
 

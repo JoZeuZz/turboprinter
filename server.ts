@@ -6,7 +6,11 @@ import { createServer as createViteServer } from "vite";
 import WebSocket from "ws";
 import crypto from "crypto";
 import { GoogleGenAI } from "@google/genai";
-import { generateAss } from "./src/lib/subtitleLayout";
+import {
+  generateAss,
+  generateSrt,
+  splitTextIntoTikTokSubtitles,
+} from "./src/lib/subtitleLayout";
 import {
   loadChannels,
   saveChannels,
@@ -3251,90 +3255,6 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
       }
     });
   }));
-
-  const formatSrtTime = (seconds: number): string => {
-    const hrs = Math.floor(seconds / 3600);
-    const mins = Math.floor((seconds % 3600) / 60);
-    const secs = Math.floor(seconds % 60);
-    const ms = Math.floor((seconds % 1) * 1000);
-    return `${hrs.toString().padStart(2, "0")}:${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")},${ms.toString().padStart(3, "0")}`;
-  };
-
-  const splitTextIntoTikTokSubtitles = (
-    text: string,
-    startSec: number,
-    durationSec: number,
-    segmentId: string,
-    baseId: string
-  ): any[] => {
-    if (!text || !text.trim()) return [];
-    
-    const cleanText = text.trim().replace(/\s+/g, " ");
-    
-    // Check if the text is predominantly CJK (no spaces, or very few)
-    const isCJK = /[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\uff66-\uff9f\u1100-\u11ff\u3130-\u318f\uac00-\ud7af]/.test(cleanText);
-    
-    let units: string[] = [];
-    if (isCJK) {
-      units = Array.from(cleanText).filter(c => c !== " ");
-    } else {
-      units = cleanText.split(" ");
-    }
-    
-    if (units.length === 0) return [];
-    
-    // Target: 2 to 3 words or characters per subtitle cue (TikTok style is very dynamic)
-    const maxUnits = 3;
-    const groups: string[][] = [];
-    
-    for (let i = 0; i < units.length; i += maxUnits) {
-      groups.push(units.slice(i, i + maxUnits));
-    }
-    
-    // If we have more than one group, and the last group has only 1 unit, 
-    // merge it into the previous group so we don't have a single word/character hanging.
-    if (groups.length > 1 && groups[groups.length - 1].length === 1) {
-      const lastGroup = groups.pop();
-      if (lastGroup) {
-        groups[groups.length - 1].push(...lastGroup);
-      }
-    }
-    
-    const totalUnits = units.length;
-    let elapsed = 0;
-    
-    return groups.map((grp, idx) => {
-      const phrase = isCJK ? grp.join("") : grp.join(" ");
-      const phraseUnitsCount = grp.length;
-      
-      // Proportional start and duration
-      const chunkStart = startSec + (elapsed / totalUnits) * durationSec;
-      const chunkDuration = (phraseUnitsCount / totalUnits) * durationSec;
-      
-      elapsed += phraseUnitsCount;
-      
-      return {
-        id: `${baseId}_part_${idx + 1}`,
-        start_sec: Number(chunkStart.toFixed(3)),
-        duration_sec: Number(chunkDuration.toFixed(3)),
-        text: phrase,
-        segment_id: segmentId
-      };
-    });
-  };
-
-  const generateSrt = (subtitles: any[]): string => {
-    return subtitles
-      .map((sub, idx) => {
-        const startSec = Number(sub.start_sec) || 0;
-        const durationSec = Number(sub.duration_sec) || 5;
-        const start = formatSrtTime(startSec);
-        const end = formatSrtTime(startSec + durationSec);
-        return `${idx + 1}\n${start} --> ${end}\n${sub.text || ""}\n`;
-      })
-      .join("\n");
-  };
-
 
   const executeCommand = (cmd: string): Promise<string> => {
     return new Promise((resolve, reject) => {

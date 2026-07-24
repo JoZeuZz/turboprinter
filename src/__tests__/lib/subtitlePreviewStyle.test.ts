@@ -16,13 +16,12 @@ describe("resolvePreviewStyle", () => {
     expect(s.fontSizePx).toBeLessThan(13);
   });
 
-  it("stroke follows the render's font-relative rule, scaled", () => {
+  it("stroke uses the render's raw outline width, scaled", () => {
     const none = resolvePreviewStyle({ fontSize: 60, strokeWidth: 0, position: "bottom" }, PREVIEW_DIMS);
     expect(none.strokePx).toBe(0);
     const s = resolvePreviewStyle({ fontSize: 60, strokeWidth: 1.5, position: "bottom" }, PREVIEW_DIMS);
-    // render stroke = max(round(1.5), round(60*0.06)=4) = 4; *SCALE ≈ 0.78
-    expect(s.strokePx).toBeGreaterThan(0.5);
-    expect(s.strokePx).toBeLessThan(1.2);
+    // render outline = 1.5 as-is (generateAss outlineVal); * scale 373/1920 ≈ 0.29
+    expect(s.strokePx).toBeCloseTo(1.5 * (373 / 1920), 5);
   });
 
   it("maps positions to render-matching bands", () => {
@@ -32,10 +31,23 @@ describe("resolvePreviewStyle", () => {
     expect(resolvePreviewStyle({ fontSize: 60, strokeWidth: 1, position: "custom", customPosition: 30 }, PREVIEW_DIMS).position).toEqual({ anchor: "top", offsetPct: 30 });
   });
 
-  it("resolves background like the render", () => {
+  it("resolves background through the shared engine as rgba", () => {
     expect(resolvePreviewStyle({ fontSize: 60, strokeWidth: 1, position: "bottom", backgroundColor: false }, PREVIEW_DIMS).background).toBeNull();
-    expect(resolvePreviewStyle({ fontSize: 60, strokeWidth: 1, position: "bottom", backgroundColor: true }, PREVIEW_DIMS).background).toEqual({ color: "#000000", rounded: false });
-    expect(resolvePreviewStyle({ fontSize: 60, strokeWidth: 1, position: "bottom", backgroundColor: "#123456", roundedBackground: true }, PREVIEW_DIMS).background).toEqual({ color: "#123456", rounded: true });
+    expect(resolvePreviewStyle({ fontSize: 60, strokeWidth: 1, position: "bottom", backgroundColor: true }, PREVIEW_DIMS).background).toEqual({ color: "rgba(0, 0, 0, 1)", rounded: false });
+    expect(resolvePreviewStyle({ fontSize: 60, strokeWidth: 1, position: "bottom", backgroundColor: "#123456", roundedBackground: true }, PREVIEW_DIMS).background).toEqual({ color: "rgba(18, 52, 86, 1)", rounded: true });
+  });
+
+  it("applies translucent and blur bg styles exactly like the render", () => {
+    const translucent = resolvePreviewStyle(
+      { fontSize: 60, strokeWidth: 1, position: "bottom", backgroundColor: "#000000", subtitleBgStyle: "translucent" },
+      PREVIEW_DIMS
+    );
+    expect(translucent.background?.color).toBe("rgba(0, 0, 0, 0.5)");
+    const blur = resolvePreviewStyle(
+      { fontSize: 60, strokeWidth: 1, position: "bottom", backgroundColor: true, subtitleBgStyle: "blur" },
+      PREVIEW_DIMS
+    );
+    expect(blur.background?.color).toBe("rgba(255, 255, 255, 0.25)");
   });
 
   it("agrees with every parity fixture on band and background presence", () => {

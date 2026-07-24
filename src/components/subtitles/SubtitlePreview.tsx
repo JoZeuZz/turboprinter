@@ -1,7 +1,9 @@
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { motion } from "motion/react";
 import { getSubtitleFontFamily, getSubtitleFontWeight } from "./SubtitleFontGallery";
 import { resolvePreviewStyle, PREVIEW_DIMS } from "../../lib/subtitlePreviewStyle";
+import { splitTextIntoTikTokSubtitles } from "../../lib/subtitleLayout";
 
 interface SubtitlePreviewProps {
   enabled: boolean;
@@ -22,21 +24,8 @@ interface SubtitlePreviewProps {
 const DEFAULT_SAMPLE =
   "Este es un ejemplo de subtítulo para previsualizar el estilo.";
 
-function getTranslucentColor(hex: string): string {
-  if (!hex || !hex.startsWith("#")) return hex;
-  const clean = hex.substring(1);
-  if (clean.length === 3) {
-    const r = clean[0], g = clean[1], b = clean[2];
-    return `rgba(${parseInt(r+r, 16)}, ${parseInt(g+g, 16)}, ${parseInt(b+b, 16)}, 0.5)`;
-  }
-  if (clean.length === 6) {
-    const r = clean.substring(0, 2);
-    const g = clean.substring(2, 4);
-    const b = clean.substring(4, 6);
-    return `rgba(${parseInt(r, 16)}, ${parseInt(g, 16)}, ${parseInt(b, 16)}, 0.5)`;
-  }
-  return hex;
-}
+// Preview playback cadence: seconds each word/character stays on screen.
+const SECONDS_PER_PREVIEW_UNIT = 0.4;
 
 export function SubtitlePreview({
   enabled,
@@ -65,9 +54,39 @@ export function SubtitlePreview({
       strokeColor: strokeColor ?? null,
       backgroundColor: textBackgroundColor ?? true,
       roundedBackground: roundedBackground ?? null,
+      subtitleBgStyle: subtitleBgStyle ?? null,
     },
     PREVIEW_DIMS
   );
+
+  // Real cues from the shared splitter — the preview plays the exact cues the render burns.
+  const cues = useMemo(() => {
+    const sample = sampleText?.trim() || DEFAULT_SAMPLE;
+    const units = sample.split(/\s+/).length;
+    return splitTextIntoTikTokSubtitles(
+      sample,
+      0,
+      units * SECONDS_PER_PREVIEW_UNIT,
+      "preview",
+      "preview"
+    );
+  }, [sampleText]);
+
+  const [cueIndex, setCueIndex] = useState(0);
+
+  useEffect(() => {
+    setCueIndex(0);
+  }, [cues]);
+
+  useEffect(() => {
+    if (!enabled || cues.length <= 1) return;
+    const current = cues[cueIndex % cues.length];
+    const timer = setTimeout(
+      () => setCueIndex((i) => (i + 1) % cues.length),
+      Math.max(300, (current?.duration_sec ?? 1) * 1000)
+    );
+    return () => clearTimeout(timer);
+  }, [cues, cueIndex, enabled]);
 
   const positionStyle =
     previewStyle.position.anchor === "bottom"
@@ -76,19 +95,10 @@ export function SubtitlePreview({
         ? { top: "50%", transform: "translate(-50%, -50%)" }
         : { top: `${previewStyle.position.offsetPct}%`, transform: "translateX(-50%)" };
 
-  const text = sampleText?.trim() || DEFAULT_SAMPLE;
+  const text = cues[cueIndex % cues.length]?.text ?? "";
 
-  let finalBgColor = "transparent";
-  const bgStyle = previewStyle.background;
-  if (bgStyle) {
-    if (subtitleBgStyle === "translucent") {
-      finalBgColor = getTranslucentColor(bgStyle.color);
-    } else if (subtitleBgStyle === "blur") {
-      finalBgColor = "rgba(255, 255, 255, 0.25)";
-    } else {
-      finalBgColor = bgStyle.color;
-    }
-  }
+  // Background color already resolved by the shared engine (same spec the ASS render uses).
+  const finalBgColor = previewStyle.background?.color ?? "transparent";
 
   const animType = subtitleAnimation ?? "pop";
   let motionProps = {};
@@ -144,10 +154,10 @@ export function SubtitlePreview({
           style={positionStyle}
         >
           <motion.div
-            key={`${text}-${animType}-${textColor}-${fontName}-${fontSize}-${strokeColor}-${strokeWidth}-${roundedBackground}-${subtitleBgStyle}`}
+            key={`${cueIndex}-${text}-${animType}-${textColor}-${fontName}-${fontSize}-${strokeColor}-${strokeWidth}-${roundedBackground}-${subtitleBgStyle}`}
             className={`inline-block max-w-full px-3 py-1.5 leading-tight transition-all ${
               previewStyle.background?.rounded ? "rounded-xl" : "rounded-sm"
-            } ${subtitleBgStyle === "blur" && textBackgroundColor !== false ? "backdrop-blur-md border border-white/20" : ""}`}
+            } ${subtitleBgStyle === "blur" && previewStyle.background ? "backdrop-blur-md border border-white/20" : ""}`}
             style={{ backgroundColor: finalBgColor }}
             {...motionProps}
           >

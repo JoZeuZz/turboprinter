@@ -35,6 +35,24 @@ export interface BackgroundColors {
   alpha: string;
 }
 
+// Canonical background: RGB components plus ASS alpha (0 = opaque, 255 = invisible).
+// Both adapters derive from this — ASS via resolveBackgroundColors, CSS via backgroundSpecToCss.
+export interface BackgroundSpec {
+  enabled: boolean;
+  r: number;
+  g: number;
+  b: number;
+  assAlpha: number;
+}
+
+export interface SplitSubtitleCue {
+  id: string;
+  start_sec: number;
+  duration_sec: number;
+  text: string;
+  segment_id: string;
+}
+
 export const REF_HEIGHT = 1920;
 
 export const cssHexToAss = (hex: string): string => {
@@ -92,10 +110,15 @@ export const resolveLayoutFractions = (
   return { alignment: 2, marginVFrac: 0.08, anchor: "bottom", offsetPct: 8 };
 };
 
-export const resolveBackgroundColors = (
+export const normalizeColor = (
+  color: string | null | undefined,
+  fallback: string
+): string => color?.trim() || fallback;
+
+export const resolveBackgroundSpec = (
   hasBg: boolean | string,
   subtitleBgStyle: string | undefined
-): BackgroundColors => {
+): BackgroundSpec => {
   const enabled =
     hasBg === true ||
     (typeof hasBg === "string" &&
@@ -103,50 +126,77 @@ export const resolveBackgroundColors = (
       hasBg.trim() !== "transparent" &&
       hasBg.trim() !== "none");
 
-  let color = "000000";
-  let alpha = "00"; // fully opaque box by default
+  let r = 0;
+  let g = 0;
+  let b = 0;
+  let assAlpha = 0; // fully opaque box by default
 
-  if (!enabled) return { enabled: false, color, alpha };
+  if (!enabled) return { enabled: false, r, g, b, assAlpha };
 
   if (typeof hasBg === "string" && hasBg.trim()) {
     const cleanBg = hasBg.trim();
     if (cleanBg.startsWith("#")) {
-      color = cssHexToAss(cleanBg);
-      if (cleanBg.length === 9) {
-        const cssAlphaInt = parseInt(cleanBg.substring(7, 9), 16);
-        alpha = (255 - cssAlphaInt).toString(16).padStart(2, "0").toUpperCase();
+      let clean = cleanBg.replace("#", "");
+      if (clean.length === 3) {
+        clean = clean[0] + clean[0] + clean[1] + clean[1] + clean[2] + clean[2];
+      }
+      if (clean.length === 6 || clean.length === 8) {
+        r = parseInt(clean.substring(0, 2), 16);
+        g = parseInt(clean.substring(2, 4), 16);
+        b = parseInt(clean.substring(4, 6), 16);
+        if (clean.length === 8) {
+          assAlpha = 255 - parseInt(clean.substring(6, 8), 16);
+        }
+      } else {
+        r = g = b = 255; // invalid hex: same white fallback as cssHexToAss
       }
     } else if (cleanBg.startsWith("rgba")) {
       const match = cleanBg.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*([\d.]+)\s*\)/);
       if (match) {
-        const r = parseInt(match[1]).toString(16).padStart(2, "0");
-        const g = parseInt(match[2]).toString(16).padStart(2, "0");
-        const b = parseInt(match[3]).toString(16).padStart(2, "0");
-        color = `${b}${g}${r}`;
-        const a = parseFloat(match[4]);
-        alpha = Math.round((1 - a) * 255).toString(16).padStart(2, "0").toUpperCase();
+        r = parseInt(match[1]);
+        g = parseInt(match[2]);
+        b = parseInt(match[3]);
+        assAlpha = Math.round((1 - parseFloat(match[4])) * 255);
       }
     } else if (cleanBg.startsWith("rgb")) {
       const match = cleanBg.match(/rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/);
       if (match) {
-        const r = parseInt(match[1]).toString(16).padStart(2, "0");
-        const g = parseInt(match[2]).toString(16).padStart(2, "0");
-        const b = parseInt(match[3]).toString(16).padStart(2, "0");
-        color = `${b}${g}${r}`;
+        r = parseInt(match[1]);
+        g = parseInt(match[2]);
+        b = parseInt(match[3]);
       }
     }
   }
 
   if (subtitleBgStyle === "translucent") {
-    if (alpha === "00") alpha = "80"; // 50% transparency
+    if (assAlpha === 0) assAlpha = 128; // 50% transparency
   } else if (subtitleBgStyle === "blur") {
-    color = "FFFFFF";
-    alpha = "C0"; // 25% opacity white box
+    r = g = b = 255;
+    assAlpha = 192; // 25% opacity white box
   } else {
-    alpha = "00"; // solid: force opaque
+    assAlpha = 0; // solid: force opaque
   }
 
-  return { enabled, color, alpha };
+  return { enabled, r, g, b, assAlpha };
+};
+
+export const backgroundSpecToCss = (spec: BackgroundSpec): string | null => {
+  if (!spec.enabled) return null;
+  const opacity = Math.round(((255 - spec.assAlpha) / 255) * 100) / 100;
+  return `rgba(${spec.r}, ${spec.g}, ${spec.b}, ${opacity})`;
+};
+
+export const resolveBackgroundColors = (
+  hasBg: boolean | string,
+  subtitleBgStyle: string | undefined
+): BackgroundColors => {
+  const spec = resolveBackgroundSpec(hasBg, subtitleBgStyle);
+  const toHex = (n: number) => n.toString(16).padStart(2, "0").toUpperCase();
+  return {
+    enabled: spec.enabled,
+    color: `${toHex(spec.b)}${toHex(spec.g)}${toHex(spec.r)}`,
+    alpha: toHex(spec.assAlpha),
+  };
 };
 
 export const buildAnimTags = (animation: string | undefined): string => {
@@ -202,6 +252,95 @@ export const getRoundedRectPath = (w: number, h: number, r: number): string => {
   return p;
 };
 
+// TikTok-style cue splitting: groups of up to 3 words (or CJK characters),
+// timed proportionally inside the segment's narration window. Used by the
+// render (ASS/SRT) and the editor preview so both show the exact same cues.
+export const splitTextIntoTikTokSubtitles = (
+  text: string,
+  startSec: number,
+  durationSec: number,
+  segmentId: string,
+  baseId: string
+): SplitSubtitleCue[] => {
+  if (!text || !text.trim()) return [];
+
+  const cleanText = text.trim().replace(/\s+/g, " ");
+
+  // Check if the text is predominantly CJK (no spaces, or very few)
+  const isCJK =
+    /[぀-ヿ㐀-䶿一-鿿豈-﫿ｦ-ﾟᄀ-ᇿ㄰-㆏가-힯]/.test(
+      cleanText
+    );
+
+  let units: string[] = [];
+  if (isCJK) {
+    units = Array.from(cleanText).filter((c) => c !== " ");
+  } else {
+    units = cleanText.split(" ");
+  }
+
+  if (units.length === 0) return [];
+
+  // Target: 2 to 3 words or characters per subtitle cue (TikTok style is very dynamic)
+  const maxUnits = 3;
+  const groups: string[][] = [];
+
+  for (let i = 0; i < units.length; i += maxUnits) {
+    groups.push(units.slice(i, i + maxUnits));
+  }
+
+  // If we have more than one group, and the last group has only 1 unit,
+  // merge it into the previous group so we don't have a single word/character hanging.
+  if (groups.length > 1 && groups[groups.length - 1].length === 1) {
+    const lastGroup = groups.pop();
+    if (lastGroup) {
+      groups[groups.length - 1].push(...lastGroup);
+    }
+  }
+
+  const totalUnits = units.length;
+  let elapsed = 0;
+
+  return groups.map((grp, idx) => {
+    const phrase = isCJK ? grp.join("") : grp.join(" ");
+    const phraseUnitsCount = grp.length;
+
+    // Proportional start and duration
+    const chunkStart = startSec + (elapsed / totalUnits) * durationSec;
+    const chunkDuration = (phraseUnitsCount / totalUnits) * durationSec;
+
+    elapsed += phraseUnitsCount;
+
+    return {
+      id: `${baseId}_part_${idx + 1}`,
+      start_sec: Number(chunkStart.toFixed(3)),
+      duration_sec: Number(chunkDuration.toFixed(3)),
+      text: phrase,
+      segment_id: segmentId,
+    };
+  });
+};
+
+export const formatSrtTime = (seconds: number): string => {
+  const hrs = Math.floor(seconds / 3600);
+  const mins = Math.floor((seconds % 3600) / 60);
+  const secs = Math.floor(seconds % 60);
+  const ms = Math.floor((seconds % 1) * 1000);
+  return `${hrs.toString().padStart(2, "0")}:${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")},${ms.toString().padStart(3, "0")}`;
+};
+
+export const generateSrt = (subtitles: SubtitleCue[]): string => {
+  return subtitles
+    .map((sub, idx) => {
+      const startSec = Number(sub.start_sec) || 0;
+      const durationSec = Number(sub.duration_sec) || 5;
+      const start = formatSrtTime(startSec);
+      const end = formatSrtTime(startSec + durationSec);
+      return `${idx + 1}\n${start} --> ${end}\n${sub.text || ""}\n`;
+    })
+    .join("\n");
+};
+
 export const generateAss = (
   subtitles: SubtitleCue[],
   resWidth: number,
@@ -211,8 +350,8 @@ export const generateAss = (
   const refHeight = REF_HEIGHT;
   const refWidth = Math.round(refHeight * (resWidth / resHeight));
   const assFont = getAssFontName(styleParams.fontName);
-  const textColor = cssHexToAss(styleParams.textColor);
-  const strokeColor = cssHexToAss(styleParams.strokeColor);
+  const textColor = cssHexToAss(normalizeColor(styleParams.textColor, "#FFFFFF"));
+  const strokeColor = cssHexToAss(normalizeColor(styleParams.strokeColor, "#000000"));
 
   const bg = resolveBackgroundColors(styleParams.hasBg, styleParams.subtitleBgStyle);
   const layout = resolveLayoutFractions(styleParams.position, styleParams.customPosition);
