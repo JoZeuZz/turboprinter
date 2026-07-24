@@ -11,19 +11,10 @@ beforeEach(() => {
 });
 
 describe("GeneratingPanel", () => {
-  it("renders progress bar when taskStatus has progress", () => {
-    useProjectWorkspaceStore.setState({
-      taskStatus: { state: 4, progress: 60, videos: [], combined_videos: [] },
-    });
+  it("renders the project-mode checklist even before orchestration reports a step", () => {
     render(<GeneratingPanel />);
-    expect(screen.getByText("60%")).toBeInTheDocument();
-  });
-
-  it("renders all step labels", () => {
-    render(<GeneratingPanel />);
-    expect(screen.getByText(/Guion/i)).toBeInTheDocument();
-    expect(screen.getByText(/Audio/i)).toBeInTheDocument();
-    expect(screen.getByText(/clips/i)).toBeInTheDocument();
+    expect(screen.getByText(/Planificando/i)).toBeInTheDocument();
+    expect(screen.getByText(/narraci/i)).toBeInTheDocument();
   });
 
   it("renders the 4-step project-mode checklist when orchestration is running", () => {

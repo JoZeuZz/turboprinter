@@ -49,24 +49,11 @@ export interface VideoParams {
 
 export const TASK_STATE_FAILED = -1 as const;
 export const TASK_STATE_COMPLETE = 1 as const;
-export const TASK_STATE_PROCESSING = 4 as const;
-
-export interface TaskStatus {
-  state: number;
-  progress: number;
-  videos: string[];
-  combined_videos: string[];
-  logs?: string[];
-}
 
 export interface ApiResponse<T> {
   status: number;
   message: string;
   data: T;
-}
-
-export interface CreateTaskResponse {
-  task_id: string;
 }
 
 export interface UiConfig {

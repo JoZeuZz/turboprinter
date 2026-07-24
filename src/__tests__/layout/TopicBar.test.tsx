@@ -4,7 +4,6 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { TopicBar } from "../../components/layout/TopicBar";
 import { useProjectWorkspaceStore } from "../../store/useProjectWorkspaceStore";
 import { useProjectStore } from "../../store/useProjectStore";
-import type { TaskStatus } from "../../api/types";
 
 function renderAtNew() {
   return render(
@@ -44,8 +43,6 @@ describe("TopicBar origin", () => {
 
   it("shows finished for a video generated this session", () => {
     useProjectWorkspaceStore.setState({
-      taskId: "t1",
-      taskStatus: { state: 1 } as TaskStatus,
       panel: "done",
       videoUrls: ["/v.mp4"],
     });
@@ -53,8 +50,8 @@ describe("TopicBar origin", () => {
     expect(screen.getByTestId("origin-badge")).toHaveAttribute("data-origin", "finished");
   });
 
-  it("shows history for a project opened by id with no session task", () => {
-    useProjectWorkspaceStore.setState({ taskId: null, taskStatus: null, panel: "review" });
+  it("shows history for a project opened by id with no active generation", () => {
+    useProjectWorkspaceStore.setState({ panel: "review" });
     renderAtProject("p1");
     expect(screen.getByTestId("origin-badge")).toHaveAttribute("data-origin", "history");
   });

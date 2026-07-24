@@ -270,22 +270,9 @@ export function VideoConfigPanel() {
         console.log("[VideoConfigPanel] Saved current parameters to localStorage: mpt-last-generated-config");
       }
 
-      const isProjectMode = projectStore.mode !== "disabled" && projectStore.projectId;
-      console.log("[VideoConfigPanel] Checking generation mode:", {
-        projectModeEnabled: isProjectMode,
-        projectStoreMode: projectStore.mode,
-        projectId: projectStore.projectId
-      });
-
-      if (isProjectMode) {
-        console.log("[VideoConfigPanel] Setting workspace panel to 'generating' for Project Mode");
-        workspaceStore.setPanel("generating");
-        console.log("[VideoConfigPanel] Dispatching generateViaProjectMode with params");
-        await projectStore.generateViaProjectMode(params);
-      } else {
-        console.log("[VideoConfigPanel] Dispatching standard generateVideo with params");
-        await workspaceStore.generateVideo(params);
-      }
+      workspaceStore.setPanel("generating");
+      console.log("[VideoConfigPanel] Dispatching generateViaProjectMode with params");
+      await projectStore.generateViaProjectMode(params);
     } catch (err) {
       console.error("[VideoConfigPanel] Error during handleGenerate:", err);
     } finally {

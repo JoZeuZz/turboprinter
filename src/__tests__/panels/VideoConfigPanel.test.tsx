@@ -17,7 +17,6 @@ vi.mock("../../api/voice", () => ({
 vi.mock("../../api/video", () => ({
   videoApi: {
     getBgmList: vi.fn(),
-    createTask: vi.fn(),
     getLocalVideos: vi.fn(),
   },
 }));
@@ -37,7 +36,6 @@ vi.mock("../../store/useConfigStore", () => ({
 beforeEach(() => {
   vi.resetAllMocks();
   vi.mocked(videoApi.getBgmList).mockResolvedValue({ files: [] });
-  vi.mocked(videoApi.createTask).mockResolvedValue({ task_id: "test-task-id" });
   vi.mocked(videoApi.getLocalVideos).mockResolvedValue({ files: [] });
   vi.mocked(voiceApi.getVoices).mockResolvedValue([
     { value: "es-ES-AlvaroNeural-Male", label: "es-ES AlvaroNeural (Male)" },
@@ -45,7 +43,6 @@ beforeEach(() => {
   ]);
   act(() => useVideoStore.getState().reset());
   vi.mocked(useProjectWorkspaceStore).mockReturnValue({
-    generateVideo: vi.fn(),
     setPanel: vi.fn(),
     videoUrls: [],
   } as never);
@@ -122,28 +119,11 @@ describe("VideoConfigPanel TTS", () => {
 });
 
 describe("VideoConfigPanel generate dispatch", () => {
-  it("calls generateVideo (legacy) when project mode is disabled", async () => {
-    const generateVideo = vi.fn();
-    vi.mocked(useProjectWorkspaceStore).mockReturnValue({
-      generateVideo, setPanel: vi.fn(), videoUrls: [],
-    } as never);
-    vi.mocked(useProjectStore).mockReturnValue({
-      mode: "disabled", generateViaProjectMode: vi.fn(),
-    } as never);
-
-    act(() => useVideoStore.getState().set("video_subject", "Dogs"));
-    render(<VideoConfigPanel />);
-    await userEvent.click(screen.getByText(/Generar video/i));
-
-    expect(generateVideo).toHaveBeenCalled();
-  });
-
-  it("calls generateViaProjectMode when project mode is ready", async () => {
+  it("always dispatches generateViaProjectMode and moves to the generating panel", async () => {
     const generateViaProjectMode = vi.fn();
-    const generateVideo = vi.fn();
     const setPanel = vi.fn();
     vi.mocked(useProjectWorkspaceStore).mockReturnValue({
-      generateVideo, setPanel, videoUrls: [],
+      setPanel, videoUrls: [],
     } as never);
     vi.mocked(useProjectStore).mockReturnValue({
       mode: "ready", generateViaProjectMode, projectId: "project-1",
@@ -154,25 +134,24 @@ describe("VideoConfigPanel generate dispatch", () => {
     await userEvent.click(screen.getByText(/Generar video/i));
 
     expect(generateViaProjectMode).toHaveBeenCalled();
-    expect(generateVideo).not.toHaveBeenCalled();
     expect(setPanel).toHaveBeenCalledWith("generating");
   });
 
-  it("calls generateVideo (legacy) when project mode is enabled but no project is open", async () => {
-    const generateVideo = vi.fn();
+  it("dispatches generateViaProjectMode even without an open project (store reports the error)", async () => {
     const generateViaProjectMode = vi.fn();
+    const setPanel = vi.fn();
     vi.mocked(useProjectWorkspaceStore).mockReturnValue({
-      generateVideo, setPanel: vi.fn(), videoUrls: [],
+      setPanel, videoUrls: [],
     } as never);
     vi.mocked(useProjectStore).mockReturnValue({
-      mode: "ready", generateViaProjectMode, projectId: null,
+      mode: "disabled", generateViaProjectMode, projectId: null,
     } as never);
 
     act(() => useVideoStore.getState().set("video_subject", "Dogs"));
     render(<VideoConfigPanel />);
     await userEvent.click(screen.getByText(/Generar video/i));
 
-    expect(generateVideo).toHaveBeenCalled();
-    expect(generateViaProjectMode).not.toHaveBeenCalled();
+    expect(generateViaProjectMode).toHaveBeenCalled();
+    expect(setPanel).toHaveBeenCalledWith("generating");
   });
 });

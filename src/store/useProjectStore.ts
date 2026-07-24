@@ -219,8 +219,8 @@ export const useProjectStore = create<ProjectStoreState>()(
           console.log("[ProjectStore] generateViaProjectMode triggered with params:", params);
           const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
           
-          // Clear any stale non-project task state to avoid false triggers
-          useProjectWorkspaceStore.setState({ taskId: null, taskStatus: null, error: null, videoUrls: [] });
+          // Clear any stale results from a previous generation
+          useProjectWorkspaceStore.setState({ error: null, videoUrls: [] });
           set({ mode: "loading", error: null, orchestrationStep: "plan" });
           console.log("[ProjectStore] Mode set to 'loading', cleared workspace status, orchestrationStep set to 'plan'");
 

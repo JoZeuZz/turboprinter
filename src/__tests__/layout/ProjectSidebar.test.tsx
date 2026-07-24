@@ -6,7 +6,6 @@ import { ProjectSidebar } from "../../components/layout/ProjectSidebar";
 import { projectsApi } from "../../api/projects";
 import { useProjectHistoryStore } from "../../store/useProjectHistoryStore";
 import { useProjectWorkspaceStore } from "../../store/useProjectWorkspaceStore";
-import type { TaskStatus } from "../../api/types";
 
 vi.mock("../../api/projects", () => ({
   projectsApi: {
@@ -157,7 +156,7 @@ describe("ProjectSidebar listing", () => {
     vi.clearAllMocks();
     localStorage.clear();
     useProjectHistoryStore.setState({ drafts: [], currentDraftId: null });
-    useProjectWorkspaceStore.setState({ topic: "", taskId: null, taskStatus: null });
+    useProjectWorkspaceStore.setState({ topic: "" });
     (projectsApi.listProjects as any).mockResolvedValue({ projects: [] });
   });
 
@@ -239,7 +238,7 @@ describe("ProjectSidebar listing", () => {
     expect(screen.queryAllByTestId("sidebar-row")).toHaveLength(0);
   });
 
-  it("shows a new project in history after a generation task completes", async () => {
+  it("shows a new project in history after the workspace topic changes", async () => {
     (projectsApi.listProjects as any)
       .mockResolvedValueOnce({ projects: [] })
       .mockResolvedValue({
@@ -249,12 +248,9 @@ describe("ProjectSidebar listing", () => {
     await waitFor(() => expect(projectsApi.listProjects).toHaveBeenCalledTimes(1));
     expect(screen.queryAllByTestId("sidebar-row")).toHaveLength(0);
 
-    // simulate the generation task reaching completion -> taskState dependency changes
+    // a finished generation updates the workspace topic -> refresh dependency changes
     act(() => {
-      useProjectWorkspaceStore.setState({
-        taskId: "t1",
-        taskStatus: { state: 1 } as TaskStatus,
-      });
+      useProjectWorkspaceStore.setState({ topic: "Video generado" });
     });
 
     await screen.findByText("Video generado");
