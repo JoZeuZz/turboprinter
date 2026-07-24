@@ -5,45 +5,30 @@ on:
   push:
     branches:
       - main
-      - personal/quality-stack
 
 jobs:
   tests:
-    name: Python ${{ matrix.python-version }} tests
+    name: Node ${{ matrix.node-version }} tests
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.11", "3.12"]
+        node-version: ["20"]
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+      - name: Set up Node ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
         with:
-          python-version: ${{ matrix.python-version }}
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v6
-        with:
-          enable-cache: true
+          node-version: ${{ matrix.node-version }}
+          cache: npm
 
       - name: Install dependencies
-        run: uv sync --frozen
+        run: npm ci
 
-      - name: Compile Python sources
-        run: uv run python -m compileall app cli.py main.py webui test
+      - name: Type check
+        run: npm run lint
 
-      - name: Run tests with coverage
-        run: |
-          uv run python -X utf8 -m pytest -q \
-            --cov=app/services/quality \
-            --cov=app/domain \
-            --cov-fail-under=85
-
-      - name: Run Ruff
-        run: uv run ruff check app webui test
-
-      - name: Run mypy (quality stack)
-        run: uv run mypy app/services/quality app/domain --no-error-summary
+      - name: Run tests
+        run: npm test
