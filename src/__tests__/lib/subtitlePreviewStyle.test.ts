@@ -26,8 +26,8 @@ describe("resolvePreviewStyle", () => {
   });
 
   it("maps positions to render-matching bands", () => {
-    expect(resolvePreviewStyle({ fontSize: 60, strokeWidth: 1, position: "bottom" }, PREVIEW_DIMS).position).toEqual({ anchor: "bottom", offsetPct: 5 });
-    expect(resolvePreviewStyle({ fontSize: 60, strokeWidth: 1, position: "top" }, PREVIEW_DIMS).position).toEqual({ anchor: "top", offsetPct: 5 });
+    expect(resolvePreviewStyle({ fontSize: 60, strokeWidth: 1, position: "bottom" }, PREVIEW_DIMS).position).toEqual({ anchor: "bottom", offsetPct: 8 });
+    expect(resolvePreviewStyle({ fontSize: 60, strokeWidth: 1, position: "top" }, PREVIEW_DIMS).position).toEqual({ anchor: "top", offsetPct: 8 });
     expect(resolvePreviewStyle({ fontSize: 60, strokeWidth: 1, position: "center" }, PREVIEW_DIMS).position).toEqual({ anchor: "center", offsetPct: 50 });
     expect(resolvePreviewStyle({ fontSize: 60, strokeWidth: 1, position: "custom", customPosition: 30 }, PREVIEW_DIMS).position).toEqual({ anchor: "top", offsetPct: 30 });
   });

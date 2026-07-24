@@ -1,3 +1,5 @@
+import { resolveLayoutFractions } from "./subtitleLayout";
+
 export interface SubtitleStyleInput {
   fontSize: number;
   strokeWidth: number;
@@ -53,10 +55,9 @@ function resolvePosition(
   position: string,
   customPosition: number | undefined
 ): PreviewStyle["position"] {
-  if (position === "top") return { anchor: "top", offsetPct: 5 };
-  if (position === "center") return { anchor: "center", offsetPct: 50 };
-  if (position === "custom") return { anchor: "top", offsetPct: customPosition ?? 70 };
-  return { anchor: "bottom", offsetPct: 5 };
+  // Delegates to the shared layout so the preview always matches the ASS render.
+  const layout = resolveLayoutFractions(position, customPosition);
+  return { anchor: layout.anchor, offsetPct: layout.offsetPct };
 }
 
 export function resolvePreviewStyle(style: SubtitleStyleInput, dims: PreviewDims): PreviewStyle {
