@@ -24,6 +24,17 @@ import { generateLlmContent } from "./src/server/llm";
 import { searchPexelsVideos, pickUniqueClip } from "./src/server/pexels";
 import { createRenderer, executeCommand } from "./src/server/render";
 import { createProjectsRepo } from "./src/server/projectsRepo";
+import {
+  loadTiktokChannels,
+  saveTiktokChannels,
+  getActiveTiktokChannel,
+  upsertTiktokChannel,
+  selectTiktokChannel,
+  removeTiktokChannel,
+  setTiktokVerification,
+  clearTiktokCredentials,
+  writeTiktokVerificationFiles,
+} from "./src/server/tiktokCredentials";
 import { google } from "googleapis";
 import multer from "multer";
 
@@ -445,58 +456,17 @@ async function startServer() {
       globalConfig.settings.youtube.channel_name = activeChannel ? activeChannel.channelName : "";
     }
 
-    const tiktokCredsPath = path.join(process.cwd(), "storage", "tiktok-credentials.json");
-    if (fs.existsSync(tiktokCredsPath)) {
-      try {
-        const data = JSON.parse(fs.readFileSync(tiktokCredsPath, "utf8"));
-        let channels = data.channels || [];
-        let activeChannelId = data.activeChannelId || null;
-        let channelName = data.channelName || "";
-
-        const activeChannel = channels.find((c: any) => c.channelId === activeChannelId) || channels[0];
-
-        globalConfig.settings.tiktok.is_linked = channels.length > 0;
-        globalConfig.settings.tiktok.account_name = activeChannel ? activeChannel.channelName : channelName;
-        globalConfig.settings.tiktok.verification_filename = data.verification_filename || "";
-        globalConfig.settings.tiktok.verification_content = data.verification_content || "";
-
-        // Write verification file to static directories so they are served directly by web/GFE
-        if (data.verification_filename && data.verification_content) {
-          try {
-            const publicPath = path.join(process.cwd(), "public", data.verification_filename);
-            const publicDir = path.dirname(publicPath);
-            if (!fs.existsSync(publicDir)) {
-              fs.mkdirSync(publicDir, { recursive: true });
-            }
-            fs.writeFileSync(publicPath, data.verification_content, "utf8");
-            console.log(`[Config] Initialized static verification file at public/${data.verification_filename}`);
-          } catch (err) {
-            console.error(`[Config] Failed to write startup verification file to public/`, err);
-          }
-
-          try {
-            const distPath = path.join(process.cwd(), "dist", data.verification_filename);
-            const distDir = path.dirname(distPath);
-            if (!fs.existsSync(distDir)) {
-              fs.mkdirSync(distDir, { recursive: true });
-            }
-            fs.writeFileSync(distPath, data.verification_content, "utf8");
-            console.log(`[Config] Initialized static verification file at dist/${data.verification_filename}`);
-          } catch (err) {
-            console.error(`[Config] Failed to write startup verification file to dist/`, err);
-          }
-        }
-      } catch (e) {
-        globalConfig.settings.tiktok.is_linked = false;
-        globalConfig.settings.tiktok.account_name = "";
-        globalConfig.settings.tiktok.verification_filename = "";
-        globalConfig.settings.tiktok.verification_content = "";
-      }
-    } else {
-      globalConfig.settings.tiktok.is_linked = false;
-      globalConfig.settings.tiktok.account_name = "";
-      globalConfig.settings.tiktok.verification_filename = "";
-      globalConfig.settings.tiktok.verification_content = "";
+    {
+      const tkCreds = loadTiktokChannels();
+      const activeTkChannel = getActiveTiktokChannel(tkCreds);
+      globalConfig.settings.tiktok.is_linked = tkCreds.channels.length > 0;
+      globalConfig.settings.tiktok.account_name = activeTkChannel
+        ? activeTkChannel.channelName
+        : tkCreds.legacyAccountName || "";
+      globalConfig.settings.tiktok.verification_filename = tkCreds.verification_filename || "";
+      globalConfig.settings.tiktok.verification_content = tkCreds.verification_content || "";
+      // Keep the static verification file served by web/GFE in sync
+      writeTiktokVerificationFiles(process.cwd(), tkCreds);
     }
     
     // Auto-populate YouTube keys from environment/process.env variables
@@ -573,60 +543,22 @@ async function startServer() {
 
     // Save TikTok credentials to .env file if they are passed in from the UI
     if (req.body.tiktok) {
-      // Save verification filename and content to tiktok-credentials.json for durability across restarts
-      const tiktokCredsPath = path.join(process.cwd(), "storage", "tiktok-credentials.json");
-      let credData: any = {};
-      if (fs.existsSync(tiktokCredsPath)) {
-        try {
-          credData = JSON.parse(fs.readFileSync(tiktokCredsPath, "utf8"));
-        } catch (e) {
-          credData = {};
-        }
-      }
-      if (req.body.tiktok.verification_filename !== undefined) {
-        credData.verification_filename = req.body.tiktok.verification_filename;
-        globalConfig.settings.tiktok.verification_filename = req.body.tiktok.verification_filename;
-      }
-      if (req.body.tiktok.verification_content !== undefined) {
-        credData.verification_content = req.body.tiktok.verification_content;
-        globalConfig.settings.tiktok.verification_content = req.body.tiktok.verification_content;
-      }
+      // Persist verification metadata in the credentials repo for durability across restarts
       try {
-        const storageDir = path.dirname(tiktokCredsPath);
-        if (!fs.existsSync(storageDir)) {
-          fs.mkdirSync(storageDir, { recursive: true });
+        let tkCreds = loadTiktokChannels();
+        tkCreds = setTiktokVerification(tkCreds, {
+          filename: req.body.tiktok.verification_filename,
+          content: req.body.tiktok.verification_content,
+        });
+        if (req.body.tiktok.verification_filename !== undefined) {
+          globalConfig.settings.tiktok.verification_filename = req.body.tiktok.verification_filename;
         }
-        fs.writeFileSync(tiktokCredsPath, JSON.stringify(credData, null, 2), "utf8");
+        if (req.body.tiktok.verification_content !== undefined) {
+          globalConfig.settings.tiktok.verification_content = req.body.tiktok.verification_content;
+        }
+        saveTiktokChannels(process.cwd(), tkCreds);
         console.log("[Config] Persisted TikTok verification metadata to disk.");
-
-        // Immediately write the verification file to the public and dist folders
-        const filename = credData.verification_filename;
-        const content = credData.verification_content;
-        if (filename && content) {
-          try {
-            const publicPath = path.join(process.cwd(), "public", filename);
-            const publicDir = path.dirname(publicPath);
-            if (!fs.existsSync(publicDir)) {
-              fs.mkdirSync(publicDir, { recursive: true });
-            }
-            fs.writeFileSync(publicPath, content, "utf8");
-            console.log(`[Config] Wrote verification file to public/${filename}`);
-          } catch (e) {
-            console.error(`[Config] Failed to write verification file to public/`, e);
-          }
-
-          try {
-            const distPath = path.join(process.cwd(), "dist", filename);
-            const distDir = path.dirname(distPath);
-            if (!fs.existsSync(distDir)) {
-              fs.mkdirSync(distDir, { recursive: true });
-            }
-            fs.writeFileSync(distPath, content, "utf8");
-            console.log(`[Config] Wrote verification file to dist/${filename}`);
-          } catch (e) {
-            console.error(`[Config] Failed to write verification file to dist/`, e);
-          }
-        }
+        writeTiktokVerificationFiles(process.cwd(), tkCreds);
       } catch (err) {
         console.error("[Config] Failed to save verification metadata to tiktok-credentials.json:", err);
       }
@@ -1205,29 +1137,7 @@ Instrucciones:
     const username = user?.username || "";
     const avatarUrl = user?.avatar_url || "";
 
-    // Save credentials to local storage
-    const storageDir = path.join(process.cwd(), "storage");
-    if (!fs.existsSync(storageDir)) {
-      fs.mkdirSync(storageDir, { recursive: true });
-    }
-
-    const credsPath = path.join(storageDir, "tiktok-credentials.json");
-    let credData: any = {
-      activeChannelId: channelId,
-      channels: []
-    };
-
-    if (fs.existsSync(credsPath)) {
-      try {
-        const existing = JSON.parse(fs.readFileSync(credsPath, "utf8"));
-        credData.channels = existing.channels || [];
-        credData.activeChannelId = existing.activeChannelId || channelId;
-      } catch (e) {
-        console.error("Error reading existing tiktok credentials:", e);
-      }
-    }
-
-    // Update or insert channel
+    // Save credentials via the repo (preserves verification metadata)
     const tokens = {
       access_token: tokenData.access_token,
       refresh_token: tokenData.refresh_token,
@@ -1235,22 +1145,9 @@ Instrucciones:
       refresh_expires_at: Date.now() + (tokenData.refresh_expires_in * 1000)
     };
 
-    const existingIndex = credData.channels.findIndex((c: any) => c.channelId === channelId);
-    if (existingIndex > -1) {
-      credData.channels[existingIndex].tokens = tokens;
-      credData.channels[existingIndex].channelName = channelName;
-      credData.channels[existingIndex].username = username;
-      credData.channels[existingIndex].avatarUrl = avatarUrl;
-    } else {
-      credData.channels.push({ channelId, channelName, username, avatarUrl, tokens });
-    }
-
-    // Set active
-    if (!credData.activeChannelId || credData.activeChannelId === "unknown" || credData.channels.length === 1) {
-      credData.activeChannelId = channelId;
-    }
-
-    fs.writeFileSync(credsPath, JSON.stringify(credData, null, 2));
+    let tkCreds = loadTiktokChannels();
+    tkCreds = upsertTiktokChannel(tkCreds, { channelId, channelName, username, avatarUrl, tokens });
+    saveTiktokChannels(process.cwd(), tkCreds);
 
     // Send postMessage to closing popup
     res.send(`
@@ -1282,40 +1179,24 @@ Instrucciones:
 
   // TikTok OAuth Status Endpoint
   app.get("/api/v1/tiktok/status", wrap(async (req: any, res: any) => {
-    const credsPath = path.join(process.cwd(), "storage", "tiktok-credentials.json");
-    if (!fs.existsSync(credsPath)) {
-      return res.json({ status: 200, message: "ok", data: { is_linked: false, channel_name: null, active_channel_id: null, channels: [] } });
-    }
+    const tkCreds = loadTiktokChannels();
+    const activeChannel = getActiveTiktokChannel(tkCreds);
 
-    try {
-      const data = JSON.parse(fs.readFileSync(credsPath, "utf8"));
-      let channels = data.channels || [];
-      let activeChannelId = data.activeChannelId || null;
-
-      const activeChannel = channels.find((c: any) => c.channelId === activeChannelId) || channels[0];
-      const activeName = activeChannel ? activeChannel.channelName : null;
-
-      return res.json({
-        status: 200,
-        message: "ok",
-        data: {
-          is_linked: channels.length > 0,
-          channel_name: activeName,
-          active_channel_id: activeChannel ? activeChannel.channelId : null,
-          channels: channels.map((c: any) => ({ channelId: c.channelId, channelName: c.channelName, username: c.username, avatarUrl: c.avatarUrl }))
-        }
-      });
-    } catch (e) {
-      return res.json({ status: 200, message: "ok", data: { is_linked: false, channel_name: null, active_channel_id: null, channels: [] } });
-    }
+    return res.json({
+      status: 200,
+      message: "ok",
+      data: {
+        is_linked: tkCreds.channels.length > 0,
+        channel_name: activeChannel ? activeChannel.channelName : null,
+        active_channel_id: activeChannel ? activeChannel.channelId : null,
+        channels: tkCreds.channels.map((c) => ({ channelId: c.channelId, channelName: c.channelName, username: c.username, avatarUrl: c.avatarUrl }))
+      }
+    });
   }));
 
   // TikTok OAuth Disconnect Endpoint
   app.post("/api/v1/tiktok/disconnect", wrap(async (req: any, res: any) => {
-    const credsPath = path.join(process.cwd(), "storage", "tiktok-credentials.json");
-    if (fs.existsSync(credsPath)) {
-      fs.unlinkSync(credsPath);
-    }
+    clearTiktokCredentials(process.cwd());
     return res.json({ status: 200, message: "ok" });
   }));
 
@@ -1326,27 +1207,18 @@ Instrucciones:
       return res.status(400).json({ status: 400, message: "Falta el channelId." });
     }
 
-    const credsPath = path.join(process.cwd(), "storage", "tiktok-credentials.json");
-    if (!fs.existsSync(credsPath)) {
+    const tkCreds = loadTiktokChannels();
+    if (tkCreds.channels.length === 0) {
       return res.status(404).json({ status: 404, message: "No se encontraron credenciales de TikTok." });
     }
 
-    try {
-      const data = JSON.parse(fs.readFileSync(credsPath, "utf8"));
-      let channels = data.channels || [];
-
-      const found = channels.find((c: any) => c.channelId === channelId);
-      if (!found) {
-        return res.status(404).json({ status: 404, message: "Cuenta no encontrada en las cuentas vinculadas." });
-      }
-
-      data.activeChannelId = channelId;
-      fs.writeFileSync(credsPath, JSON.stringify(data, null, 2));
-
-      return res.json({ status: 200, message: "ok", activeChannelId: channelId });
-    } catch (e: any) {
-      return res.status(500).json({ status: 500, message: e.message });
+    const updated = selectTiktokChannel(tkCreds, channelId);
+    if (!updated) {
+      return res.status(404).json({ status: 404, message: "Cuenta no encontrada en las cuentas vinculadas." });
     }
+
+    saveTiktokChannels(process.cwd(), updated);
+    return res.json({ status: 200, message: "ok", activeChannelId: channelId });
   }));
 
   // TikTok OAuth Disconnect Single Channel Endpoint
@@ -1356,32 +1228,13 @@ Instrucciones:
       return res.status(400).json({ status: 400, message: "Falta el channelId." });
     }
 
-    const credsPath = path.join(process.cwd(), "storage", "tiktok-credentials.json");
-    if (!fs.existsSync(credsPath)) {
+    const tkCreds = loadTiktokChannels();
+    if (tkCreds.channels.length === 0) {
       return res.status(404).json({ status: 404, message: "No se encontraron credenciales de TikTok." });
     }
 
-    try {
-      const data = JSON.parse(fs.readFileSync(credsPath, "utf8"));
-      let channels = data.channels || [];
-
-      data.channels = channels.filter((c: any) => c.channelId !== channelId);
-      if (data.activeChannelId === channelId) {
-        data.activeChannelId = data.channels.length > 0 ? data.channels[0].channelId : null;
-      }
-
-      if (data.channels.length === 0) {
-        if (fs.existsSync(credsPath)) {
-          fs.unlinkSync(credsPath);
-        }
-      } else {
-        fs.writeFileSync(credsPath, JSON.stringify(data, null, 2));
-      }
-
-      return res.json({ status: 200, message: "ok" });
-    } catch (e: any) {
-      return res.status(500).json({ status: 500, message: e.message });
-    }
+    saveTiktokChannels(process.cwd(), removeTiktokChannel(tkCreds, channelId));
+    return res.json({ status: 200, message: "ok" });
   }));
 
   // TikTok Video Upload/Publish Endpoint
@@ -1391,16 +1244,12 @@ Instrucciones:
       return res.status(400).json({ status: 400, message: "Falta el videoUrl del video a subir." });
     }
 
-    const credsPath = path.join(process.cwd(), "storage", "tiktok-credentials.json");
-    if (!fs.existsSync(credsPath)) {
+    const tkCreds = loadTiktokChannels();
+    if (tkCreds.channels.length === 0) {
       return res.status(401).json({ status: 401, message: "TikTok no está vinculado. Por favor, vincúlalo primero." });
     }
 
-    const cred = JSON.parse(fs.readFileSync(credsPath, "utf8"));
-    const channels = cred.channels || [];
-    const activeChannelId = cred.activeChannelId || null;
-    const activeChannel = channels.find((c: any) => c.channelId === activeChannelId) || channels[0];
-
+    const activeChannel = getActiveTiktokChannel(tkCreds);
     if (!activeChannel) {
       return res.status(401).json({ status: 401, message: "TikTok no está vinculado o la cuenta activa no existe." });
     }
@@ -1426,7 +1275,7 @@ Instrucciones:
           activeChannel.tokens.access_token = refreshData.access_token;
           activeChannel.tokens.refresh_token = refreshData.refresh_token;
           activeChannel.tokens.expires_at = Date.now() + (refreshData.expires_in * 1000);
-          fs.writeFileSync(credsPath, JSON.stringify(cred, null, 2));
+          saveTiktokChannels(process.cwd(), tkCreds);
           accessToken = refreshData.access_token;
           console.log("[TikTok] Access token refreshed successfully.");
         } else {
@@ -2739,19 +2588,12 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
     let verificationContent = globalConfig.settings?.tiktok?.verification_content;
 
     // Load from disk directly as a fallback/guarantee to make it 100% robust
-    const tiktokCredsPath = path.join(process.cwd(), "storage", "tiktok-credentials.json");
-    if (fs.existsSync(tiktokCredsPath)) {
-      try {
-        const data = JSON.parse(fs.readFileSync(tiktokCredsPath, "utf8"));
-        if (data.verification_filename) {
-          verificationFilename = data.verification_filename;
-        }
-        if (data.verification_content) {
-          verificationContent = data.verification_content;
-        }
-      } catch (e) {
-        // ignore JSON parse errors
-      }
+    const tkCreds = loadTiktokChannels();
+    if (tkCreds.verification_filename) {
+      verificationFilename = tkCreds.verification_filename;
+    }
+    if (tkCreds.verification_content) {
+      verificationContent = tkCreds.verification_content;
     }
 
     if (verificationFilename && filename === verificationFilename) {
