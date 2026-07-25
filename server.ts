@@ -23,6 +23,7 @@ import { synthesizeSpeech } from "./src/server/tts";
 import { generateLlmContent } from "./src/server/llm";
 import { searchPexelsVideos, pickUniqueClip } from "./src/server/pexels";
 import { createRenderer, executeCommand } from "./src/server/render";
+import { createProjectsRepo } from "./src/server/projectsRepo";
 import { google } from "googleapis";
 import multer from "multer";
 
@@ -241,55 +242,8 @@ function getFormattedDateTime(): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_${pad(d.getHours())}-${pad(d.getMinutes())}-${pad(d.getSeconds())}`;
 }
 
-// Persistent Project Database helper
-const PROJECTS_FILE = path.join(process.cwd(), "storage", "projects_db.json");
-
-function loadProjects() {
-  try {
-    const dir = path.dirname(PROJECTS_FILE);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-    if (fs.existsSync(PROJECTS_FILE)) {
-      const data = fs.readFileSync(PROJECTS_FILE, "utf-8");
-      const parsed = JSON.parse(data);
-      const map = new Map<string, any>();
-      for (const [k, v] of Object.entries(parsed)) {
-        map.set(k, v);
-      }
-      return map;
-    }
-  } catch (err) {
-    console.error("Error loading projects from file, using empty map:", err);
-  }
-  return new Map<string, any>();
-}
-
-function saveProjects(map: Map<string, any>) {
-  try {
-    const obj = Object.fromEntries(map);
-    fs.writeFileSync(PROJECTS_FILE, JSON.stringify(obj, null, 2), "utf-8");
-  } catch (err) {
-    console.error("Error saving projects to file:", err);
-  }
-}
-
-const projects = loadProjects();
-
-// Override set and delete to automatically save to disk
-const originalSet = projects.set.bind(projects);
-projects.set = function (key: string, value: any) {
-  const result = originalSet(key, value);
-  saveProjects(projects);
-  return result;
-};
-
-const originalDelete = projects.delete.bind(projects);
-projects.delete = function (key: string) {
-  const result = originalDelete(key);
-  saveProjects(projects);
-  return result;
-};
+// Project database: repository with explicit persistence on set/delete.
+const projects = createProjectsRepo();
 
 const tasks = new Map<string, any>();
 

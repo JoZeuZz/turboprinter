@@ -23,8 +23,14 @@ export interface MusicItem {
   volume: number;
 }
 
+// Structural subset of ProjectsRepo/Map — the renderer only reads and updates.
+export interface ProjectsStore {
+  get(id: string): any | undefined;
+  set(id: string, project: any): unknown;
+}
+
 export interface RenderDeps {
-  projects: Map<string, any>;
+  projects: ProjectsStore;
   tasks: Map<string, any>;
   logTask: (taskId: string, level: "INFO" | "SUCCESS" | "WARNING" | "ERROR", category: string, message: string) => void;
   localVideosDir: string;
