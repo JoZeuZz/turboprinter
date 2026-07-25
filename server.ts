@@ -267,7 +267,7 @@ let globalConfig = {
     app: {
       video_source: "pexels",
       tls_verify: true,
-      pexels_api_keys: [process.env.PEXELS_API_KEY || "PEXELS_KEY_REMOVED_FROM_HISTORY_ROTATE_IT"],
+      pexels_api_keys: process.env.PEXELS_API_KEY ? [process.env.PEXELS_API_KEY] : [],
       pixabay_api_keys: [],
       coverr_api_keys: [],
       llm_provider: "gemini",

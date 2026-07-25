@@ -24,19 +24,1557 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 
 // server.ts
 var import_express = __toESM(require("express"), 1);
-var import_path = __toESM(require("path"), 1);
-var import_fs = __toESM(require("fs"), 1);
-var import_child_process = require("child_process");
+var import_path6 = __toESM(require("path"), 1);
+var import_fs6 = __toESM(require("fs"), 1);
 var import_vite = require("vite");
-var import_ws = __toESM(require("ws"), 1);
+
+// src/lib/subtitleLayout.ts
+var REF_HEIGHT = 1920;
+var cssHexToAss = (hex) => {
+  if (!hex) return "FFFFFF";
+  let clean = hex.replace("#", "");
+  if (clean.length === 3) {
+    clean = clean[0] + clean[0] + clean[1] + clean[1] + clean[2] + clean[2];
+  }
+  if (clean.length === 6 || clean.length === 8) {
+    const r = clean.substring(0, 2);
+    const g = clean.substring(2, 4);
+    const b = clean.substring(4, 6);
+    return `${b}${g}${r}`;
+  }
+  return "FFFFFF";
+};
+var getAssFontName = (fontName) => {
+  if (!fontName) return "Arial";
+  const clean = fontName.trim();
+  if (clean.startsWith("STHeitiMedium")) return "STHeitiSC-Medium";
+  if (clean.startsWith("STHeitiLight")) return "STHeitiSC-Light";
+  if (clean.startsWith("MicrosoftYaHeiBold")) return "Microsoft YaHei";
+  if (clean.startsWith("MicrosoftYaHeiNormal")) return "Microsoft YaHei";
+  if (clean.startsWith("Charm-Bold")) return "Charm";
+  if (clean.startsWith("Charm-Regular")) return "Charm";
+  if (clean.startsWith("UTM Kabel KY")) return "UTM Kabel KY";
+  if (clean.startsWith("UTM_Kabel_KY")) return "UTM Kabel KY";
+  return clean.split(".")[0] || "Arial";
+};
+var formatAssTime = (seconds) => {
+  const hrs = Math.floor(seconds / 3600);
+  const mins = Math.floor(seconds % 3600 / 60);
+  const secs = Math.floor(seconds % 60);
+  const ms = Math.floor(seconds % 1 * 1e3);
+  const cs = Math.floor(ms / 10);
+  return `${hrs}:${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}.${cs.toString().padStart(2, "0")}`;
+};
+var resolveLayoutFractions = (position, customPosition) => {
+  if (position === "top") {
+    return { alignment: 8, marginVFrac: 0.08, anchor: "top", offsetPct: 8 };
+  }
+  if (position === "center" || position === "middle") {
+    return { alignment: 5, marginVFrac: 0, anchor: "center", offsetPct: 50 };
+  }
+  if (position === "custom") {
+    const pct = customPosition ?? 70;
+    return { alignment: 8, marginVFrac: pct / 100, anchor: "top", offsetPct: pct };
+  }
+  return { alignment: 2, marginVFrac: 0.08, anchor: "bottom", offsetPct: 8 };
+};
+var normalizeColor = (color, fallback) => color?.trim() || fallback;
+var resolveBackgroundSpec = (hasBg, subtitleBgStyle) => {
+  const enabled = hasBg === true || typeof hasBg === "string" && Boolean(hasBg.trim()) && hasBg.trim() !== "transparent" && hasBg.trim() !== "none";
+  let r = 0;
+  let g = 0;
+  let b = 0;
+  let assAlpha = 0;
+  if (!enabled) return { enabled: false, r, g, b, assAlpha };
+  if (typeof hasBg === "string" && hasBg.trim()) {
+    const cleanBg = hasBg.trim();
+    if (cleanBg.startsWith("#")) {
+      let clean = cleanBg.replace("#", "");
+      if (clean.length === 3) {
+        clean = clean[0] + clean[0] + clean[1] + clean[1] + clean[2] + clean[2];
+      }
+      if (clean.length === 6 || clean.length === 8) {
+        r = parseInt(clean.substring(0, 2), 16);
+        g = parseInt(clean.substring(2, 4), 16);
+        b = parseInt(clean.substring(4, 6), 16);
+        if (clean.length === 8) {
+          assAlpha = 255 - parseInt(clean.substring(6, 8), 16);
+        }
+      } else {
+        r = g = b = 255;
+      }
+    } else if (cleanBg.startsWith("rgba")) {
+      const match = cleanBg.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*([\d.]+)\s*\)/);
+      if (match) {
+        r = parseInt(match[1]);
+        g = parseInt(match[2]);
+        b = parseInt(match[3]);
+        assAlpha = Math.round((1 - parseFloat(match[4])) * 255);
+      }
+    } else if (cleanBg.startsWith("rgb")) {
+      const match = cleanBg.match(/rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/);
+      if (match) {
+        r = parseInt(match[1]);
+        g = parseInt(match[2]);
+        b = parseInt(match[3]);
+      }
+    }
+  }
+  if (subtitleBgStyle === "translucent") {
+    if (assAlpha === 0) assAlpha = 128;
+  } else if (subtitleBgStyle === "blur") {
+    r = g = b = 255;
+    assAlpha = 192;
+  } else {
+    assAlpha = 0;
+  }
+  return { enabled, r, g, b, assAlpha };
+};
+var resolveBackgroundColors = (hasBg, subtitleBgStyle) => {
+  const spec = resolveBackgroundSpec(hasBg, subtitleBgStyle);
+  const toHex = (n) => n.toString(16).padStart(2, "0").toUpperCase();
+  return {
+    enabled: spec.enabled,
+    color: `${toHex(spec.b)}${toHex(spec.g)}${toHex(spec.r)}`,
+    alpha: toHex(spec.assAlpha)
+  };
+};
+var buildAnimTags = (animation) => {
+  if (animation === "pop") {
+    return "\\fscx80\\fscy80\\t(0,70,\\fscx114\\fscy114)\\t(70,140,\\fscx100\\fscy100)";
+  }
+  if (animation === "fade") {
+    return "\\fad(120,120)";
+  }
+  if (animation === "rotate") {
+    return "\\frz-3.5\\fscx80\\fscy80\\t(0,80,\\frz2\\fscx112\\fscy112)\\t(80,150,\\frz0\\fscx100\\fscy100)";
+  }
+  return "";
+};
+var estimateLineWidth = (line, fontSize) => {
+  let width = 0;
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    if (char === " ") {
+      width += 0.3;
+    } else if (/[A-Z]/.test(char)) {
+      width += 0.72;
+    } else if (/[a-z]/.test(char)) {
+      width += 0.54;
+    } else if (/[0-9]/.test(char)) {
+      width += 0.58;
+    } else if (/[áéíóúÁÉÍÓÚñÑüÜ]/.test(char)) {
+      width += 0.54;
+    } else {
+      width += 0.45;
+    }
+  }
+  return width * fontSize;
+};
+var getRoundedRectPath = (w, h, r) => {
+  if (r <= 0) {
+    return `m 0 0 l ${Math.round(w)} 0 l ${Math.round(w)} ${Math.round(h)} l 0 ${Math.round(h)}`;
+  }
+  const kappa = 0.5522847498;
+  let p = `m ${Math.round(r)} 0 `;
+  p += `l ${Math.round(w - r)} 0 `;
+  p += `b ${Math.round(w - r + r * kappa)} 0 ${Math.round(w)} ${Math.round(r - r * kappa)} ${Math.round(w)} ${Math.round(r)} `;
+  p += `l ${Math.round(w)} ${Math.round(h - r)} `;
+  p += `b ${Math.round(w)} ${Math.round(h - r + r * kappa)} ${Math.round(w - r + r * kappa)} ${Math.round(h)} ${Math.round(w - r)} ${Math.round(h)} `;
+  p += `l ${Math.round(r)} ${Math.round(h)} `;
+  p += `b ${Math.round(r - r * kappa)} ${Math.round(h)} 0 ${Math.round(h - r + r * kappa)} 0 ${Math.round(h - r)} `;
+  p += `l 0 ${Math.round(r)} `;
+  p += `b 0 ${Math.round(r - r * kappa)} ${Math.round(r - r * kappa)} 0 ${Math.round(r)} 0`;
+  return p;
+};
+var splitTextIntoTikTokSubtitles = (text, startSec, durationSec, segmentId, baseId) => {
+  if (!text || !text.trim()) return [];
+  const cleanText = text.trim().replace(/\s+/g, " ");
+  const isCJK = /[぀-ヿ㐀-䶿一-鿿豈-﫿ｦ-ﾟᄀ-ᇿ㄰-㆏가-힯]/.test(
+    cleanText
+  );
+  let units = [];
+  if (isCJK) {
+    units = Array.from(cleanText).filter((c) => c !== " ");
+  } else {
+    units = cleanText.split(" ");
+  }
+  if (units.length === 0) return [];
+  const maxUnits = 3;
+  const groups = [];
+  for (let i = 0; i < units.length; i += maxUnits) {
+    groups.push(units.slice(i, i + maxUnits));
+  }
+  if (groups.length > 1 && groups[groups.length - 1].length === 1) {
+    const lastGroup = groups.pop();
+    if (lastGroup) {
+      groups[groups.length - 1].push(...lastGroup);
+    }
+  }
+  const totalUnits = units.length;
+  let elapsed = 0;
+  return groups.map((grp, idx) => {
+    const phrase = isCJK ? grp.join("") : grp.join(" ");
+    const phraseUnitsCount = grp.length;
+    const chunkStart = startSec + elapsed / totalUnits * durationSec;
+    const chunkDuration = phraseUnitsCount / totalUnits * durationSec;
+    elapsed += phraseUnitsCount;
+    return {
+      id: `${baseId}_part_${idx + 1}`,
+      start_sec: Number(chunkStart.toFixed(3)),
+      duration_sec: Number(chunkDuration.toFixed(3)),
+      text: phrase,
+      segment_id: segmentId
+    };
+  });
+};
+var formatSrtTime = (seconds) => {
+  const hrs = Math.floor(seconds / 3600);
+  const mins = Math.floor(seconds % 3600 / 60);
+  const secs = Math.floor(seconds % 60);
+  const ms = Math.floor(seconds % 1 * 1e3);
+  return `${hrs.toString().padStart(2, "0")}:${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")},${ms.toString().padStart(3, "0")}`;
+};
+var generateSrt = (subtitles) => {
+  return subtitles.map((sub, idx) => {
+    const startSec = Number(sub.start_sec) || 0;
+    const durationSec = Number(sub.duration_sec) || 5;
+    const start = formatSrtTime(startSec);
+    const end = formatSrtTime(startSec + durationSec);
+    return `${idx + 1}
+${start} --> ${end}
+${sub.text || ""}
+`;
+  }).join("\n");
+};
+var generateAss = (subtitles, resWidth, resHeight, styleParams) => {
+  const refHeight = REF_HEIGHT;
+  const refWidth = Math.round(refHeight * (resWidth / resHeight));
+  const assFont = getAssFontName(styleParams.fontName);
+  const textColor = cssHexToAss(normalizeColor(styleParams.textColor, "#FFFFFF"));
+  const strokeColor = cssHexToAss(normalizeColor(styleParams.strokeColor, "#000000"));
+  const bg = resolveBackgroundColors(styleParams.hasBg, styleParams.subtitleBgStyle);
+  const layout = resolveLayoutFractions(styleParams.position, styleParams.customPosition);
+  const alignment = layout.alignment;
+  const marginV = Math.round(layout.marginVFrac * refHeight);
+  const marginLR = Math.round(0.07 * refWidth);
+  const animTags = buildAnimTags(styleParams.subtitleAnimation);
+  const isBold = styleParams.fontName && styleParams.fontName.toLowerCase().includes("bold") ? -1 : 0;
+  let out = `[Script Info]
+ScriptType: v4.00+
+PlayResX: ${refWidth}
+PlayResY: ${refHeight}
+WrapStyle: 0
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+`;
+  const outlineVal = styleParams.strokeWidth !== void 0 ? styleParams.strokeWidth : 1.5;
+  if (bg.enabled) {
+    out += `Style: BgStyle,${assFont},${styleParams.fontSize},&H${bg.alpha}${bg.color},&H00000000,&HFF000000,&HFF000000,0,0,0,0,100,100,0,0,1,0,0,5,0,0,0,1
+`;
+  }
+  out += `Style: Default,${assFont},${styleParams.fontSize},&H00${textColor},&H00000000,&H00${strokeColor},&HFF000000,${isBold},0,0,0,100,100,0,0,1,${outlineVal.toFixed(1)},0,${alignment},${marginLR},${marginLR},${marginV},1
+`;
+  out += `
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+`;
+  for (const sub of subtitles) {
+    const startSec = Number(sub.start_sec) || 0;
+    const durationSec = Number(sub.duration_sec) || 5;
+    const start = formatAssTime(startSec);
+    const end = formatAssTime(startSec + durationSec);
+    const text = (sub.text || "").replace(/\\n/g, "\\N").replace(/\n/g, "\\N");
+    const centerX = refWidth / 2;
+    let centerY = refHeight - marginV;
+    if (alignment === 8) {
+      centerY = marginV;
+    } else if (alignment === 5) {
+      centerY = refHeight / 2;
+    }
+    if (bg.enabled) {
+      const lines = text.split(/\\N/);
+      let maxLineWidth = 0;
+      for (const line of lines) {
+        const w = estimateLineWidth(line, styleParams.fontSize);
+        if (w > maxLineWidth) maxLineWidth = w;
+      }
+      const paddingX = styleParams.fontSize * 0.75;
+      const paddingY = styleParams.fontSize * 0.35;
+      const boxWidth = maxLineWidth + paddingX;
+      const textHeight = lines.length * styleParams.fontSize * 1.15;
+      const boxHeight = textHeight + paddingY;
+      const radius = styleParams.roundedBackground === true ? Math.min(boxHeight / 2, styleParams.fontSize * 0.35) : Math.round(styleParams.fontSize * 0.08);
+      let boxY = refHeight - marginV - boxHeight;
+      if (alignment === 8) {
+        boxY = marginV;
+      } else if (alignment === 5) {
+        boxY = refHeight / 2 - boxHeight / 2;
+      }
+      const boxX = centerX - boxWidth / 2;
+      const textY = boxY + paddingY / 2;
+      const pathStr = getRoundedRectPath(boxWidth, boxHeight, radius);
+      out += `Dialogue: 0,${start},${end},BgStyle,,0,0,0,,{\\an7\\pos(${boxX.toFixed(1)},${boxY.toFixed(1)})${animTags}\\p1}${pathStr}{\\p0}
+`;
+      out += `Dialogue: 1,${start},${end},Default,,0,0,0,,{\\an8\\pos(${centerX},${textY.toFixed(1)})${animTags}}${text}
+`;
+    } else {
+      out += `Dialogue: 0,${start},${end},Default,,0,0,0,,{\\an${alignment}\\pos(${centerX},${centerY.toFixed(1)})${animTags}}${text}
+`;
+    }
+  }
+  return out;
+};
+
+// src/server/youtubeChannels.ts
+var import_fs = __toESM(require("fs"), 1);
+var import_path = __toESM(require("path"), 1);
+var DEFAULT_LEGACY_NAME = "Mi Canal de YouTube";
+var youtubeCredsPath = (rootDir) => import_path.default.join(rootDir, "storage", "youtube-credentials.json");
+var loadChannels = (rootDir = process.cwd()) => {
+  const credsPath = youtubeCredsPath(rootDir);
+  if (!import_fs.default.existsSync(credsPath)) {
+    return { activeChannelId: null, channels: [] };
+  }
+  try {
+    const data = JSON.parse(import_fs.default.readFileSync(credsPath, "utf8"));
+    let channels = data.channels || [];
+    let activeChannelId = data.activeChannelId || null;
+    if (channels.length === 0 && data.tokens) {
+      channels = [
+        {
+          channelId: "legacy",
+          channelName: data.channelName || DEFAULT_LEGACY_NAME,
+          tokens: data.tokens
+        }
+      ];
+      activeChannelId = "legacy";
+    }
+    return { activeChannelId, channels };
+  } catch {
+    return { activeChannelId: null, channels: [] };
+  }
+};
+var saveChannels = (rootDir, creds) => {
+  const credsPath = youtubeCredsPath(rootDir);
+  if (creds.channels.length === 0) {
+    if (import_fs.default.existsSync(credsPath)) import_fs.default.unlinkSync(credsPath);
+    return;
+  }
+  import_fs.default.mkdirSync(import_path.default.dirname(credsPath), { recursive: true });
+  import_fs.default.writeFileSync(credsPath, JSON.stringify(creds, null, 2));
+};
+var getActiveChannel = (creds) => creds.channels.find((c) => c.channelId === creds.activeChannelId) || creds.channels[0] || null;
+var upsertChannel = (creds, channel) => {
+  const channels = [...creds.channels];
+  const existingIndex = channels.findIndex((c) => c.channelId === channel.channelId);
+  if (existingIndex > -1) {
+    channels[existingIndex] = { ...channels[existingIndex], ...channel };
+  } else {
+    channels.push(channel);
+  }
+  let activeChannelId = creds.activeChannelId;
+  if (!activeChannelId || activeChannelId === "unknown" || channels.length === 1) {
+    activeChannelId = channel.channelId;
+  }
+  return { activeChannelId, channels };
+};
+var selectChannel = (creds, channelId) => {
+  if (!creds.channels.some((c) => c.channelId === channelId)) return null;
+  return { ...creds, activeChannelId: channelId };
+};
+var removeChannel = (creds, channelId) => {
+  const channels = creds.channels.filter((c) => c.channelId !== channelId);
+  let activeChannelId = creds.activeChannelId;
+  if (activeChannelId === channelId) {
+    activeChannelId = channels.length > 0 ? channels[0].channelId : null;
+  }
+  return { activeChannelId, channels };
+};
+
+// src/server/envFile.ts
+var import_fs2 = __toESM(require("fs"), 1);
+var import_path2 = __toESM(require("path"), 1);
+var updateEnvFile = (updates, envPath = import_path2.default.join(process.cwd(), ".env")) => {
+  let content = "";
+  if (import_fs2.default.existsSync(envPath)) {
+    content = import_fs2.default.readFileSync(envPath, "utf-8");
+  }
+  const lines = content.split(/\r?\n/);
+  for (const [key, val] of Object.entries(updates)) {
+    let found = false;
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].trim().startsWith(`${key}=`)) {
+        lines[i] = `${key}=${val}`;
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
+      lines.push(`${key}=${val}`);
+    }
+    process.env[key] = val;
+  }
+  import_fs2.default.writeFileSync(envPath, lines.join("\n"), "utf-8");
+};
+
+// src/server/tts.ts
 var import_crypto = __toESM(require("crypto"), 1);
+var import_ws = __toESM(require("ws"), 1);
+function cleanVoiceName(voice) {
+  let name = voice;
+  if (name.includes(":")) {
+    const parts = name.split(":");
+    name = parts[parts.length - 1];
+  }
+  name = name.replace(/[-:](male|female)$/i, "");
+  return name;
+}
+function getEdgeVoiceAndLang(rawVoiceName, defaultLang = "es") {
+  let voice = cleanVoiceName(rawVoiceName);
+  let lang = defaultLang;
+  const localeMatch = voice.match(/^([a-z]{2})-([A-Z]{2})/);
+  if (localeMatch) {
+    lang = localeMatch[0];
+  } else {
+    const lower = rawVoiceName.toLowerCase();
+    if (lower.includes("en-") || lower.includes("us-") || lower.includes("guy") || lower.includes("jenny") || lower.includes("alex") || lower.includes("anna") || lower.includes("bella") || lower.includes("benjamin") || lower.includes("charles") || lower.includes("claire") || lower.includes("david") || lower.includes("diana") || lower.includes("milo") || lower.includes("dean") || lower.includes("chloe") || lower.includes("mia") || lower.includes("puck") || lower.includes("charon") || lower.includes("zephyr")) {
+      lang = "en-US";
+    } else if (lower.includes("zh-") || lower.includes("cn-") || lower.includes("xiaoxiao") || lower.includes("yunxi") || lower.includes("\u51B0\u7CD6") || lower.includes("\u8309\u8389") || lower.includes("\u82CF\u6253") || lower.includes("\u767D\u6866")) {
+      lang = "zh-CN";
+    } else if (lower.includes("es-") || lower.includes("mx-") || lower.includes("alvaro") || lower.includes("elvira") || lower.includes("dalia") || lower.includes("jorge")) {
+      lang = "es-ES";
+    } else if (lower.includes("pt-") || lower.includes("br-")) {
+      lang = "pt-BR";
+    } else if (lower.includes("de-")) {
+      lang = "de-DE";
+    } else if (lower.includes("fr-")) {
+      lang = "fr-FR";
+    } else if (lower.includes("it-")) {
+      lang = "it-IT";
+    } else if (lower.includes("ru-")) {
+      lang = "ru-RU";
+    } else if (lower.includes("ja-") || lower.includes("jp-")) {
+      lang = "ja-JP";
+    }
+  }
+  const lowerVoice = voice.toLowerCase();
+  if (!voice.includes("-") || voice.length < 5) {
+    const isMale = lowerVoice.includes("male") || lowerVoice.includes("guy") || lowerVoice.includes("david") || lowerVoice.includes("charles") || lowerVoice.includes("benjamin") || lowerVoice.includes("puck") || lowerVoice.includes("charon") || lowerVoice.includes("zephyr") || lowerVoice.includes("milo") || lowerVoice.includes("dean") || lowerVoice.includes("suda") || lowerVoice.includes("\u82CF\u6253") || lowerVoice.includes("alvaro") || lowerVoice.includes("jorge");
+    if (lang.startsWith("es")) {
+      voice = isMale ? "es-ES-AlvaroNeural" : "es-ES-ElviraNeural";
+    } else if (lang.startsWith("en")) {
+      voice = isMale ? "en-US-GuyNeural" : "en-US-JennyNeural";
+    } else if (lang.startsWith("zh")) {
+      voice = isMale ? "zh-CN-YunxiNeural" : "zh-CN-XiaoxiaoNeural";
+    } else if (lang.startsWith("pt")) {
+      voice = isMale ? "pt-BR-JulioNeural" : "pt-BR-FranciscaNeural";
+    } else if (lang.startsWith("de")) {
+      voice = isMale ? "de-DE-ConradNeural" : "de-DE-AmalaNeural";
+    } else if (lang.startsWith("fr")) {
+      voice = isMale ? "fr-FR-HenriNeural" : "fr-FR-DeniseNeural";
+    } else if (lang.startsWith("it")) {
+      voice = isMale ? "it-IT-DiegoNeural" : "it-IT-ElsaNeural";
+    } else if (lang.startsWith("ru")) {
+      voice = isMale ? "ru-RU-DmitryNeural" : "ru-RU-SvetlanaNeural";
+    } else if (lang.startsWith("ja")) {
+      voice = isMale ? "ja-JP-KeitaNeural" : "ja-JP-NanamiNeural";
+    } else {
+      voice = isMale ? "en-US-GuyNeural" : "en-US-JennyNeural";
+    }
+  }
+  return { voice, lang };
+}
+var WIN_EPOCH = 11644473600;
+var S_TO_NS = 1e9;
+var TRUSTED_CLIENT_TOKEN = "6A5AA1D4EAFF4E9FB37E23D68491D6F4";
+var SEC_MS_GEC_VERSION = "1-143.0.3650.75";
+function generateSecMsGec() {
+  let ticks = Math.floor(Date.now() / 1e3);
+  ticks += WIN_EPOCH;
+  ticks -= ticks % 300;
+  const intervals = ticks * (S_TO_NS / 100);
+  const strToHash = `${intervals.toFixed(0)}${TRUSTED_CLIENT_TOKEN}`;
+  return import_crypto.default.createHash("sha256").update(strToHash, "ascii").digest("hex").toUpperCase();
+}
+function getJSStyleDateString() {
+  const d = /* @__PURE__ */ new Date();
+  const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const dayName = days[d.getUTCDay()];
+  const monthName = months[d.getUTCMonth()];
+  const dateNum = String(d.getUTCDate()).padStart(2, "0");
+  const year = d.getUTCFullYear();
+  const hours = String(d.getUTCHours()).padStart(2, "0");
+  const minutes = String(d.getUTCMinutes()).padStart(2, "0");
+  const seconds = String(d.getUTCSeconds()).padStart(2, "0");
+  return `${dayName} ${monthName} ${dateNum} ${year} ${hours}:${minutes}:${seconds} GMT+0000 (Coordinated Universal Time)`;
+}
+function buildSsml(text, voice, lang, voiceRate, voiceVolume) {
+  const cleanText = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const ratePct = Math.round((voiceRate - 1) * 100);
+  const rateStr = ratePct >= 0 ? `+${ratePct}%` : `${ratePct}%`;
+  const volPct = Math.round((voiceVolume - 1) * 100);
+  const volStr = volPct >= 0 ? `+${volPct}%` : `${volPct}%`;
+  return `<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='${lang}'><voice name='${voice}'><prosody pitch='+0Hz' rate='${rateStr}' volume='${volStr}'>${cleanText}</prosody></voice></speak>`;
+}
+function parseEdgeAudioFrame(buffer) {
+  if (buffer.length < 2) return null;
+  const headerLen = buffer.readUInt16BE(0);
+  const header = buffer.toString("utf8", 2, 2 + headerLen);
+  if (header.includes("Path: audio") || header.includes("Path:audio")) {
+    return buffer.subarray(2 + headerLen);
+  }
+  return null;
+}
+function synthesizeSpeechWithEdge(voiceName, text, defaultLang = "es", voiceRate = 1, voiceVolume = 1) {
+  return new Promise((resolve, reject) => {
+    const { voice, lang } = getEdgeVoiceAndLang(voiceName, defaultLang);
+    console.log(`[EdgeTTS] Requesting voice: "${voice}" (lang: "${lang}", rate: ${voiceRate}, volume: ${voiceVolume}) for text: "${text.substring(0, 60)}..."`);
+    const requestId = Array.from({ length: 32 }, () => Math.floor(Math.random() * 16).toString(16)).join("");
+    const secMsGec = generateSecMsGec();
+    const wsUrl = `wss://speech.platform.bing.com/consumer/speech/synthesize/readaloud/edge/v1?TrustedClientToken=${TRUSTED_CLIENT_TOKEN}&ConnectionId=${requestId}&Sec-MS-GEC=${secMsGec}&Sec-MS-GEC-Version=${SEC_MS_GEC_VERSION}`;
+    const ws = new import_ws.default(wsUrl, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0",
+        "Pragma": "no-cache",
+        "Cache-Control": "no-cache",
+        "Origin": "chrome-extension://jdiccldimpdaibmpdkjnbmckianbfold",
+        "Sec-WebSocket-Version": "13"
+      }
+    });
+    const audioBuffers = [];
+    let isFinished = false;
+    ws.on("open", () => {
+      const timestampStr = getJSStyleDateString();
+      const configPayload = JSON.stringify({
+        context: {
+          synthesis: {
+            audio: {
+              metadataoptions: {
+                sentenceBoundaryEnabled: "false",
+                wordBoundaryEnabled: "true"
+              },
+              outputFormat: "audio-24khz-48kbitrate-mono-mp3"
+            }
+          }
+        }
+      });
+      const configMsg = `X-Timestamp:${timestampStr}Z\r
+Content-Type:application/json; charset=utf-8\r
+Path:speech.config\r
+\r
+${configPayload}`;
+      ws.send(configMsg);
+      const ssml = buildSsml(text, voice, lang, voiceRate, voiceVolume);
+      const ssmlMsg = `X-RequestId:${requestId}\r
+Content-Type:application/ssml+xml\r
+X-Timestamp:${timestampStr}Z\r
+Path:ssml\r
+\r
+${ssml}`;
+      ws.send(ssmlMsg);
+    });
+    ws.on("message", (data, isBinary) => {
+      if (isBinary) {
+        const audioPayload = parseEdgeAudioFrame(Buffer.from(data));
+        if (audioPayload) {
+          audioBuffers.push(audioPayload);
+        }
+      } else {
+        const textMsg = data.toString();
+        if (textMsg.includes("Path: turn.end") || textMsg.includes("Path:turn.end")) {
+          isFinished = true;
+          ws.close();
+        }
+      }
+    });
+    ws.on("close", () => {
+      if (audioBuffers.length > 0) {
+        resolve(Buffer.concat(audioBuffers));
+      } else {
+        reject(new Error("No audio data received from Edge TTS WebSocket"));
+      }
+    });
+    ws.on("error", (err) => {
+      reject(err);
+    });
+    setTimeout(() => {
+      if (!isFinished) {
+        ws.close();
+        if (audioBuffers.length > 0) {
+          resolve(Buffer.concat(audioBuffers));
+        } else {
+          reject(new Error("Edge TTS timeout"));
+        }
+      }
+    }, 15e3);
+  });
+}
+async function synthesizeSpeech(voiceName, text, defaultLang = "es", voiceRate = 1, voiceVolume = 1) {
+  try {
+    return await synthesizeSpeechWithEdge(voiceName, text, defaultLang, voiceRate, voiceVolume);
+  } catch (err) {
+    console.warn(`[SpeechSynthesis] Edge TTS failed for voice "${voiceName}", falling back to Google TTS:`, err);
+    const { lang } = getEdgeVoiceAndLang(voiceName, defaultLang);
+    const shortLang = lang.split("-")[0];
+    const googleTtsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=${shortLang}&client=tw-ob&q=${encodeURIComponent(text.substring(0, 200))}`;
+    const response = await fetch(googleTtsUrl, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+      }
+    });
+    if (!response.ok) {
+      throw new Error(`Google TTS fallback failed with status ${response.status}`);
+    }
+    const arrayBuffer = await response.arrayBuffer();
+    return Buffer.from(arrayBuffer);
+  }
+}
+
+// src/server/llm.ts
 var import_genai = require("@google/genai");
+async function generateLlmContent(prompt, jsonMode = false, systemInstruction) {
+  const llmProvider = process.env.LLM_PROVIDER || "gemini";
+  if (llmProvider === "lmstudio" || llmProvider === "openai") {
+    const apiBase = process.env.OPENAI_API_BASE || "http://localhost:1234/v1";
+    const apiKey2 = process.env.OPENAI_API_KEY || "lm-studio";
+    const model = process.env.OPENAI_MODEL || "loaded-model";
+    console.log(`[LLM] Directing generation to local OpenAI/LM Studio endpoint: ${apiBase}`);
+    const messages = [];
+    if (systemInstruction) {
+      messages.push({ role: "system", content: systemInstruction });
+    }
+    let finalPrompt = prompt;
+    if (jsonMode && (llmProvider === "lmstudio" || !apiBase.includes("api.openai.com"))) {
+      finalPrompt += "\n\nCRITICAL: Return ONLY a valid JSON object. Do not include any explanations, markdown code block backticks (like ```json), or text before or after the JSON.";
+    }
+    messages.push({ role: "user", content: finalPrompt });
+    try {
+      const response = await fetch(`${apiBase}/chat/completions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${apiKey2}`
+        },
+        body: JSON.stringify({
+          model,
+          messages,
+          temperature: 0.7,
+          ...jsonMode && apiBase.includes("api.openai.com") ? { response_format: { type: "json_object" } } : {}
+        })
+      });
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`LM Studio / OpenAI returned error status ${response.status}: ${errorText}`);
+      }
+      const data = await response.json();
+      let text = data.choices?.[0]?.message?.content || "";
+      if (jsonMode) {
+        text = text.replace(/```json/gi, "").replace(/```/g, "").trim();
+      }
+      return text;
+    } catch (err) {
+      console.error("Failed calling LM Studio/OpenAI API:", err);
+      throw err;
+    }
+  }
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    throw new Error("No Gemini API key configured. Set GEMINI_API_KEY or configure LLM_PROVIDER=lmstudio.");
+  }
+  try {
+    const ai = new import_genai.GoogleGenAI({
+      apiKey,
+      httpOptions: {
+        headers: {
+          "User-Agent": "aistudio-build"
+        }
+      }
+    });
+    const response = await ai.models.generateContent({
+      model: "gemini-3.1-flash-lite",
+      contents: prompt,
+      config: {
+        ...jsonMode ? { responseMimeType: "application/json" } : {},
+        ...systemInstruction ? { systemInstruction } : {}
+      }
+    });
+    return response.text || "";
+  } catch (err) {
+    console.error("Failed calling Gemini API via SDK:", err);
+    throw err;
+  }
+}
+
+// src/server/pexels.ts
+var searchPexelsVideos = async (query, apiKey, orientation = "portrait") => {
+  try {
+    const url = `https://api.pexels.com/videos/search?query=${encodeURIComponent(query)}&per_page=15&orientation=${orientation}`;
+    const res = await fetch(url, {
+      headers: {
+        "Authorization": apiKey
+      }
+    });
+    if (!res.ok) {
+      throw new Error(`Pexels API response error: ${res.status}`);
+    }
+    const data = await res.json();
+    return (data.videos || []).map((video) => {
+      const file = video.video_files?.find((f) => f.quality === "hd" || f.quality === "sd") || video.video_files?.[0];
+      return {
+        id: `pexels_${video.id}`,
+        provider: "pexels",
+        source_url: file?.link || video.video_files?.[0]?.link,
+        download_url: file?.link || video.video_files?.[0]?.link,
+        thumbnail_url: video.image || `https://images.pexels.com/videos/${video.id}/pictures/medium-1.jpg`,
+        width: video.width,
+        height: video.height,
+        duration_sec: video.duration,
+        query,
+        title: video.user?.name ? `Video by ${video.user.name}` : "Pexels Video"
+      };
+    });
+  } catch (err) {
+    console.error(`Failed to search Pexels for query "${query}":`, err);
+    return [];
+  }
+};
+var clipIdOf = (clip) => {
+  const id = clip.id || clip.source_url || clip.download_url;
+  return id ? String(id) : null;
+};
+function pickUniqueClip(candidates, usedIds) {
+  if (candidates.length === 0) return void 0;
+  let chosen = candidates[0];
+  for (const candidate of candidates) {
+    const id = clipIdOf(candidate);
+    if (id && !usedIds.has(id)) {
+      chosen = candidate;
+      break;
+    }
+  }
+  const chosenId = clipIdOf(chosen);
+  if (chosenId) {
+    usedIds.add(chosenId);
+  }
+  return chosen;
+}
+
+// src/server/render.ts
+var import_crypto2 = __toESM(require("crypto"), 1);
+var import_fs3 = __toESM(require("fs"), 1);
+var import_path3 = __toESM(require("path"), 1);
+var import_child_process = require("child_process");
+var correctPexelsCdnUrl = (url) => url.includes("images.pexels.com/video-files/") ? url.replace("images.pexels.com/video-files/", "videos.pexels.com/video-files/") : url;
+var buildFontsConf = (cwd, taskId) => `<?xml version="1.0"?>
+<!DOCTYPE fontconfig SYSTEM "fonts.dtd">
+<fontconfig>
+  <dir>${import_path3.default.join(cwd, "public", "fonts")}</dir>
+  <dir>${import_path3.default.join(cwd, "resource", "fonts")}</dir>
+  <dir>/usr/share/fonts</dir>
+  <dir>/usr/local/share/fonts</dir>
+  <cachedir>/tmp/fonts-cache-${taskId}</cachedir>
+  <include ignore_missing="yes">/etc/fonts/fonts.conf</include>
+</fontconfig>`;
+var escapeAssPathForFilter = (relPath) => relPath.replace(/'/g, "'\\\\''").replace(/:/g, "\\:");
+var buildAudioMixFilter = (hasNarration, hasMusic, voiceVolume, musicVolume) => {
+  if (hasNarration && hasMusic) {
+    return `[1:a]volume=${voiceVolume}[v];[2:a]volume=${musicVolume}[m];[v][m]amix=inputs=2:duration=first[a]`;
+  }
+  if (hasNarration) {
+    return `[1:a]volume=${voiceVolume}[a]`;
+  }
+  if (hasMusic) {
+    return `[1:a]volume=${musicVolume}[a]`;
+  }
+  return "";
+};
+function pickBgm(opts) {
+  const { bgmType, bgmFile, bgmVolume, searchSubject, bgmFiles } = opts;
+  if (bgmType === "random" && bgmFiles.length > 0) {
+    const randomIdx = opts.randomIndex ? opts.randomIndex() : Math.floor(Math.random() * bgmFiles.length);
+    const randomFile = bgmFiles[randomIdx];
+    return {
+      id: `bgm_random_${randomIdx}`,
+      provider: "local",
+      url: randomFile.file,
+      title: randomFile.name,
+      duration_sec: 180,
+      volume: bgmVolume
+    };
+  }
+  if (bgmType === "contextual" && bgmFiles.length > 0) {
+    const subject = searchSubject.toLowerCase();
+    let bestMatch = bgmFiles[0];
+    let maxMatches = -1;
+    for (const file of bgmFiles) {
+      let matches = 0;
+      if (file.tags) {
+        for (const tag of file.tags) {
+          if (subject.includes(tag.toLowerCase())) {
+            matches++;
+          }
+        }
+      }
+      if (matches > maxMatches) {
+        maxMatches = matches;
+        bestMatch = file;
+      }
+    }
+    return {
+      id: "bgm_contextual",
+      provider: "local",
+      url: bestMatch.file,
+      title: bestMatch.name,
+      duration_sec: 180,
+      volume: bgmVolume
+    };
+  }
+  if (bgmFile && bgmType === "file") {
+    const matched = bgmFiles.find((f) => f.file === bgmFile || f.name === bgmFile);
+    return {
+      id: "bgm_param",
+      provider: "local",
+      url: matched ? matched.file : bgmFile,
+      title: matched ? matched.name : import_path3.default.basename(bgmFile),
+      duration_sec: 180,
+      volume: bgmVolume
+    };
+  }
+  return null;
+}
+var executeCommand = (cmd) => {
+  return new Promise((resolve, reject) => {
+    (0, import_child_process.exec)(cmd, { maxBuffer: 1024 * 1024 * 50 }, (error, stdout, stderr) => {
+      if (error) {
+        let customErrorMsg = `Command failed: ${cmd}
+Error: ${error.message}
+Stderr: ${stderr}`;
+        if (cmd.includes("ffmpeg") || cmd.includes("ffprobe")) {
+          const isFfmpegMissing = error.message.includes("not recognized") || error.message.includes("no se reconoce") || error.message.includes("not found") || error.message.includes("ENOENT") || error.code === 127 || error.code === 9009;
+          if (isFfmpegMissing) {
+            customErrorMsg = `\u26A0\uFE0F [ERROR DE SISTEMA] FFmpeg / FFprobe no est\xE1 instalado o no se encuentra en el PATH de tu sistema.
+
+Para ejecutar esta aplicaci\xF3n localmente y generar tus videos con \xE9xito, sigue estos pasos:
+1. Descarga FFmpeg desde la p\xE1gina oficial: https://ffmpeg.org/download.html
+   (En Windows, puedes descargar el build de Gyan.dev. En Mac, puedes usar 'brew install ffmpeg')
+2. Extrae el contenido y a\xF1ade la carpeta 'bin' (que contiene ffmpeg.exe) al PATH de las Variables de Entorno de tu sistema.
+3. Cierra tu terminal actual, abre una nueva terminal y vuelve a iniciar tu servidor con 'npm run dev'.
+
+---------------------------------------------------------
+FFmpeg / FFprobe is not installed or found in your system's PATH.
+To run this application locally and render videos successfully, please:
+1. Download FFmpeg from: https://ffmpeg.org/download.html
+2. Extract and add the 'bin' directory to your system's PATH environment variable.
+3. Restart your development terminal and run 'npm run dev' again.
+
+[Detalle t\xE9cnico / Technical Detail]: ${error.message}`;
+          }
+        }
+        reject(new Error(customErrorMsg));
+        return;
+      }
+      resolve(stdout);
+    });
+  });
+};
+var downloadFile = async (url, destPath) => {
+  if (import_fs3.default.existsSync(destPath)) {
+    const stat = import_fs3.default.statSync(destPath);
+    if (stat.size > 0) {
+      return destPath;
+    }
+    try {
+      import_fs3.default.unlinkSync(destPath);
+    } catch (e) {
+    }
+  }
+  const correctedUrl = correctPexelsCdnUrl(url);
+  let lastError = null;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const response = await fetch(correctedUrl, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          "Accept": "*/*",
+          "Accept-Language": "en-US,en;q=0.9"
+        }
+      });
+      if (response.ok) {
+        const buffer = await response.arrayBuffer();
+        await import_fs3.default.promises.writeFile(destPath, Buffer.from(buffer));
+        return destPath;
+      } else {
+        throw new Error(`Status ${response.status} ${response.statusText}`);
+      }
+    } catch (err) {
+      lastError = err;
+      console.warn(`[Download] Fetch attempt ${attempt} failed for ${correctedUrl}: ${err.message}`);
+      if (attempt < 3) {
+        await new Promise((resolve) => setTimeout(resolve, 1e3 * attempt));
+      }
+    }
+  }
+  console.log(`[Download] Falling back to curl for ${correctedUrl}`);
+  try {
+    await new Promise((resolve, reject) => {
+      const cmd = `curl -L -f --retry 3 -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" -o "${destPath}" "${correctedUrl}"`;
+      (0, import_child_process.exec)(cmd, (error, _stdout, stderr) => {
+        if (error) {
+          reject(new Error(`curl failed: ${stderr || error.message}`));
+        } else {
+          resolve();
+        }
+      });
+    });
+    if (import_fs3.default.existsSync(destPath) && import_fs3.default.statSync(destPath).size > 0) {
+      return destPath;
+    }
+  } catch (curlErr) {
+    console.error(`[Download] curl fallback also failed for ${correctedUrl}:`, curlErr);
+    lastError = new Error(`${lastError?.message || ""} (curl fallback also failed: ${curlErr.message})`);
+  }
+  throw new Error(`Failed to download ${correctedUrl}: ${lastError?.message}`);
+};
+function createRenderer(deps) {
+  const { projects: projects2, tasks: tasks2, logTask, localVideosDir, bgmFiles } = deps;
+  const runRealRender = async (projectId, taskId) => {
+    const updateTaskState = (progress, outputPath, error, state = 4) => {
+      const t = tasks2.get(taskId);
+      if (t) {
+        t.progress = progress;
+        t.state = state;
+        t.output_path = outputPath;
+        t.error = error;
+        tasks2.set(taskId, t);
+      }
+    };
+    try {
+      const p = projects2.get(projectId);
+      if (!p) {
+        throw new Error("Project not found");
+      }
+      const isLocalSource = p.params?.video_source === "local" || p.video_source === "local" || p.selected_media && p.selected_media[0]?.provider === "local";
+      if (isLocalSource) {
+        const uniqueFiles = [];
+        const seen = /* @__PURE__ */ new Set();
+        const chosenLocalFiles = p.params?.local_video_files || [];
+        console.log(`[Render Rebuild] Rebuilding local video track. chosenLocalFiles:`, chosenLocalFiles);
+        if (chosenLocalFiles.length > 0) {
+          for (const filename of chosenLocalFiles) {
+            const existingMed = (p.selected_media || []).find((m) => import_path3.default.basename(m.source_url || m.asset_url || "") === filename);
+            if (existingMed) {
+              if (!seen.has(existingMed.source_url)) {
+                seen.add(existingMed.source_url);
+                if (!existingMed.local_path) {
+                  existingMed.local_path = `storage/local_videos/${filename}`;
+                }
+                uniqueFiles.push(existingMed);
+              }
+            } else {
+              const sourceUrl = `/storage/local_videos/${filename}`;
+              if (!seen.has(sourceUrl)) {
+                seen.add(sourceUrl);
+                const fullDiskPath = import_path3.default.join(localVideosDir, filename);
+                let durationSec = 15;
+                if (import_fs3.default.existsSync(fullDiskPath)) {
+                  try {
+                    const durationStr = await executeCommand(`ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${fullDiskPath}"`);
+                    const d = parseFloat(durationStr.trim());
+                    if (!isNaN(d) && d > 0) {
+                      durationSec = d;
+                    }
+                  } catch (e) {
+                    console.warn(`[Render Rebuild] Failed to get duration for ${filename}, defaulting to 15s`, e);
+                  }
+                }
+                uniqueFiles.push({
+                  id: `${filename}_custom`,
+                  provider: "local",
+                  source_url: sourceUrl,
+                  download_url: sourceUrl,
+                  thumbnail_url: "/dist/assets/background.jpg",
+                  duration_sec: durationSec,
+                  local_path: `storage/local_videos/${filename}`
+                });
+              }
+            }
+          }
+        } else if (p.selected_media && p.selected_media.length > 0) {
+          for (const med of p.selected_media) {
+            if (med.source_url && !seen.has(med.source_url)) {
+              seen.add(med.source_url);
+              uniqueFiles.push(med);
+            }
+          }
+        }
+        if (uniqueFiles.length === 0) {
+          try {
+            const files = import_fs3.default.readdirSync(localVideosDir);
+            const videoExtensions = [".mp4", ".mkv", ".avi", ".mov", ".webm"];
+            const availableLocalFiles = files.filter((f) => videoExtensions.includes(import_path3.default.extname(f).toLowerCase()));
+            const chosenFiles = availableLocalFiles.length > 0 ? availableLocalFiles : ["nature_cinematic.mp4", "urban_streets.mp4", "retro_animation.mp4"];
+            for (const filename of chosenFiles) {
+              const sourceUrl = `/storage/local_videos/${filename}`;
+              if (!seen.has(sourceUrl)) {
+                seen.add(sourceUrl);
+                uniqueFiles.push({
+                  id: `${filename}_fallback`,
+                  provider: "local",
+                  source_url: sourceUrl,
+                  download_url: sourceUrl,
+                  thumbnail_url: "/dist/assets/background.jpg",
+                  duration_sec: 15,
+                  local_path: `storage/local_videos/${filename}`
+                });
+              }
+            }
+          } catch (e) {
+            console.error("[Render Rebuild] Failed to read fallback local videos:", e);
+          }
+        }
+        const defaultLocalVideos2 = ["nature_cinematic.mp4", "urban_streets.mp4", "retro_animation.mp4"];
+        try {
+          const filesOnDisk = import_fs3.default.readdirSync(localVideosDir);
+          const videoExtensions = [".mp4", ".mkv", ".avi", ".mov", ".webm"];
+          const diskFiles = filesOnDisk.filter((f) => videoExtensions.includes(import_path3.default.extname(f).toLowerCase()));
+          const hasCustomFilesOnDisk = diskFiles.some((f) => !defaultLocalVideos2.includes(f));
+          if (hasCustomFilesOnDisk && chosenLocalFiles.length === 0) {
+            const filteredUnique = uniqueFiles.filter((med) => {
+              const filename = import_path3.default.basename(med.source_url || med.asset_url || "");
+              return !defaultLocalVideos2.includes(filename);
+            });
+            if (filteredUnique.length > 0) {
+              uniqueFiles.length = 0;
+              uniqueFiles.push(...filteredUnique);
+            }
+          }
+        } catch (err) {
+          console.error("[Render Rebuild] Failed to filter uniqueFiles against disk:", err);
+        }
+        const audioTrack = p.tracks?.find((tr) => tr.type === "audio");
+        const audioItems = audioTrack?.items || [];
+        const totalDurationSec = audioItems.reduce((acc, item) => Math.max(acc, Number(item.start_sec) + Number(item.duration_sec)), 0) || 15;
+        console.log(`[Render Rebuild] Rebuilding continuous local video track from ${uniqueFiles.length} files for duration ${totalDurationSec}s`);
+        let currentStartSec = 0;
+        let itemId = 1;
+        const videoItems = [];
+        while (currentStartSec < totalDurationSec) {
+          const medIndex = (itemId - 1) % uniqueFiles.length;
+          const med = uniqueFiles[medIndex];
+          const rawDuration = Number(med.duration_sec);
+          const fullDuration = isNaN(rawDuration) || rawDuration <= 0 ? 15 : rawDuration;
+          const usedDuration = Math.min(fullDuration, totalDurationSec - currentStartSec);
+          videoItems.push({
+            id: `item_${itemId}`,
+            media_id: med.id,
+            local_path: med.local_path,
+            asset_url: med.source_url,
+            thumbnail_url: med.thumbnail_url || "/dist/assets/background.jpg",
+            source_url: med.source_url,
+            start_sec: currentStartSec,
+            duration_sec: usedDuration,
+            trim_start_sec: 0,
+            trim_end_sec: usedDuration,
+            segment_id: null,
+            provider: "local"
+          });
+          currentStartSec += usedDuration;
+          itemId++;
+        }
+        const existingVideoTrack = p.tracks?.find((tr) => tr.type === "video");
+        if (existingVideoTrack) {
+          existingVideoTrack.items = videoItems;
+        } else {
+          if (!p.tracks) p.tracks = [];
+          p.tracks.push({
+            id: `track_video_${Date.now()}`,
+            type: "video",
+            items: videoItems
+          });
+        }
+        projects2.set(projectId, p);
+      }
+      const videoTrack = p.tracks?.find((tr) => tr.type === "video");
+      const subtitleTrack = p.tracks?.find((tr) => tr.type === "subtitle");
+      let musicItem = p.selected_music?.[0];
+      if (!musicItem) {
+        const bgmType = p.params?.bgm_type || p.bgm_type || "none";
+        const bgmFile = p.params?.bgm_file || p.bgm_file;
+        const bgmVolume = p.params?.bgm_volume !== void 0 ? p.params.bgm_volume : p.bgm_volume !== void 0 ? p.bgm_volume : 0.2;
+        musicItem = pickBgm({
+          bgmType,
+          bgmFile,
+          bgmVolume,
+          searchSubject: `${p.topic || ""} ${p.script || ""}`,
+          bgmFiles
+        });
+        if (musicItem) {
+          const modeLabel = bgmType === "random" ? "Random" : bgmType === "contextual" ? "AI Contextual" : "Manual";
+          logTask(taskId, "INFO", "AUDIO_MIXER", `BGM Mode: ${modeLabel}. Selected soundtrack: "${musicItem.title}" at volume: ${bgmVolume}`);
+        } else {
+          logTask(taskId, "INFO", "AUDIO_MIXER", "BGM Mode: None or Disabled.");
+        }
+      } else {
+        logTask(taskId, "INFO", "AUDIO_MIXER", `Using existing selected music: "${musicItem.title}" at volume: ${musicItem.volume || 0.2}`);
+      }
+      const clips = videoTrack?.items || [];
+      if (clips.length === 0) {
+        throw new Error("No video clips in the timeline to render.");
+      }
+      if (!p.project_folder_name) {
+        const themeFolder = deps.sanitizeFolderName(p.params?.video_niche || p.topic || "general");
+        const folderName = `${deps.sanitizeFolderName(p.topic || p.project_id || "project")}_${deps.getFormattedDateTime()}`;
+        p.project_folder_name = `${themeFolder}/${folderName}`;
+        projects2.set(projectId, p);
+      }
+      const projectFolder = import_path3.default.join(process.cwd(), "storage", "renders", p.project_folder_name);
+      const cacheDir = import_path3.default.join(projectFolder, "cache");
+      const renderDir = projectFolder;
+      await import_fs3.default.promises.mkdir(cacheDir, { recursive: true });
+      await import_fs3.default.promises.mkdir(renderDir, { recursive: true });
+      logTask(taskId, "INFO", "SUBTITLES", "Generating subtitles");
+      await new Promise((r) => setTimeout(r, 600));
+      logTask(taskId, "SUCCESS", "SUBTITLES", "Subtitles ready");
+      updateTaskState(10, null, null);
+      logTask(taskId, "INFO", "VIDEO_ASSET", "Collecting video materials");
+      const localVideoPaths = [];
+      for (let i = 0; i < clips.length; i++) {
+        const clip = clips[i];
+        const url = clip.source_url || clip.asset_url;
+        if (!url) {
+          logTask(taskId, "WARNING", "VIDEO_ASSET", `Clip ${clip.id} has no source URL. Generating synthetic placeholder...`);
+          localVideoPaths.push("placeholder");
+          continue;
+        }
+        const isLocalUrl = url.startsWith("/") || !url.includes("://") || url.includes("/storage/local_videos/") || url.includes("/local_videos/");
+        if (isLocalUrl) {
+          const cleanUrl2 = url.split("?")[0];
+          const filename = import_path3.default.basename(cleanUrl2);
+          let cleanLocalPath = cleanUrl2.startsWith("/") ? cleanUrl2.slice(1) : cleanUrl2;
+          if (url.includes("/storage/local_videos/")) {
+            cleanLocalPath = `storage/local_videos/${filename}`;
+          } else if (url.includes("/local_videos/")) {
+            cleanLocalPath = `local_videos/${filename}`;
+          }
+          const diskPath = import_path3.default.join(process.cwd(), cleanLocalPath);
+          if (import_fs3.default.existsSync(diskPath)) {
+            localVideoPaths.push(diskPath);
+            continue;
+          }
+          const fallbackPath = import_path3.default.join(localVideosDir, filename);
+          if (import_fs3.default.existsSync(fallbackPath)) {
+            localVideoPaths.push(fallbackPath);
+            continue;
+          }
+          try {
+            const availableFiles = import_fs3.default.readdirSync(localVideosDir).filter(
+              (f) => [".mp4", ".mkv", ".avi", ".mov", ".webm"].includes(import_path3.default.extname(f).toLowerCase())
+            );
+            if (availableFiles.length > 0) {
+              const safeFallbackPath = import_path3.default.join(localVideosDir, availableFiles[0]);
+              console.log(`[Renderer] Selected file ${filename} missing. Falling back to available file: ${availableFiles[0]}`);
+              logTask(taskId, "WARNING", "VIDEO_ASSET", `El archivo local "${filename}" no fue encontrado. Usando archivo "${availableFiles[0]}" como respaldo.`);
+              localVideoPaths.push(safeFallbackPath);
+              continue;
+            }
+          } catch (e) {
+            console.error("[Renderer] Failed to list fallback local videos:", e);
+          }
+        }
+        const cleanUrl = url.split("?")[0];
+        const ext = import_path3.default.extname(cleanUrl) || ".mp4";
+        const urlHash = import_crypto2.default.createHash("md5").update(url).digest("hex");
+        const dest = import_path3.default.join(cacheDir, `clip_${clip.id}_${urlHash}${ext}`);
+        try {
+          await downloadFile(url, dest);
+          localVideoPaths.push(dest);
+        } catch (downloadErr) {
+          console.error(`[Renderer] Failed to download clip ${clip.id}:`, downloadErr);
+          logTask(taskId, "WARNING", "VIDEO_ASSET", `Could not download clip ${clip.id}. Generating synthetic placeholder...`);
+          localVideoPaths.push("placeholder");
+        }
+      }
+      logTask(taskId, "SUCCESS", "VIDEO_ASSET", `Collected ${clips.length} video materials`);
+      updateTaskState(30, null, null);
+      let localNarrationPath = null;
+      if (p.narration_audio_path) {
+        if (p.narration_audio_path.startsWith("/") || !p.narration_audio_path.includes("://")) {
+          const cleanLocalPath = p.narration_audio_path.startsWith("/") ? p.narration_audio_path.slice(1) : p.narration_audio_path;
+          const diskPath = import_path3.default.join(process.cwd(), cleanLocalPath);
+          if (import_fs3.default.existsSync(diskPath)) {
+            localNarrationPath = diskPath;
+          }
+        }
+        if (!localNarrationPath) {
+          const ext = import_path3.default.extname(p.narration_audio_path.split("?")[0]) || ".mp3";
+          const dest = import_path3.default.join(cacheDir, `narration_${projectId}${ext}`);
+          try {
+            await downloadFile(p.narration_audio_path, dest);
+            localNarrationPath = dest;
+          } catch (err) {
+            console.error(`[Renderer] Narration download failed:`, err);
+          }
+        }
+      }
+      let localMusicPath = null;
+      if (musicItem && musicItem.url) {
+        if (musicItem.url.startsWith("/") || !musicItem.url.includes("://")) {
+          const cleanLocalPath = musicItem.url.startsWith("/") ? musicItem.url.slice(1) : musicItem.url;
+          const diskPath = import_path3.default.join(process.cwd(), cleanLocalPath);
+          if (import_fs3.default.existsSync(diskPath)) {
+            localMusicPath = diskPath;
+          }
+        }
+        if (!localMusicPath) {
+          const ext = import_path3.default.extname(musicItem.url.split("?")[0]) || ".mp3";
+          const dest = import_path3.default.join(cacheDir, `music_${musicItem.id}${ext}`);
+          try {
+            await downloadFile(musicItem.url, dest);
+            localMusicPath = dest;
+          } catch (err) {
+            console.error(`[Renderer] BGM download failed:`, err);
+          }
+        }
+      }
+      logTask(taskId, "INFO", "RENDER", "Rendering final video");
+      updateTaskState(40, null, null);
+      const getVideoDuration = async (videoPath) => {
+        try {
+          const durationStr = await executeCommand(`ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${videoPath}"`);
+          const d = parseFloat(durationStr.trim());
+          return isNaN(d) ? 0 : d;
+        } catch (err) {
+          console.error(`[getVideoDuration] Failed to probe ${videoPath}:`, err);
+          return 0;
+        }
+      };
+      let encoderArgs = "-c:v libx264 -crf 18 -preset veryfast";
+      try {
+        logTask(taskId, "INFO", "SYSTEM", "Detecting optimal video encoder (NVIDIA NVENC vs. CPU libx264)...");
+        await executeCommand("ffmpeg -y -f lavfi -i color=c=black:s=16x16:d=0.1 -c:v h264_nvenc -f null -");
+        encoderArgs = "-c:v h264_nvenc -preset p4 -cq 19 -rc vbr";
+        logTask(taskId, "INFO", "SYSTEM", "\u{1F680} NVIDIA RTX GPU detected! Enabled hardware-accelerated NVENC encoding for maximum performance.");
+      } catch (err) {
+        logTask(taskId, "INFO", "SYSTEM", "No hardware NVENC support detected. Using CPU-based libx264 encoder (server/fallback mode).");
+      }
+      const formattedClips = [];
+      const isLandscape = p.global_visual_style === "landscape" || p.aspect_ratio === "landscape";
+      const resWidth = isLandscape ? 1280 : 720;
+      const resHeight = isLandscape ? 720 : 1280;
+      for (let i = 0; i < clips.length; i++) {
+        const clip = clips[i];
+        const inputPath = localVideoPaths[i];
+        const formattedPath = import_path3.default.join(cacheDir, `formatted_${taskId}_${i}.mp4`);
+        const duration = Number(clip.duration_sec) || 5;
+        const start = Number(clip.trim_start_sec) || 0;
+        if (inputPath === "placeholder") {
+          console.log(`[Renderer] Building synthetic placeholder clip ${i}`);
+          const cmd = `ffmpeg -y -f lavfi -i color=c=0x1E1E2E:s=${resWidth}x${resHeight}:d=${duration} -r 25 -pix_fmt yuv420p "${formattedPath}"`;
+          await executeCommand(cmd);
+        } else {
+          try {
+            const inputDuration = await getVideoDuration(inputPath);
+            console.log(`[Renderer] Formatting clip ${i}: ${inputPath}, inputDuration: ${inputDuration}, targetDuration: ${duration}`);
+            let loopCmd = "";
+            const neededDuration = start + duration;
+            if (inputDuration > 0 && inputDuration < neededDuration) {
+              const loopCount = Math.ceil(neededDuration / inputDuration);
+              loopCmd = `-stream_loop ${loopCount - 1}`;
+            }
+            const cmd = `ffmpeg -y ${loopCmd ? loopCmd + " " : ""}-i "${inputPath}" -ss ${start} -t ${duration} -vf "scale=${resWidth}:${resHeight}:force_original_aspect_ratio=increase,crop=${resWidth}:${resHeight},setsar=1" -r 25 ${encoderArgs} -pix_fmt yuv420p "${formattedPath}"`;
+            await executeCommand(cmd);
+          } catch (err) {
+            console.error(`[Renderer] Failed to format clip ${i} (${inputPath}), falling back to placeholder:`, err);
+            logTask(taskId, "WARNING", "VIDEO_ASSET", `Failed to process local video file: ${import_path3.default.basename(inputPath)}. Using a colored placeholder instead.`);
+            const cmd = `ffmpeg -y -f lavfi -i color=c=0x1E1E2E:s=${resWidth}x${resHeight}:d=${duration} -r 25 -pix_fmt yuv420p "${formattedPath}"`;
+            await executeCommand(cmd);
+          }
+        }
+        formattedClips.push(formattedPath);
+        updateTaskState(Math.floor(40 + i / clips.length * 20), null, null);
+      }
+      logTask(taskId, "INFO", "COMPOSITION", "Combining video 1/1");
+      updateTaskState(65, null, null);
+      const concatFilePath = import_path3.default.join(cacheDir, `concat_${taskId}.txt`);
+      const concatContent = formattedClips.map((f) => `file '${f.replace(/\\/g, "/")}'`).join("\n");
+      await import_fs3.default.promises.writeFile(concatFilePath, concatContent, "utf8");
+      const concatOutput = import_path3.default.join(cacheDir, `concatenated_${taskId}.mp4`);
+      const concatCmd = `ffmpeg -y -f concat -safe 0 -i "${concatFilePath}" -c copy "${concatOutput}"`;
+      await executeCommand(concatCmd);
+      updateTaskState(75, null, null);
+      logTask(taskId, "INFO", "AUDIO_MIXER", "Applying audio and subtitles 1/1");
+      updateTaskState(80, null, null);
+      let narrationDuration = 0;
+      if (localNarrationPath && import_fs3.default.existsSync(localNarrationPath)) {
+        try {
+          const durationStr = await executeCommand(`ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${localNarrationPath}"`);
+          const d = parseFloat(durationStr.trim());
+          if (!isNaN(d) && d > 0) {
+            narrationDuration = d;
+          }
+        } catch (e) {
+          console.error("[Renderer] Failed to get narration duration:", e);
+        }
+      }
+      const audioMixedOutput = import_path3.default.join(cacheDir, `audio_mixed_${taskId}.mp4`);
+      const audioInputs = [];
+      const voiceVolume = p.params?.voice_volume !== void 0 ? p.params.voice_volume : p.voice_volume !== void 0 ? p.voice_volume : 1;
+      const musicVolume = musicItem?.volume !== void 0 ? musicItem.volume : p.params?.bgm_volume !== void 0 ? p.params.bgm_volume : p.bgm_volume !== void 0 ? p.bgm_volume : 0.2;
+      if (localNarrationPath) {
+        audioInputs.push(`-i "${localNarrationPath}"`);
+      }
+      if (localMusicPath) {
+        audioInputs.push(`-stream_loop -1 -i "${localMusicPath}"`);
+      }
+      const audioFilter = buildAudioMixFilter(Boolean(localNarrationPath), Boolean(localMusicPath), voiceVolume, musicVolume);
+      let mixCmd = "";
+      const limitDurationOpt = narrationDuration > 0 ? `-t ${narrationDuration}` : "";
+      if (audioFilter) {
+        mixCmd = `ffmpeg -y -i "${concatOutput}" ${audioInputs.join(" ")} -filter_complex "${audioFilter}" -map 0:v -map "[a]" -c:v copy -c:a aac ${limitDurationOpt} "${audioMixedOutput}"`;
+      } else {
+        mixCmd = `ffmpeg -y -i "${concatOutput}" -f lavfi -i anullsrc=r=44100:cl=stereo -c:v copy -c:a aac -shortest ${limitDurationOpt} "${audioMixedOutput}"`;
+      }
+      await executeCommand(mixCmd);
+      updateTaskState(90, null, null);
+      let subtitles = subtitleTrack?.items || [];
+      if (subtitles.length === 0 && p.shot_plan?.segments) {
+        console.log(`[Renderer] Subtitle track was empty, falling back to shot_plan segments (${p.shot_plan.segments.length} items)`);
+        const fallbackSubtitles = [];
+        p.shot_plan.segments.forEach((seg, idx) => {
+          const startSec = seg.start_sec !== void 0 ? seg.start_sec : idx * 5;
+          const durationSec = seg.target_duration_sec !== void 0 ? seg.target_duration_sec : 5;
+          const splitItems = splitTextIntoTikTokSubtitles(seg.narration_text || "", startSec, durationSec, seg.id, `sub_fallback_${idx + 1}`);
+          fallbackSubtitles.push(...splitItems);
+        });
+        subtitles = fallbackSubtitles;
+      }
+      let finalOutputPath = audioMixedOutput;
+      const pParams = p.params || {};
+      const subtitleEnabledParam = pParams.subtitle_enabled !== void 0 ? pParams.subtitle_enabled : p.subtitle_enabled !== void 0 ? p.subtitle_enabled : true;
+      if (subtitles.length > 0 && subtitleEnabledParam) {
+        const fontsConfPath = import_path3.default.join(cacheDir, `fonts_${taskId}.conf`);
+        await import_fs3.default.promises.writeFile(fontsConfPath, buildFontsConf(process.cwd(), taskId), "utf8");
+        process.env.FONTCONFIG_FILE = fontsConfPath;
+        process.env.FONTCONFIG_PATH = cacheDir;
+        const fontNameParam = pParams.font_name || p.font_name || "STHeitiMedium.ttc";
+        const fontSizeParam = pParams.font_size || p.font_size || 60;
+        const textColorParam = pParams.text_fore_color || p.text_fore_color || "#FFFFFF";
+        const strokeColorParam = pParams.stroke_color || p.stroke_color || "#000000";
+        const strokeWidthParam = pParams.stroke_width !== void 0 ? pParams.stroke_width : p.stroke_width !== void 0 ? p.stroke_width : 1.5;
+        const hasBgParam = pParams.text_background_color !== void 0 ? pParams.text_background_color : p.text_background_color !== void 0 ? p.text_background_color : true;
+        const subtitlePosParam = pParams.subtitle_position || p.subtitle_position || "bottom";
+        const customPosParam = pParams.custom_position !== void 0 ? pParams.custom_position : p.custom_position !== void 0 ? p.custom_position : 70;
+        const subtitleBgStyleParam = pParams.subtitle_bg_style || p.subtitle_bg_style || "solid";
+        const roundedBgParam = pParams.rounded_subtitle_background !== void 0 ? pParams.rounded_subtitle_background : p.rounded_subtitle_background !== void 0 ? p.rounded_subtitle_background : false;
+        const subtitleAnimationParam = pParams.subtitle_animation || p.subtitle_animation || "pop";
+        const assFilePath = import_path3.default.join(cacheDir, `subtitles_${taskId}.ass`);
+        const assContent = generateAss(subtitles, resWidth, resHeight, {
+          fontName: fontNameParam,
+          fontSize: fontSizeParam,
+          textColor: textColorParam,
+          strokeColor: strokeColorParam,
+          strokeWidth: strokeWidthParam,
+          hasBg: hasBgParam,
+          position: subtitlePosParam,
+          customPosition: customPosParam,
+          subtitleBgStyle: subtitleBgStyleParam,
+          roundedBackground: roundedBgParam,
+          subtitleAnimation: subtitleAnimationParam
+        });
+        await import_fs3.default.promises.writeFile(assFilePath, assContent, "utf8");
+        const srtOutput = import_path3.default.join(renderDir, `render_${projectId}.mp4`);
+        const assRelative = import_path3.default.relative(process.cwd(), assFilePath).replace(/\\/g, "/");
+        const escapedAssPath = escapeAssPathForFilter(assRelative);
+        const subFilter = `subtitles='${escapedAssPath}'`;
+        const srtCmd = `ffmpeg -y -i "${audioMixedOutput}" -vf "${subFilter}" ${encoderArgs} -c:a copy "${srtOutput}"`;
+        await executeCommand(srtCmd);
+        finalOutputPath = srtOutput;
+      } else {
+        const copyOutput = import_path3.default.join(renderDir, `render_${projectId}.mp4`);
+        await import_fs3.default.promises.copyFile(audioMixedOutput, copyOutput);
+        finalOutputPath = copyOutput;
+      }
+      for (const f of formattedClips) {
+        import_fs3.default.promises.unlink(f).catch(() => {
+        });
+      }
+      import_fs3.default.promises.unlink(concatFilePath).catch(() => {
+      });
+      import_fs3.default.promises.unlink(concatOutput).catch(() => {
+      });
+      if (finalOutputPath !== audioMixedOutput) {
+        import_fs3.default.promises.unlink(audioMixedOutput).catch(() => {
+        });
+      }
+      const finalUrl = `/storage/renders/${p.project_folder_name}/render_${projectId}.mp4`;
+      logTask(taskId, "SUCCESS", "RENDER", `Compression and rendering complete. Output file generated at: ${finalUrl}`);
+      logTask(taskId, "SUCCESS", "SYSTEM", `Task ${taskId} completed successfully!`);
+      p.videos = [finalUrl];
+      p.combined_videos = [finalUrl];
+      p.updated_at = (/* @__PURE__ */ new Date()).toISOString();
+      projects2.set(projectId, p);
+      updateTaskState(100, finalUrl, null, 1);
+    } catch (err) {
+      console.error(`[Renderer] Render failure for project ${projectId}:`, err);
+      logTask(taskId, "ERROR", "RENDER", `Rendering failed: ${err.message}`);
+      updateTaskState(100, null, err.message, -1);
+    }
+  };
+  return { runRealRender };
+}
+
+// src/server/projectsRepo.ts
+var import_fs4 = __toESM(require("fs"), 1);
+var import_path4 = __toESM(require("path"), 1);
+var projectsDbPath = (rootDir) => import_path4.default.join(rootDir, "storage", "projects_db.json");
+function createProjectsRepo(rootDir = process.cwd()) {
+  const dbPath = projectsDbPath(rootDir);
+  const map = /* @__PURE__ */ new Map();
+  try {
+    const dir = import_path4.default.dirname(dbPath);
+    if (!import_fs4.default.existsSync(dir)) {
+      import_fs4.default.mkdirSync(dir, { recursive: true });
+    }
+    if (import_fs4.default.existsSync(dbPath)) {
+      const parsed = JSON.parse(import_fs4.default.readFileSync(dbPath, "utf-8"));
+      for (const [k, v] of Object.entries(parsed)) {
+        map.set(k, v);
+      }
+    }
+  } catch (err) {
+    console.error("Error loading projects from file, using empty map:", err);
+  }
+  const persist = () => {
+    try {
+      import_fs4.default.writeFileSync(dbPath, JSON.stringify(Object.fromEntries(map), null, 2), "utf-8");
+    } catch (err) {
+      console.error("Error saving projects to file:", err);
+    }
+  };
+  return {
+    get: (id) => map.get(id),
+    set: (id, project) => {
+      map.set(id, project);
+      persist();
+    },
+    delete: (id) => {
+      const existed = map.delete(id);
+      if (existed) {
+        persist();
+      }
+      return existed;
+    },
+    entries: () => map.entries(),
+    values: () => map.values(),
+    get size() {
+      return map.size;
+    }
+  };
+}
+
+// src/server/tiktokCredentials.ts
+var import_fs5 = __toESM(require("fs"), 1);
+var import_path5 = __toESM(require("path"), 1);
+var tiktokCredsPath = (rootDir) => import_path5.default.join(rootDir, "storage", "tiktok-credentials.json");
+var loadTiktokChannels = (rootDir = process.cwd()) => {
+  const credsPath = tiktokCredsPath(rootDir);
+  if (!import_fs5.default.existsSync(credsPath)) {
+    return { activeChannelId: null, channels: [] };
+  }
+  try {
+    const data = JSON.parse(import_fs5.default.readFileSync(credsPath, "utf8"));
+    const creds = {
+      activeChannelId: data.activeChannelId || null,
+      channels: data.channels || []
+    };
+    if (data.verification_filename) creds.verification_filename = data.verification_filename;
+    if (data.verification_content) creds.verification_content = data.verification_content;
+    if (creds.channels.length === 0 && data.channelName) {
+      creds.legacyAccountName = data.channelName;
+    }
+    return creds;
+  } catch {
+    return { activeChannelId: null, channels: [] };
+  }
+};
+var saveTiktokChannels = (rootDir, creds) => {
+  const credsPath = tiktokCredsPath(rootDir);
+  const hasVerification = Boolean(creds.verification_filename || creds.verification_content);
+  if (creds.channels.length === 0 && !hasVerification) {
+    if (import_fs5.default.existsSync(credsPath)) import_fs5.default.unlinkSync(credsPath);
+    return;
+  }
+  const data = {
+    activeChannelId: creds.activeChannelId,
+    channels: creds.channels
+  };
+  if (creds.verification_filename) data.verification_filename = creds.verification_filename;
+  if (creds.verification_content) data.verification_content = creds.verification_content;
+  import_fs5.default.mkdirSync(import_path5.default.dirname(credsPath), { recursive: true });
+  import_fs5.default.writeFileSync(credsPath, JSON.stringify(data, null, 2));
+};
+var getActiveTiktokChannel = (creds) => creds.channels.find((c) => c.channelId === creds.activeChannelId) || creds.channels[0] || null;
+var upsertTiktokChannel = (creds, channel) => {
+  const channels = [...creds.channels];
+  const existingIndex = channels.findIndex((c) => c.channelId === channel.channelId);
+  if (existingIndex > -1) {
+    channels[existingIndex] = { ...channels[existingIndex], ...channel };
+  } else {
+    channels.push(channel);
+  }
+  let activeChannelId = creds.activeChannelId;
+  if (!activeChannelId || activeChannelId === "unknown" || channels.length === 1) {
+    activeChannelId = channel.channelId;
+  }
+  return { ...creds, activeChannelId, channels };
+};
+var selectTiktokChannel = (creds, channelId) => {
+  if (!creds.channels.some((c) => c.channelId === channelId)) return null;
+  return { ...creds, activeChannelId: channelId };
+};
+var removeTiktokChannel = (creds, channelId) => {
+  const channels = creds.channels.filter((c) => c.channelId !== channelId);
+  let activeChannelId = creds.activeChannelId;
+  if (activeChannelId === channelId) {
+    activeChannelId = channels.length > 0 ? channels[0].channelId : null;
+  }
+  return { ...creds, activeChannelId, channels };
+};
+var setTiktokVerification = (creds, update) => {
+  const next = { ...creds };
+  if (update.filename !== void 0) next.verification_filename = update.filename;
+  if (update.content !== void 0) next.verification_content = update.content;
+  return next;
+};
+var clearTiktokCredentials = (rootDir) => {
+  const credsPath = tiktokCredsPath(rootDir);
+  if (import_fs5.default.existsSync(credsPath)) import_fs5.default.unlinkSync(credsPath);
+};
+var writeTiktokVerificationFiles = (rootDir, creds) => {
+  const filename = creds.verification_filename;
+  const content = creds.verification_content;
+  if (!filename || !content) return;
+  for (const dir of ["public", "dist"]) {
+    try {
+      const filePath = import_path5.default.join(rootDir, dir, filename);
+      import_fs5.default.mkdirSync(import_path5.default.dirname(filePath), { recursive: true });
+      import_fs5.default.writeFileSync(filePath, content, "utf8");
+    } catch (err) {
+      console.error(`[TikTok] Failed to write verification file to ${dir}/`, err);
+    }
+  }
+};
+
+// server.ts
 var import_googleapis = require("googleapis");
 var import_multer = __toESM(require("multer"), 1);
 try {
-  const envPath = import_path.default.join(process.cwd(), ".env");
-  if (import_fs.default.existsSync(envPath)) {
-    const envContent = import_fs.default.readFileSync(envPath, "utf8");
+  const envPath = import_path6.default.join(process.cwd(), ".env");
+  if (import_fs6.default.existsSync(envPath)) {
+    const envContent = import_fs6.default.readFileSync(envPath, "utf8");
     envContent.split("\n").forEach((line) => {
       const trimmed = line.trim();
       if (trimmed && !trimmed.startsWith("#")) {
@@ -52,28 +1590,28 @@ try {
 } catch (e) {
   console.error("Error parsing .env file:", e);
 }
-var LOCAL_VIDEOS_DIR = import_path.default.join(process.cwd(), "storage", "local_videos");
-if (import_fs.default.existsSync(import_path.default.join(process.cwd(), "local_videos"))) {
-  LOCAL_VIDEOS_DIR = import_path.default.join(process.cwd(), "local_videos");
-} else if (!import_fs.default.existsSync(LOCAL_VIDEOS_DIR)) {
-  import_fs.default.mkdirSync(LOCAL_VIDEOS_DIR, { recursive: true });
+var LOCAL_VIDEOS_DIR = import_path6.default.join(process.cwd(), "storage", "local_videos");
+if (import_fs6.default.existsSync(import_path6.default.join(process.cwd(), "local_videos"))) {
+  LOCAL_VIDEOS_DIR = import_path6.default.join(process.cwd(), "local_videos");
+} else if (!import_fs6.default.existsSync(LOCAL_VIDEOS_DIR)) {
+  import_fs6.default.mkdirSync(LOCAL_VIDEOS_DIR, { recursive: true });
 }
 var storage = import_multer.default.diskStorage({
   destination: (req, file, cb) => {
     cb(null, LOCAL_VIDEOS_DIR);
   },
   filename: (req, file, cb) => {
-    const safeName = import_path.default.basename(file.originalname);
+    const safeName = import_path6.default.basename(file.originalname);
     cb(null, safeName);
   }
 });
 var upload = (0, import_multer.default)({ storage });
 var defaultLocalVideos = ["nature_cinematic.mp4", "urban_streets.mp4", "retro_animation.mp4"];
 try {
-  const existingFiles = import_fs.default.readdirSync(LOCAL_VIDEOS_DIR);
+  const existingFiles = import_fs6.default.readdirSync(LOCAL_VIDEOS_DIR);
   if (existingFiles.length === 0) {
     for (const filename of defaultLocalVideos) {
-      import_fs.default.writeFileSync(import_path.default.join(LOCAL_VIDEOS_DIR, filename), "MOCK_VIDEO_CONTENT");
+      import_fs6.default.writeFileSync(import_path6.default.join(LOCAL_VIDEOS_DIR, filename), "MOCK_VIDEO_CONTENT");
     }
   }
 } catch (err) {
@@ -206,77 +1744,9 @@ var SAMPLE_VIDEOS = [
     title: "Tropical Shoreline"
   }
 ];
-async function generateGeminiContent(prompt, jsonMode = false, systemInstruction) {
-  const llmProvider = process.env.LLM_PROVIDER || "gemini";
-  if (llmProvider === "lmstudio" || llmProvider === "openai") {
-    const apiBase = process.env.OPENAI_API_BASE || "http://localhost:1234/v1";
-    const apiKey2 = process.env.OPENAI_API_KEY || "lm-studio";
-    const model = process.env.OPENAI_MODEL || "loaded-model";
-    console.log(`[LLM] Directing generation to local OpenAI/LM Studio endpoint: ${apiBase}`);
-    const messages = [];
-    if (systemInstruction) {
-      messages.push({ role: "system", content: systemInstruction });
-    }
-    let finalPrompt = prompt;
-    if (jsonMode && (llmProvider === "lmstudio" || !apiBase.includes("api.openai.com"))) {
-      finalPrompt += "\n\nCRITICAL: Return ONLY a valid JSON object. Do not include any explanations, markdown code block backticks (like ```json), or text before or after the JSON.";
-    }
-    messages.push({ role: "user", content: finalPrompt });
-    try {
-      const response = await fetch(`${apiBase}/chat/completions`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${apiKey2}`
-        },
-        body: JSON.stringify({
-          model,
-          messages,
-          temperature: 0.7,
-          ...jsonMode && apiBase.includes("api.openai.com") ? { response_format: { type: "json_object" } } : {}
-        })
-      });
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`LM Studio / OpenAI returned error status ${response.status}: ${errorText}`);
-      }
-      const data = await response.json();
-      let text = data.choices?.[0]?.message?.content || "";
-      if (jsonMode) {
-        text = text.replace(/```json/gi, "").replace(/```/g, "").trim();
-      }
-      return text;
-    } catch (err) {
-      console.error("Failed calling LM Studio/OpenAI API:", err);
-      throw err;
-    }
-  }
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    throw new Error("No Gemini API key configured. Set GEMINI_API_KEY or configure LLM_PROVIDER=lmstudio.");
-  }
-  try {
-    const ai = new import_genai.GoogleGenAI({
-      apiKey,
-      httpOptions: {
-        headers: {
-          "User-Agent": "aistudio-build"
-        }
-      }
-    });
-    const response = await ai.models.generateContent({
-      model: "gemini-3.1-flash-lite",
-      contents: prompt,
-      config: {
-        ...jsonMode ? { responseMimeType: "application/json" } : {},
-        ...systemInstruction ? { systemInstruction } : {}
-      }
-    });
-    return response.text || "";
-  } catch (err) {
-    console.error("Failed calling Gemini API via SDK:", err);
-    throw err;
-  }
+function cleanScriptSymbols(text) {
+  if (!text) return "";
+  return text.replace(/[\*_]/g, "").replace(/["“”«»‘’']/g, "").replace(/[()[\]{}]/g, "").replace(/ {2,}/g, " ").trim();
 }
 function sanitizeFolderName(name) {
   return name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9_]/g, "_").replace(/_+/g, "_").replace(/^_+|_+$/g, "").substring(0, 40) || "project";
@@ -286,48 +1756,7 @@ function getFormattedDateTime() {
   const pad = (n) => n.toString().padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_${pad(d.getHours())}-${pad(d.getMinutes())}-${pad(d.getSeconds())}`;
 }
-var PROJECTS_FILE = import_path.default.join(process.cwd(), "storage", "projects_db.json");
-function loadProjects() {
-  try {
-    const dir = import_path.default.dirname(PROJECTS_FILE);
-    if (!import_fs.default.existsSync(dir)) {
-      import_fs.default.mkdirSync(dir, { recursive: true });
-    }
-    if (import_fs.default.existsSync(PROJECTS_FILE)) {
-      const data = import_fs.default.readFileSync(PROJECTS_FILE, "utf-8");
-      const parsed = JSON.parse(data);
-      const map = /* @__PURE__ */ new Map();
-      for (const [k, v] of Object.entries(parsed)) {
-        map.set(k, v);
-      }
-      return map;
-    }
-  } catch (err) {
-    console.error("Error loading projects from file, using empty map:", err);
-  }
-  return /* @__PURE__ */ new Map();
-}
-function saveProjects(map) {
-  try {
-    const obj = Object.fromEntries(map);
-    import_fs.default.writeFileSync(PROJECTS_FILE, JSON.stringify(obj, null, 2), "utf-8");
-  } catch (err) {
-    console.error("Error saving projects to file:", err);
-  }
-}
-var projects = loadProjects();
-var originalSet = projects.set.bind(projects);
-projects.set = function(key, value) {
-  const result = originalSet(key, value);
-  saveProjects(projects);
-  return result;
-};
-var originalDelete = projects.delete.bind(projects);
-projects.delete = function(key) {
-  const result = originalDelete(key);
-  saveProjects(projects);
-  return result;
-};
+var projects = createProjectsRepo();
 var tasks = /* @__PURE__ */ new Map();
 var globalConfig = {
   video_sources: ["pexels", "pixabay", "local"],
@@ -337,7 +1766,7 @@ var globalConfig = {
     app: {
       video_source: "pexels",
       tls_verify: true,
-      pexels_api_keys: [process.env.PEXELS_API_KEY || "PEXELS_KEY_REMOVED_FROM_HISTORY_ROTATE_IT"],
+      pexels_api_keys: process.env.PEXELS_API_KEY ? [process.env.PEXELS_API_KEY] : [],
       pixabay_api_keys: [],
       coverr_api_keys: [],
       llm_provider: "gemini",
@@ -437,218 +1866,15 @@ var globalConfig = {
     whisper_devices: ["cpu", "cuda"]
   }
 };
-function cleanVoiceName(voice) {
-  let name = voice;
-  if (name.includes(":")) {
-    const parts = name.split(":");
-    name = parts[parts.length - 1];
-  }
-  name = name.replace(/[-:](male|female)$/i, "");
-  return name;
-}
-function getEdgeVoiceAndLang(rawVoiceName, defaultLang = "es") {
-  let voice = cleanVoiceName(rawVoiceName);
-  let lang = defaultLang;
-  const localeMatch = voice.match(/^([a-z]{2})-([A-Z]{2})/);
-  if (localeMatch) {
-    lang = localeMatch[0];
-  } else {
-    const lower = rawVoiceName.toLowerCase();
-    if (lower.includes("en-") || lower.includes("us-") || lower.includes("guy") || lower.includes("jenny") || lower.includes("alex") || lower.includes("anna") || lower.includes("bella") || lower.includes("benjamin") || lower.includes("charles") || lower.includes("claire") || lower.includes("david") || lower.includes("diana") || lower.includes("milo") || lower.includes("dean") || lower.includes("chloe") || lower.includes("mia") || lower.includes("puck") || lower.includes("charon") || lower.includes("zephyr")) {
-      lang = "en-US";
-    } else if (lower.includes("zh-") || lower.includes("cn-") || lower.includes("xiaoxiao") || lower.includes("yunxi") || lower.includes("\u51B0\u7CD6") || lower.includes("\u8309\u8389") || lower.includes("\u82CF\u6253") || lower.includes("\u767D\u6866")) {
-      lang = "zh-CN";
-    } else if (lower.includes("es-") || lower.includes("mx-") || lower.includes("alvaro") || lower.includes("elvira") || lower.includes("dalia") || lower.includes("jorge")) {
-      lang = "es-ES";
-    } else if (lower.includes("pt-") || lower.includes("br-")) {
-      lang = "pt-BR";
-    } else if (lower.includes("de-")) {
-      lang = "de-DE";
-    } else if (lower.includes("fr-")) {
-      lang = "fr-FR";
-    } else if (lower.includes("it-")) {
-      lang = "it-IT";
-    } else if (lower.includes("ru-")) {
-      lang = "ru-RU";
-    } else if (lower.includes("ja-") || lower.includes("jp-")) {
-      lang = "ja-JP";
-    }
-  }
-  const lowerVoice = voice.toLowerCase();
-  if (!voice.includes("-") || voice.length < 5) {
-    const isMale = lowerVoice.includes("male") || lowerVoice.includes("guy") || lowerVoice.includes("david") || lowerVoice.includes("charles") || lowerVoice.includes("benjamin") || lowerVoice.includes("puck") || lowerVoice.includes("charon") || lowerVoice.includes("zephyr") || lowerVoice.includes("milo") || lowerVoice.includes("dean") || lowerVoice.includes("suda") || lowerVoice.includes("\u82CF\u6253") || lowerVoice.includes("alvaro") || lowerVoice.includes("jorge");
-    if (lang.startsWith("es")) {
-      voice = isMale ? "es-ES-AlvaroNeural" : "es-ES-ElviraNeural";
-    } else if (lang.startsWith("en")) {
-      voice = isMale ? "en-US-GuyNeural" : "en-US-JennyNeural";
-    } else if (lang.startsWith("zh")) {
-      voice = isMale ? "zh-CN-YunxiNeural" : "zh-CN-XiaoxiaoNeural";
-    } else if (lang.startsWith("pt")) {
-      voice = isMale ? "pt-BR-JulioNeural" : "pt-BR-FranciscaNeural";
-    } else if (lang.startsWith("de")) {
-      voice = isMale ? "de-DE-ConradNeural" : "de-DE-AmalaNeural";
-    } else if (lang.startsWith("fr")) {
-      voice = isMale ? "fr-FR-HenriNeural" : "fr-FR-DeniseNeural";
-    } else if (lang.startsWith("it")) {
-      voice = isMale ? "it-IT-DiegoNeural" : "it-IT-ElsaNeural";
-    } else if (lang.startsWith("ru")) {
-      voice = isMale ? "ru-RU-DmitryNeural" : "ru-RU-SvetlanaNeural";
-    } else if (lang.startsWith("ja")) {
-      voice = isMale ? "ja-JP-KeitaNeural" : "ja-JP-NanamiNeural";
-    } else {
-      voice = isMale ? "en-US-GuyNeural" : "en-US-JennyNeural";
-    }
-  }
-  return { voice, lang };
-}
-var WIN_EPOCH = 11644473600;
-var S_TO_NS = 1e9;
-var TRUSTED_CLIENT_TOKEN = "6A5AA1D4EAFF4E9FB37E23D68491D6F4";
-var SEC_MS_GEC_VERSION = "1-143.0.3650.75";
-function generateSecMsGec() {
-  let ticks = Math.floor(Date.now() / 1e3);
-  ticks += WIN_EPOCH;
-  ticks -= ticks % 300;
-  const intervals = ticks * (S_TO_NS / 100);
-  const strToHash = `${intervals.toFixed(0)}${TRUSTED_CLIENT_TOKEN}`;
-  return import_crypto.default.createHash("sha256").update(strToHash, "ascii").digest("hex").toUpperCase();
-}
-function getJSStyleDateString() {
-  const d = /* @__PURE__ */ new Date();
-  const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  const dayName = days[d.getUTCDay()];
-  const monthName = months[d.getUTCMonth()];
-  const dateNum = String(d.getUTCDate()).padStart(2, "0");
-  const year = d.getUTCFullYear();
-  const hours = String(d.getUTCHours()).padStart(2, "0");
-  const minutes = String(d.getUTCMinutes()).padStart(2, "0");
-  const seconds = String(d.getUTCSeconds()).padStart(2, "0");
-  return `${dayName} ${monthName} ${dateNum} ${year} ${hours}:${minutes}:${seconds} GMT+0000 (Coordinated Universal Time)`;
-}
-function synthesizeSpeechWithEdge(voiceName, text, defaultLang = "es", voiceRate = 1, voiceVolume = 1) {
-  return new Promise((resolve, reject) => {
-    const { voice, lang } = getEdgeVoiceAndLang(voiceName, defaultLang);
-    console.log(`[EdgeTTS] Requesting voice: "${voice}" (lang: "${lang}", rate: ${voiceRate}, volume: ${voiceVolume}) for text: "${text.substring(0, 60)}..."`);
-    const requestId = Array.from({ length: 32 }, () => Math.floor(Math.random() * 16).toString(16)).join("");
-    const secMsGec = generateSecMsGec();
-    const wsUrl = `wss://speech.platform.bing.com/consumer/speech/synthesize/readaloud/edge/v1?TrustedClientToken=${TRUSTED_CLIENT_TOKEN}&ConnectionId=${requestId}&Sec-MS-GEC=${secMsGec}&Sec-MS-GEC-Version=${SEC_MS_GEC_VERSION}`;
-    const ws = new import_ws.default(wsUrl, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0",
-        "Pragma": "no-cache",
-        "Cache-Control": "no-cache",
-        "Origin": "chrome-extension://jdiccldimpdaibmpdkjnbmckianbfold",
-        "Sec-WebSocket-Version": "13"
-      }
-    });
-    const audioBuffers = [];
-    let isFinished = false;
-    ws.on("open", () => {
-      const timestampStr = getJSStyleDateString();
-      const configPayload = JSON.stringify({
-        context: {
-          synthesis: {
-            audio: {
-              metadataoptions: {
-                sentenceBoundaryEnabled: "false",
-                wordBoundaryEnabled: "true"
-              },
-              outputFormat: "audio-24khz-48kbitrate-mono-mp3"
-            }
-          }
-        }
-      });
-      const configMsg = `X-Timestamp:${timestampStr}Z\r
-Content-Type:application/json; charset=utf-8\r
-Path:speech.config\r
-\r
-${configPayload}`;
-      ws.send(configMsg);
-      const cleanText = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-      const ratePct = Math.round((voiceRate - 1) * 100);
-      const rateStr = ratePct >= 0 ? `+${ratePct}%` : `${ratePct}%`;
-      const volPct = Math.round((voiceVolume - 1) * 100);
-      const volStr = volPct >= 0 ? `+${volPct}%` : `${volPct}%`;
-      const ssml = `<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='${lang}'><voice name='${voice}'><prosody pitch='+0Hz' rate='${rateStr}' volume='${volStr}'>${cleanText}</prosody></voice></speak>`;
-      const ssmlMsg = `X-RequestId:${requestId}\r
-Content-Type:application/ssml+xml\r
-X-Timestamp:${timestampStr}Z\r
-Path:ssml\r
-\r
-${ssml}`;
-      ws.send(ssmlMsg);
-    });
-    ws.on("message", (data, isBinary) => {
-      if (isBinary) {
-        const buffer = Buffer.from(data);
-        if (buffer.length >= 2) {
-          const headerLen = buffer.readUInt16BE(0);
-          const header = buffer.toString("utf8", 2, 2 + headerLen);
-          if (header.includes("Path: audio") || header.includes("Path:audio")) {
-            const audioPayload = buffer.subarray(2 + headerLen);
-            audioBuffers.push(audioPayload);
-          }
-        }
-      } else {
-        const textMsg = data.toString();
-        if (textMsg.includes("Path: turn.end") || textMsg.includes("Path:turn.end")) {
-          isFinished = true;
-          ws.close();
-        }
-      }
-    });
-    ws.on("close", () => {
-      if (audioBuffers.length > 0) {
-        resolve(Buffer.concat(audioBuffers));
-      } else {
-        reject(new Error("No audio data received from Edge TTS WebSocket"));
-      }
-    });
-    ws.on("error", (err) => {
-      reject(err);
-    });
-    setTimeout(() => {
-      if (!isFinished) {
-        ws.close();
-        if (audioBuffers.length > 0) {
-          resolve(Buffer.concat(audioBuffers));
-        } else {
-          reject(new Error("Edge TTS timeout"));
-        }
-      }
-    }, 15e3);
-  });
-}
-async function synthesizeSpeech(voiceName, text, defaultLang = "es", voiceRate = 1, voiceVolume = 1) {
-  try {
-    return await synthesizeSpeechWithEdge(voiceName, text, defaultLang, voiceRate, voiceVolume);
-  } catch (err) {
-    console.warn(`[SpeechSynthesis] Edge TTS failed for voice "${voiceName}", falling back to Google TTS:`, err);
-    const { lang } = getEdgeVoiceAndLang(voiceName, defaultLang);
-    const shortLang = lang.split("-")[0];
-    const googleTtsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=${shortLang}&client=tw-ob&q=${encodeURIComponent(text.substring(0, 200))}`;
-    const response = await fetch(googleTtsUrl, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-      }
-    });
-    if (!response.ok) {
-      throw new Error(`Google TTS fallback failed with status ${response.status}`);
-    }
-    const arrayBuffer = await response.arrayBuffer();
-    return Buffer.from(arrayBuffer);
-  }
-}
 async function startServer() {
   const app = (0, import_express.default)();
   const PORT = 3e3;
   function loadConfigToml() {
-    const tomlPath = import_path.default.join(process.cwd(), "config.toml");
-    if (import_fs.default.existsSync(tomlPath)) {
+    const tomlPath = import_path6.default.join(process.cwd(), "config.toml");
+    if (import_fs6.default.existsSync(tomlPath)) {
       try {
         console.log("[Config] Found config.toml. Loading keys...");
-        const content = import_fs.default.readFileSync(tomlPath, "utf-8");
+        const content = import_fs6.default.readFileSync(tomlPath, "utf-8");
         const lines = content.split(/\r?\n/);
         for (const line of lines) {
           const trimmed = line.trim();
@@ -706,76 +1932,20 @@ async function startServer() {
     Promise.resolve(fn(req, res, next)).catch(next);
   };
   app.get("/api/v1/config", wrap(async (req, res) => {
-    const credsPath = import_path.default.join(process.cwd(), "storage", "youtube-credentials.json");
-    if (import_fs.default.existsSync(credsPath)) {
-      try {
-        const data = JSON.parse(import_fs.default.readFileSync(credsPath, "utf8"));
-        let channels = data.channels || [];
-        let activeChannelId = data.activeChannelId || null;
-        let channelName = data.channelName || "";
-        if (channels.length === 0 && data.tokens) {
-          const channelId = "legacy";
-          activeChannelId = channelId;
-          channels = [{ channelId, channelName: data.channelName || "Mi Canal de YouTube", tokens: data.tokens }];
-        }
-        const activeChannel = channels.find((c) => c.channelId === activeChannelId) || channels[0];
-        globalConfig.settings.youtube.is_linked = channels.length > 0;
-        globalConfig.settings.youtube.channel_name = activeChannel ? activeChannel.channelName : channelName;
-      } catch (e) {
-        globalConfig.settings.youtube.is_linked = false;
-        globalConfig.settings.youtube.channel_name = "";
-      }
-    } else {
-      globalConfig.settings.youtube.is_linked = false;
-      globalConfig.settings.youtube.channel_name = "";
+    {
+      const creds = loadChannels();
+      const activeChannel = getActiveChannel(creds);
+      globalConfig.settings.youtube.is_linked = creds.channels.length > 0;
+      globalConfig.settings.youtube.channel_name = activeChannel ? activeChannel.channelName : "";
     }
-    const tiktokCredsPath = import_path.default.join(process.cwd(), "storage", "tiktok-credentials.json");
-    if (import_fs.default.existsSync(tiktokCredsPath)) {
-      try {
-        const data = JSON.parse(import_fs.default.readFileSync(tiktokCredsPath, "utf8"));
-        let channels = data.channels || [];
-        let activeChannelId = data.activeChannelId || null;
-        let channelName = data.channelName || "";
-        const activeChannel = channels.find((c) => c.channelId === activeChannelId) || channels[0];
-        globalConfig.settings.tiktok.is_linked = channels.length > 0;
-        globalConfig.settings.tiktok.account_name = activeChannel ? activeChannel.channelName : channelName;
-        globalConfig.settings.tiktok.verification_filename = data.verification_filename || "";
-        globalConfig.settings.tiktok.verification_content = data.verification_content || "";
-        if (data.verification_filename && data.verification_content) {
-          try {
-            const publicPath = import_path.default.join(process.cwd(), "public", data.verification_filename);
-            const publicDir = import_path.default.dirname(publicPath);
-            if (!import_fs.default.existsSync(publicDir)) {
-              import_fs.default.mkdirSync(publicDir, { recursive: true });
-            }
-            import_fs.default.writeFileSync(publicPath, data.verification_content, "utf8");
-            console.log(`[Config] Initialized static verification file at public/${data.verification_filename}`);
-          } catch (err) {
-            console.error(`[Config] Failed to write startup verification file to public/`, err);
-          }
-          try {
-            const distPath = import_path.default.join(process.cwd(), "dist", data.verification_filename);
-            const distDir = import_path.default.dirname(distPath);
-            if (!import_fs.default.existsSync(distDir)) {
-              import_fs.default.mkdirSync(distDir, { recursive: true });
-            }
-            import_fs.default.writeFileSync(distPath, data.verification_content, "utf8");
-            console.log(`[Config] Initialized static verification file at dist/${data.verification_filename}`);
-          } catch (err) {
-            console.error(`[Config] Failed to write startup verification file to dist/`, err);
-          }
-        }
-      } catch (e) {
-        globalConfig.settings.tiktok.is_linked = false;
-        globalConfig.settings.tiktok.account_name = "";
-        globalConfig.settings.tiktok.verification_filename = "";
-        globalConfig.settings.tiktok.verification_content = "";
-      }
-    } else {
-      globalConfig.settings.tiktok.is_linked = false;
-      globalConfig.settings.tiktok.account_name = "";
-      globalConfig.settings.tiktok.verification_filename = "";
-      globalConfig.settings.tiktok.verification_content = "";
+    {
+      const tkCreds = loadTiktokChannels();
+      const activeTkChannel = getActiveTiktokChannel(tkCreds);
+      globalConfig.settings.tiktok.is_linked = tkCreds.channels.length > 0;
+      globalConfig.settings.tiktok.account_name = activeTkChannel ? activeTkChannel.channelName : tkCreds.legacyAccountName || "";
+      globalConfig.settings.tiktok.verification_filename = tkCreds.verification_filename || "";
+      globalConfig.settings.tiktok.verification_content = tkCreds.verification_content || "";
+      writeTiktokVerificationFiles(process.cwd(), tkCreds);
     }
     globalConfig.settings.youtube.client_id = process.env.YOUTUBE_CLIENT_ID || "";
     globalConfig.settings.youtube.api_key = process.env.YOUTUBE_CLIENT_SECRET || "";
@@ -785,10 +1955,10 @@ async function startServer() {
   }));
   app.get("/api/v1/local-videos", wrap(async (req, res) => {
     try {
-      const files = import_fs.default.readdirSync(LOCAL_VIDEOS_DIR);
+      const files = import_fs6.default.readdirSync(LOCAL_VIDEOS_DIR);
       const videoExtensions = [".mp4", ".mkv", ".avi", ".mov", ".webm"];
-      const videoFiles = files.filter((file) => videoExtensions.includes(import_path.default.extname(file).toLowerCase())).map((file) => {
-        const stats = import_fs.default.statSync(import_path.default.join(LOCAL_VIDEOS_DIR, file));
+      const videoFiles = files.filter((file) => videoExtensions.includes(import_path6.default.extname(file).toLowerCase())).map((file) => {
+        const stats = import_fs6.default.statSync(import_path6.default.join(LOCAL_VIDEOS_DIR, file));
         return {
           name: file,
           size: stats.size,
@@ -830,27 +2000,7 @@ async function startServer() {
       }
       if (Object.keys(updates).length > 0) {
         try {
-          const envPath = import_path.default.join(process.cwd(), ".env");
-          let content = "";
-          if (import_fs.default.existsSync(envPath)) {
-            content = import_fs.default.readFileSync(envPath, "utf-8");
-          }
-          let lines = content.split(/\r?\n/);
-          for (const [key, val] of Object.entries(updates)) {
-            let found = false;
-            for (let i = 0; i < lines.length; i++) {
-              if (lines[i].trim().startsWith(`${key}=`)) {
-                lines[i] = `${key}=${val}`;
-                found = true;
-                break;
-              }
-            }
-            if (!found) {
-              lines.push(`${key}=${val}`);
-            }
-            process.env[key] = val;
-          }
-          import_fs.default.writeFileSync(envPath, lines.join("\n"), "utf-8");
+          updateEnvFile(updates);
           console.log("[Config] Updated .env file with YouTube credentials from UI save:", Object.keys(updates));
         } catch (err) {
           console.error("[Config] Failed to update .env file with YouTube credentials:", err);
@@ -858,56 +2008,21 @@ async function startServer() {
       }
     }
     if (req.body.tiktok) {
-      const tiktokCredsPath = import_path.default.join(process.cwd(), "storage", "tiktok-credentials.json");
-      let credData = {};
-      if (import_fs.default.existsSync(tiktokCredsPath)) {
-        try {
-          credData = JSON.parse(import_fs.default.readFileSync(tiktokCredsPath, "utf8"));
-        } catch (e) {
-          credData = {};
-        }
-      }
-      if (req.body.tiktok.verification_filename !== void 0) {
-        credData.verification_filename = req.body.tiktok.verification_filename;
-        globalConfig.settings.tiktok.verification_filename = req.body.tiktok.verification_filename;
-      }
-      if (req.body.tiktok.verification_content !== void 0) {
-        credData.verification_content = req.body.tiktok.verification_content;
-        globalConfig.settings.tiktok.verification_content = req.body.tiktok.verification_content;
-      }
       try {
-        const storageDir = import_path.default.dirname(tiktokCredsPath);
-        if (!import_fs.default.existsSync(storageDir)) {
-          import_fs.default.mkdirSync(storageDir, { recursive: true });
+        let tkCreds = loadTiktokChannels();
+        tkCreds = setTiktokVerification(tkCreds, {
+          filename: req.body.tiktok.verification_filename,
+          content: req.body.tiktok.verification_content
+        });
+        if (req.body.tiktok.verification_filename !== void 0) {
+          globalConfig.settings.tiktok.verification_filename = req.body.tiktok.verification_filename;
         }
-        import_fs.default.writeFileSync(tiktokCredsPath, JSON.stringify(credData, null, 2), "utf8");
+        if (req.body.tiktok.verification_content !== void 0) {
+          globalConfig.settings.tiktok.verification_content = req.body.tiktok.verification_content;
+        }
+        saveTiktokChannels(process.cwd(), tkCreds);
         console.log("[Config] Persisted TikTok verification metadata to disk.");
-        const filename = credData.verification_filename;
-        const content = credData.verification_content;
-        if (filename && content) {
-          try {
-            const publicPath = import_path.default.join(process.cwd(), "public", filename);
-            const publicDir = import_path.default.dirname(publicPath);
-            if (!import_fs.default.existsSync(publicDir)) {
-              import_fs.default.mkdirSync(publicDir, { recursive: true });
-            }
-            import_fs.default.writeFileSync(publicPath, content, "utf8");
-            console.log(`[Config] Wrote verification file to public/${filename}`);
-          } catch (e) {
-            console.error(`[Config] Failed to write verification file to public/`, e);
-          }
-          try {
-            const distPath = import_path.default.join(process.cwd(), "dist", filename);
-            const distDir = import_path.default.dirname(distPath);
-            if (!import_fs.default.existsSync(distDir)) {
-              import_fs.default.mkdirSync(distDir, { recursive: true });
-            }
-            import_fs.default.writeFileSync(distPath, content, "utf8");
-            console.log(`[Config] Wrote verification file to dist/${filename}`);
-          } catch (e) {
-            console.error(`[Config] Failed to write verification file to dist/`, e);
-          }
-        }
+        writeTiktokVerificationFiles(process.cwd(), tkCreds);
       } catch (err) {
         console.error("[Config] Failed to save verification metadata to tiktok-credentials.json:", err);
       }
@@ -920,27 +2035,7 @@ async function startServer() {
       }
       if (Object.keys(updates).length > 0) {
         try {
-          const envPath = import_path.default.join(process.cwd(), ".env");
-          let content = "";
-          if (import_fs.default.existsSync(envPath)) {
-            content = import_fs.default.readFileSync(envPath, "utf-8");
-          }
-          let lines = content.split(/\r?\n/);
-          for (const [key, val] of Object.entries(updates)) {
-            let found = false;
-            for (let i = 0; i < lines.length; i++) {
-              if (lines[i].trim().startsWith(`${key}=`)) {
-                lines[i] = `${key}=${val}`;
-                found = true;
-                break;
-              }
-            }
-            if (!found) {
-              lines.push(`${key}=${val}`);
-            }
-            process.env[key] = val;
-          }
-          import_fs.default.writeFileSync(envPath, lines.join("\n"), "utf-8");
+          updateEnvFile(updates);
           console.log("[Config] Updated .env file with TikTok credentials from UI save:", Object.keys(updates));
         } catch (err) {
           console.error("[Config] Failed to update .env file with TikTok credentials:", err);
@@ -954,9 +2049,9 @@ async function startServer() {
     let voicesList = [];
     if (provider === "azure-tts-v1" || provider === "edge-tts" || provider === "azure-tts-v2") {
       try {
-        const azureVoicesPath = import_path.default.join(process.cwd(), "src", "api", "azure_voices.json");
-        if (import_fs.default.existsSync(azureVoicesPath)) {
-          const rawData = import_fs.default.readFileSync(azureVoicesPath, "utf-8");
+        const azureVoicesPath = import_path6.default.join(process.cwd(), "src", "api", "azure_voices.json");
+        if (import_fs6.default.existsSync(azureVoicesPath)) {
+          const rawData = import_fs6.default.readFileSync(azureVoicesPath, "utf-8");
           const azureVoicesList = JSON.parse(rawData);
           voicesList = azureVoicesList.map((item) => ({
             value: `${item.name}-${item.gender}`,
@@ -1166,7 +2261,9 @@ async function startServer() {
     let prompt = `Escribe un gui\xF3n de video sobre "${video_subject}" en idioma ${video_language}. Es CR\xCDTICO que el gui\xF3n tenga exactamente ${paragraph_number} p\xE1rrafos bien estructurados, completos y detallados.
 Cada p\xE1rrafo debe ser sustancial y desarrollado por completo (debe tener un rango estricto de entre 45 y 55 palabras por p\xE1rrafo, compuesto por 3 a 5 oraciones ricas y descriptivas, \xF3ptimo para narrar una historia o un documental).
 La longitud total del gui\xF3n completo debe ser de aproximadamente ${paragraph_number * 45} a ${paragraph_number * 55} palabras en total. A medida que aumenta el n\xFAmero de p\xE1rrafos, el gui\xF3n general debe ser proporcionalmente m\xE1s largo de forma lineal y acumulativa (por ejemplo, 3 p\xE1rrafos deben sumar unas 150 palabras en total, y 4 p\xE1rrafos deben sumar unas 200 palabras en total). No reduzcas la longitud de los p\xE1rrafos individuales al tener m\xE1s p\xE1rrafos; cada uno de ellos debe mantener de forma consistente la profundidad, extensi\xF3n y cantidad de palabras especificadas.
-Separa cada p\xE1rrafo estrictamente con dos saltos de l\xEDnea (\\n\\n). Devuelve SOLAMENTE el texto del gui\xF3n, sin t\xEDtulos, introducciones ni comentarios adicionales.`;
+Separa cada p\xE1rrafo estrictamente con dos saltos de l\xEDnea (\\n\\n). Devuelve SOLAMENTE el texto del gui\xF3n, sin t\xEDtulos, introducciones ni comentarios adicionales.
+
+CR\xCDTICO: No utilices NING\xDAN tipo de formato de texto como asteriscos (* o **), comillas (" o \u201C o \u201D) o palabras entre par\xE9ntesis o corchetes, ya que el gui\xF3n se usar\xE1 directamente con un generador de voz autom\xE1tica y estos caracteres provocan lecturas raras. Escribe solo texto limpio y natural.`;
     if (video_script_prompt) {
       prompt += `
 
@@ -1179,7 +2276,8 @@ ${video_script_prompt}`;
 
 [INSTRUCCI\xD3N DE PRIORIDAD ABSOLUTA PARA EL N\xDAMERO DE P\xC1RRAFOS]: El usuario ha solicitado exactamente ${paragraph_number} p\xE1rrafos. Ignora cualquier restricci\xF3n de l\xEDmite de palabras total anterior (como "extensi\xF3n total de entre 120 y 140 palabras" o similar). En su lugar, aplica ese l\xEDmite de palabras a cada p\xE1rrafo de manera individual (es decir, cada uno de los ${paragraph_number} p\xE1rrafos debe tener unas 45-55 palabras de forma consistente). El guion completo debe crecer de manera lineal y proporcional (aproximadamente de ${paragraph_number * 45} a ${paragraph_number * 55} palabras en total) para asegurar que la duraci\xF3n de la locuci\xF3n aumente seg\xFAn la cantidad de p\xE1rrafos solicitados.`;
     }
-    const scriptText = await generateGeminiContent(prompt, false, finalSystemPrompt || void 0);
+    const rawScript = await generateLlmContent(prompt, false, finalSystemPrompt || void 0);
+    const scriptText = cleanScriptSymbols(rawScript);
     res.json({ status: 200, message: "ok", data: { video_script: scriptText } });
   }));
   app.post("/api/v1/terms", wrap(async (req, res) => {
@@ -1189,7 +2287,7 @@ ${video_script_prompt}`;
       throw new Error("No Gemini API key configured. Please set GEMINI_API_KEY.");
     }
     const prompt = `Analiza el siguiente gui\xF3n de video y genera una lista de exactamente 5 t\xE9rminos de b\xFAsqueda en ingl\xE9s (para buscar videos de stock relevantes). Devuelve una respuesta JSON con el formato: { "terms": ["term1", "term2", ...] }. Gui\xF3n: ${video_script}`;
-    const resp = await generateGeminiContent(prompt, true);
+    const resp = await generateLlmContent(prompt, true);
     const parsed = JSON.parse(resp);
     const terms = parsed.terms || [];
     res.json({ status: 200, message: "ok", data: { video_terms: terms } });
@@ -1211,7 +2309,7 @@ Instrucciones:
 - Todos los hashtags deben estar en min\xFAsculas.
 - El formato final debe ser una sola l\xEDnea de hashtags separados por un espacio, por ejemplo: "#hashtag1 #hashtag2 #hashtag3" (sin comas ni saltos de l\xEDnea).
 - Devuelve la respuesta en formato JSON estructurado: { "hashtags": "#hashtag1 #hashtag2 #hashtag3" }`;
-    const resp = await generateGeminiContent(prompt, true);
+    const resp = await generateLlmContent(prompt, true);
     let hashtags = "";
     try {
       const parsed = JSON.parse(resp);
@@ -1271,39 +2369,8 @@ Instrucciones:
     } catch (err) {
       console.error("Error al obtener informaci\xF3n del canal:", err);
     }
-    const storageDir = import_path.default.join(process.cwd(), "storage");
-    if (!import_fs.default.existsSync(storageDir)) {
-      import_fs.default.mkdirSync(storageDir, { recursive: true });
-    }
-    const credsPath = import_path.default.join(storageDir, "youtube-credentials.json");
-    let credData = {
-      activeChannelId: channelId,
-      channels: []
-    };
-    if (import_fs.default.existsSync(credsPath)) {
-      try {
-        const existing = JSON.parse(import_fs.default.readFileSync(credsPath, "utf8"));
-        let channels = existing.channels || [];
-        if (channels.length === 0 && existing.tokens) {
-          channels = [{ channelId: "legacy", channelName: existing.channelName || "Mi Canal de YouTube", tokens: existing.tokens }];
-        }
-        credData.channels = channels;
-        credData.activeChannelId = existing.activeChannelId || channelId;
-      } catch (e) {
-        console.error("Error reading existing credentials:", e);
-      }
-    }
-    const existingIndex = credData.channels.findIndex((c) => c.channelId === channelId);
-    if (existingIndex > -1) {
-      credData.channels[existingIndex].tokens = tokens;
-      credData.channels[existingIndex].channelName = channelName;
-    } else {
-      credData.channels.push({ channelId, channelName, tokens });
-    }
-    if (!credData.activeChannelId || credData.activeChannelId === "unknown" || credData.channels.length === 1) {
-      credData.activeChannelId = channelId;
-    }
-    import_fs.default.writeFileSync(credsPath, JSON.stringify(credData, null, 2));
+    const creds = upsertChannel(loadChannels(), { channelId, channelName, tokens });
+    saveChannels(process.cwd(), creds);
     res.send(`
       <html>
         <head>
@@ -1331,41 +2398,21 @@ Instrucciones:
     `);
   }));
   app.get("/api/v1/youtube/status", wrap(async (req, res) => {
-    const credsPath = import_path.default.join(process.cwd(), "storage", "youtube-credentials.json");
-    if (!import_fs.default.existsSync(credsPath)) {
-      return res.json({ status: 200, message: "ok", data: { is_linked: false, channel_name: null, active_channel_id: null, channels: [] } });
-    }
-    try {
-      const data = JSON.parse(import_fs.default.readFileSync(credsPath, "utf8"));
-      let channels = data.channels || [];
-      let activeChannelId = data.activeChannelId || null;
-      let channelName = data.channelName || null;
-      if (channels.length === 0 && data.tokens) {
-        const channelId = "legacy";
-        activeChannelId = channelId;
-        channels = [{ channelId, channelName: data.channelName || "Mi Canal de YouTube", tokens: data.tokens }];
+    const creds = loadChannels();
+    const activeChannel = getActiveChannel(creds);
+    return res.json({
+      status: 200,
+      message: "ok",
+      data: {
+        is_linked: creds.channels.length > 0,
+        channel_name: activeChannel ? activeChannel.channelName : null,
+        active_channel_id: activeChannel ? activeChannel.channelId : null,
+        channels: creds.channels.map((c) => ({ channelId: c.channelId, channelName: c.channelName }))
       }
-      const activeChannel = channels.find((c) => c.channelId === activeChannelId) || channels[0];
-      const activeName = activeChannel ? activeChannel.channelName : channelName;
-      return res.json({
-        status: 200,
-        message: "ok",
-        data: {
-          is_linked: channels.length > 0,
-          channel_name: activeName,
-          active_channel_id: activeChannel ? activeChannel.channelId : null,
-          channels: channels.map((c) => ({ channelId: c.channelId, channelName: c.channelName }))
-        }
-      });
-    } catch (e) {
-      return res.json({ status: 200, message: "ok", data: { is_linked: false, channel_name: null, active_channel_id: null, channels: [] } });
-    }
+    });
   }));
   app.post("/api/v1/youtube/disconnect", wrap(async (req, res) => {
-    const credsPath = import_path.default.join(process.cwd(), "storage", "youtube-credentials.json");
-    if (import_fs.default.existsSync(credsPath)) {
-      import_fs.default.unlinkSync(credsPath);
-    }
+    saveChannels(process.cwd(), { activeChannelId: null, channels: [] });
     return res.json({ status: 200, message: "ok" });
   }));
   app.post("/api/v1/youtube/select-channel", wrap(async (req, res) => {
@@ -1373,25 +2420,16 @@ Instrucciones:
     if (!channelId) {
       return res.status(400).json({ status: 400, message: "Falta el channelId." });
     }
-    const credsPath = import_path.default.join(process.cwd(), "storage", "youtube-credentials.json");
-    if (!import_fs.default.existsSync(credsPath)) {
+    const creds = loadChannels();
+    if (creds.channels.length === 0) {
       return res.status(404).json({ status: 404, message: "No se encontraron credenciales de YouTube." });
     }
     try {
-      const data = JSON.parse(import_fs.default.readFileSync(credsPath, "utf8"));
-      let channels = data.channels || [];
-      if (channels.length === 0 && data.tokens) {
-        const cId = "legacy";
-        data.activeChannelId = cId;
-        data.channels = [{ channelId: cId, channelName: data.channelName || "Mi Canal de YouTube", tokens: data.tokens }];
-        channels = data.channels;
-      }
-      const found = channels.find((c) => c.channelId === channelId);
-      if (!found) {
+      const updated = selectChannel(creds, channelId);
+      if (!updated) {
         return res.status(404).json({ status: 404, message: "Canal no encontrado en las cuentas vinculadas." });
       }
-      data.activeChannelId = channelId;
-      import_fs.default.writeFileSync(credsPath, JSON.stringify(data, null, 2));
+      saveChannels(process.cwd(), updated);
       return res.json({ status: 200, message: "ok", activeChannelId: channelId });
     } catch (e) {
       return res.status(500).json({ status: 500, message: e.message });
@@ -1402,30 +2440,12 @@ Instrucciones:
     if (!channelId) {
       return res.status(400).json({ status: 400, message: "Falta el channelId." });
     }
-    const credsPath = import_path.default.join(process.cwd(), "storage", "youtube-credentials.json");
-    if (!import_fs.default.existsSync(credsPath)) {
+    const creds = loadChannels();
+    if (creds.channels.length === 0) {
       return res.status(404).json({ status: 404, message: "No se encontraron credenciales de YouTube." });
     }
     try {
-      const data = JSON.parse(import_fs.default.readFileSync(credsPath, "utf8"));
-      let channels = data.channels || [];
-      if (channels.length === 0 && data.tokens) {
-        const cId = "legacy";
-        data.activeChannelId = cId;
-        data.channels = [{ channelId: cId, channelName: data.channelName || "Mi Canal de YouTube", tokens: data.tokens }];
-        channels = data.channels;
-      }
-      data.channels = channels.filter((c) => c.channelId !== channelId);
-      if (data.activeChannelId === channelId) {
-        data.activeChannelId = data.channels.length > 0 ? data.channels[0].channelId : null;
-      }
-      if (data.channels.length === 0) {
-        if (import_fs.default.existsSync(credsPath)) {
-          import_fs.default.unlinkSync(credsPath);
-        }
-      } else {
-        import_fs.default.writeFileSync(credsPath, JSON.stringify(data, null, 2));
-      }
+      saveChannels(process.cwd(), removeChannel(creds, channelId));
       return res.json({ status: 200, message: "ok" });
     } catch (e) {
       return res.status(500).json({ status: 500, message: e.message });
@@ -1436,19 +2456,11 @@ Instrucciones:
     if (!videoUrl) {
       return res.status(400).json({ status: 400, message: "Falta el videoUrl del video a subir." });
     }
-    const credsPath = import_path.default.join(process.cwd(), "storage", "youtube-credentials.json");
-    if (!import_fs.default.existsSync(credsPath)) {
+    const creds = loadChannels();
+    if (creds.channels.length === 0) {
       return res.status(401).json({ status: 401, message: "YouTube no est\xE1 vinculado. Por favor, vinc\xFAlalo primero." });
     }
-    const cred = JSON.parse(import_fs.default.readFileSync(credsPath, "utf8"));
-    let channels = cred.channels || [];
-    let activeChannelId = cred.activeChannelId || null;
-    if (channels.length === 0 && cred.tokens) {
-      const channelId = "legacy";
-      activeChannelId = channelId;
-      channels = [{ channelId, channelName: cred.channelName || "Mi Canal de YouTube", tokens: cred.tokens }];
-    }
-    const activeChannel = channels.find((c) => c.channelId === activeChannelId) || channels[0];
+    const activeChannel = getActiveChannel(creds);
     if (!activeChannel) {
       return res.status(401).json({ status: 401, message: "YouTube no est\xE1 vinculado o el canal activo no existe." });
     }
@@ -1459,11 +2471,11 @@ Instrucciones:
     oauth2Client.setCredentials(activeChannel.tokens);
     oauth2Client.on("tokens", (newTokens) => {
       activeChannel.tokens = { ...activeChannel.tokens, ...newTokens };
-      import_fs.default.writeFileSync(credsPath, JSON.stringify(cred, null, 2));
+      saveChannels(process.cwd(), creds);
     });
     const youtube = import_googleapis.google.youtube({ version: "v3", auth: oauth2Client });
-    const filePath = import_path.default.join(process.cwd(), videoUrl);
-    if (!import_fs.default.existsSync(filePath)) {
+    const filePath = import_path6.default.join(process.cwd(), videoUrl);
+    if (!import_fs6.default.existsSync(filePath)) {
       return res.status(404).json({ status: 404, message: `No se encontr\xF3 el archivo de video en el disco: ${filePath}` });
     }
     const response = await youtube.videos.insert({
@@ -1483,7 +2495,7 @@ Instrucciones:
         }
       },
       media: {
-        body: import_fs.default.createReadStream(filePath)
+        body: import_fs6.default.createReadStream(filePath)
       }
     });
     res.json({
@@ -1552,43 +2564,15 @@ Instrucciones:
     const channelName = user?.display_name || user?.username || "Usuario de TikTok";
     const username = user?.username || "";
     const avatarUrl = user?.avatar_url || "";
-    const storageDir = import_path.default.join(process.cwd(), "storage");
-    if (!import_fs.default.existsSync(storageDir)) {
-      import_fs.default.mkdirSync(storageDir, { recursive: true });
-    }
-    const credsPath = import_path.default.join(storageDir, "tiktok-credentials.json");
-    let credData = {
-      activeChannelId: channelId,
-      channels: []
-    };
-    if (import_fs.default.existsSync(credsPath)) {
-      try {
-        const existing = JSON.parse(import_fs.default.readFileSync(credsPath, "utf8"));
-        credData.channels = existing.channels || [];
-        credData.activeChannelId = existing.activeChannelId || channelId;
-      } catch (e) {
-        console.error("Error reading existing tiktok credentials:", e);
-      }
-    }
     const tokens = {
       access_token: tokenData.access_token,
       refresh_token: tokenData.refresh_token,
       expires_at: Date.now() + tokenData.expires_in * 1e3,
       refresh_expires_at: Date.now() + tokenData.refresh_expires_in * 1e3
     };
-    const existingIndex = credData.channels.findIndex((c) => c.channelId === channelId);
-    if (existingIndex > -1) {
-      credData.channels[existingIndex].tokens = tokens;
-      credData.channels[existingIndex].channelName = channelName;
-      credData.channels[existingIndex].username = username;
-      credData.channels[existingIndex].avatarUrl = avatarUrl;
-    } else {
-      credData.channels.push({ channelId, channelName, username, avatarUrl, tokens });
-    }
-    if (!credData.activeChannelId || credData.activeChannelId === "unknown" || credData.channels.length === 1) {
-      credData.activeChannelId = channelId;
-    }
-    import_fs.default.writeFileSync(credsPath, JSON.stringify(credData, null, 2));
+    let tkCreds = loadTiktokChannels();
+    tkCreds = upsertTiktokChannel(tkCreds, { channelId, channelName, username, avatarUrl, tokens });
+    saveTiktokChannels(process.cwd(), tkCreds);
     res.send(`
       <html>
         <head>
@@ -1616,35 +2600,21 @@ Instrucciones:
     `);
   }));
   app.get("/api/v1/tiktok/status", wrap(async (req, res) => {
-    const credsPath = import_path.default.join(process.cwd(), "storage", "tiktok-credentials.json");
-    if (!import_fs.default.existsSync(credsPath)) {
-      return res.json({ status: 200, message: "ok", data: { is_linked: false, channel_name: null, active_channel_id: null, channels: [] } });
-    }
-    try {
-      const data = JSON.parse(import_fs.default.readFileSync(credsPath, "utf8"));
-      let channels = data.channels || [];
-      let activeChannelId = data.activeChannelId || null;
-      const activeChannel = channels.find((c) => c.channelId === activeChannelId) || channels[0];
-      const activeName = activeChannel ? activeChannel.channelName : null;
-      return res.json({
-        status: 200,
-        message: "ok",
-        data: {
-          is_linked: channels.length > 0,
-          channel_name: activeName,
-          active_channel_id: activeChannel ? activeChannel.channelId : null,
-          channels: channels.map((c) => ({ channelId: c.channelId, channelName: c.channelName, username: c.username, avatarUrl: c.avatarUrl }))
-        }
-      });
-    } catch (e) {
-      return res.json({ status: 200, message: "ok", data: { is_linked: false, channel_name: null, active_channel_id: null, channels: [] } });
-    }
+    const tkCreds = loadTiktokChannels();
+    const activeChannel = getActiveTiktokChannel(tkCreds);
+    return res.json({
+      status: 200,
+      message: "ok",
+      data: {
+        is_linked: tkCreds.channels.length > 0,
+        channel_name: activeChannel ? activeChannel.channelName : null,
+        active_channel_id: activeChannel ? activeChannel.channelId : null,
+        channels: tkCreds.channels.map((c) => ({ channelId: c.channelId, channelName: c.channelName, username: c.username, avatarUrl: c.avatarUrl }))
+      }
+    });
   }));
   app.post("/api/v1/tiktok/disconnect", wrap(async (req, res) => {
-    const credsPath = import_path.default.join(process.cwd(), "storage", "tiktok-credentials.json");
-    if (import_fs.default.existsSync(credsPath)) {
-      import_fs.default.unlinkSync(credsPath);
-    }
+    clearTiktokCredentials(process.cwd());
     return res.json({ status: 200, message: "ok" });
   }));
   app.post("/api/v1/tiktok/select-channel", wrap(async (req, res) => {
@@ -1652,65 +2622,39 @@ Instrucciones:
     if (!channelId) {
       return res.status(400).json({ status: 400, message: "Falta el channelId." });
     }
-    const credsPath = import_path.default.join(process.cwd(), "storage", "tiktok-credentials.json");
-    if (!import_fs.default.existsSync(credsPath)) {
+    const tkCreds = loadTiktokChannels();
+    if (tkCreds.channels.length === 0) {
       return res.status(404).json({ status: 404, message: "No se encontraron credenciales de TikTok." });
     }
-    try {
-      const data = JSON.parse(import_fs.default.readFileSync(credsPath, "utf8"));
-      let channels = data.channels || [];
-      const found = channels.find((c) => c.channelId === channelId);
-      if (!found) {
-        return res.status(404).json({ status: 404, message: "Cuenta no encontrada en las cuentas vinculadas." });
-      }
-      data.activeChannelId = channelId;
-      import_fs.default.writeFileSync(credsPath, JSON.stringify(data, null, 2));
-      return res.json({ status: 200, message: "ok", activeChannelId: channelId });
-    } catch (e) {
-      return res.status(500).json({ status: 500, message: e.message });
+    const updated = selectTiktokChannel(tkCreds, channelId);
+    if (!updated) {
+      return res.status(404).json({ status: 404, message: "Cuenta no encontrada en las cuentas vinculadas." });
     }
+    saveTiktokChannels(process.cwd(), updated);
+    return res.json({ status: 200, message: "ok", activeChannelId: channelId });
   }));
   app.post("/api/v1/tiktok/disconnect-channel", wrap(async (req, res) => {
     const { channelId } = req.body;
     if (!channelId) {
       return res.status(400).json({ status: 400, message: "Falta el channelId." });
     }
-    const credsPath = import_path.default.join(process.cwd(), "storage", "tiktok-credentials.json");
-    if (!import_fs.default.existsSync(credsPath)) {
+    const tkCreds = loadTiktokChannels();
+    if (tkCreds.channels.length === 0) {
       return res.status(404).json({ status: 404, message: "No se encontraron credenciales de TikTok." });
     }
-    try {
-      const data = JSON.parse(import_fs.default.readFileSync(credsPath, "utf8"));
-      let channels = data.channels || [];
-      data.channels = channels.filter((c) => c.channelId !== channelId);
-      if (data.activeChannelId === channelId) {
-        data.activeChannelId = data.channels.length > 0 ? data.channels[0].channelId : null;
-      }
-      if (data.channels.length === 0) {
-        if (import_fs.default.existsSync(credsPath)) {
-          import_fs.default.unlinkSync(credsPath);
-        }
-      } else {
-        import_fs.default.writeFileSync(credsPath, JSON.stringify(data, null, 2));
-      }
-      return res.json({ status: 200, message: "ok" });
-    } catch (e) {
-      return res.status(500).json({ status: 500, message: e.message });
-    }
+    saveTiktokChannels(process.cwd(), removeTiktokChannel(tkCreds, channelId));
+    return res.json({ status: 200, message: "ok" });
   }));
   app.post("/api/v1/tiktok/upload", wrap(async (req, res) => {
     const { videoUrl, title } = req.body;
     if (!videoUrl) {
       return res.status(400).json({ status: 400, message: "Falta el videoUrl del video a subir." });
     }
-    const credsPath = import_path.default.join(process.cwd(), "storage", "tiktok-credentials.json");
-    if (!import_fs.default.existsSync(credsPath)) {
+    const tkCreds = loadTiktokChannels();
+    if (tkCreds.channels.length === 0) {
       return res.status(401).json({ status: 401, message: "TikTok no est\xE1 vinculado. Por favor, vinc\xFAlalo primero." });
     }
-    const cred = JSON.parse(import_fs.default.readFileSync(credsPath, "utf8"));
-    const channels = cred.channels || [];
-    const activeChannelId = cred.activeChannelId || null;
-    const activeChannel = channels.find((c) => c.channelId === activeChannelId) || channels[0];
+    const activeChannel = getActiveTiktokChannel(tkCreds);
     if (!activeChannel) {
       return res.status(401).json({ status: 401, message: "TikTok no est\xE1 vinculado o la cuenta activa no existe." });
     }
@@ -1735,7 +2679,7 @@ Instrucciones:
           activeChannel.tokens.access_token = refreshData.access_token;
           activeChannel.tokens.refresh_token = refreshData.refresh_token;
           activeChannel.tokens.expires_at = Date.now() + refreshData.expires_in * 1e3;
-          import_fs.default.writeFileSync(credsPath, JSON.stringify(cred, null, 2));
+          saveTiktokChannels(process.cwd(), tkCreds);
           accessToken = refreshData.access_token;
           console.log("[TikTok] Access token refreshed successfully.");
         } else {
@@ -1799,157 +2743,14 @@ Instrucciones:
       tasks.set(taskId, t);
     }
   };
-  app.post("/api/v1/videos", wrap(async (req, res) => {
-    const {
-      video_source,
-      local_video_files,
-      video_script,
-      video_subject,
-      voice_name,
-      bgm_file,
-      video_aspect,
-      font_name,
-      font_size,
-      text_fore_color,
-      video_concat_mode,
-      bgm_volume,
-      n_threads,
-      video_codec,
-      tts_provider
-    } = req.body;
-    const taskId = "task_" + Math.random().toString(36).substring(2, 9);
-    const taskStatus = {
-      state: 4,
-      // TASK_STATE_PROCESSING
-      progress: 0,
-      videos: [],
-      combined_videos: [],
-      logs: []
-    };
-    tasks.set(taskId, taskStatus);
-    logTask(taskId, "INFO", "SYSTEM", `Initializing video generation task ${taskId}...`);
-    logTask(taskId, "INFO", "VALIDATION", "Verifying request payload parameters...");
-    let validationFailed = false;
-    let validationErrorMessage = "";
-    if (video_source === "local") {
-      logTask(taskId, "INFO", "VALIDATION", `Video source is set to LOCAL. Selected files: ${Array.isArray(local_video_files) ? local_video_files.join(", ") : "None"}`);
-      if (!local_video_files || !Array.isArray(local_video_files) || local_video_files.length === 0) {
-        validationFailed = true;
-        validationErrorMessage = "No local video files were selected. Please choose at least one video in the Configurations panel.";
-      } else {
-        const missingFiles = [];
-        for (const file of local_video_files) {
-          const filePath = import_path.default.join(LOCAL_VIDEOS_DIR, file);
-          if (!import_fs.default.existsSync(filePath)) {
-            missingFiles.push(file);
-          }
-        }
-        if (missingFiles.length > 0) {
-          validationFailed = true;
-          validationErrorMessage = `The following selected files do not exist in storage/local_videos: ${missingFiles.join(", ")}. Please make sure they exist.`;
-        }
-      }
-    } else {
-      logTask(taskId, "INFO", "VALIDATION", `Video source is set to ONLINE (${video_source || "pexels"}).`);
-    }
-    if (!validationFailed) {
-      if (!video_script && !video_subject) {
-        validationFailed = true;
-        validationErrorMessage = "Both the video script and subject are empty. Please write a script or enter a subject to generate one.";
-      }
-    }
-    if (validationFailed) {
-      logTask(taskId, "ERROR", "VALIDATION", `Validation Failed: ${validationErrorMessage}`);
-      logTask(taskId, "ERROR", "SYSTEM", "Task execution aborted due to pre-requisite failures.");
-      const t = tasks.get(taskId);
-      if (t) {
-        t.state = -1;
-        tasks.set(taskId, t);
-      }
-      return res.json({ status: 200, message: "ok", data: { task_id: taskId } });
-    }
-    logTask(taskId, "SUCCESS", "VALIDATION", `All parameters validated. Script character count: ${video_script?.length || 0}. Format: ${video_aspect || "9:16"}`);
-    let progress = 0;
-    const interval = setInterval(() => {
-      progress += 20;
-      const t = tasks.get(taskId);
-      if (!t) {
-        clearInterval(interval);
-        return;
-      }
-      t.progress = progress;
-      tasks.set(taskId, t);
-      if (progress === 20) {
-        logTask(taskId, "INFO", "TTS", `Starting Text-to-Speech synthesis using provider: "${tts_provider || "azure-tts-v1"}"...`);
-        if (!voice_name) {
-          logTask(taskId, "WARNING", "TTS", "No voice name specified. Falling back to default neural speaker.");
-        } else {
-          logTask(taskId, "INFO", "TTS", `Synthesizing spoken track with voice: "${voice_name}"...`);
-        }
-        logTask(taskId, "SUCCESS", "TTS", `Audio track synthesized successfully. Duration: 38.4s. Saved as tts_${taskId}.mp3.`);
-      } else if (progress === 40) {
-        logTask(taskId, "INFO", "SUBTITLES", "Loading Whisper voice-alignment model...");
-        logTask(taskId, "INFO", "SUBTITLES", "Aligning spoken voice audio to original script tokens...");
-        logTask(taskId, "SUCCESS", "SUBTITLES", "Successfully generated subtitle cues (SRT) with timestamp mappings.");
-      } else if (progress === 60) {
-        if (video_source === "local") {
-          logTask(taskId, "INFO", "VIDEO_ASSET", `Loading ${local_video_files.length} verified files from local storage...`);
-          local_video_files.forEach((file) => {
-            logTask(taskId, "INFO", "VIDEO_ASSET", `Including asset: storage/local_videos/${file}`);
-          });
-          logTask(taskId, "SUCCESS", "VIDEO_ASSET", "All local assets imported successfully.");
-        } else {
-          logTask(taskId, "INFO", "VIDEO_ASSET", `Querying search terms from online API provider (${video_source || "pexels"})...`);
-          logTask(taskId, "SUCCESS", "VIDEO_ASSET", `Successfully retrieved and cached 5 clips matching tags: ${Array.isArray(req.body.video_terms) ? req.body.video_terms.join(", ") : "general"}.`);
-        }
-      } else if (progress === 80) {
-        logTask(taskId, "INFO", "COMPOSITION", `Joining video assets with concat mode: "${video_concat_mode || "random"}"`);
-        if (bgm_file) {
-          logTask(taskId, "INFO", "AUDIO_MIXER", `Mixing background music track: "${bgm_file}" at volume: ${bgm_volume || 0.2}`);
-        } else {
-          logTask(taskId, "INFO", "AUDIO_MIXER", "Injecting ambient background music track...");
-        }
-        logTask(taskId, "INFO", "COMPOSITION", `Burning subtitle overlays onto visual frames (Font: "${font_name || "STHeitiMedium.ttc"}", Size: ${font_size || 60}px, Color: "${text_fore_color || "#FFFFFF"}")...`);
-        logTask(taskId, "SUCCESS", "COMPOSITION", "Composition of video and subtitle tracks complete.");
-      } else if (progress >= 100) {
-        logTask(taskId, "INFO", "RENDER", `Launching FFmpeg encoding task (Threads: ${n_threads || 2}, Codec: "${video_codec || "libx264"}")...`);
-        logTask(taskId, "SUCCESS", "RENDER", `Compression and rendering complete. Output file generated at: storage/renders/render_${taskId}.mp4`);
-        logTask(taskId, "SUCCESS", "SYSTEM", `Task ${taskId} completed successfully!`);
-        t.state = 1;
-        t.videos = [SAMPLE_VIDEOS[0].source_url];
-        t.combined_videos = [SAMPLE_VIDEOS[0].source_url];
-        tasks.set(taskId, t);
-        clearInterval(interval);
-      }
-    }, 1500);
-    res.json({ status: 200, message: "ok", data: { task_id: taskId } });
-  }));
-  app.get("/api/v1/tasks/:id", wrap(async (req, res) => {
-    const t = tasks.get(req.params.id);
-    if (!t) {
-      return res.status(404).json({ status: 404, message: "Task not found", data: null });
-    }
-    res.json({ status: 200, message: "ok", data: t });
-  }));
-  app.get("/api/v1/tasks", wrap(async (req, res) => {
-    const data = {};
-    for (const [k, v] of tasks.entries()) {
-      data[k] = v;
-    }
-    res.json({ status: 200, message: "ok", data });
-  }));
-  app.delete("/api/v1/tasks/:id", wrap(async (req, res) => {
-    tasks.delete(req.params.id);
-    res.json({ status: 200, message: "ok", data: null });
-  }));
   app.get("/api/v1/musics", wrap(async (req, res) => {
     res.json({ status: 200, message: "ok", data: { files: BGM_FILES } });
   }));
   app.get("/api/v1/projects", wrap(async (req, res) => {
     for (const [projectId, p] of Array.from(projects.entries())) {
       if (p.project_folder_name) {
-        const folderPath = import_path.default.join(process.cwd(), "storage", "renders", p.project_folder_name);
-        if (!import_fs.default.existsSync(folderPath)) {
+        const folderPath = import_path6.default.join(process.cwd(), "storage", "renders", p.project_folder_name);
+        if (!import_fs6.default.existsSync(folderPath)) {
           projects.delete(projectId);
         }
       }
@@ -1979,8 +2780,11 @@ Es CR\xCDTICO que el gui\xF3n tenga EXACTAMENTE ${paragraph_number} p\xE1rrafos,
 Cada p\xE1rrafo debe ser sustancial y desarrollado por completo (aproximadamente de 50 a 70 palabras por p\xE1rrafo, compuesto por 3 a 5 oraciones ricas y descriptivas).
 A medida que aumenta el n\xFAmero de p\xE1rrafos, el gui\xF3n general debe ser proporcionalmente m\xE1s largo; bajo ninguna circunstancia acortes ni apresures los p\xE1rrafos individuales al tener m\xE1s de ellos. Cada p\xE1rrafo debe mantener la misma profundidad, extensi\xF3n y desarrollo completo de una parte de la historia con transiciones naturales hacia el siguiente.
 No repitas informaci\xF3n. No uses relleno. Cada frase debe aportar algo interesante.
-Devuelve \xDANICAMENTE el texto del gui\xF3n, sin t\xEDtulos, encabezados, listas, notas ni comentarios adicionales.`;
-      scriptText = await generateGeminiContent(prompt);
+Devuelve \xDANICAMENTE el texto del gui\xF3n, sin t\xEDtulos, encabezados, listas, notas ni comentarios adicionales.
+
+CR\xCDTICO: No utilices NING\xDAN tipo de formato de texto como asteriscos (* o **), comillas (" o \u201C o \u201D) o palabras entre par\xE9ntesis o corchetes, ya que el gui\xF3n se usar\xE1 directamente con un generador de voz autom\xE1tica y estos caracteres provocan lecturas raras. Escribe solo texto limpio y natural.`;
+      const rawScript = await generateLlmContent(prompt);
+      scriptText = cleanScriptSymbols(rawScript);
     }
     const newProject = {
       project_id: projectId,
@@ -2012,7 +2816,7 @@ Devuelve \xDANICAMENTE el texto del gui\xF3n, sin t\xEDtulos, encabezados, lista
       project_id: projectId,
       topic: topic || "Gui\xF3n de Video",
       language,
-      script,
+      script: cleanScriptSymbols(script),
       has_script: true,
       has_shot_plan: false,
       has_selected_media: false,
@@ -2034,9 +2838,9 @@ Devuelve \xDANICAMENTE el texto del gui\xF3n, sin t\xEDtulos, encabezados, lista
   app.post("/api/v1/projects/from-reddit", wrap(async (req, res) => {
     const { url, title, body, language = "es" } = req.body;
     const projectId = "proj_" + Math.random().toString(36).substring(2, 9);
-    const script = `${title}
+    const script = cleanScriptSymbols(`${title}
 
-${body}`;
+${body}`);
     const newProject = {
       project_id: projectId,
       topic: title || "Reddit Post",
@@ -2121,6 +2925,9 @@ ${body}`;
     if (!p) {
       return res.status(404).json({ status: 404, message: "Project not found", data: null });
     }
+    if (req.body && req.body.script) {
+      req.body.script = cleanScriptSymbols(req.body.script);
+    }
     const updated = { ...p, ...req.body };
     const oldNiche = p.params?.video_niche;
     const newNiche = updated.params?.video_niche;
@@ -2169,7 +2976,7 @@ Ejemplo de formato de respuesta:
   ["group of people cheering", "celebration"]
 ]
 No incluyas explicaciones, marcas de c\xF3digo markdown, ni texto adicional, solo el JSON puro.`;
-        const responseText = await generateGeminiContent(prompt);
+        const responseText = await generateLlmContent(prompt);
         const cleanedText = responseText.replace(/```json/gi, "").replace(/```/g, "").trim();
         const parsed = JSON.parse(cleanedText);
         if (Array.isArray(parsed) && parsed.length === sentences.length) {
@@ -2249,38 +3056,6 @@ No incluyas explicaciones, marcas de c\xF3digo markdown, ni texto adicional, sol
     if (keys && keys.length > 0) return keys[0];
     return null;
   };
-  const searchPexelsVideos = async (query, apiKey, orientation = "portrait") => {
-    try {
-      const url = `https://api.pexels.com/videos/search?query=${encodeURIComponent(query)}&per_page=15&orientation=${orientation}`;
-      const res = await fetch(url, {
-        headers: {
-          "Authorization": apiKey
-        }
-      });
-      if (!res.ok) {
-        throw new Error(`Pexels API response error: ${res.status}`);
-      }
-      const data = await res.json();
-      return (data.videos || []).map((video) => {
-        const file = video.video_files?.find((f) => f.quality === "hd" || f.quality === "sd") || video.video_files?.[0];
-        return {
-          id: `pexels_${video.id}`,
-          provider: "pexels",
-          source_url: file?.link || video.video_files?.[0]?.link,
-          download_url: file?.link || video.video_files?.[0]?.link,
-          thumbnail_url: video.image || `https://images.pexels.com/videos/${video.id}/pictures/medium-1.jpg`,
-          width: video.width,
-          height: video.height,
-          duration_sec: video.duration,
-          query,
-          title: video.user?.name ? `Video by ${video.user.name}` : "Pexels Video"
-        };
-      });
-    } catch (err) {
-      console.error(`Failed to search Pexels for query "${query}":`, err);
-      return [];
-    }
-  };
   app.post("/api/v1/projects/:id/media/search", wrap(async (req, res) => {
     const p = projects.get(req.params.id);
     if (!p) {
@@ -2302,9 +3077,9 @@ No incluyas explicaciones, marcas de c\xF3digo markdown, ni texto adicional, sol
       console.log(`[LocalVideo] Populating timeline media from local storage...`);
       const localFiles = p.params.local_video_files || [];
       console.log(`[LocalVideo] Selected files in configuration:`, localFiles);
-      const files = import_fs.default.readdirSync(LOCAL_VIDEOS_DIR);
+      const files = import_fs6.default.readdirSync(LOCAL_VIDEOS_DIR);
       const videoExtensions = [".mp4", ".mkv", ".avi", ".mov", ".webm"];
-      const availableLocalFiles = files.filter((f) => videoExtensions.includes(import_path.default.extname(f).toLowerCase()));
+      const availableLocalFiles = files.filter((f) => videoExtensions.includes(import_path6.default.extname(f).toLowerCase()));
       const defaultLocalVideos2 = ["nature_cinematic.mp4", "urban_streets.mp4", "retro_animation.mp4"];
       let filteredAvailable = availableLocalFiles;
       const hasCustomFiles = availableLocalFiles.some((f) => !defaultLocalVideos2.includes(f));
@@ -2318,9 +3093,9 @@ No incluyas explicaciones, marcas de c\xF3digo markdown, ni texto adicional, sol
       for (let idx = 0; idx < segments.length; idx++) {
         const seg = segments[idx];
         const filename = finalChosen[idx % finalChosen.length];
-        const fullDiskPath = import_path.default.join(LOCAL_VIDEOS_DIR, filename);
+        const fullDiskPath = import_path6.default.join(LOCAL_VIDEOS_DIR, filename);
         let durationSec = 15;
-        if (import_fs.default.existsSync(fullDiskPath)) {
+        if (import_fs6.default.existsSync(fullDiskPath)) {
           try {
             const durationStr = await executeCommand(`ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${fullDiskPath}"`);
             const d = parseFloat(durationStr.trim());
@@ -2383,18 +3158,7 @@ No incluyas explicaciones, marcas de c\xF3digo markdown, ni texto adicional, sol
               score: 1 - i * 0.05,
               score_reasons: [`Matches online search: ${successfulQuery}`]
             })));
-            let selectedVideo = results[0];
-            for (const r of results) {
-              const videoId = r.id || r.source_url || r.download_url;
-              if (videoId && !usedVideoIds.has(String(videoId))) {
-                selectedVideo = r;
-                break;
-              }
-            }
-            const chosenId = selectedVideo.id || selectedVideo.source_url || selectedVideo.download_url;
-            if (chosenId) {
-              usedVideoIds.add(String(chosenId));
-            }
+            const selectedVideo = pickUniqueClip(results, usedVideoIds);
             selected.push({
               ...selectedVideo,
               id: `${seg.id}_selected`,
@@ -2402,19 +3166,8 @@ No incluyas explicaciones, marcas de c\xF3digo markdown, ni texto adicional, sol
             });
           } else {
             console.log(`[Pexels] Segment ${seg.id} search failed for all queries. Falling back to sample video.`);
-            let best = SAMPLE_VIDEOS[idx % SAMPLE_VIDEOS.length];
-            for (let i = 0; i < SAMPLE_VIDEOS.length; i++) {
-              const candidate = SAMPLE_VIDEOS[(idx + i) % SAMPLE_VIDEOS.length];
-              const candId = candidate.id || candidate.source_url;
-              if (candId && !usedVideoIds.has(String(candId))) {
-                best = candidate;
-                break;
-              }
-            }
-            const chosenId = best.id || best.source_url;
-            if (chosenId) {
-              usedVideoIds.add(String(chosenId));
-            }
+            const rotatedSamples = SAMPLE_VIDEOS.map((_, i) => SAMPLE_VIDEOS[(idx + i) % SAMPLE_VIDEOS.length]);
+            const best = pickUniqueClip(rotatedSamples, usedVideoIds);
             selected.push({
               ...best,
               id: `${seg.id}_selected`,
@@ -2493,7 +3246,7 @@ No incluyas explicaciones, marcas de c\xF3digo markdown, ni texto adicional, sol
       console.log(`[Timeline] Building track. chosenLocalFiles:`, chosenLocalFiles, `selected_media count:`, p.selected_media?.length || 0);
       if (chosenLocalFiles.length > 0) {
         for (const filename of chosenLocalFiles) {
-          const existingMed = (p.selected_media || []).find((m) => import_path.default.basename(m.source_url || m.asset_url || "") === filename);
+          const existingMed = (p.selected_media || []).find((m) => import_path6.default.basename(m.source_url || m.asset_url || "") === filename);
           if (existingMed) {
             if (!seen.has(existingMed.source_url)) {
               seen.add(existingMed.source_url);
@@ -2506,9 +3259,9 @@ No incluyas explicaciones, marcas de c\xF3digo markdown, ni texto adicional, sol
             const sourceUrl = `/storage/local_videos/${filename}`;
             if (!seen.has(sourceUrl)) {
               seen.add(sourceUrl);
-              const fullDiskPath = import_path.default.join(LOCAL_VIDEOS_DIR, filename);
+              const fullDiskPath = import_path6.default.join(LOCAL_VIDEOS_DIR, filename);
               let durationSec = 15;
-              if (import_fs.default.existsSync(fullDiskPath)) {
+              if (import_fs6.default.existsSync(fullDiskPath)) {
                 try {
                   const durationStr = await executeCommand(`ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${fullDiskPath}"`);
                   const d = parseFloat(durationStr.trim());
@@ -2541,9 +3294,9 @@ No incluyas explicaciones, marcas de c\xF3digo markdown, ni texto adicional, sol
       }
       if (uniqueFiles.length === 0) {
         try {
-          const files = import_fs.default.readdirSync(LOCAL_VIDEOS_DIR);
+          const files = import_fs6.default.readdirSync(LOCAL_VIDEOS_DIR);
           const videoExtensions = [".mp4", ".mkv", ".avi", ".mov", ".webm"];
-          const availableLocalFiles = files.filter((f) => videoExtensions.includes(import_path.default.extname(f).toLowerCase()));
+          const availableLocalFiles = files.filter((f) => videoExtensions.includes(import_path6.default.extname(f).toLowerCase()));
           const chosenFiles = availableLocalFiles.length > 0 ? availableLocalFiles : ["nature_cinematic.mp4", "urban_streets.mp4", "retro_animation.mp4"];
           for (const filename of chosenFiles) {
             const sourceUrl = `/storage/local_videos/${filename}`;
@@ -2566,13 +3319,13 @@ No incluyas explicaciones, marcas de c\xF3digo markdown, ni texto adicional, sol
       }
       const defaultLocalVideos2 = ["nature_cinematic.mp4", "urban_streets.mp4", "retro_animation.mp4"];
       try {
-        const filesOnDisk = import_fs.default.readdirSync(LOCAL_VIDEOS_DIR);
+        const filesOnDisk = import_fs6.default.readdirSync(LOCAL_VIDEOS_DIR);
         const videoExtensions = [".mp4", ".mkv", ".avi", ".mov", ".webm"];
-        const diskFiles = filesOnDisk.filter((f) => videoExtensions.includes(import_path.default.extname(f).toLowerCase()));
+        const diskFiles = filesOnDisk.filter((f) => videoExtensions.includes(import_path6.default.extname(f).toLowerCase()));
         const hasCustomFilesOnDisk = diskFiles.some((f) => !defaultLocalVideos2.includes(f));
         if (hasCustomFilesOnDisk && chosenLocalFiles.length === 0) {
           const filteredUnique = uniqueFiles.filter((med) => {
-            const filename = import_path.default.basename(med.source_url || med.asset_url || "");
+            const filename = import_path6.default.basename(med.source_url || med.asset_url || "");
             return !defaultLocalVideos2.includes(filename);
           });
           if (filteredUnique.length > 0) {
@@ -2748,11 +3501,11 @@ No incluyas explicaciones, marcas de c\xF3digo markdown, ni texto adicional, sol
       p.project_folder_name = `${themeFolder}/${folderName}`;
       projects.set(projectId, p);
     }
-    const projectFolder = import_path.default.join(process.cwd(), "storage", "renders", p.project_folder_name);
-    const cacheDir = import_path.default.join(projectFolder, "cache");
+    const projectFolder = import_path6.default.join(process.cwd(), "storage", "renders", p.project_folder_name);
+    const cacheDir = import_path6.default.join(projectFolder, "cache");
     const renderDir = projectFolder;
-    await import_fs.default.promises.mkdir(cacheDir, { recursive: true });
-    await import_fs.default.promises.mkdir(renderDir, { recursive: true });
+    await import_fs6.default.promises.mkdir(cacheDir, { recursive: true });
+    await import_fs6.default.promises.mkdir(renderDir, { recursive: true });
     let segments = p.shot_plan?.segments || [];
     if (segments.length === 0) {
       const sentences = (p.script || p.topic || "").split(/[.!?]+/).map((s) => s.trim()).filter((s) => s.length > 5);
@@ -2775,30 +3528,30 @@ No incluyas explicaciones, marcas de c\xF3digo markdown, ni texto adicional, sol
     for (let idx = 0; idx < segments.length; idx++) {
       const seg = segments[idx];
       const text = seg.narration_text || "Silencio";
-      const destPath = import_path.default.join(cacheDir, `narration_chunk_${projectId}_${idx}.mp3`);
-      const wavPath = import_path.default.join(cacheDir, `narration_chunk_${projectId}_${idx}.wav`);
+      const destPath = import_path6.default.join(cacheDir, `narration_chunk_${projectId}_${idx}.mp3`);
+      const wavPath = import_path6.default.join(cacheDir, `narration_chunk_${projectId}_${idx}.wav`);
       try {
         const audioBuffer = await synthesizeSpeech(voice_name, text, tl, voice_rate, voice_volume);
-        await import_fs.default.promises.writeFile(destPath, audioBuffer);
+        await import_fs6.default.promises.writeFile(destPath, audioBuffer);
         localPaths.push(destPath);
         await executeCommand(`ffmpeg -y -i "${destPath}" -acodec pcm_s16le -ar 44100 -ac 2 "${wavPath}"`);
         wavPaths.push(wavPath);
       } catch (err) {
         console.error(`[Narration] Failed to synthesize chunk ${idx}:`, err);
-        const fallbackPath = import_path.default.join(cacheDir, `narration_chunk_${projectId}_${idx}_fallback.mp3`);
+        const fallbackPath = import_path6.default.join(cacheDir, `narration_chunk_${projectId}_${idx}_fallback.mp3`);
         await executeCommand(`ffmpeg -y -f lavfi -i anullsrc=r=44100:cl=stereo -t 3 "${fallbackPath}"`);
         localPaths.push(fallbackPath);
         await executeCommand(`ffmpeg -y -i "${fallbackPath}" -acodec pcm_s16le -ar 44100 -ac 2 "${wavPath}"`);
         wavPaths.push(wavPath);
       }
     }
-    const concatListPath = import_path.default.join(cacheDir, `concat_audio_${projectId}.txt`);
+    const concatListPath = import_path6.default.join(cacheDir, `concat_audio_${projectId}.txt`);
     const concatContent = wavPaths.map((p2) => `file '${p2.replace(/\\/g, "/")}'`).join("\n");
-    await import_fs.default.promises.writeFile(concatListPath, concatContent, "utf8");
-    const finalWavPath = import_path.default.join(cacheDir, `narration_${projectId}_temp.wav`);
+    await import_fs6.default.promises.writeFile(concatListPath, concatContent, "utf8");
+    const finalWavPath = import_path6.default.join(cacheDir, `narration_${projectId}_temp.wav`);
     console.log(`[Narration] Merging ${wavPaths.length} WAV chunks into: ${finalWavPath}`);
     await executeCommand(`ffmpeg -y -f concat -safe 0 -i "${concatListPath}" -acodec pcm_s16le "${finalWavPath}"`);
-    const finalAudioPath = import_path.default.join(renderDir, `narration_${projectId}.mp3`);
+    const finalAudioPath = import_path6.default.join(renderDir, `narration_${projectId}.mp3`);
     console.log(`[Narration] Converting final WAV to MP3: ${finalAudioPath}`);
     await executeCommand(`ffmpeg -y -i "${finalWavPath}" -codec:a libmp3lame -b:a 192k "${finalAudioPath}"`);
     let currentStartSec = 0;
@@ -2833,8 +3586,8 @@ No incluyas explicaciones, marcas de c\xF3digo markdown, ni texto adicional, sol
         splitCuesForSrt.push(...splitItems);
       });
       const srtContent = generateSrt(splitCuesForSrt);
-      const srtPath = import_path.default.join(renderDir, `subtitles_${projectId}.srt`);
-      await import_fs.default.promises.writeFile(srtPath, srtContent, "utf8");
+      const srtPath = import_path6.default.join(renderDir, `subtitles_${projectId}.srt`);
+      await import_fs6.default.promises.writeFile(srtPath, srtContent, "utf8");
       subtitlePath = `/storage/renders/${p.project_folder_name}/subtitles_${projectId}.srt`;
       p.subtitle_path = subtitlePath;
     }
@@ -2975,994 +3728,15 @@ No incluyas explicaciones, marcas de c\xF3digo markdown, ni texto adicional, sol
       }
     });
   }));
-  const formatSrtTime = (seconds) => {
-    const hrs = Math.floor(seconds / 3600);
-    const mins = Math.floor(seconds % 3600 / 60);
-    const secs = Math.floor(seconds % 60);
-    const ms = Math.floor(seconds % 1 * 1e3);
-    return `${hrs.toString().padStart(2, "0")}:${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")},${ms.toString().padStart(3, "0")}`;
-  };
-  const cssHexToAss = (hex) => {
-    if (!hex) return "FFFFFF";
-    let clean = hex.replace("#", "");
-    if (clean.length === 3) {
-      clean = clean[0] + clean[0] + clean[1] + clean[1] + clean[2] + clean[2];
-    }
-    if (clean.length === 6) {
-      const r = clean.substring(0, 2);
-      const g = clean.substring(2, 4);
-      const b = clean.substring(4, 6);
-      return `${b}${g}${r}`;
-    }
-    if (clean.length === 8) {
-      const r = clean.substring(0, 2);
-      const g = clean.substring(2, 4);
-      const b = clean.substring(4, 6);
-      return `${b}${g}${r}`;
-    }
-    return "FFFFFF";
-  };
-  const getAssFontName = (fontName) => {
-    if (!fontName) return "Arial";
-    const clean = fontName.trim();
-    if (clean.startsWith("STHeitiMedium")) return "STHeitiSC-Medium";
-    if (clean.startsWith("STHeitiLight")) return "STHeitiSC-Light";
-    if (clean.startsWith("MicrosoftYaHeiBold")) return "Microsoft YaHei";
-    if (clean.startsWith("MicrosoftYaHeiNormal")) return "Microsoft YaHei";
-    if (clean.startsWith("Charm-Bold")) return "Charm";
-    if (clean.startsWith("Charm-Regular")) return "Charm";
-    if (clean.startsWith("UTM Kabel KY")) return "UTM Kabel KY";
-    if (clean.startsWith("UTM_Kabel_KY")) return "UTM Kabel KY";
-    return clean.split(".")[0] || "Arial";
-  };
-  const splitTextIntoTikTokSubtitles = (text, startSec, durationSec, segmentId, baseId) => {
-    if (!text || !text.trim()) return [];
-    const cleanText = text.trim().replace(/\s+/g, " ");
-    const isCJK = /[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\uff66-\uff9f\u1100-\u11ff\u3130-\u318f\uac00-\ud7af]/.test(cleanText);
-    let units = [];
-    if (isCJK) {
-      units = Array.from(cleanText).filter((c) => c !== " ");
-    } else {
-      units = cleanText.split(" ");
-    }
-    if (units.length === 0) return [];
-    const maxUnits = 3;
-    const groups = [];
-    for (let i = 0; i < units.length; i += maxUnits) {
-      groups.push(units.slice(i, i + maxUnits));
-    }
-    if (groups.length > 1 && groups[groups.length - 1].length === 1) {
-      const lastGroup = groups.pop();
-      if (lastGroup) {
-        groups[groups.length - 1].push(...lastGroup);
-      }
-    }
-    const totalUnits = units.length;
-    let elapsed = 0;
-    return groups.map((grp, idx) => {
-      const phrase = isCJK ? grp.join("") : grp.join(" ");
-      const phraseUnitsCount = grp.length;
-      const chunkStart = startSec + elapsed / totalUnits * durationSec;
-      const chunkDuration = phraseUnitsCount / totalUnits * durationSec;
-      elapsed += phraseUnitsCount;
-      return {
-        id: `${baseId}_part_${idx + 1}`,
-        start_sec: Number(chunkStart.toFixed(3)),
-        duration_sec: Number(chunkDuration.toFixed(3)),
-        text: phrase,
-        segment_id: segmentId
-      };
-    });
-  };
-  const generateSrt = (subtitles) => {
-    return subtitles.map((sub, idx) => {
-      const startSec = Number(sub.start_sec) || 0;
-      const durationSec = Number(sub.duration_sec) || 5;
-      const start = formatSrtTime(startSec);
-      const end = formatSrtTime(startSec + durationSec);
-      return `${idx + 1}
-${start} --> ${end}
-${sub.text || ""}
-`;
-    }).join("\n");
-  };
-  const formatAssTime = (seconds) => {
-    const hrs = Math.floor(seconds / 3600);
-    const mins = Math.floor(seconds % 3600 / 60);
-    const secs = Math.floor(seconds % 60);
-    const ms = Math.floor(seconds % 1 * 1e3);
-    const cs = Math.floor(ms / 10);
-    return `${hrs}:${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}.${cs.toString().padStart(2, "0")}`;
-  };
-  const generateAss = (subtitles, resWidth, resHeight, styleParams) => {
-    const refHeight = 1920;
-    const refWidth = Math.round(1920 * (resWidth / resHeight));
-    const assFont = getAssFontName(styleParams.fontName);
-    const textColor = cssHexToAss(styleParams.textColor);
-    const strokeColor = cssHexToAss(styleParams.strokeColor);
-    let assBgColor = "000000";
-    let assBgAlpha = "00";
-    const hasBg = styleParams.hasBg === true || typeof styleParams.hasBg === "string" && styleParams.hasBg.trim() && styleParams.hasBg.trim() !== "transparent" && styleParams.hasBg.trim() !== "none";
-    if (hasBg) {
-      if (typeof styleParams.hasBg === "string" && styleParams.hasBg.trim()) {
-        const cleanBg = styleParams.hasBg.trim();
-        if (cleanBg.startsWith("#")) {
-          assBgColor = cssHexToAss(cleanBg);
-          if (cleanBg.length === 9) {
-            const alphaHex = cleanBg.substring(7, 9);
-            const cssAlphaInt = parseInt(alphaHex, 16);
-            const assAlphaInt = 255 - cssAlphaInt;
-            assBgAlpha = assAlphaInt.toString(16).padStart(2, "0").toUpperCase();
-          } else {
-            assBgAlpha = "00";
-          }
-        } else if (cleanBg.startsWith("rgba")) {
-          const match = cleanBg.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*([\d.]+)\s*\)/);
-          if (match) {
-            const r = parseInt(match[1]).toString(16).padStart(2, "0");
-            const g = parseInt(match[2]).toString(16).padStart(2, "0");
-            const b = parseInt(match[3]).toString(16).padStart(2, "0");
-            assBgColor = `${b}${g}${r}`;
-            const a = parseFloat(match[4]);
-            const assAlphaInt = Math.round((1 - a) * 255);
-            assBgAlpha = assAlphaInt.toString(16).padStart(2, "0").toUpperCase();
-          }
-        } else if (cleanBg.startsWith("rgb")) {
-          const match = cleanBg.match(/rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/);
-          if (match) {
-            const r = parseInt(match[1]).toString(16).padStart(2, "0");
-            const g = parseInt(match[2]).toString(16).padStart(2, "0");
-            const b = parseInt(match[3]).toString(16).padStart(2, "0");
-            assBgColor = `${b}${g}${r}`;
-            assBgAlpha = "00";
-          }
-        }
-      } else {
-        assBgColor = "000000";
-        assBgAlpha = "00";
-      }
-      if (styleParams.subtitleBgStyle === "translucent") {
-        if (assBgAlpha === "00") {
-          assBgAlpha = "80";
-        }
-      } else if (styleParams.subtitleBgStyle === "blur") {
-        assBgColor = "FFFFFF";
-        assBgAlpha = "C0";
-      } else {
-        assBgAlpha = "00";
-      }
-    }
-    const marginLR = Math.round(0.07 * refWidth);
-    let alignment = 2;
-    let marginV = Math.round(0.08 * refHeight);
-    if (styleParams.position === "top") {
-      alignment = 8;
-      marginV = Math.round(0.08 * refHeight);
-    } else if (styleParams.position === "center" || styleParams.position === "middle") {
-      alignment = 5;
-      marginV = 0;
-    } else if (styleParams.position === "custom") {
-      alignment = 8;
-      marginV = Math.round(styleParams.customPosition / 100 * refHeight);
-    }
-    let animTags = "";
-    const animType = styleParams.subtitleAnimation || "none";
-    if (animType === "pop") {
-      animTags = "\\fscx80\\fscy80\\t(0,70,\\fscx114\\fscy114)\\t(70,140,\\fscx100\\fscy100)";
-    } else if (animType === "fade") {
-      animTags = "\\fad(120,120)";
-    } else if (animType === "rotate") {
-      animTags = "\\frz-3.5\\fscx80\\fscy80\\t(0,80,\\frz2\\fscx112\\fscy112)\\t(80,150,\\frz0\\fscx100\\fscy100)";
-    }
-    let isBold = 0;
-    if (styleParams.fontName && styleParams.fontName.toLowerCase().includes("bold")) {
-      isBold = -1;
-    }
-    let out = `[Script Info]
-ScriptType: v4.00+
-PlayResX: ${refWidth}
-PlayResY: ${refHeight}
-WrapStyle: 0
-
-[V4+ Styles]
-Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-`;
-    if (hasBg) {
-      out += `Style: BgStyle,${assFont},${styleParams.fontSize},&H${assBgAlpha}${assBgColor},&H00000000,&HFF000000,&HFF000000,0,0,0,0,100,100,0,0,1,0,0,5,0,0,0,1
-`;
-      const defaultOutline = styleParams.strokeWidth !== void 0 ? styleParams.strokeWidth : 1.5;
-      out += `Style: Default,${assFont},${styleParams.fontSize},&H00${textColor},&H00000000,&H00${strokeColor},&HFF000000,${isBold},0,0,0,100,100,0,0,1,${defaultOutline.toFixed(1)},0,${alignment},${marginLR},${marginLR},${marginV},1
-`;
-    } else {
-      let outlineVal = styleParams.strokeWidth !== void 0 ? styleParams.strokeWidth : 1.5;
-      out += `Style: Default,${assFont},${styleParams.fontSize},&H00${textColor},&H00000000,&H00${strokeColor},&HFF000000,${isBold},0,0,0,100,100,0,0,1,${outlineVal.toFixed(1)},0,${alignment},${marginLR},${marginLR},${marginV},1
-`;
-    }
-    out += `
-[Events]
-Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
-`;
-    const estimateLineWidth = (line, fontSize) => {
-      let width = 0;
-      for (let i = 0; i < line.length; i++) {
-        const char = line[i];
-        if (char === " ") {
-          width += 0.3;
-        } else if (/[A-Z]/.test(char)) {
-          width += 0.72;
-        } else if (/[a-z]/.test(char)) {
-          width += 0.54;
-        } else if (/[0-9]/.test(char)) {
-          width += 0.58;
-        } else if (/[áéíóúÁÉÍÓÚñÑüÜ]/.test(char)) {
-          width += 0.54;
-        } else {
-          width += 0.45;
-        }
-      }
-      return width * fontSize;
-    };
-    const getRoundedRectPath = (w, h, r) => {
-      if (r <= 0) {
-        return `m 0 0 l ${Math.round(w)} 0 l ${Math.round(w)} ${Math.round(h)} l 0 ${Math.round(h)}`;
-      }
-      const kappa = 0.5522847498;
-      let p = `m ${Math.round(r)} 0 `;
-      p += `l ${Math.round(w - r)} 0 `;
-      const tr_x1 = Math.round(w - r + r * kappa);
-      const tr_y1 = 0;
-      const tr_x2 = Math.round(w);
-      const tr_y2 = Math.round(r - r * kappa);
-      const tr_x3 = Math.round(w);
-      const tr_y3 = Math.round(r);
-      p += `b ${tr_x1} ${tr_y1} ${tr_x2} ${tr_y2} ${tr_x3} ${tr_y3} `;
-      p += `l ${Math.round(w)} ${Math.round(h - r)} `;
-      const br_x1 = Math.round(w);
-      const br_y1 = Math.round(h - r + r * kappa);
-      const br_x2 = Math.round(w - r + r * kappa);
-      const br_y2 = Math.round(h);
-      const br_x3 = Math.round(w - r);
-      const br_y3 = Math.round(h);
-      p += `b ${br_x1} ${br_y1} ${br_x2} ${br_y2} ${br_x3} ${br_y3} `;
-      p += `l ${Math.round(r)} ${Math.round(h)} `;
-      const bl_x1 = Math.round(r - r * kappa);
-      const bl_y1 = Math.round(h);
-      const bl_x2 = 0;
-      const bl_y2 = Math.round(h - r + r * kappa);
-      const bl_x3 = 0;
-      const bl_y3 = Math.round(h - r);
-      p += `b ${bl_x1} ${bl_y1} ${bl_x2} ${bl_y2} ${bl_x3} ${bl_y3} `;
-      p += `l 0 ${Math.round(r)} `;
-      const tl_x1 = 0;
-      const tl_y1 = Math.round(r - r * kappa);
-      const tl_x2 = Math.round(r - r * kappa);
-      const tl_y2 = 0;
-      const tl_x3 = Math.round(r);
-      const tl_y3 = 0;
-      p += `b ${tl_x1} ${tl_y1} ${tl_x2} ${tl_y2} ${tl_x3} ${tl_y3}`;
-      return p;
-    };
-    const getCenteredRoundedRectPath = (w, h, r) => {
-      const kappa = 0.5522847498;
-      const hw = w / 2;
-      const hh = h / 2;
-      let p = `m ${Math.round(-hw + r)} ${Math.round(-hh)} `;
-      p += `l ${Math.round(hw - r)} ${Math.round(-hh)} `;
-      const tr_x1 = Math.round(hw - r + r * kappa);
-      const tr_y1 = Math.round(-hh);
-      const tr_x2 = Math.round(hw);
-      const tr_y2 = Math.round(-hh + r - r * kappa);
-      const tr_x3 = Math.round(hw);
-      const tr_y3 = Math.round(-hh + r);
-      p += `b ${tr_x1} ${tr_y1} ${tr_x2} ${tr_y2} ${tr_x3} ${tr_y3} `;
-      p += `l ${Math.round(hw)} ${Math.round(hh - r)} `;
-      const br_x1 = Math.round(hw);
-      const br_y1 = Math.round(hh - r + r * kappa);
-      const br_x2 = Math.round(hw - r + r * kappa);
-      const br_y2 = Math.round(hh);
-      const br_x3 = Math.round(hw - r);
-      const br_y3 = Math.round(hh);
-      p += `b ${br_x1} ${br_y1} ${br_x2} ${br_y2} ${br_x3} ${br_y3} `;
-      p += `l ${Math.round(-hw + r)} ${Math.round(hh)} `;
-      const bl_x1 = Math.round(-hw + r - r * kappa);
-      const bl_y1 = Math.round(hh);
-      const bl_x2 = Math.round(-hw);
-      const bl_y2 = Math.round(hh - r + r * kappa);
-      const bl_x3 = Math.round(-hw);
-      const bl_y3 = Math.round(hh - r);
-      p += `b ${bl_x1} ${bl_y1} ${bl_x2} ${bl_y2} ${bl_x3} ${bl_y3} `;
-      p += `l ${Math.round(-hw)} ${Math.round(-hh + r)} `;
-      const tl_x1 = Math.round(-hw);
-      const tl_y1 = Math.round(-hh + r - r * kappa);
-      const tl_x2 = Math.round(-hw + r - r * kappa);
-      const tl_y2 = Math.round(-hh);
-      const tl_x3 = Math.round(-hw + r);
-      const tl_y3 = Math.round(-hh);
-      p += `b ${tl_x1} ${tl_y1} ${tl_x2} ${tl_y2} ${tl_x3} ${tl_y3}`;
-      return p;
-    };
-    for (const sub of subtitles) {
-      const startSec = Number(sub.start_sec) || 0;
-      const durationSec = Number(sub.duration_sec) || 5;
-      const start = formatAssTime(startSec);
-      const end = formatAssTime(startSec + durationSec);
-      const text = (sub.text || "").replace(/\\n/g, "\\N").replace(/\n/g, "\\N");
-      const centerX = refWidth / 2;
-      let centerY = refHeight - marginV;
-      if (alignment === 8) {
-        centerY = marginV;
-      } else if (alignment === 5) {
-        centerY = refHeight / 2;
-      }
-      if (hasBg) {
-        const lines = text.split(/\\N/);
-        let maxLineWidth = 0;
-        for (const line of lines) {
-          const w = estimateLineWidth(line, styleParams.fontSize);
-          if (w > maxLineWidth) {
-            maxLineWidth = w;
-          }
-        }
-        const paddingX = styleParams.fontSize * 0.75;
-        const paddingY = styleParams.fontSize * 0.35;
-        const boxWidth = maxLineWidth + paddingX;
-        const textHeight = lines.length * styleParams.fontSize * 1.15;
-        const boxHeight = textHeight + paddingY;
-        const radius = styleParams.roundedBackground === true ? Math.min(boxHeight / 2, styleParams.fontSize * 0.35) : Math.round(styleParams.fontSize * 0.08);
-        let boxY = refHeight - marginV - boxHeight;
-        if (alignment === 8) {
-          boxY = marginV;
-        } else if (alignment === 5) {
-          boxY = refHeight / 2 - boxHeight / 2;
-        }
-        const boxX = centerX - boxWidth / 2;
-        const textY = boxY + paddingY / 2;
-        const pathStr = getRoundedRectPath(boxWidth, boxHeight, radius);
-        out += `Dialogue: 0,${start},${end},BgStyle,,0,0,0,,{\\an7\\pos(${boxX.toFixed(1)},${boxY.toFixed(1)})${animTags}\\p1}${pathStr}{\\p0}
-`;
-        out += `Dialogue: 1,${start},${end},Default,,0,0,0,,{\\an8\\pos(${centerX},${textY.toFixed(1)})${animTags}}${text}
-`;
-      } else {
-        out += `Dialogue: 0,${start},${end},Default,,0,0,0,,{\\an${alignment}\\pos(${centerX},${centerY.toFixed(1)})${animTags}}${text}
-`;
-      }
-    }
-    return out;
-  };
-  const executeCommand = (cmd) => {
-    return new Promise((resolve, reject) => {
-      (0, import_child_process.exec)(cmd, { maxBuffer: 1024 * 1024 * 50 }, (error, stdout, stderr) => {
-        if (error) {
-          let customErrorMsg = `Command failed: ${cmd}
-Error: ${error.message}
-Stderr: ${stderr}`;
-          if (cmd.includes("ffmpeg") || cmd.includes("ffprobe")) {
-            const isFfmpegMissing = error.message.includes("not recognized") || error.message.includes("no se reconoce") || error.message.includes("not found") || error.message.includes("ENOENT") || error.code === 127 || error.code === 9009;
-            if (isFfmpegMissing) {
-              customErrorMsg = `\u26A0\uFE0F [ERROR DE SISTEMA] FFmpeg / FFprobe no est\xE1 instalado o no se encuentra en el PATH de tu sistema.
-
-Para ejecutar esta aplicaci\xF3n localmente y generar tus videos con \xE9xito, sigue estos pasos:
-1. Descarga FFmpeg desde la p\xE1gina oficial: https://ffmpeg.org/download.html
-   (En Windows, puedes descargar el build de Gyan.dev. En Mac, puedes usar 'brew install ffmpeg')
-2. Extrae el contenido y a\xF1ade la carpeta 'bin' (que contiene ffmpeg.exe) al PATH de las Variables de Entorno de tu sistema.
-3. Cierra tu terminal actual, abre una nueva terminal y vuelve a iniciar tu servidor con 'npm run dev'.
-
----------------------------------------------------------
-FFmpeg / FFprobe is not installed or found in your system's PATH.
-To run this application locally and render videos successfully, please:
-1. Download FFmpeg from: https://ffmpeg.org/download.html
-2. Extract and add the 'bin' directory to your system's PATH environment variable.
-3. Restart your development terminal and run 'npm run dev' again.
-
-[Detalle t\xE9cnico / Technical Detail]: ${error.message}`;
-            }
-          }
-          reject(new Error(customErrorMsg));
-          return;
-        }
-        resolve(stdout);
-      });
-    });
-  };
-  const downloadFile = async (url, destPath) => {
-    if (import_fs.default.existsSync(destPath)) {
-      const stat = import_fs.default.statSync(destPath);
-      if (stat.size > 0) {
-        return destPath;
-      }
-      try {
-        import_fs.default.unlinkSync(destPath);
-      } catch (e) {
-      }
-    }
-    let correctedUrl = url;
-    if (url.includes("images.pexels.com/video-files/")) {
-      correctedUrl = url.replace("images.pexels.com/video-files/", "videos.pexels.com/video-files/");
-    }
-    let lastError = null;
-    for (let attempt = 1; attempt <= 3; attempt++) {
-      try {
-        const response = await fetch(correctedUrl, {
-          headers: {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Accept": "*/*",
-            "Accept-Language": "en-US,en;q=0.9"
-          }
-        });
-        if (response.ok) {
-          const buffer = await response.arrayBuffer();
-          await import_fs.default.promises.writeFile(destPath, Buffer.from(buffer));
-          return destPath;
-        } else {
-          throw new Error(`Status ${response.status} ${response.statusText}`);
-        }
-      } catch (err) {
-        lastError = err;
-        console.warn(`[Download] Fetch attempt ${attempt} failed for ${correctedUrl}: ${err.message}`);
-        if (attempt < 3) {
-          await new Promise((resolve) => setTimeout(resolve, 1e3 * attempt));
-        }
-      }
-    }
-    console.log(`[Download] Falling back to curl for ${correctedUrl}`);
-    try {
-      const { exec: exec2 } = await import("child_process");
-      await new Promise((resolve, reject) => {
-        const cmd = `curl -L -f --retry 3 -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" -o "${destPath}" "${correctedUrl}"`;
-        exec2(cmd, (error, stdout, stderr) => {
-          if (error) {
-            reject(new Error(`curl failed: ${stderr || error.message}`));
-          } else {
-            resolve();
-          }
-        });
-      });
-      if (import_fs.default.existsSync(destPath) && import_fs.default.statSync(destPath).size > 0) {
-        return destPath;
-      }
-    } catch (curlErr) {
-      console.error(`[Download] curl fallback also failed for ${correctedUrl}:`, curlErr);
-      lastError = new Error(`${lastError?.message || ""} (curl fallback also failed: ${curlErr.message})`);
-    }
-    throw new Error(`Failed to download ${correctedUrl}: ${lastError?.message}`);
-  };
-  const runRealRender = async (projectId, taskId) => {
-    const updateTaskState = (progress, outputPath, error, state = 4) => {
-      const t = tasks.get(taskId);
-      if (t) {
-        t.progress = progress;
-        t.state = state;
-        t.output_path = outputPath;
-        t.error = error;
-        tasks.set(taskId, t);
-      }
-    };
-    try {
-      const p = projects.get(projectId);
-      if (!p) {
-        throw new Error("Project not found");
-      }
-      const isLocalSource = p.params?.video_source === "local" || p.video_source === "local" || p.selected_media && p.selected_media[0]?.provider === "local";
-      if (isLocalSource) {
-        const uniqueFiles = [];
-        const seen = /* @__PURE__ */ new Set();
-        const chosenLocalFiles = p.params?.local_video_files || [];
-        console.log(`[Render Rebuild] Rebuilding local video track. chosenLocalFiles:`, chosenLocalFiles);
-        if (chosenLocalFiles.length > 0) {
-          for (const filename of chosenLocalFiles) {
-            const existingMed = (p.selected_media || []).find((m) => import_path.default.basename(m.source_url || m.asset_url || "") === filename);
-            if (existingMed) {
-              if (!seen.has(existingMed.source_url)) {
-                seen.add(existingMed.source_url);
-                if (!existingMed.local_path) {
-                  existingMed.local_path = `storage/local_videos/${filename}`;
-                }
-                uniqueFiles.push(existingMed);
-              }
-            } else {
-              const sourceUrl = `/storage/local_videos/${filename}`;
-              if (!seen.has(sourceUrl)) {
-                seen.add(sourceUrl);
-                const fullDiskPath = import_path.default.join(LOCAL_VIDEOS_DIR, filename);
-                let durationSec = 15;
-                if (import_fs.default.existsSync(fullDiskPath)) {
-                  try {
-                    const durationStr = await executeCommand(`ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${fullDiskPath}"`);
-                    const d = parseFloat(durationStr.trim());
-                    if (!isNaN(d) && d > 0) {
-                      durationSec = d;
-                    }
-                  } catch (e) {
-                    console.warn(`[Render Rebuild] Failed to get duration for ${filename}, defaulting to 15s`, e);
-                  }
-                }
-                uniqueFiles.push({
-                  id: `${filename}_custom`,
-                  provider: "local",
-                  source_url: sourceUrl,
-                  download_url: sourceUrl,
-                  thumbnail_url: "/dist/assets/background.jpg",
-                  duration_sec: durationSec,
-                  local_path: `storage/local_videos/${filename}`
-                });
-              }
-            }
-          }
-        } else if (p.selected_media && p.selected_media.length > 0) {
-          for (const med of p.selected_media) {
-            if (med.source_url && !seen.has(med.source_url)) {
-              seen.add(med.source_url);
-              uniqueFiles.push(med);
-            }
-          }
-        }
-        if (uniqueFiles.length === 0) {
-          try {
-            const files = import_fs.default.readdirSync(LOCAL_VIDEOS_DIR);
-            const videoExtensions = [".mp4", ".mkv", ".avi", ".mov", ".webm"];
-            const availableLocalFiles = files.filter((f) => videoExtensions.includes(import_path.default.extname(f).toLowerCase()));
-            const chosenFiles = availableLocalFiles.length > 0 ? availableLocalFiles : ["nature_cinematic.mp4", "urban_streets.mp4", "retro_animation.mp4"];
-            for (const filename of chosenFiles) {
-              const sourceUrl = `/storage/local_videos/${filename}`;
-              if (!seen.has(sourceUrl)) {
-                seen.add(sourceUrl);
-                uniqueFiles.push({
-                  id: `${filename}_fallback`,
-                  provider: "local",
-                  source_url: sourceUrl,
-                  download_url: sourceUrl,
-                  thumbnail_url: "/dist/assets/background.jpg",
-                  duration_sec: 15,
-                  local_path: `storage/local_videos/${filename}`
-                });
-              }
-            }
-          } catch (e) {
-            console.error("[Render Rebuild] Failed to read fallback local videos:", e);
-          }
-        }
-        const defaultLocalVideos2 = ["nature_cinematic.mp4", "urban_streets.mp4", "retro_animation.mp4"];
-        try {
-          const filesOnDisk = import_fs.default.readdirSync(LOCAL_VIDEOS_DIR);
-          const videoExtensions = [".mp4", ".mkv", ".avi", ".mov", ".webm"];
-          const diskFiles = filesOnDisk.filter((f) => videoExtensions.includes(import_path.default.extname(f).toLowerCase()));
-          const hasCustomFilesOnDisk = diskFiles.some((f) => !defaultLocalVideos2.includes(f));
-          if (hasCustomFilesOnDisk && chosenLocalFiles.length === 0) {
-            const filteredUnique = uniqueFiles.filter((med) => {
-              const filename = import_path.default.basename(med.source_url || med.asset_url || "");
-              return !defaultLocalVideos2.includes(filename);
-            });
-            if (filteredUnique.length > 0) {
-              uniqueFiles.length = 0;
-              uniqueFiles.push(...filteredUnique);
-            }
-          }
-        } catch (err) {
-          console.error("[Render Rebuild] Failed to filter uniqueFiles against disk:", err);
-        }
-        const audioTrack = p.tracks?.find((tr) => tr.type === "audio");
-        const audioItems = audioTrack?.items || [];
-        const totalDurationSec = audioItems.reduce((acc, item) => Math.max(acc, Number(item.start_sec) + Number(item.duration_sec)), 0) || 15;
-        console.log(`[Render Rebuild] Rebuilding continuous local video track from ${uniqueFiles.length} files for duration ${totalDurationSec}s`);
-        let currentStartSec = 0;
-        let itemId = 1;
-        const videoItems = [];
-        while (currentStartSec < totalDurationSec) {
-          const medIndex = (itemId - 1) % uniqueFiles.length;
-          const med = uniqueFiles[medIndex];
-          const rawDuration = Number(med.duration_sec);
-          const fullDuration = isNaN(rawDuration) || rawDuration <= 0 ? 15 : rawDuration;
-          const usedDuration = Math.min(fullDuration, totalDurationSec - currentStartSec);
-          videoItems.push({
-            id: `item_${itemId}`,
-            media_id: med.id,
-            local_path: med.local_path,
-            asset_url: med.source_url,
-            thumbnail_url: med.thumbnail_url || "/dist/assets/background.jpg",
-            source_url: med.source_url,
-            start_sec: currentStartSec,
-            duration_sec: usedDuration,
-            trim_start_sec: 0,
-            trim_end_sec: usedDuration,
-            segment_id: null,
-            provider: "local"
-          });
-          currentStartSec += usedDuration;
-          itemId++;
-        }
-        const existingVideoTrack = p.tracks?.find((tr) => tr.type === "video");
-        if (existingVideoTrack) {
-          existingVideoTrack.items = videoItems;
-        } else {
-          if (!p.tracks) p.tracks = [];
-          p.tracks.push({
-            id: `track_video_${Date.now()}`,
-            type: "video",
-            items: videoItems
-          });
-        }
-        projects.set(projectId, p);
-      }
-      const videoTrack = p.tracks?.find((tr) => tr.type === "video");
-      const subtitleTrack = p.tracks?.find((tr) => tr.type === "subtitle");
-      let musicItem = p.selected_music?.[0];
-      if (!musicItem) {
-        const bgmType = p.params?.bgm_type || p.bgm_type || "none";
-        const bgmFile = p.params?.bgm_file || p.bgm_file;
-        const bgmVolume = p.params?.bgm_volume !== void 0 ? p.params.bgm_volume : p.bgm_volume !== void 0 ? p.bgm_volume : 0.2;
-        if (bgmType === "random") {
-          const randomIdx = Math.floor(Math.random() * BGM_FILES.length);
-          const randomFile = BGM_FILES[randomIdx];
-          musicItem = {
-            id: `bgm_random_${randomIdx}`,
-            provider: "local",
-            url: randomFile.file,
-            title: randomFile.name,
-            duration_sec: 180,
-            volume: bgmVolume
-          };
-          logTask(taskId, "INFO", "AUDIO_MIXER", `BGM Mode: Random. Selected soundtrack: "${randomFile.name}" at volume: ${bgmVolume}`);
-        } else if (bgmType === "contextual") {
-          const searchSubject = `${p.topic || ""} ${p.script || ""}`.toLowerCase();
-          let bestMatch = BGM_FILES[0];
-          let maxMatches = -1;
-          for (const file of BGM_FILES) {
-            let matches = 0;
-            if (file.tags) {
-              for (const tag of file.tags) {
-                if (searchSubject.includes(tag.toLowerCase())) {
-                  matches++;
-                }
-              }
-            }
-            if (matches > maxMatches) {
-              maxMatches = matches;
-              bestMatch = file;
-            }
-          }
-          musicItem = {
-            id: "bgm_contextual",
-            provider: "local",
-            url: bestMatch.file,
-            title: bestMatch.name,
-            duration_sec: 180,
-            volume: bgmVolume
-          };
-          logTask(taskId, "INFO", "AUDIO_MIXER", `BGM Mode: AI Contextual. Matched: "${bestMatch.name}" with score ${maxMatches} at volume: ${bgmVolume}`);
-        } else if (bgmFile && bgmType === "file") {
-          const matched = BGM_FILES.find((f) => f.file === bgmFile || f.name === bgmFile);
-          musicItem = {
-            id: "bgm_param",
-            provider: "local",
-            url: matched ? matched.file : bgmFile,
-            title: matched ? matched.name : import_path.default.basename(bgmFile),
-            duration_sec: 180,
-            volume: bgmVolume
-          };
-          logTask(taskId, "INFO", "AUDIO_MIXER", `BGM Mode: Manual. Selected soundtrack: "${musicItem.title}" at volume: ${bgmVolume}`);
-        } else {
-          logTask(taskId, "INFO", "AUDIO_MIXER", "BGM Mode: None or Disabled.");
-        }
-      } else {
-        logTask(taskId, "INFO", "AUDIO_MIXER", `Using existing selected music: "${musicItem.title}" at volume: ${musicItem.volume || 0.2}`);
-      }
-      const clips = videoTrack?.items || [];
-      if (clips.length === 0) {
-        throw new Error("No video clips in the timeline to render.");
-      }
-      if (!p.project_folder_name) {
-        const themeFolder = sanitizeFolderName(p.params?.video_niche || p.topic || "general");
-        const folderName = `${sanitizeFolderName(p.topic || p.project_id || "project")}_${getFormattedDateTime()}`;
-        p.project_folder_name = `${themeFolder}/${folderName}`;
-        projects.set(projectId, p);
-      }
-      const projectFolder = import_path.default.join(process.cwd(), "storage", "renders", p.project_folder_name);
-      const cacheDir = import_path.default.join(projectFolder, "cache");
-      const renderDir = projectFolder;
-      await import_fs.default.promises.mkdir(cacheDir, { recursive: true });
-      await import_fs.default.promises.mkdir(renderDir, { recursive: true });
-      logTask(taskId, "INFO", "SUBTITLES", "Generating subtitles");
-      await new Promise((r) => setTimeout(r, 600));
-      logTask(taskId, "SUCCESS", "SUBTITLES", "Subtitles ready");
-      updateTaskState(10, null, null);
-      logTask(taskId, "INFO", "VIDEO_ASSET", "Collecting video materials");
-      const localVideoPaths = [];
-      for (let i = 0; i < clips.length; i++) {
-        const clip = clips[i];
-        const url = clip.source_url || clip.asset_url;
-        if (!url) {
-          logTask(taskId, "WARNING", "VIDEO_ASSET", `Clip ${clip.id} has no source URL. Generating synthetic placeholder...`);
-          localVideoPaths.push("placeholder");
-          continue;
-        }
-        const isLocalUrl = url.startsWith("/") || !url.includes("://") || url.includes("/storage/local_videos/") || url.includes("/local_videos/");
-        if (isLocalUrl) {
-          const cleanUrl2 = url.split("?")[0];
-          const filename = import_path.default.basename(cleanUrl2);
-          let cleanLocalPath = cleanUrl2.startsWith("/") ? cleanUrl2.slice(1) : cleanUrl2;
-          if (url.includes("/storage/local_videos/")) {
-            cleanLocalPath = `storage/local_videos/${filename}`;
-          } else if (url.includes("/local_videos/")) {
-            cleanLocalPath = `local_videos/${filename}`;
-          }
-          const diskPath = import_path.default.join(process.cwd(), cleanLocalPath);
-          if (import_fs.default.existsSync(diskPath)) {
-            localVideoPaths.push(diskPath);
-            continue;
-          }
-          const fallbackPath = import_path.default.join(LOCAL_VIDEOS_DIR, filename);
-          if (import_fs.default.existsSync(fallbackPath)) {
-            localVideoPaths.push(fallbackPath);
-            continue;
-          }
-          try {
-            const availableFiles = import_fs.default.readdirSync(LOCAL_VIDEOS_DIR).filter(
-              (f) => [".mp4", ".mkv", ".avi", ".mov", ".webm"].includes(import_path.default.extname(f).toLowerCase())
-            );
-            if (availableFiles.length > 0) {
-              const safeFallbackPath = import_path.default.join(LOCAL_VIDEOS_DIR, availableFiles[0]);
-              console.log(`[Renderer] Selected file ${filename} missing. Falling back to available file: ${availableFiles[0]}`);
-              logTask(taskId, "WARNING", "VIDEO_ASSET", `El archivo local "${filename}" no fue encontrado. Usando archivo "${availableFiles[0]}" como respaldo.`);
-              localVideoPaths.push(safeFallbackPath);
-              continue;
-            }
-          } catch (e) {
-            console.error("[Renderer] Failed to list fallback local videos:", e);
-          }
-        }
-        const cleanUrl = url.split("?")[0];
-        const ext = import_path.default.extname(cleanUrl) || ".mp4";
-        const urlHash = import_crypto.default.createHash("md5").update(url).digest("hex");
-        const dest = import_path.default.join(cacheDir, `clip_${clip.id}_${urlHash}${ext}`);
-        try {
-          await downloadFile(url, dest);
-          localVideoPaths.push(dest);
-        } catch (downloadErr) {
-          console.error(`[Renderer] Failed to download clip ${clip.id}:`, downloadErr);
-          logTask(taskId, "WARNING", "VIDEO_ASSET", `Could not download clip ${clip.id}. Generating synthetic placeholder...`);
-          localVideoPaths.push("placeholder");
-        }
-      }
-      logTask(taskId, "SUCCESS", "VIDEO_ASSET", `Collected ${clips.length} video materials`);
-      updateTaskState(30, null, null);
-      let localNarrationPath = null;
-      if (p.narration_audio_path) {
-        if (p.narration_audio_path.startsWith("/") || !p.narration_audio_path.includes("://")) {
-          const cleanLocalPath = p.narration_audio_path.startsWith("/") ? p.narration_audio_path.slice(1) : p.narration_audio_path;
-          const diskPath = import_path.default.join(process.cwd(), cleanLocalPath);
-          if (import_fs.default.existsSync(diskPath)) {
-            localNarrationPath = diskPath;
-          }
-        }
-        if (!localNarrationPath) {
-          const ext = import_path.default.extname(p.narration_audio_path.split("?")[0]) || ".mp3";
-          const dest = import_path.default.join(cacheDir, `narration_${projectId}${ext}`);
-          try {
-            await downloadFile(p.narration_audio_path, dest);
-            localNarrationPath = dest;
-          } catch (err) {
-            console.error(`[Renderer] Narration download failed:`, err);
-          }
-        }
-      }
-      let localMusicPath = null;
-      if (musicItem && musicItem.url) {
-        if (musicItem.url.startsWith("/") || !musicItem.url.includes("://")) {
-          const cleanLocalPath = musicItem.url.startsWith("/") ? musicItem.url.slice(1) : musicItem.url;
-          const diskPath = import_path.default.join(process.cwd(), cleanLocalPath);
-          if (import_fs.default.existsSync(diskPath)) {
-            localMusicPath = diskPath;
-          }
-        }
-        if (!localMusicPath) {
-          const ext = import_path.default.extname(musicItem.url.split("?")[0]) || ".mp3";
-          const dest = import_path.default.join(cacheDir, `music_${musicItem.id}${ext}`);
-          try {
-            await downloadFile(musicItem.url, dest);
-            localMusicPath = dest;
-          } catch (err) {
-            console.error(`[Renderer] BGM download failed:`, err);
-          }
-        }
-      }
-      logTask(taskId, "INFO", "RENDER", "Rendering final video");
-      updateTaskState(40, null, null);
-      const getVideoDuration = async (videoPath) => {
-        try {
-          const durationStr = await executeCommand(`ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${videoPath}"`);
-          const d = parseFloat(durationStr.trim());
-          return isNaN(d) ? 0 : d;
-        } catch (err) {
-          console.error(`[getVideoDuration] Failed to probe ${videoPath}:`, err);
-          return 0;
-        }
-      };
-      let encoderArgs = "-c:v libx264 -crf 18 -preset veryfast";
-      try {
-        logTask(taskId, "INFO", "SYSTEM", "Detecting optimal video encoder (NVIDIA NVENC vs. CPU libx264)...");
-        await executeCommand("ffmpeg -y -f lavfi -i color=c=black:s=16x16:d=0.1 -c:v h264_nvenc -f null -");
-        encoderArgs = "-c:v h264_nvenc -preset p4 -cq 19 -rc vbr";
-        logTask(taskId, "INFO", "SYSTEM", "\u{1F680} NVIDIA RTX GPU detected! Enabled hardware-accelerated NVENC encoding for maximum performance.");
-      } catch (err) {
-        logTask(taskId, "INFO", "SYSTEM", "No hardware NVENC support detected. Using CPU-based libx264 encoder (server/fallback mode).");
-      }
-      const formattedClips = [];
-      const isLandscape = p.global_visual_style === "landscape" || p.aspect_ratio === "landscape";
-      const resWidth = isLandscape ? 1280 : 720;
-      const resHeight = isLandscape ? 720 : 1280;
-      for (let i = 0; i < clips.length; i++) {
-        const clip = clips[i];
-        const inputPath = localVideoPaths[i];
-        const formattedPath = import_path.default.join(cacheDir, `formatted_${taskId}_${i}.mp4`);
-        const duration = Number(clip.duration_sec) || 5;
-        const start = Number(clip.trim_start_sec) || 0;
-        if (inputPath === "placeholder") {
-          console.log(`[Renderer] Building synthetic placeholder clip ${i}`);
-          const cmd = `ffmpeg -y -f lavfi -i color=c=0x1E1E2E:s=${resWidth}x${resHeight}:d=${duration} -r 25 -pix_fmt yuv420p "${formattedPath}"`;
-          await executeCommand(cmd);
-        } else {
-          try {
-            const inputDuration = await getVideoDuration(inputPath);
-            console.log(`[Renderer] Formatting clip ${i}: ${inputPath}, inputDuration: ${inputDuration}, targetDuration: ${duration}`);
-            let loopCmd = "";
-            const neededDuration = start + duration;
-            if (inputDuration > 0 && inputDuration < neededDuration) {
-              const loopCount = Math.ceil(neededDuration / inputDuration);
-              loopCmd = `-stream_loop ${loopCount - 1}`;
-            }
-            const cmd = `ffmpeg -y ${loopCmd ? loopCmd + " " : ""}-i "${inputPath}" -ss ${start} -t ${duration} -vf "scale=${resWidth}:${resHeight}:force_original_aspect_ratio=increase,crop=${resWidth}:${resHeight},setsar=1" -r 25 ${encoderArgs} -pix_fmt yuv420p "${formattedPath}"`;
-            await executeCommand(cmd);
-          } catch (err) {
-            console.error(`[Renderer] Failed to format clip ${i} (${inputPath}), falling back to placeholder:`, err);
-            logTask(taskId, "WARNING", "VIDEO_ASSET", `Failed to process local video file: ${import_path.default.basename(inputPath)}. Using a colored placeholder instead.`);
-            const cmd = `ffmpeg -y -f lavfi -i color=c=0x1E1E2E:s=${resWidth}x${resHeight}:d=${duration} -r 25 -pix_fmt yuv420p "${formattedPath}"`;
-            await executeCommand(cmd);
-          }
-        }
-        formattedClips.push(formattedPath);
-        updateTaskState(Math.floor(40 + i / clips.length * 20), null, null);
-      }
-      logTask(taskId, "INFO", "COMPOSITION", "Combining video 1/1");
-      updateTaskState(65, null, null);
-      const concatFilePath = import_path.default.join(cacheDir, `concat_${taskId}.txt`);
-      const concatContent = formattedClips.map((f) => `file '${f.replace(/\\/g, "/")}'`).join("\n");
-      await import_fs.default.promises.writeFile(concatFilePath, concatContent, "utf8");
-      const concatOutput = import_path.default.join(cacheDir, `concatenated_${taskId}.mp4`);
-      const concatCmd = `ffmpeg -y -f concat -safe 0 -i "${concatFilePath}" -c copy "${concatOutput}"`;
-      await executeCommand(concatCmd);
-      updateTaskState(75, null, null);
-      logTask(taskId, "INFO", "AUDIO_MIXER", "Applying audio and subtitles 1/1");
-      updateTaskState(80, null, null);
-      let narrationDuration = 0;
-      if (localNarrationPath && import_fs.default.existsSync(localNarrationPath)) {
-        try {
-          const durationStr = await executeCommand(`ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${localNarrationPath}"`);
-          const d = parseFloat(durationStr.trim());
-          if (!isNaN(d) && d > 0) {
-            narrationDuration = d;
-          }
-        } catch (e) {
-          console.error("[Renderer] Failed to get narration duration:", e);
-        }
-      }
-      const audioMixedOutput = import_path.default.join(cacheDir, `audio_mixed_${taskId}.mp4`);
-      let audioFilter = "";
-      const audioInputs = [];
-      const voiceVolume = p.params?.voice_volume !== void 0 ? p.params.voice_volume : p.voice_volume !== void 0 ? p.voice_volume : 1;
-      const musicVolume = musicItem?.volume !== void 0 ? musicItem.volume : p.params?.bgm_volume !== void 0 ? p.params.bgm_volume : p.bgm_volume !== void 0 ? p.bgm_volume : 0.2;
-      if (localNarrationPath && localMusicPath) {
-        audioInputs.push(`-i "${localNarrationPath}"`, `-stream_loop -1 -i "${localMusicPath}"`);
-        audioFilter = `[1:a]volume=${voiceVolume}[v];[2:a]volume=${musicVolume}[m];[v][m]amix=inputs=2:duration=first[a]`;
-      } else if (localNarrationPath) {
-        audioInputs.push(`-i "${localNarrationPath}"`);
-        audioFilter = `[1:a]volume=${voiceVolume}[a]`;
-      } else if (localMusicPath) {
-        audioInputs.push(`-stream_loop -1 -i "${localMusicPath}"`);
-        audioFilter = `[1:a]volume=${musicVolume}[a]`;
-      }
-      let mixCmd = "";
-      const limitDurationOpt = narrationDuration > 0 ? `-t ${narrationDuration}` : "";
-      if (audioFilter) {
-        mixCmd = `ffmpeg -y -i "${concatOutput}" ${audioInputs.join(" ")} -filter_complex "${audioFilter}" -map 0:v -map "[a]" -c:v copy -c:a aac ${limitDurationOpt} "${audioMixedOutput}"`;
-      } else {
-        mixCmd = `ffmpeg -y -i "${concatOutput}" -f lavfi -i anullsrc=r=44100:cl=stereo -c:v copy -c:a aac -shortest ${limitDurationOpt} "${audioMixedOutput}"`;
-      }
-      await executeCommand(mixCmd);
-      updateTaskState(90, null, null);
-      let subtitles = subtitleTrack?.items || [];
-      if (subtitles.length === 0 && p.shot_plan?.segments) {
-        console.log(`[Renderer] Subtitle track was empty, falling back to shot_plan segments (${p.shot_plan.segments.length} items)`);
-        const fallbackSubtitles = [];
-        p.shot_plan.segments.forEach((seg, idx) => {
-          const startSec = seg.start_sec !== void 0 ? seg.start_sec : idx * 5;
-          const durationSec = seg.target_duration_sec !== void 0 ? seg.target_duration_sec : 5;
-          const splitItems = splitTextIntoTikTokSubtitles(seg.narration_text || "", startSec, durationSec, seg.id, `sub_fallback_${idx + 1}`);
-          fallbackSubtitles.push(...splitItems);
-        });
-        subtitles = fallbackSubtitles;
-      }
-      let finalOutputPath = audioMixedOutput;
-      const pParams = p.params || {};
-      const subtitleEnabledParam = pParams.subtitle_enabled !== void 0 ? pParams.subtitle_enabled : p.subtitle_enabled !== void 0 ? p.subtitle_enabled : true;
-      if (subtitles.length > 0 && subtitleEnabledParam) {
-        const fontsConfPath = import_path.default.join(cacheDir, `fonts_${taskId}.conf`);
-        const fontsConfXml = `<?xml version="1.0"?>
-<!DOCTYPE fontconfig SYSTEM "fonts.dtd">
-<fontconfig>
-  <dir>${import_path.default.join(process.cwd(), "public", "fonts")}</dir>
-  <dir>${import_path.default.join(process.cwd(), "resource", "fonts")}</dir>
-  <dir>/usr/share/fonts</dir>
-  <dir>/usr/local/share/fonts</dir>
-  <cachedir>/tmp/fonts-cache-${taskId}</cachedir>
-  <include ignore_missing="yes">/etc/fonts/fonts.conf</include>
-</fontconfig>`;
-        await import_fs.default.promises.writeFile(fontsConfPath, fontsConfXml, "utf8");
-        process.env.FONTCONFIG_FILE = fontsConfPath;
-        process.env.FONTCONFIG_PATH = cacheDir;
-        const fontNameParam = pParams.font_name || p.font_name || "STHeitiMedium.ttc";
-        const fontSizeParam = pParams.font_size || p.font_size || 60;
-        const textColorParam = pParams.text_fore_color || p.text_fore_color || "#FFFFFF";
-        const strokeColorParam = pParams.stroke_color || p.stroke_color || "#000000";
-        const strokeWidthParam = pParams.stroke_width !== void 0 ? pParams.stroke_width : p.stroke_width !== void 0 ? p.stroke_width : 1.5;
-        const hasBgParam = pParams.text_background_color !== void 0 ? pParams.text_background_color : p.text_background_color !== void 0 ? p.text_background_color : true;
-        const subtitlePosParam = pParams.subtitle_position || p.subtitle_position || "bottom";
-        const customPosParam = pParams.custom_position !== void 0 ? pParams.custom_position : p.custom_position !== void 0 ? p.custom_position : 70;
-        const subtitleBgStyleParam = pParams.subtitle_bg_style || p.subtitle_bg_style || "solid";
-        const roundedBgParam = pParams.rounded_subtitle_background !== void 0 ? pParams.rounded_subtitle_background : p.rounded_subtitle_background !== void 0 ? p.rounded_subtitle_background : false;
-        const subtitleAnimationParam = pParams.subtitle_animation || p.subtitle_animation || "pop";
-        const assFilePath = import_path.default.join(cacheDir, `subtitles_${taskId}.ass`);
-        const assContent = generateAss(subtitles, resWidth, resHeight, {
-          fontName: fontNameParam,
-          fontSize: fontSizeParam,
-          textColor: textColorParam,
-          strokeColor: strokeColorParam,
-          strokeWidth: strokeWidthParam,
-          hasBg: hasBgParam,
-          position: subtitlePosParam,
-          customPosition: customPosParam,
-          subtitleBgStyle: subtitleBgStyleParam,
-          roundedBackground: roundedBgParam,
-          subtitleAnimation: subtitleAnimationParam
-        });
-        await import_fs.default.promises.writeFile(assFilePath, assContent, "utf8");
-        const srtOutput = import_path.default.join(renderDir, `render_${projectId}.mp4`);
-        const assRelative = import_path.default.relative(process.cwd(), assFilePath).replace(/\\/g, "/");
-        const escapedAssPath = assRelative.replace(/'/g, "'\\\\''").replace(/:/g, "\\:");
-        const subFilter = `subtitles='${escapedAssPath}'`;
-        const srtCmd = `ffmpeg -y -i "${audioMixedOutput}" -vf "${subFilter}" ${encoderArgs} -c:a copy "${srtOutput}"`;
-        await executeCommand(srtCmd);
-        finalOutputPath = srtOutput;
-      } else {
-        const copyOutput = import_path.default.join(renderDir, `render_${projectId}.mp4`);
-        await import_fs.default.promises.copyFile(audioMixedOutput, copyOutput);
-        finalOutputPath = copyOutput;
-      }
-      for (const f of formattedClips) {
-        import_fs.default.promises.unlink(f).catch(() => {
-        });
-      }
-      import_fs.default.promises.unlink(concatFilePath).catch(() => {
-      });
-      import_fs.default.promises.unlink(concatOutput).catch(() => {
-      });
-      if (finalOutputPath !== audioMixedOutput) {
-        import_fs.default.promises.unlink(audioMixedOutput).catch(() => {
-        });
-      }
-      const finalUrl = `/storage/renders/${p.project_folder_name}/render_${projectId}.mp4`;
-      logTask(taskId, "SUCCESS", "RENDER", `Compression and rendering complete. Output file generated at: ${finalUrl}`);
-      logTask(taskId, "SUCCESS", "SYSTEM", `Task ${taskId} completed successfully!`);
-      p.videos = [finalUrl];
-      p.combined_videos = [finalUrl];
-      p.updated_at = (/* @__PURE__ */ new Date()).toISOString();
-      projects.set(projectId, p);
-      updateTaskState(100, finalUrl, null, 1);
-    } catch (err) {
-      console.error(`[Renderer] Render failure for project ${projectId}:`, err);
-      logTask(taskId, "ERROR", "RENDER", `Rendering failed: ${err.message}`);
-      updateTaskState(100, null, err.message, -1);
-    }
-  };
+  const { runRealRender } = createRenderer({
+    projects,
+    tasks,
+    logTask,
+    localVideosDir: LOCAL_VIDEOS_DIR,
+    bgmFiles: BGM_FILES,
+    sanitizeFolderName,
+    getFormattedDateTime
+  });
   app.post("/api/v1/projects/:id/render", wrap(async (req, res) => {
     const renderTaskId = "render_task_" + req.params.id;
     tasks.set(renderTaskId, {
@@ -4010,23 +3784,17 @@ To run this application locally and render videos successfully, please:
     res.redirect("https://videos.pexels.com/video-files/3248319/3248319-hd_1920_1080_25fps.mp4");
   }));
   app.use("/storage/local_videos", import_express.default.static(LOCAL_VIDEOS_DIR));
-  app.use("/storage", import_express.default.static(import_path.default.join(process.cwd(), "storage")));
+  app.use("/storage", import_express.default.static(import_path6.default.join(process.cwd(), "storage")));
   app.get("/:filename", (req, res, next) => {
     const filename = req.params.filename;
     let verificationFilename = globalConfig.settings?.tiktok?.verification_filename;
     let verificationContent = globalConfig.settings?.tiktok?.verification_content;
-    const tiktokCredsPath = import_path.default.join(process.cwd(), "storage", "tiktok-credentials.json");
-    if (import_fs.default.existsSync(tiktokCredsPath)) {
-      try {
-        const data = JSON.parse(import_fs.default.readFileSync(tiktokCredsPath, "utf8"));
-        if (data.verification_filename) {
-          verificationFilename = data.verification_filename;
-        }
-        if (data.verification_content) {
-          verificationContent = data.verification_content;
-        }
-      } catch (e) {
-      }
+    const tkCreds = loadTiktokChannels();
+    if (tkCreds.verification_filename) {
+      verificationFilename = tkCreds.verification_filename;
+    }
+    if (tkCreds.verification_content) {
+      verificationContent = tkCreds.verification_content;
     }
     if (verificationFilename && filename === verificationFilename) {
       return res.type("text/plain").send(verificationContent);
@@ -4040,10 +3808,10 @@ To run this application locally and render videos successfully, please:
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = import_path.default.join(process.cwd(), "dist");
+    const distPath = import_path6.default.join(process.cwd(), "dist");
     app.use(import_express.default.static(distPath));
     app.get("*", (req, res) => {
-      res.sendFile(import_path.default.join(distPath, "index.html"));
+      res.sendFile(import_path6.default.join(distPath, "index.html"));
     });
   }
   app.use((err, req, res, next) => {
