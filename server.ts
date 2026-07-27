@@ -22,6 +22,7 @@ import { searchPexelsVideos, pickUniqueClip } from "./src/server/pexels";
 import { createRenderer, executeCommand } from "./src/server/render";
 import { createProjectsRepo } from "./src/server/projectsRepo";
 import { shouldSweepProject, resolveRenderStatus } from "./src/server/projectLifecycle";
+import { isSafeMediaFilename, isSafeProjectFolderName, resolveWithinDir } from "./src/server/pathSafety";
 import {
   loadTiktokChannels,
   saveTiktokChannels,
@@ -1045,10 +1046,15 @@ Instrucciones:
 
     const youtube = google.youtube({ version: "v3", auth: oauth2Client });
 
-    // Locate file on disk
-    const filePath = path.join(process.cwd(), videoUrl);
+    // Locate file on disk. Solo se publica lo que el render escribió:
+    // cualquier ruta fuera de storage/renders se rechaza, no se normaliza.
+    const rendersDir = path.join(process.cwd(), "storage", "renders");
+    const filePath = resolveWithinDir(rendersDir, path.join(process.cwd(), videoUrl));
+    if (!filePath) {
+      return res.status(400).json({ status: 400, message: "videoUrl debe apuntar a un render dentro de storage/renders.", data: null });
+    }
     if (!fs.existsSync(filePath)) {
-      return res.status(404).json({ status: 404, message: `No se encontró el archivo de video en el disco: ${filePath}` });
+      return res.status(404).json({ status: 404, message: "No se encontró el archivo de video en el disco.", data: null });
     }
 
     const response = await youtube.videos.insert({
@@ -1256,6 +1262,10 @@ Instrucciones:
     const { videoUrl, title } = req.body;
     if (!videoUrl) {
       return res.status(400).json({ status: 400, message: "Falta el videoUrl del video a subir." });
+    }
+    // Misma regla que YouTube: solo se publica un render de storage/renders.
+    if (!resolveWithinDir(path.join(process.cwd(), "storage", "renders"), path.join(process.cwd(), videoUrl))) {
+      return res.status(400).json({ status: 400, message: "videoUrl debe apuntar a un render dentro de storage/renders.", data: null });
     }
 
     const tkCreds = loadTiktokChannels();
@@ -1571,7 +1581,16 @@ CRÍTICO: No utilices NINGÚN tipo de formato de texto como asteriscos (* o **),
     if (req.body && req.body.script) {
       req.body.script = cleanScriptSymbols(req.body.script);
     }
-    const updated = { ...p, ...req.body };
+    // Campos que pertenecen al servidor: el cliente no los elige. project_folder_name
+    // se une a una ruta de disco y se crea con mkdir más abajo en el pipeline.
+    const { project_id: _ignoredId, created_at: _ignoredCreatedAt, ...clientPatch } = req.body || {};
+    if (
+      req.body?.project_folder_name !== undefined &&
+      !isSafeProjectFolderName(req.body.project_folder_name)
+    ) {
+      return res.status(400).json({ status: 400, message: "project_folder_name inválido.", data: null });
+    }
+    const updated = { ...p, ...clientPatch };
     const oldNiche = p.params?.video_niche;
     const newNiche = updated.params?.video_niche;
     if (!updated.project_folder_name || (newNiche && oldNiche !== newNiche)) {
@@ -1743,7 +1762,18 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
     p.params.video_source = videoSource;
     p.video_source = videoSource;
     if (req.body.local_video_files !== undefined) {
-      p.params.local_video_files = req.body.local_video_files;
+      // Los nombres llegan del body y acaban en una línea de comandos ffprobe;
+      // solo se aceptan nombres de archivo simples de storage/local_videos.
+      const requested = Array.isArray(req.body.local_video_files) ? req.body.local_video_files : [];
+      const rejected = requested.filter((name: unknown) => !isSafeMediaFilename(name));
+      if (rejected.length > 0) {
+        return res.status(400).json({
+          status: 400,
+          message: "local_video_files solo admite nombres de archivo de video simples.",
+          data: null
+        });
+      }
+      p.params.local_video_files = requested;
     }
     projects.set(req.params.id, p);
 
