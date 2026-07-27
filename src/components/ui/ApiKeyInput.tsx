@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Eye, EyeOff, Save } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { SECRET_SENTINEL } from "../../server/configMasking";
 
 interface ApiKeyInputProps {
   label: string;
@@ -18,10 +19,17 @@ export function ApiKeyInput({ label, value, placeholder, onSave }: ApiKeyInputPr
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const maskedDisplay = value ? "•".repeat(8) + value.slice(-4) : t("apiKey.notSet");
+  const isStoredSecret = value === SECRET_SENTINEL;
+  const maskedDisplay = isStoredSecret
+    ? t("apiKey.saved")
+    : value
+      ? "•".repeat(8) + value.slice(-4)
+      : t("apiKey.notSet");
 
   const handleEdit = () => {
-    setDraft(value);
+    // Never pre-fill the edit box with the sentinel — the user must type the
+    // real key, and an unedited box must not overwrite what the server stores.
+    setDraft(isStoredSecret ? "" : value);
     setEditing(true);
     setSaved(false);
     setError(null);
