@@ -1,5 +1,11 @@
 # 000 — Current State Audit
 
+> **Provenance**: written for the pre-rewrite Python architecture (FastAPI +
+> Streamlit + MoviePy). The design intent is current; the file paths, module
+> names and commands are not — this project is now TypeScript (Express +
+> React + Vite + FFmpeg CLI). See `MAP.md` for the real layout and
+> `CONTEXT.md` for canonical vocabulary.
+
 ## Repo structure
 - `app/` — FastAPI backend (`main.py`, `app/asgi.py`, `app/router.py`)
 - `app/controllers/v1/` — video.py, llm.py route handlers

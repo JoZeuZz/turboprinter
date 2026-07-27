@@ -1,5 +1,11 @@
 # 002 — Structured Shot Planner (Fase 2)
 
+> **Provenance**: written for the pre-rewrite Python architecture (FastAPI +
+> Streamlit + MoviePy). The design intent is current; the file paths, module
+> names and commands are not — this project is now TypeScript (Express +
+> React + Vite + FFmpeg CLI). See `MAP.md` for the real layout and
+> `CONTEXT.md` for canonical vocabulary.
+
 ## Objetivo
 
 Fase 2 introduce un planificador de planos estructurado que, dado el guion de un
