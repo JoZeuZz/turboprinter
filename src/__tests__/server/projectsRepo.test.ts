@@ -44,12 +44,67 @@ describe("createProjectsRepo", () => {
     expect(reopened.get("p2")).toEqual({ project_id: "p2" });
   });
 
-  it("survives a corrupt db file by starting empty instead of throwing", () => {
+  it("throws on a corrupt db file instead of starting empty", () => {
     fs.mkdirSync(path.dirname(projectsDbPath(tmpDir)), { recursive: true });
     fs.writeFileSync(projectsDbPath(tmpDir), "{not json", "utf8");
 
+    expect(() => createProjectsRepo(tmpDir)).toThrow(/no es JSON válido/);
+  });
+
+  it("leaves a corrupt db file untouched so it can still be repaired by hand", () => {
+    fs.mkdirSync(path.dirname(projectsDbPath(tmpDir)), { recursive: true });
+    fs.writeFileSync(projectsDbPath(tmpDir), "{not json", "utf8");
+
+    expect(() => createProjectsRepo(tmpDir)).toThrow();
+    expect(fs.readFileSync(projectsDbPath(tmpDir), "utf8")).toBe("{not json");
+  });
+
+  it("throws when the db file parses to something that is not an object", () => {
+    fs.mkdirSync(path.dirname(projectsDbPath(tmpDir)), { recursive: true });
+    fs.writeFileSync(projectsDbPath(tmpDir), "[1, 2, 3]", "utf8");
+
+    expect(() => createProjectsRepo(tmpDir)).toThrow(/objeto JSON/);
+  });
+
+  it("leaves no temp file behind after a successful write", () => {
     const repo = createProjectsRepo(tmpDir);
-    expect(repo.size).toBe(0);
+    repo.set("p1", { project_id: "p1" });
+
+    const storageDir = path.dirname(projectsDbPath(tmpDir));
+    const leftovers = fs.readdirSync(storageDir).filter((f) => f.endsWith(".tmp"));
+    expect(leftovers).toEqual([]);
+  });
+
+  it("writes valid, re-readable JSON on every set", () => {
+    const repo = createProjectsRepo(tmpDir);
+    repo.set("p1", { project_id: "p1", topic: "gatos" });
+    repo.set("p2", { project_id: "p2", topic: "perros" });
+
+    const onDisk = JSON.parse(fs.readFileSync(projectsDbPath(tmpDir), "utf8"));
+    expect(Object.keys(onDisk).sort()).toEqual(["p1", "p2"]);
+  });
+
+  it("throws instead of silently losing data when the write fails", () => {
+    const repo = createProjectsRepo(tmpDir);
+    repo.set("p1", { project_id: "p1" });
+
+    const storageDir = path.dirname(projectsDbPath(tmpDir));
+    fs.chmodSync(storageDir, 0o500); // r-x: no se puede crear el temporal
+    try {
+      // Root ignora los bits de permiso; en ese caso la prueba no aplica.
+      let writable = true;
+      try {
+        fs.writeFileSync(path.join(storageDir, ".probe"), "x");
+        fs.unlinkSync(path.join(storageDir, ".probe"));
+      } catch {
+        writable = false;
+      }
+      if (!writable) {
+        expect(() => repo.set("p2", { project_id: "p2" })).toThrow(/No se pudo guardar/);
+      }
+    } finally {
+      fs.chmodSync(storageDir, 0o700);
+    }
   });
 
   it("exposes entries and values for iteration", () => {
