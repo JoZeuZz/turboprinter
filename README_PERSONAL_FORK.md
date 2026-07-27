@@ -1,106 +1,14 @@
 # MoneyPrinterTurbo — Personal Fork (LXC / Proxmox)
 
 This is a personal fork of [MoneyPrinterTurbo](https://github.com/harry0703/MoneyPrinterTurbo)
-focused on **Spanish short‑form video quality** and a **maintainable, opt‑in
-quality layer** (the *Personal Quality Stack*). It is designed to run on a
-CPU‑only Debian/Ubuntu **LXC container on Proxmox**, with persistent storage and
-local/self‑hosted providers (Ollama, Pollinations, OpenAI‑compatible, or a
-manually pasted script — **no OpenAI/Anthropic API key required at runtime**).
+focused on **Spanish short‑form vertical video** (TikTok/Reels/Shorts), with
+clip‑by‑clip timeline editing before the final render. It is designed to run on
+a CPU‑only Debian/Ubuntu **LXC container on Proxmox**, with persistent storage.
 
-Everything added by this fork is **optional and disabled by default**: with
-`[quality] enabled = false`, behaviour is identical to upstream.
-
----
-
-## 1. Personal Quality Stack (overview)
-
-Optional layer under `app/services/quality/`, gated by the `[quality]` section in
-`config.toml`. Highlights:
-
-| Area | What it adds | Where |
-|------|--------------|-------|
-| Render profiles | `fast/balanced/high/archival` (CRF, preset, pix_fmt, audio bitrate) | `[quality] profile` |
-| Premium subtitles | ES normalization, presets, safe‑area for Shorts/Reels/TikTok | `[quality] subtitle_style`, `target_platform` |
-| Material ranker | deterministic ranking (resolution, orientation, duration, diversity, local‑first) | automatic when enabled |
-| Local library | index your own clips (SQLite) and prioritize them over stock | `library_cli` + `prefer_local_assets` |
-| TTS adapter | uniform TTS result + optional Whisper word alignment | `voice.synthesize`, `word_highlight` |
-| Spanish content package | title/description/hashtags/hook/keywords/thumbnail prompt/checklist (no LLM needed) | `[quality] content_package` |
-| Render manifest | per-task `manifest.json` with effective quality settings, render profile, codec and artifact paths | written automatically when `[quality] enabled = true` |
-
-See `config.example.toml` `[quality]` for all keys.
-
----
-
-## 1b. Domain layer & project persistence (opt-in foundation)
-
-The fork includes an **optional domain layer** (`app/domain/`) and **filesystem persistence** (`app/infrastructure/storage/`) to enable future project-mode features (multi-shot planning, timeline editing, advanced rendering). These are **off by default** and add **zero overhead** when disabled.
-
-| Component | Purpose | Scope |
-|-----------|---------|-------|
-| `app/domain/` | Pydantic v2 models: ShotPlan, MediaCandidate, TimelineProject, RenderSpec | domain entities for project-mode workflows |
-| `app/domain/projects/commands.py` | 5 edit commands (move, trim, replace, timing, volume) and `TimelineProject.apply()` dispatch | safe minimal timeline edits |
-| `app/infrastructure/storage/` | FilesystemProjectStore: JSON persistence under `storage/tasks/{task_id}/` | shot_plan.json, media_candidates.json, timeline_project.json, render_spec.json |
-| `app/application/services/timeline_builder.py` | Builds a deterministic `TimelineProject` from `ShotPlan + selected_media`; writes `timeline_project.json` when a store/task id are provided | Fase 4 standalone, no legacy render wiring yet |
-| `app/infrastructure/renderers/moviepy_renderer.py` | Renders a `TimelineProject` to `final.mp4`, honouring per-item trims/durations, reusing legacy `generate_video` for subtitles/BGM/mux; writes `render_manifest.json` + `render_result.json` | Fase 5, default renderer |
-| `app/infrastructure/renderers/opencut_adapter.py` | Experimental OpenCut renderer stub; raises `NotImplementedError` | Fase 5, behind `TimelineRenderer` interface |
-| `app/application/workflows/render_project.py` | Loads `timeline_project.json` + `render_spec.json` and renders via the selected renderer | Fase 5 standalone, not wired into legacy task pipeline |
-| `app/controllers/v1/projects.py` | Project-mode REST API under `/api/v1/projects` (create, plan, media, timeline, edit commands, background render, assets) | Fase 6, `404` when project mode is off; legacy endpoints untouched |
-| `app/application/services/music_selector.py` + `app/infrastructure/music_providers/` | Contextual music selection from `MusicIntent` (local library + Jamendo stub); writes `selected_music.json` | Fase 8, gated by `TURBOPRINTER_CONTEXTUAL_MUSIC`; legacy BGM untouched |
-| `app/application/services/reddit_ingest.py` + `app/domain/sources/models.py` | Reddit/manual text → anonymized `StorySource` → script text feeding `/projects/from-script` | Fase 9, gated by `TURBOPRINTER_REDDIT_INGEST`; PRAW optional/lazy |
-| `TURBOPRINTER_PROJECT_MODE_ENABLED` | Environment flag (default: off) | enables project-mode wiring (in future plans) |
-| `TURBOPRINTER_STRUCTURED_SHOT_PLANNER` | Environment flag (default: off) | enables the structured Shot Planner (Fase 2) |
-
-**Important:** When `TURBOPRINTER_PROJECT_MODE_ENABLED` is unset or `false`, the entire video pipeline behaves identically to upstream. This layer is purely additive — no changes to existing render, script, subtitle or media selection logic.
-
-### Feature flags
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `TURBOPRINTER_PROJECT_MODE_ENABLED` | `false` | Activates project-mode wiring. When unset or `false`, behaviour is identical to upstream. |
-| `TURBOPRINTER_STRUCTURED_SHOT_PLANNER` | `false` | Activates the structured Shot Planner (Fase 2). Requires `litellm_model_name` set in `config.toml`. On LLM failure or missing model, degrades automatically to a local deterministic heuristic (split by sentences + uniform duration + keyword queries) — no external service required. |
-| `TURBOPRINTER_MULTI_PROVIDER_MEDIA` | `false` | Activates multi-provider media search (Pexels, Pixabay, Coverr + local library). Auto-detects providers with API keys configured in `config.toml`; if a provider fails the others continue. Without keys or a local library database the aggregator is inert. Set `TURBOPRINTER_PROJECT_MODE_ENABLED=true` to persist candidates and selection. |
-| `TURBOPRINTER_TIMELINE_RENDERER` | `moviepy` | Selects the project-mode renderer (`moviepy` or `opencut`). `opencut` is an experimental stub. Only effective when `TURBOPRINTER_PROJECT_MODE_ENABLED=true`. |
-| `TURBOPRINTER_CONTEXTUAL_MUSIC` | `false` | Activates contextual music selection (Fase 8) from `MusicIntent` using a local music library (+ optional Jamendo). Without the flag or a library, the legacy BGM behaviour is unchanged. |
-| `TURBOPRINTER_REDDIT_INGEST` | `false` | Activates Reddit ingest (Fase 9): a thread/manual text becomes an anonymized `StorySource` → script text for `/projects/from-script`. PRAW is an optional, lazily imported dependency; without it or credentials, only manual payloads work and the rest of the system is unaffected. |
-
-`TimelineBuilder` is available as a standalone service for project-mode workflows:
-it converts `shot_plan.json` plus `selected_media.json` into
-`timeline_project.json`. The Fase 5 `MoviePyTimelineRenderer` then renders that
-project into `final.mp4` (honouring per-item trims, reusing the legacy
-`generate_video` for subtitles/BGM/mux) and writes `render_manifest.json` +
-`render_result.json`. It is **not** wired into the legacy task pipeline; the
-upstream render path is untouched. See
-`docs/architecture/005-opencut-integration-notes.md`.
-
-### Project API (Fase 6)
-
-`app/controllers/v1/projects.py` exposes the project-mode pipeline over REST
-under `/api/v1/projects` (create from topic/script, run plan, search media,
-build/edit timeline, background render, list assets). All endpoints return
-`404` when `TURBOPRINTER_PROJECT_MODE_ENABLED` is off, so the legacy `video`/`llm`
-endpoints and WebUI are unaffected. Render runs in the background and reports
-progress via the existing task-state manager. See
-`docs/architecture/006-project-api.md`.
-
-### Project Editor (Fase 7)
-
-A minimal manual editor lives at `webui/pages/2_Project_Editor.py` (a separate
-Streamlit page; `webui/Main.py` is untouched). It consumes the Fase 6 API via a
-testable client `webui/project_api.py` to create/load a project, run
-plan/media/build, reorder clips, adjust trims, replace candidates and launch a
-background render. Requires `TURBOPRINTER_PROJECT_MODE_ENABLED=true` and the API
-running. See `docs/architecture/004-manual-editor-roadmap.md`.
-
-To enable the structured Shot Planner:
-
-```bash
-export TURBOPRINTER_STRUCTURED_SHOT_PLANNER=true
-# config.toml must include:
-# [app]
-# litellm_model_name = "ollama/mistral"   # or any litellm-compatible model string
-```
-
-When the flag is off (the default), `get_shot_planner()` returns `None` and no planner instance is created.
+The LLM provider is configurable via `LLM_PROVIDER` (`gemini`, `lmstudio` or
+`openai`, the latter two for any OpenAI‑compatible endpoint) — **no
+OpenAI/Anthropic API key is required at runtime**, and ChatGPT/Claude web are
+never automated.
 
 ---
 
@@ -222,7 +130,7 @@ Notes:
 3. **Fallback:** enable Gemini in `llm_fallback_providers` (or the WebUI
    *AI Provider (avanzado)* expander) to compare quality when DeepSeek output
    isn't convincing.
-4. **Render:** run the Personal Quality Stack as usual.
+4. **Render:** run the pipeline as usual.
 
 Per‑run overrides without editing `config.toml`:
 
@@ -280,7 +188,7 @@ uv run python main.py            # binds to [listen_host]:[listen_port] from con
 uv run python cli.py --video-subject "Tu tema" --quality-enabled \
     --quality-profile high --quality-target-platform shorts \
     --quality-subtitle-style premium --quality-content-package
-uv run python cli.py --help      # see the "Personal Quality Stack" flag group
+uv run python cli.py --help      # see the flag group
 ```
 
 ---
@@ -430,37 +338,6 @@ A simple snapshot of the persistent mount (section 4) covers all of the above.
 
 ---
 
-## 10. Keeping the fork in sync with upstream
-
-```
-origin    = https://github.com/JoZeuZz/turboprinter.git   (your fork)
-upstream  = https://github.com/harry0703/MoneyPrinterTurbo.git
-```
-
-- Keep **`main`** tracking upstream with minimal/no custom changes.
-- Do feature work on personal branches (e.g. `personal/quality-stack`).
-
-```bash
-# Refresh main from upstream
-git checkout main
-git fetch upstream
-git merge --ff-only upstream/main      # or: git rebase upstream/main
-git push origin main
-
-# Rebase your personal work on the new upstream
-git checkout personal/quality-stack
-git rebase main
-# resolve conflicts (the quality stack is additive, so they should be minimal)
-uv run pytest                          # re-validate after rebase
-git push --force-with-lease origin personal/quality-stack
-```
-
-The quality stack lives in **new modules** (`app/services/quality/`) plus small,
-guarded hooks, so upstream merges should rarely conflict. When they do, prefer
-re‑applying the small hooks over editing large upstream files.
-
----
-
 ## 11. Validation
 
 In the LXC, after install or a rebase:
@@ -469,12 +346,10 @@ In the LXC, after install or a rebase:
 uv lock --check
 uv run python -m compileall app webui
 uv run pytest                          # full suite
-uv run python cli.py --help            # confirms the quality flag group
+uv run python cli.py --help            # confirms the flag group
 docker compose config                  # only if you use the compose files
 ```
 
-For a quick end‑to‑end check of the quality layer, run a short render with
-`[quality] enabled = true`, `profile = "high"`, `subtitle_style = "premium"`,
-`target_platform = "shorts"` and inspect the output plus
+For a quick end‑to‑end check, run a short render and inspect the output plus
 `storage/tasks/<id>/content_package.{json,md}`, `word_timestamps.json` and
 `manifest.json` (effective render settings for the task).
