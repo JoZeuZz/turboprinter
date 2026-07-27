@@ -88,23 +88,29 @@ describe("createProjectsRepo", () => {
     const repo = createProjectsRepo(tmpDir);
     repo.set("p1", { project_id: "p1" });
 
-    const storageDir = path.dirname(projectsDbPath(tmpDir));
-    fs.chmodSync(storageDir, 0o500); // r-x: no se puede crear el temporal
-    try {
-      // Root ignora los bits de permiso; en ese caso la prueba no aplica.
-      let writable = true;
-      try {
-        fs.writeFileSync(path.join(storageDir, ".probe"), "x");
-        fs.unlinkSync(path.join(storageDir, ".probe"));
-      } catch {
-        writable = false;
-      }
-      if (!writable) {
-        expect(() => repo.set("p2", { project_id: "p2" })).toThrow(/No se pudo guardar/);
-      }
-    } finally {
-      fs.chmodSync(storageDir, 0o700);
-    }
+    // Convertir la ruta de la base en un directorio hace que rename(2) falle
+    // con EISDIR pase lo que pase, también como root — a diferencia de los bits
+    // de permiso, que root ignora.
+    const dbPath = projectsDbPath(tmpDir);
+    fs.unlinkSync(dbPath);
+    fs.mkdirSync(dbPath);
+
+    expect(() => repo.set("p2", { project_id: "p2" })).toThrow(/No se pudo guardar/);
+  });
+
+  it("cleans up the temp file when the write fails", () => {
+    const repo = createProjectsRepo(tmpDir);
+    repo.set("p1", { project_id: "p1" });
+
+    const dbPath = projectsDbPath(tmpDir);
+    fs.unlinkSync(dbPath);
+    fs.mkdirSync(dbPath);
+
+    expect(() => repo.set("p2", { project_id: "p2" })).toThrow();
+
+    const storageDir = path.dirname(dbPath);
+    const leftovers = fs.readdirSync(storageDir).filter((f) => f.endsWith(".tmp"));
+    expect(leftovers).toEqual([]);
   });
 
   it("exposes entries and values for iteration", () => {
