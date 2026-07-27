@@ -25,6 +25,7 @@ import { generateLlmContent } from "./src/server/llm";
 import { searchPexelsVideos, pickUniqueClip } from "./src/server/pexels";
 import { createRenderer, executeCommand } from "./src/server/render";
 import { createProjectsRepo } from "./src/server/projectsRepo";
+import { shouldSweepProject, resolveRenderStatus } from "./src/server/projectLifecycle";
 import {
   loadTiktokChannels,
   saveTiktokChannels,
@@ -1384,13 +1385,16 @@ Instrucciones:
 
   // 5. Projects APIs
   app.get("/api/v1/projects", wrap(async (req: any, res: any) => {
-    // Automatically clean up projects whose storage folders have been deleted
+    // Clean up proyectos whose render folder was deleted from disk. Only
+    // proyectos that actually completed a render (p.videos is populated) are
+    // eligible: a proyecto mid-pipeline has a project_folder_name stamped by
+    // PUT /projects/:id but no folder yet, and sweeping it there destroyed the
+    // user's in-flight work.
     for (const [projectId, p] of Array.from(projects.entries())) {
-      if (p.project_folder_name) {
-        const folderPath = path.join(process.cwd(), "storage", "renders", p.project_folder_name);
-        if (!fs.existsSync(folderPath)) {
-          projects.delete(projectId);
-        }
+      if (!p.project_folder_name) continue;
+      const folderPath = path.join(process.cwd(), "storage", "renders", p.project_folder_name);
+      if (shouldSweepProject(p, fs.existsSync(folderPath))) {
+        projects.delete(projectId);
       }
     }
     const list = Array.from(projects.values()).map(p => ({
