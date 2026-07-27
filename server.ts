@@ -19,6 +19,7 @@ import {
   removeChannel,
 } from "./src/server/youtubeChannels";
 import { updateEnvFile } from "./src/server/envFile";
+import { maskSecrets, stripSentinelSecrets } from "./src/server/configMasking";
 import { synthesizeSpeech } from "./src/server/tts";
 import { generateLlmContent } from "./src/server/llm";
 import { searchPexelsVideos, pickUniqueClip } from "./src/server/pexels";
@@ -477,7 +478,11 @@ async function startServer() {
     globalConfig.settings.tiktok.client_id = process.env.TIKTOK_CLIENT_KEY || "";
     globalConfig.settings.tiktok.client_secret = process.env.TIKTOK_CLIENT_SECRET || "";
 
-    res.json({ status: 200, message: "ok", data: globalConfig });
+    res.json({
+      status: 200,
+      message: "ok",
+      data: { ...globalConfig, settings: maskSecrets(globalConfig.settings) },
+    });
   }));
 
   app.get("/api/v1/local-videos", wrap(async (req: any, res: any) => {
@@ -520,6 +525,9 @@ async function startServer() {
   }));
 
   app.put("/api/v1/config", wrap(async (req: any, res: any) => {
+    // A sentinel means "the user did not change this secret" — drop it so the
+    // stored value survives instead of being overwritten with the mask.
+    req.body = stripSentinelSecrets(req.body);
     globalConfig.settings = { ...globalConfig.settings, ...req.body };
 
     // Save YouTube credentials to .env file if they are passed in from the UI
@@ -580,7 +588,11 @@ async function startServer() {
       }
     }
 
-    res.json({ status: 200, message: "ok", data: globalConfig });
+    res.json({
+      status: 200,
+      message: "ok",
+      data: { ...globalConfig, settings: maskSecrets(globalConfig.settings) },
+    });
   }));
 
   // 2. Voices APIs
