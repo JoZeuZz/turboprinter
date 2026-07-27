@@ -347,7 +347,7 @@ export function createRenderer(deps: RenderDeps) {
                 let durationSec = 15;
                 if (fs.existsSync(fullDiskPath)) {
                   try {
-                    const durationStr = await executeCommand(`ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${fullDiskPath}"`);
+                    const durationStr = await executeCommand(`ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${fullDiskPath}"`, PROBE_COMMAND_TIMEOUT_MS);
                     const d = parseFloat(durationStr.trim());
                     if (!isNaN(d) && d > 0) {
                       durationSec = d;
@@ -654,7 +654,7 @@ export function createRenderer(deps: RenderDeps) {
       // Get exact duration of a video file via ffprobe
       const getVideoDuration = async (videoPath: string): Promise<number> => {
         try {
-          const durationStr = await executeCommand(`ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${videoPath}"`);
+          const durationStr = await executeCommand(`ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${videoPath}"`, PROBE_COMMAND_TIMEOUT_MS);
           const d = parseFloat(durationStr.trim());
           return isNaN(d) ? 0 : d;
         } catch (err) {
@@ -668,7 +668,7 @@ export function createRenderer(deps: RenderDeps) {
       try {
         logTask(taskId, "INFO", "SYSTEM", "Detecting optimal video encoder (NVIDIA NVENC vs. CPU libx264)...");
         // Run a very quick dummy probe to check if h264_nvenc works on the system
-        await executeCommand('ffmpeg -y -f lavfi -i color=c=black:s=16x16:d=0.1 -c:v h264_nvenc -f null -');
+        await executeCommand('ffmpeg -y -f lavfi -i color=c=black:s=16x16:d=0.1 -c:v h264_nvenc -f null -', PROBE_COMMAND_TIMEOUT_MS);
         encoderArgs = "-c:v h264_nvenc -preset p4 -cq 19 -rc vbr";
         logTask(taskId, "INFO", "SYSTEM", "🚀 NVIDIA RTX GPU detected! Enabled hardware-accelerated NVENC encoding for maximum performance.");
       } catch (err) {
@@ -739,7 +739,7 @@ export function createRenderer(deps: RenderDeps) {
       let narrationDuration = 0;
       if (localNarrationPath && fs.existsSync(localNarrationPath)) {
         try {
-          const durationStr = await executeCommand(`ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${localNarrationPath}"`);
+          const durationStr = await executeCommand(`ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${localNarrationPath}"`, PROBE_COMMAND_TIMEOUT_MS);
           const d = parseFloat(durationStr.trim());
           if (!isNaN(d) && d > 0) {
             narrationDuration = d;
