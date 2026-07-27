@@ -2578,17 +2578,32 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
 
   app.get("/api/v1/projects/:id/render", wrap(async (req: any, res: any) => {
     const renderTaskId = "render_task_" + req.params.id;
-    const t = tasks.get(renderTaskId) || { state: 1, progress: 100, output_path: SAMPLE_VIDEOS[3].source_url };
+    const task = tasks.get(renderTaskId);
+    const p = projects.get(req.params.id);
+
+    // The tasks map is in-process only, so a server restart loses it. Rather
+    // than fabricating a completed render (which used to hand the client a
+    // hardcoded stock clip), reconstruct real state from the proyecto's
+    // recorded output and the file on disk.
+    let renderedFileExists = false;
+    const recordedUrl = p?.videos?.[0];
+    if (!task && typeof recordedUrl === "string" && recordedUrl.length > 0) {
+      const relative = recordedUrl.replace(/^\/+/, "");
+      renderedFileExists = fs.existsSync(path.join(process.cwd(), relative));
+    }
+
+    const status = resolveRenderStatus({ task, project: p, renderedFileExists });
+
     res.json({
       status: 200,
       message: "ok",
       data: {
         task_id: renderTaskId,
-        state: t.state,
-        progress: t.progress,
-        output_path: t.output_path,
-        error: t.error
-      }
+        state: status.state,
+        progress: status.progress,
+        output_path: status.output_path,
+        error: status.error,
+      },
     });
   }));
 
