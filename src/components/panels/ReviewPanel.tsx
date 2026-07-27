@@ -45,9 +45,15 @@ export function ReviewPanel() {
 
   // Load BGMs
   useEffect(() => {
-    videoApi.getBgmList().then((res) => {
-      setBgmFiles(res.files);
-    });
+    videoApi
+      .getBgmList()
+      .then((res) => {
+        setBgmFiles(res.files);
+      })
+      .catch((err) => {
+        console.error("[ReviewPanel] Failed to load BGM list:", err);
+        setBgmFiles([]);
+      });
   }, []);
 
   // Sync orderedClips when project loads
