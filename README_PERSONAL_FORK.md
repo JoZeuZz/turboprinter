@@ -201,6 +201,17 @@ index/stats/list command — the old `library_cli` is gone.
   by design. A reverse proxy or firewall remains the only access control.
 - **No `chmod 777`.** Run as a non‑root user inside the LXC; keep `storage/`
   writable only by that user.
+- **Request bodies cannot pick arbitrary filesystem paths or shell arguments
+  any more.** `local_video_files` sent to
+  `POST /api/v1/projects/:id/media/search` now accepts only bare filenames
+  with a known video extension — anything else gets a `400`. `videoUrl` sent
+  to `POST /api/v1/youtube/upload` and `POST /api/v1/tiktok/upload` must
+  resolve inside `storage/renders`, or the request is rejected before the
+  file is touched. `PUT /api/v1/projects/:id` ignores `project_id` and
+  `created_at` from the body and validates `project_folder_name` against the
+  shape the server itself generates. The containment rules live in
+  `src/server/pathSafety.ts` and are unit-tested in
+  `src/__tests__/server/pathSafety.test.ts`.
 
 ### Example nginx reverse proxy (with basic auth + TLS)
 
