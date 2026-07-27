@@ -58,6 +58,7 @@ an empty value or an obvious placeholder like `<your-key>`.
 | `OPENAI_MODEL` | model name for the OpenAI‑compatible endpoint |
 | `YOUTUBE_CLIENT_ID` / `YOUTUBE_CLIENT_SECRET` | YouTube OAuth |
 | `TIKTOK_CLIENT_KEY` / `TIKTOK_CLIENT_SECRET` | TikTok OAuth |
+| `RENDER_COMMAND_TIMEOUT_MS` | optional, milliseconds, default `1800000` (30 min) — per-command ceiling for ffmpeg/ffprobe during a render; raise it on slow hardware or for very long videos |
 
 Example:
 
