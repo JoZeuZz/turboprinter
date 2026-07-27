@@ -10,10 +10,14 @@ The LLM provider is configurable via `LLM_PROVIDER` (`gemini`, `lmstudio` or
 OpenAI/Anthropic API key is required at runtime**, and ChatGPT/Claude web are
 never automated.
 
+> This fork was rewritten from Python (FastAPI + Streamlit + MoviePy) to
+> TypeScript (Express + React + Vite + FFmpeg CLI). Everything below describes
+> the TypeScript stack. Design documents under `docs/architecture/` predate the
+> rewrite — their intent is current, their file paths are not.
 
 ---
 
-## 2. Install on an LXC (Debian/Ubuntu)
+## 1. Install on an LXC (Debian/Ubuntu)
 
 > Use an **unprivileged** LXC. CPU‑only works; GPU is optional and not required.
 
@@ -37,7 +41,7 @@ npm ci
 
 ---
 
-## 3. Configure `.env`
+## 2. Configure `.env`
 
 Create a `.env` file in the project root (it is git‑ignored — never commit it,
 it holds your keys). **Never write a real key value in this document** — use
@@ -69,7 +73,7 @@ but it should **not** be used to configure new setups — use `.env`.
 
 ---
 
-## 3b. LLM providers
+## 3. LLM providers
 
 LLM support lives in `src/server/llm.ts` (91 lines). It supports **Gemini** and
 any **OpenAI‑compatible endpoint**, including a local one such as LM Studio.
@@ -272,7 +276,7 @@ A simple snapshot of the persistent mount (section 4) covers all of the above.
 
 ---
 
-## 11. Validation
+## 10. Validation
 
 ```bash
 npm run lint    # tsc --noEmit
