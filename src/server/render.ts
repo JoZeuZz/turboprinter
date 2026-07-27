@@ -174,12 +174,25 @@ export function pickBgm(opts: {
   return null;
 }
 
-export const executeCommand = (cmd: string): Promise<string> => {
+/** Ceiling for a heavy ffmpeg invocation (encode, concat, mix, subtitle burn).
+ *  A stalled child is killed rather than wedging the render forever.
+ *  Override with RENDER_COMMAND_TIMEOUT_MS. */
+export const DEFAULT_COMMAND_TIMEOUT_MS = Number(process.env.RENDER_COMMAND_TIMEOUT_MS) > 0
+  ? Number(process.env.RENDER_COMMAND_TIMEOUT_MS)
+  : 30 * 60 * 1000;
+
+/** Ceiling for a probe (ffprobe duration, NVENC capability check). These are
+ *  sub-second when healthy; a minute means the device or file is wedged. */
+export const PROBE_COMMAND_TIMEOUT_MS = 60 * 1000;
+
+export const executeCommand = (cmd: string, timeoutMs: number = DEFAULT_COMMAND_TIMEOUT_MS): Promise<string> => {
   return new Promise((resolve, reject) => {
-    exec(cmd, { maxBuffer: 1024 * 1024 * 50 }, (error, stdout, stderr) => {
+    exec(cmd, { maxBuffer: 1024 * 1024 * 50, timeout: timeoutMs, killSignal: "SIGKILL" }, (error, stdout, stderr) => {
       if (error) {
         let customErrorMsg = `Command failed: ${cmd}\nError: ${error.message}\nStderr: ${stderr}`;
-        if (cmd.includes("ffmpeg") || cmd.includes("ffprobe")) {
+        if ((error as any).killed) {
+          customErrorMsg = `El comando superó el límite de ${Math.round(timeoutMs / 1000)}s y fue detenido. Command timed out after ${Math.round(timeoutMs / 1000)}s.`;
+        } else if (cmd.includes("ffmpeg") || cmd.includes("ffprobe")) {
           const isFfmpegMissing =
             error.message.includes("not recognized") ||
             error.message.includes("no se reconoce") ||
