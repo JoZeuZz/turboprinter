@@ -211,7 +211,11 @@ index/stats/list command — the old `library_cli` is gone.
   `created_at` from the body and validates `project_folder_name` against the
   shape the server itself generates. The containment rules live in
   `src/server/pathSafety.ts` and are unit-tested in
-  `src/__tests__/server/pathSafety.test.ts`.
+  `src/__tests__/server/pathSafety.test.ts`. Media filenames also reject
+  shell metacharacters (`"`, `` ` ``, `$`, `\`) and control characters, since
+  they are interpolated into a double-quoted ffprobe/ffmpeg shell word; the
+  local video upload endpoint rejects such names outright rather than
+  storing them.
 
 ### Example nginx reverse proxy (with basic auth + TLS)
 

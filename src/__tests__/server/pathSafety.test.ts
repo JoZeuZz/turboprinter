@@ -33,6 +33,33 @@ describe("isSafeMediaFilename", () => {
     expect(isSafeMediaFilename(42)).toBe(false);
     expect(isSafeMediaFilename({})).toBe(false);
   });
+  it("rejects a filename containing a double quote", () => {
+    expect(isSafeMediaFilename('a";id;".mp4')).toBe(false);
+  });
+  it("rejects command substitution", () => {
+    expect(isSafeMediaFilename("a$(id).mp4")).toBe(false);
+  });
+  it("rejects backtick substitution", () => {
+    expect(isSafeMediaFilename("a`id`.mp4")).toBe(false);
+  });
+  it("rejects a backslash", () => {
+    expect(isSafeMediaFilename("a\\x.mp4")).toBe(false);
+  });
+  it("rejects a newline", () => {
+    expect(isSafeMediaFilename("a\nid.mp4")).toBe(false);
+  });
+  it("still accepts an accented filename with parentheses", () => {
+    expect(isSafeMediaFilename("vídeo (1).mp4")).toBe(true);
+  });
+  it("still accepts a filename with a space and a hyphen", () => {
+    expect(isSafeMediaFilename("my clip-02.webm")).toBe(true);
+  });
+  it("still accepts a filename with an apostrophe", () => {
+    expect(isSafeMediaFilename("o'brien.mp4")).toBe(true);
+  });
+  it("still accepts a filename with a semicolon, since it is not shell-special inside double quotes", () => {
+    expect(isSafeMediaFilename("a;b.mp4")).toBe(true);
+  });
 });
 
 describe("resolveWithinDir", () => {

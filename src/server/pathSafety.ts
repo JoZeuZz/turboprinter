@@ -11,14 +11,27 @@ import path from "path";
  *  src/server/render.ts when listing storage/local_videos. */
 export const MEDIA_EXTENSIONS = [".mp4", ".mkv", ".avi", ".mov", ".webm"];
 
+/** Characters that break out of, or are interpreted inside, a double-quoted
+ *  shell word. The ffprobe/ffmpeg call sites interpolate filenames into
+ *  `"..."`, so any of these turns a filename into command syntax. */
+const SHELL_UNSAFE = /["$`\\]/;
+
+/** Control characters, including NUL and newline. A newline terminates a
+ *  command just as reliably as a semicolon. */
+// eslint-disable-next-line no-control-regex
+const CONTROL_CHARS = /[\x00-\x1f\x7f]/;
+
 /**
- * True when `name` is a bare filename safe to join onto a media directory:
- * no directory separators, no traversal, no NUL, and a known video extension.
+ * True when `name` is a bare filename safe to join onto a media directory
+ * and to interpolate into a double-quoted shell word: no directory
+ * separators, no traversal, no control characters, no shell metacharacters,
+ * and a known video extension.
  */
 export function isSafeMediaFilename(name: unknown): name is string {
   if (typeof name !== "string") return false;
   if (name.length === 0 || name.length > 255) return false;
-  if (name.includes("\0")) return false;
+  if (CONTROL_CHARS.test(name)) return false;
+  if (SHELL_UNSAFE.test(name)) return false;
   if (name !== path.basename(name)) return false;
   if (name === "." || name === "..") return false;
   return MEDIA_EXTENSIONS.includes(path.extname(name).toLowerCase());

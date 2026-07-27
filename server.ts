@@ -72,6 +72,11 @@ const storage = multer.diskStorage({
   },
   filename: (_req, file, cb) => {
     const safeName = path.basename(file.originalname);
+    if (!isSafeMediaFilename(safeName)) {
+      // Un nombre que el pipeline nunca podrá usar no debe llegar al disco:
+      // acabaría interpolado en una línea de comandos ffprobe.
+      return cb(new Error("Nombre de archivo de video no válido."), "");
+    }
     cb(null, safeName);
   }
 });
