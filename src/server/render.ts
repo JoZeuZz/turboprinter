@@ -744,14 +744,34 @@ export function createRenderer(deps: RenderDeps) {
       }
       const audioFilter = buildAudioMixFilter(Boolean(localNarrationPath), Boolean(localMusicPath), voiceVolume, musicVolume);
 
-      let mixCmd = "";
       const limitDurationOpt = narrationDuration > 0 ? `-t ${narrationDuration}` : "";
+      const buildMixCmd = (filter: string): string =>
+        `ffmpeg -y -i "${concatOutput}" ${audioInputs.join(" ")} -filter_complex "${filter}" -map 0:v -map "[a]" -c:v copy -c:a aac ${limitDurationOpt} "${audioMixedOutput}"`;
+
+      let mixCmd = "";
       if (audioFilter) {
-        mixCmd = `ffmpeg -y -i "${concatOutput}" ${audioInputs.join(" ")} -filter_complex "${audioFilter}" -map 0:v -map "[a]" -c:v copy -c:a aac ${limitDurationOpt} "${audioMixedOutput}"`;
+        mixCmd = buildMixCmd(audioFilter);
       } else {
         mixCmd = `ffmpeg -y -i "${concatOutput}" -f lavfi -i anullsrc=r=44100:cl=stereo -c:v copy -c:a aac -shortest ${limitDurationOpt} "${audioMixedOutput}"`;
       }
-      await executeCommand(mixCmd);
+
+      try {
+        await executeCommand(mixCmd);
+      } catch (err: any) {
+        const isDucked = audioFilter.includes("sidechaincompress");
+        if (!isDucked) throw err;
+        // Some FFmpeg builds ship without sidechaincompress. Fall back to the
+        // flat mix rather than losing the whole render.
+        logTask(taskId, "WARNING", "RENDER", "BGM ducking unavailable, falling back to a flat audio mix.");
+        const flatFilter = buildAudioMixFilter(
+          Boolean(localNarrationPath),
+          Boolean(localMusicPath),
+          voiceVolume,
+          musicVolume,
+          0
+        );
+        await executeCommand(buildMixCmd(flatFilter));
+      }
       updateTaskState(90, null, null);
 
       // Burn Subtitles
