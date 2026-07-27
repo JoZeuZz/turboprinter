@@ -2590,8 +2590,10 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
   // Serve local videos from whatever folder is active (either root local_videos or storage/local_videos)
   app.use("/storage/local_videos", express.static(LOCAL_VIDEOS_DIR));
 
-  // Serve storage directory statically
-  app.use("/storage", express.static(path.join(process.cwd(), "storage")));
+  // Serve only the rendered output. The rest of storage/ holds OAuth refresh
+  // tokens (youtube-credentials.json, tiktok-credentials.json) and the project
+  // database — never web-serve the directory root.
+  app.use("/storage/renders", express.static(path.join(process.cwd(), "storage", "renders")));
 
   // TikTok Domain/URL Verification Endpoint
   app.get("/:filename", (req: any, res: any, next: any) => {
