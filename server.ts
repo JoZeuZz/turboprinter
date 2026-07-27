@@ -66,10 +66,10 @@ if (fs.existsSync(path.join(process.cwd(), "local_videos"))) {
 }
 
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
+  destination: (_req, _file, cb) => {
     cb(null, LOCAL_VIDEOS_DIR);
   },
-  filename: (req, file, cb) => {
+  filename: (_req, file, cb) => {
     const safeName = path.basename(file.originalname);
     cb(null, safeName);
   }
@@ -453,7 +453,7 @@ async function startServer() {
   app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
   // Add Request logger middleware
-  app.use((req, res, next) => {
+  app.use((req, _res, next) => {
     console.log(`[API] ${req.method} ${req.url}`);
     next();
   });
@@ -464,7 +464,7 @@ async function startServer() {
   };
 
   // 1. Config APIs
-  app.get("/api/v1/config", wrap(async (req: any, res: any) => {
+  app.get("/api/v1/config", wrap(async (_req: any, res: any) => {
     {
       const creds = loadChannels();
       const activeChannel = getActiveChannel(creds);
@@ -500,7 +500,7 @@ async function startServer() {
     });
   }));
 
-  app.get("/api/v1/local-videos", wrap(async (req: any, res: any) => {
+  app.get("/api/v1/local-videos", wrap(async (_req: any, res: any) => {
     try {
       const files = fs.readdirSync(LOCAL_VIDEOS_DIR);
       const videoExtensions = [".mp4", ".mkv", ".avi", ".mov", ".webm"];
@@ -702,23 +702,6 @@ async function startServer() {
     });
   }));
 
-  function getFallbackScript(subject: string, paragraph_number: number): string {
-    const fallbackParagraphs = [
-      `Bienvenidos a este viaje fascinante y profundamente revelador por el maravilloso mundo de ${subject}. En este relato, nos disponemos a desentrañar los secretos más asombrosos, las leyendas ocultas y los acontecimientos históricos que han dado forma a este tema y que despiertan una inmensa pasión en todos aquellos que se atreven a explorarlo con una mirada curiosa y atenta.`,
-      `Al adentrarnos en las profundidades de ${subject}, comenzamos a descubrir detalles verdaderamente sorprendentes que desafían lo unconventional y cambian por completo nuestra percepción cotidiana de la realidad. Es un espectáculo absolutamente asombroso contemplar cómo la ciencia rigurosa, la majestuosidad de la naturaleza indómita y la chispa inagotable de la creatividad humana se entrelazan de manera perfecta para crear algo único.`,
-      `Cada rincón y cada época relacionados con ${subject} albergan lecciones valiosas de perseverancia, ingenio y misterio. A través de los años, grandes pensadores y exploradores dedicaron sus vidas enteras a comprender estas dinámicas, dejando un legado imborrable que hoy en día continúa inspirando a nuevas generaciones de entusiastas en todo el planeta.`,
-      `Además, el impacto cultural y social de ${subject} no solo se limita al pasado, sino que sigue moldeando activamente nuestras interacciones modernas y la forma en que concebimos el mañana. Comprender su esencia misma nos permite conectar con un propósito mayor, reconociendo las influencias invisibles pero poderosas que guían constantemente nuestras decisiones y nuestra evolución colectiva.`,
-      `Es fascinante observar cómo las diferentes corrientes de pensamiento han convergido en torno a ${subject}, aportando cada una de ellas una perspectiva valiosa y única que enriquece el debate global. Desde las aplicaciones más prácticas del día a día hasta las teorías más abstractas de la filosofía y el arte, este campo de estudio se consolida como un puente indispensable entre diversas disciplinas del saber humano.`,
-      `A medida que la tecnología y la investigación avanzan a pasos agigantados, nuevas dimensiones de ${subject} comienzan a revelarse ante nuestros ojos, planteando desafíos emocionantes y oportunidades sin precedentes. Los expertos coinciden en que apenas estamos rozando la superficie de lo que es posible alcanzar, lo que convierte a esta disciplina en un terreno sumamente fértil para la innovación y el descubrimiento continuo.`,
-      `Por otro lado, la vertiente humana de ${subject} nos recuerda la importancia de la empatía, la colaboración y el esfuerzo compartido en la construcción de un futuro más próspero. Las grandes historias de éxito asociadas a este ámbito suelen estar protagonizadas por personas comunes que, impulsadas por una visión extraordinaria, lograron superar barreras aparentemente insalvables.`,
-      `Al reflexionar con mayor profundidad sobre la trascendencia de ${subject}, nos damos cuenta de que cada pequeño avance en esta materia contribuye a tejer una red global de conocimiento interconectado. Esta sinergia no solo acelera el progreso técnico, sino que también fomenta un entendimiento más profundo y compasivo entre las diversas comunidades que cohabitan en nuestro planeta.`,
-      `De cara a los próximos años, se vislumbra que ${subject} jugará un papel crucial en la resolución de algunos de los interrogantes más complejos del nuevo milenio. Estar preparados para comprender estos cambios y adaptarnos a ellos con flexibilidad será, sin duda, una de las habilidades más valiosas para las generaciones venideras.`,
-      `Esperamos sinceramente que hayan disfrutado al máximo de este enriquecedor recorrido lleno de aprendizaje y asombro por el universo de ${subject}. Los invitamos cordialmente a seguir explorando este y otros enigmas con la mente abierta, recordando siempre que la curiosidad insaciable es el verdadero motor que impulsa el conocimiento humano hacia horizontes infinitos.`
-    ];
-
-    return fallbackParagraphs.slice(0, paragraph_number).join("\n\n");
-  }
-
   app.post("/api/v1/voices/preview", wrap(async (req: any, res: any) => {
     const voice_name = req.body.voice_name || "";
     const text = req.body.text || "Hola, probando esta voz.";
@@ -820,7 +803,7 @@ CRÍTICO: No utilices NINGÚN tipo de formato de texto como asteriscos (* o **),
   }));
 
   app.post("/api/v1/terms", wrap(async (req: any, res: any) => {
-    const { video_subject, video_script = "" } = req.body;
+    const { video_script = "" } = req.body;
     const llmProvider = process.env.LLM_PROVIDER || "gemini";
     if (llmProvider === "gemini" && !process.env.GEMINI_API_KEY) {
       throw new Error("No Gemini API key configured. Please set GEMINI_API_KEY.");
@@ -928,7 +911,11 @@ Instrucciones:
     }
 
     // Save credentials to local storage
-    const creds = upsertChannel(loadChannels(), { channelId, channelName, tokens });
+    const creds = upsertChannel(loadChannels(), {
+      channelId,
+      channelName,
+      tokens: tokens as unknown as Record<string, unknown>,
+    });
     saveChannels(process.cwd(), creds);
 
     // Send postMessage to closing popup
@@ -960,7 +947,7 @@ Instrucciones:
   }));
 
   // YouTube OAuth Status Endpoint
-  app.get("/api/v1/youtube/status", wrap(async (req: any, res: any) => {
+  app.get("/api/v1/youtube/status", wrap(async (_req: any, res: any) => {
     const creds = loadChannels();
     const activeChannel = getActiveChannel(creds);
     return res.json({
@@ -976,7 +963,7 @@ Instrucciones:
   }));
 
   // YouTube OAuth Disconnect Endpoint
-  app.post("/api/v1/youtube/disconnect", wrap(async (req: any, res: any) => {
+  app.post("/api/v1/youtube/disconnect", wrap(async (_req: any, res: any) => {
     saveChannels(process.cwd(), { activeChannelId: null, channels: [] });
     return res.json({ status: 200, message: "ok" });
   }));
@@ -1205,7 +1192,7 @@ Instrucciones:
   }));
 
   // TikTok OAuth Status Endpoint
-  app.get("/api/v1/tiktok/status", wrap(async (req: any, res: any) => {
+  app.get("/api/v1/tiktok/status", wrap(async (_req: any, res: any) => {
     const tkCreds = loadTiktokChannels();
     const activeChannel = getActiveTiktokChannel(tkCreds);
 
@@ -1222,7 +1209,7 @@ Instrucciones:
   }));
 
   // TikTok OAuth Disconnect Endpoint
-  app.post("/api/v1/tiktok/disconnect", wrap(async (req: any, res: any) => {
+  app.post("/api/v1/tiktok/disconnect", wrap(async (_req: any, res: any) => {
     clearTiktokCredentials(process.cwd());
     return res.json({ status: 200, message: "ok" });
   }));
@@ -1375,12 +1362,12 @@ Instrucciones:
     }
   };
 
-  app.get("/api/v1/musics", wrap(async (req: any, res: any) => {
+  app.get("/api/v1/musics", wrap(async (_req: any, res: any) => {
     res.json({ status: 200, message: "ok", data: { files: BGM_FILES } });
   }));
 
   // 5. Projects APIs
-  app.get("/api/v1/projects", wrap(async (req: any, res: any) => {
+  app.get("/api/v1/projects", wrap(async (_req: any, res: any) => {
     // Clean up proyectos whose render folder was deleted from disk. Only
     // proyectos that actually completed a render (p.videos is populated) are
     // eligible: a proyecto mid-pipeline has a project_folder_name stamped by
@@ -1482,7 +1469,9 @@ CRÍTICO: No utilices NINGÚN tipo de formato de texto como asteriscos (* o **),
   }));
 
   app.post("/api/v1/projects/from-reddit", wrap(async (req: any, res: any) => {
-    const { url, title, body, language = "es" } = req.body;
+    // El campo `url` del body se acepta pero todavía no se usa: no existe
+    // cliente de Reddit en el repo. Ver docs/architecture/008-reddit-ingest.md.
+    const { title, body, language = "es" } = req.body;
     const projectId = "proj_" + Math.random().toString(36).substring(2, 9);
     const script = cleanScriptSymbols(`${title}\n\n${body}`);
 
@@ -1625,7 +1614,7 @@ CRÍTICO: No utilices NINGÚN tipo de formato de texto como asteriscos (* o **),
     if (process.env.GEMINI_API_KEY || currentLlmProvider === "lmstudio" || currentLlmProvider === "openai") {
       try {
         const prompt = `Analiza las siguientes oraciones de un guión de video en idioma "${p.language || "es"}":
-${sentences.map((s, i) => `Segmento ${i + 1}: "${s}"`).join("\n")}
+${sentences.map((s: string, i: number) => `Segmento ${i + 1}: "${s}"`).join("\n")}
 
 Tema general del video: "${p.topic || ""}"
 Palabras clave/Términos de video preferidos del usuario: "${userTerms.join(", ")}"
@@ -2115,7 +2104,7 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
 
         // Find the segment that covers the midpoint of this video item's time range
         const clipMidpoint = currentStartSec + (usedDuration / 2);
-        const activeSeg = segments.find(s => {
+        const activeSeg = segments.find((s: any) => {
           const sStart = s.start_sec !== undefined ? s.start_sec : 0;
           const sEnd = s.end_sec !== undefined ? s.end_sec : sStart + (s.target_duration_sec || 5);
           return clipMidpoint >= sStart && clipMidpoint <= sEnd;
@@ -2615,7 +2604,7 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
     });
   }));
 
-  app.get("/api/v1/projects/:id/assets/*", wrap(async (req: any, res: any) => {
+  app.get("/api/v1/projects/:id/assets/*", wrap(async (_req: any, res: any) => {
     // Redirect asset fetch to online resource
     res.redirect("https://videos.pexels.com/video-files/3248319/3248319-hd_1920_1080_25fps.mp4");
   }));
@@ -2659,13 +2648,13 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
-    app.get('*', (req, res) => {
+    app.get('*', (_req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }
 
   // Error handler middleware
-  app.use((err: any, req: any, res: any, next: any) => {
+  app.use((err: any, _req: any, res: any, _next: any) => {
     console.error("[Server Error]", err);
     res.status(500).json({ status: 500, message: err.message || "Internal Server Error", data: null });
   });
