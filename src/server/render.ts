@@ -106,6 +106,23 @@ export const buildAudioMixFilter = (
   return "";
 };
 
+/**
+ * Flags that bound the audio mix output.
+ *
+ * The BGM input is opened with `-stream_loop -1`, i.e. infinite. Without an
+ * explicit bound, a mix that has BGM but no narración would make ffmpeg write
+ * until the disk fills. The narración, when present, provides the bound —
+ * either its measured duration or, failing that, `amix=duration=first`.
+ */
+export const buildMixDurationArgs = (hasNarration: boolean, narrationDuration: number): string => {
+  if (narrationDuration > 0) return `-t ${narrationDuration}`;
+  // Sin narración el único audio es la BGM en bucle infinito: hay que cortar
+  // con el vídeo, que sí es finito.
+  if (!hasNarration) return "-shortest";
+  // Con narración pero sin duración medida, amix=duration=first ya acota.
+  return "";
+};
+
 export function pickBgm(opts: {
   bgmType: string;
   bgmFile?: string;
@@ -764,7 +781,7 @@ export function createRenderer(deps: RenderDeps) {
       }
       const audioFilter = buildAudioMixFilter(Boolean(localNarrationPath), Boolean(localMusicPath), voiceVolume, musicVolume);
 
-      const limitDurationOpt = narrationDuration > 0 ? `-t ${narrationDuration}` : "";
+      const limitDurationOpt = buildMixDurationArgs(Boolean(localNarrationPath), narrationDuration);
       const buildMixCmd = (filter: string): string =>
         `ffmpeg -y -i "${concatOutput}" ${audioInputs.join(" ")} -filter_complex "${filter}" -map 0:v -map "[a]" -c:v copy -c:a aac ${limitDurationOpt} "${audioMixedOutput}"`;
 
