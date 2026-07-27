@@ -99,6 +99,8 @@ El proyecto es una aplicación **Full-Stack** que genera videos automáticos en 
 
 ## 2. MAPA DE ARCHIVOS CLAVE Y SU PROPÓSITO
 
+> El glosario canónico de términos está en `CONTEXT.md`.
+
 ### Frontend (`/src`)
 
 *   `src/pages/Workspace.tsx`: El orquestador principal de la mesa de trabajo. Maneja la carga de proyectos y despacha la navegación entre pantallas basándose en si existe una línea de tiempo (`has_timeline`).
@@ -133,9 +135,30 @@ El proyecto es una aplicación **Full-Stack** que genera videos automáticos en 
 
     *   `app.post("/api/v1/projects/:id/render")`: Orquesta el proceso real de renderizado con FFmpeg.
 
-    *   `generateAss(...)`: Genera el archivo `.ass` para quemar subtítulos avanzados con soporte de cajas de fondo sólidas, traslúcidas u opacas, alineación exacta y soporte de fuentes personalizadas.
-
     *   `fonts.conf`: Archivo xml autogenerado en tiempo de ejecución para inyectar correctamente fuentes cargadas localmente (`public/fonts/` y `resource/fonts/`) en libass de FFmpeg.
+
+### Backend modular (`/src/server`)
+
+*   `render.ts`: pipeline FFmpeg completo (formateo de clips, concat, mezcla de audio, quemado de subtítulos ASS).
+
+*   `pexels.ts`: búsqueda de material y unicidad de clips.
+
+*   `tts.ts`: síntesis de voz (Edge TTS).
+
+*   `llm.ts`: proveedores LLM (Gemini y endpoints OpenAI-compatibles).
+
+*   `projectsRepo.ts`: persistencia en `storage/projects_db.json`.
+
+*   `youtubeChannels.ts`: credenciales OAuth por canal de YouTube.
+
+*   `tiktokCredentials.ts`: credenciales OAuth por cuenta de TikTok.
+
+*   `envFile.ts`: escritura de `.env`.
+
+### Lógica pura compartida (`/src/lib`)
+
+*   `src/lib/subtitleLayout.ts`: el motor único de subtítulos (splitting, geometría, color, emisión ASS/SRT). `generateAss(...)` vive aquí, no en `server.ts`; `server.ts` importa de este módulo (`server.ts:8-12`). Regla del glosario canónico (`CONTEXT.md`): toda lógica de subtítulos vive en `src/lib/subtitleLayout.ts`, nunca duplicada en un adapter.
+
 
   
 
