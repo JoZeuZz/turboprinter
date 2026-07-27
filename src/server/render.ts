@@ -7,6 +7,7 @@ import fs from "fs";
 import path from "path";
 import { exec } from "child_process";
 import { generateAss, splitTextIntoTikTokSubtitles } from "../lib/subtitleLayout";
+import { isSafeMediaFilename } from "./pathSafety";
 
 export interface BgmFileEntry {
   file: string;
@@ -310,6 +311,12 @@ export function createRenderer(deps: RenderDeps) {
 
         if (chosenLocalFiles.length > 0) {
           for (const filename of chosenLocalFiles) {
+            // Defensa en profundidad: un proyecto guardado antes de la validación
+            // de entrada puede traer un nombre que acabaría en una shell.
+            if (!isSafeMediaFilename(filename)) {
+              logTask(taskId, "WARNING", "VIDEO_ASSET", `Nombre de archivo local ignorado por no ser válido.`);
+              continue;
+            }
             const existingMed = (p.selected_media || []).find((m: any) => path.basename(m.source_url || m.asset_url || "") === filename);
             if (existingMed) {
               if (!seen.has(existingMed.source_url)) {
