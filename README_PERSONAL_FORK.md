@@ -10,6 +10,7 @@ The LLM provider is configurable via `LLM_PROVIDER` (`gemini`, `lmstudio` or
 OpenAI/Anthropic API key is required at runtime**, and ChatGPT/Claude web are
 never automated.
 
+
 ---
 
 ## 2. Install on an LXC (Debian/Ubuntu)
@@ -18,242 +19,186 @@ never automated.
 
 ```bash
 # System dependencies
-apt update
-apt install -y git ffmpeg python3 python3-venv build-essential curl imagemagick
+apt update && apt install -y git ffmpeg curl
 
-# uv (dependency/runtime manager; project uses pyproject.toml + uv.lock)
-curl -LsSf https://astral.sh/uv/install.sh | sh
-#   ^ then restart your shell, or: source $HOME/.local/bin/env
+# Node 20 (via nodesource or nvm — pick one and document it)
+# <!-- TODO: verify the exact install command used on the target LXC -->
+
+# Clone your fork
+git clone https://github.com/JoZeuZz/turboprinter.git /opt/turboprinter
+cd /opt/turboprinter
+
+# Install the locked dependency tree
+npm ci
 ```
 
-Python must be **>=3.11,<3.13** (3.12 recommended). `uv` will fetch a matching
-interpreter automatically if your system Python is outside that range.
-
-```bash
-# Clone your fork (origin = your fork, upstream = original)
-git clone https://github.com/JoZeuZz/turboprinter.git
-cd turboprinter
-git remote add upstream https://github.com/harry0703/MoneyPrinterTurbo.git   # if missing
-
-# Install the locked environment
-uv sync --frozen        # or: uv sync   (to re-resolve)
-```
+`ffmpeg` and `ffprobe` must be on `PATH` — the render pipeline
+(`src/server/render.ts`) shells out to them directly.
 
 ---
 
-## 3. Configure `config.toml`
+## 3. Configure `.env`
+
+Create a `.env` file in the project root (it is git‑ignored — never commit it,
+it holds your keys). **Never write a real key value in this document** — use
+an empty value or an obvious placeholder like `<your-key>`.
+
+| Variable | Purpose |
+|---|---|
+| `PEXELS_API_KEY` | Pexels stock search |
+| `PEXELS_KEY` | alternate name read as a fallback for `PEXELS_API_KEY` (undocumented in `.env.example`) |
+| `GEMINI_API_KEY` | Gemini LLM |
+| `LLM_PROVIDER` | `gemini` \| `lmstudio` \| `openai` |
+| `OPENAI_API_BASE` | OpenAI‑compatible endpoint (e.g. LM Studio) |
+| `OPENAI_API_KEY` | key for the OpenAI‑compatible endpoint |
+| `OPENAI_MODEL` | model name for the OpenAI‑compatible endpoint |
+| `YOUTUBE_CLIENT_ID` / `YOUTUBE_CLIENT_SECRET` | YouTube OAuth |
+| `TIKTOK_CLIENT_KEY` / `TIKTOK_CLIENT_SECRET` | TikTok OAuth |
+
+Example:
 
 ```bash
-cp config.example.toml config.toml
+PEXELS_API_KEY=<your-key>
+LLM_PROVIDER=gemini
+GEMINI_API_KEY=<your-key>
 ```
 
-`config.toml` is **git‑ignored** (never commit it — it holds your keys). Key
-points for a personal, keyless‑at‑runtime setup:
-
-- **LLM provider (script/keywords):** prefer local/self‑hosted. Examples:
-  - **Ollama:** `llm_provider = "ollama"`, set `ollama_model_name`. The fork
-    auto‑detects the host from inside containers.
-  - **Pollinations:** `llm_provider = "pollinations"` (free, optional key).
-  - **OpenAI‑compatible gateway** (LM Studio, OpenRouter, etc.): set
-    `llm_provider = "openai"` + `openai_base_url` + `openai_model_name`.
-  - **Manual:** leave the script field and paste your own script in the
-    WebUI/CLI (`--video-script`) — no provider needed.
-- **Subtitles:** `subtitle_provider = "edge"` (online) or `"whisper"` (local,
-  CPU). Whisper runs on CPU by default (`[whisper] device = "CPU"`,
-  `compute_type = "int8"`).
-- **Stock material:** add `pexels_api_keys` / `pixabay_api_keys` /
-  `coverr_api_keys` only if you want online sources; otherwise rely on the
-  **local library** (section 6).
-- **Quality stack:** set `[quality] enabled = true` and pick a `profile`,
-  `target_platform`, `subtitle_style`, etc.
+`config.toml` is a Python‑era leftover. The server still parses a small
+allow-listed subset of its keys for backwards compatibility (see section 7),
+but it should **not** be used to configure new setups — use `.env`.
 
 ---
 
-## 3b. LLM providers: DeepSeek (primary) & Gemini (fallback)
+## 3b. LLM providers
 
-This fork optimizes two cloud LLM providers for Spanish content while keeping
-Ollama, LiteLLM and all upstream providers intact. No OpenAI/Anthropic API key
-is required at runtime, and ChatGPT/Claude web are never automated.
+LLM support lives in `src/server/llm.ts` (91 lines). It supports **Gemini** and
+any **OpenAI‑compatible endpoint**, including a local one such as LM Studio.
+The runtime does **not** require an OpenAI or Anthropic API key — that is an
+explicit project constraint — and ChatGPT/Claude web are never automated.
 
-### Recommended `config.toml` (no real keys committed)
+Select the provider with `LLM_PROVIDER` in `.env`:
 
-```toml
-[app]
-# Set DeepSeek as the main provider for this personal fork.
-llm_provider = "deepseek"
-
-# ----- DeepSeek (primary, low cost) -----
-deepseek_api_key = ""                 # paste locally, never commit
-deepseek_base_url = "https://api.deepseek.com"
-deepseek_model_name = "deepseek-v4-flash"
-deepseek_thinking_enabled = false     # keep voiceover clean, avoid reasoning cost
-deepseek_reasoning_effort = "high"    # only used when thinking is enabled
-
-# ----- Gemini (fallback / quality comparison) -----
-gemini_api_key = ""
-gemini_model_name = "gemini-2.5-flash"
-gemini_base_url = ""                  # optional custom endpoint
-
-# ----- Optional fallback chain + timeouts -----
-llm_fallback_providers = ["gemini"]   # [] disables fallback (default)
-llm_request_timeout_seconds = 120
-llm_connect_timeout_seconds = 30
-```
-
-Notes:
-
-- `deepseek_model_name` defaults to `deepseek-v4-flash` if left empty.
-  `deepseek-chat` / `deepseek-reasoner` still work (V3.2 non‑thinking / thinking
-  modes) but trigger a warning recommending you verify model availability in the
-  [official docs](https://api-docs.deepseek.com).
-- With `deepseek_thinking_enabled = false`, the client sends
-  `extra_body={"thinking": {"type": "disabled"}}`. Set it to `true` to enable
-  step‑by‑step reasoning plus `deepseek_reasoning_effort`. If a model/gateway
-  rejects those params, the error message tells you to disable thinking or fix
-  the model name.
-- `<think>…</think>` blocks are always stripped before scripts, keywords,
-  subtitles or TTS, regardless of provider.
-
-### Fallback behaviour
-
-- Empty `llm_fallback_providers` → identical to upstream (single provider).
-- When set, the primary `llm_provider` is tried first, then each fallback in
-  order. A misconfigured or failing provider is skipped (with a log line, never
-  the API key) and the next one is tried. The primary and duplicates are
-  de‑duplicated, so there is no infinite loop.
-
-### Recommended workflow
-
-1. **Script:** generate with DeepSeek, *or* paste a manual script from
-   ChatGPT/Claude into the WebUI script field / CLI `--video-script`.
-2. **Keywords & metadata:** generate with DeepSeek (cheap, clean output).
-3. **Fallback:** enable Gemini in `llm_fallback_providers` (or the WebUI
-   *AI Provider (avanzado)* expander) to compare quality when DeepSeek output
-   isn't convincing.
-4. **Render:** run the pipeline as usual.
-
-Per‑run overrides without editing `config.toml`:
+- `LLM_PROVIDER=gemini` + `GEMINI_API_KEY`
+- `LLM_PROVIDER=openai` (or `lmstudio`) + `OPENAI_API_BASE` + `OPENAI_API_KEY`
+  + `OPENAI_MODEL` — points at any OpenAI‑compatible endpoint, local or
+  hosted.
 
 ```bash
-uv run python cli.py --video-subject "..." --llm-provider gemini --llm-model gemini-2.5-flash
+# .env — Gemini
+LLM_PROVIDER=gemini
+GEMINI_API_KEY=<your-key>
 ```
 
-### Costs & security
+```bash
+# .env — local OpenAI-compatible endpoint (e.g. LM Studio)
+LLM_PROVIDER=lmstudio
+OPENAI_API_BASE=http://127.0.0.1:1234/v1
+OPENAI_API_KEY=<not-required-by-most-local-servers>
+OPENAI_MODEL=<model-name-loaded-in-lm-studio>
+```
 
-- DeepSeek is usually the economical option, but **verify current pricing in the
-  official docs before intensive use** — model names and prices change.
-- Never commit `config.toml` or paste real API keys into the repository. The
-  WebUI masks keys and the service layer redacts credentials from error messages
-  and logs.
-- Do not expose the WebUI publicly without authentication / a reverse proxy
-  (see section 7).
-
-### LLM Provider Registry (Plan 011a)
-
-`app/services/quality/llm_providers/` defines `OpenAICompatProvider`, `GeminiProvider`, and a `get_provider()` dispatcher. Currently, `_generate_response_single` in `llm.py` keeps known providers inline (openai, groq, deepseek, etc.) to preserve `test_llm.py` test patches on `llm.OpenAI`. The registry routes only unknown/custom provider names.
-
-To complete the migration: update `test_llm.py` to patch `openai_compat.OpenAI` instead of `llm.OpenAI`, then remove the `_inline` set from `_generate_response_single`.
+There is no DeepSeek‑ or Groq‑specific code path in the TypeScript server.
+Never commit `.env` or paste real API keys into the repository.
 
 ---
 
 ## 4. Persistent storage (Proxmox)
 
-The app writes only under the project's `storage/` (tasks, cache, local videos,
-local library) and downloads Whisper models under `models/`. Keep these on a
-**persistent mount** so they survive container rebuilds.
+The app writes only under the project's `storage/`:
+
+- `storage/projects_db.json` — the proyecto database
+- `storage/renders/<tema>/<proyecto>/` — render output and cache
+- `storage/local_videos/` — the local material library
+- `storage/youtube-credentials.json`, `storage/tiktok-credentials.json` —
+  OAuth refresh tokens
+
+Keep `storage/` on a **persistent mount** so it survives container rebuilds.
 
 Suggested Proxmox bind mounts (host → container):
 
 ```
 /tank/mpt/storage   ->  /opt/turboprinter/storage
-/tank/mpt/models    ->  /opt/turboprinter/models
-/tank/mpt/config    ->  /opt/turboprinter/config.toml   (single file)
+/tank/mpt/env       ->  /opt/turboprinter/.env   (single file)
 ```
 
-`storage/`, `models/`, `config.toml` and `.claude/` are git‑ignored, so they are
-never committed.
+`storage/`, `.env` and `.claude/` are git‑ignored, so they are never
+committed.
 
 ---
 
-## 5. Run (WebUI / API / CLI)
+## 5. Run
 
 ```bash
-# WebUI (Streamlit)
-uv run streamlit run ./webui/Main.py --server.address 127.0.0.1 --server.port 8501
+# Development (Vite middleware, hot reload) — port 3000
+npm run dev
 
-# API (FastAPI/uvicorn)
-uv run python main.py            # binds to [listen_host]:[listen_port] from config
-
-# CLI (headless, ideal for LXC/cron)
-uv run python cli.py --video-subject "Tu tema" --quality-enabled \
-    --quality-profile high --quality-target-platform shorts \
-    --quality-subtitle-style premium --quality-content-package
-uv run python cli.py --help      # see the flag group
+# Production build, then run
+npm run build
+npm start                # node dist/server.cjs — port 3000
 ```
+
+There is **no CLI and no headless mode today**: everything goes through the
+HTTP API or the web UI. If you want headless automation, the routes under
+`/api/v1/projects/*` are the entry point.
 
 ---
 
 ## 6. Local material library
 
-Index your own (licensed/owned) clips so the pipeline prefers them over stock:
+There is **no CLI** for the local material library. Videos go into
+`storage/local_videos/`, either by:
 
-```bash
-uv run python -m app.services.quality.library_cli index /ruta/a/tus/videos \
-    --source user --license CC0 --tags naturaleza,ciudad
-uv run python -m app.services.quality.library_cli stats
-uv run python -m app.services.quality.library_cli list
-```
+- dropping files there directly, or
+- uploading through the web UI, which calls
+  `POST /api/v1/local-videos/upload`.
 
-The index lives in `storage/local_library/library.db`. With
-`[quality] enabled = true` and `prefer_local_assets = true`, indexed clips are
-ranked and used **before** downloading stock. Indexing **never moves or deletes**
-your media; `remove` only deletes the database row.
+`GET /api/v1/local-videos` lists what is currently there. There is no
+index/stats/list command — the old `library_cli` is gone.
 
-> Only index media you own or that is licensed for your use. Do not download
-> from platforms outside the supported stock APIs.
+> Only add media you own or that is licensed for your use.
 
 ---
 
 ## 7. Security hardening (personal deployment)
 
-This fork keeps upstream behaviour but documents and provides safer knobs.
-
-- **Do not bind to `0.0.0.0` unless you need LAN access.** The API default is
-  `listen_host = "0.0.0.0"`. For a single host, set `listen_host = "127.0.0.1"`
-  and reach the service via SSH tunnel or a reverse proxy. For Streamlit, use
-  `--server.address 127.0.0.1`.
-- **Reverse proxy + auth if exposed.** If you expose the WebUI/API beyond
-  localhost, put it behind nginx/Caddy with **HTTP auth or an identity proxy**
-  and TLS (see example below). Never expose it unauthenticated to the internet.
-- **CORS.** The API defaults to `allow_origins = ["*"]`. Restrict it by setting
-  the `CORS_ALLOWED_ORIGINS` environment variable (comma‑separated) to your real
-  origin(s), e.g. `CORS_ALLOWED_ORIGINS="https://video.tu-dominio.org"`.
-  With an empty allow-list the API falls back to wildcard origins **without**
-  `allow_credentials`; to enable credentials you must supply an explicit
-  origin allow-list via `CORS_ALLOWED_ORIGINS`.
-- **Secrets.** `config.toml` is git‑ignored; keep your keys only there. The fork
-  redacts the Pixabay key from logs and never logs full credentials.
-- **TLS verification** for stock/LLM requests stays **on** by default
-  (`tls_verify = true`). Only disable for trusted proxy/self‑signed setups.
-- **Explicit timeouts** are set on external requests (LLM, TTS, stock,
-  cross‑post) so a hung provider cannot stall a task indefinitely.
-- **Upload limits.** Set `max_upload_size_mb` in `config.toml` (0 = unlimited)
-  and/or enforce `client_max_body_size` at the reverse proxy.
-- **Task `_meta/` is listing-private, not access-controlled.** Private task
-  artifacts (`script.json`, `params`, `manifest.json`, `word_timestamps.json`,
-  `subtitle.srt`) live under `storage/tasks/<id>/_meta/` so they no longer appear
-  in the `/tasks/<id>/` directory listing. However, the `/tasks` static mount
-  still serves the whole task tree, so `/tasks/<id>/_meta/<file>` remains
-  fetchable by anyone who can reach the mount (the WebUI sidecar links point
-  there by design). These files may contain your pasted script and effective
-  render config — do **not** expose the API/WebUI publicly without the reverse
-  proxy + auth boundary described below.
-- **Redis** (optional, `enable_redis`) is for task state only — keep it private,
-  bound to localhost, with a password; do not expose it.
+- **The bind address and port are hardcoded.** The server binds
+  `0.0.0.0:3000` (`server.ts:392` sets `const PORT = 3000;`, `server.ts:2658`
+  calls `app.listen(PORT, "0.0.0.0", ...)`). There is no configuration knob
+  for either. A firewall or a reverse proxy is the only control today.
+- **No CORS middleware exists.** The TypeScript server has no CORS layer and
+  reads no environment variable to configure one — do not rely on one.
+- **There is no authentication on any route.** Do not expose the port beyond
+  localhost or a trusted LAN without a reverse proxy providing auth and TLS
+  (see example below).
+- **Secrets.** `.env` and `config.toml` are both git‑ignored; keep keys only
+  there and `chmod 600` them. `storage/youtube-credentials.json` and
+  `storage/tiktok-credentials.json` hold OAuth **refresh tokens** — treat
+  them as credentials and never web‑serve the `storage/` root.
+- **Config endpoints mask secrets.** `GET` and `PUT /api/v1/config` never
+  return secret values — they return the sentinel `__SAVED__` for any
+  populated secret. The client only `PUT`s fields the user actually edited,
+  so an untouched secret is never sent back and the stored value survives.
+  Implemented in `src/server/configMasking.ts`.
+- **Only two `storage/` subdirectories are web‑served**: `storage/renders`
+  and `storage/local_videos`. The `storage/` root mount was removed
+  precisely because the OAuth credential JSONs live inside it
+  (`server.ts:2609`, `server.ts:2614`).
+- **File permissions.** `.env` and both credential JSONs are written with
+  mode `0600` (`src/server/envFile.ts`, `youtubeChannels.ts`,
+  `tiktokCredentials.ts`).
+- **`config.toml` reaches the process only through an allow-list.**
+  `config.toml` keys reach `process.env` only through
+  `CONFIG_TOML_ENV_ALLOWLIST` in `server.ts`, not a blanket mirror that hands
+  every key in the file to every FFmpeg child process. The allow-list
+  includes `pexels_key`, an undocumented alias read as a fallback in
+  `getPexelsApiKey()` — this alias is real but not documented in
+  `.env.example`.
+- **None of the above adds authentication.** The API is still unauthenticated
+  by design. A reverse proxy or firewall remains the only access control.
 - **No `chmod 777`.** Run as a non‑root user inside the LXC; keep `storage/`
   writable only by that user.
 
-### Example nginx reverse proxy (WebUI, with basic auth + TLS)
+### Example nginx reverse proxy (with basic auth + TLS)
 
 ```nginx
 server {
@@ -269,10 +214,10 @@ server {
     auth_basic_user_file /etc/nginx/.htpasswd;   # htpasswd -c ...
 
     location / {
-        proxy_pass         http://127.0.0.1:8501;   # Streamlit
+        proxy_pass         http://127.0.0.1:3000;
         proxy_http_version 1.1;
         proxy_set_header   Host $host;
-        proxy_set_header   Upgrade $http_upgrade;    # Streamlit websockets
+        proxy_set_header   Upgrade $http_upgrade;
         proxy_set_header   Connection "upgrade";
         proxy_read_timeout 86400;
     }
@@ -281,46 +226,32 @@ server {
 
 ---
 
-## 8. systemd services
+## 8. systemd service
 
-`/etc/systemd/system/turboprinter-api.service`:
+`/etc/systemd/system/turboprinter.service`:
 
 ```ini
 [Unit]
-Description=Turboprinter API
+Description=TurboPrinter
 After=network.target
 
 [Service]
 User=turboprinter
 WorkingDirectory=/opt/turboprinter
-ExecStart=/root/.local/bin/uv run python main.py
-Restart=on-failure
-Environment=CORS_ALLOWED_ORIGINS=https://video.tu-dominio.org
-
-[Install]
-WantedBy=multi-user.target
-```
-
-`/etc/systemd/system/turboprinter-webui.service`:
-
-```ini
-[Unit]
-Description=Turboprinter WebUI
-After=network.target
-
-[Service]
-User=turboprinter
-WorkingDirectory=/opt/turboprinter
-ExecStart=/root/.local/bin/uv run streamlit run ./webui/Main.py --server.address 127.0.0.1 --server.port 8501
+EnvironmentFile=/opt/turboprinter/.env
+ExecStart=/usr/bin/node /opt/turboprinter/dist/server.cjs
 Restart=on-failure
 
 [Install]
 WantedBy=multi-user.target
 ```
+
+`npm run build` must have been run first — `npm start` (and this unit's
+`ExecStart`) runs the bundle in `dist/`.
 
 ```bash
 systemctl daemon-reload
-systemctl enable --now turboprinter-api turboprinter-webui
+systemctl enable --now turboprinter
 ```
 
 ---
@@ -329,10 +260,13 @@ systemctl enable --now turboprinter-api turboprinter-webui
 
 Back up regularly:
 
-- `config.toml` — your providers, keys and quality settings.
-- `storage/local_library/library.db` — the local material index.
-- Your local media folder(s) — the actual clips you index.
-- `storage/tasks/` — generated outputs you want to keep (large; prune as needed).
+- `.env` — your provider keys and configuration. **A backup of this file
+  contains secrets.**
+- `storage/projects_db.json` — the proyecto database.
+- `storage/renders/` — render output and cache.
+- `storage/local_videos/` — your local material library.
+- `storage/youtube-credentials.json`, `storage/tiktok-credentials.json` —
+  OAuth refresh tokens.
 
 A simple snapshot of the persistent mount (section 4) covers all of the above.
 
@@ -340,16 +274,8 @@ A simple snapshot of the persistent mount (section 4) covers all of the above.
 
 ## 11. Validation
 
-In the LXC, after install or a rebase:
-
 ```bash
-uv lock --check
-uv run python -m compileall app webui
-uv run pytest                          # full suite
-uv run python cli.py --help            # confirms the flag group
-docker compose config                  # only if you use the compose files
+npm run lint    # tsc --noEmit
+npm test        # vitest run
+npm run build   # verifies the production bundle still builds
 ```
-
-For a quick end‑to‑end check, run a short render and inspect the output plus
-`storage/tasks/<id>/content_package.{json,md}`, `word_timestamps.json` and
-`manifest.json` (effective render settings for the task).
