@@ -3,8 +3,11 @@ import {
   buildFontsConf,
   escapeAssPathForFilter,
   buildAudioMixFilter,
+  buildMixDurationArgs,
   duckDbToRatio,
   DEFAULT_DUCK_DB,
+  DEFAULT_COMMAND_TIMEOUT_MS,
+  PROBE_COMMAND_TIMEOUT_MS,
   pickBgm,
   correctPexelsCdnUrl,
 } from "../../server/render";
@@ -141,5 +144,43 @@ describe("pickBgm", () => {
       randomIndex: () => 1,
     });
     expect(item).toMatchObject({ url: "/songs/epic.mp3", title: "Epic" });
+  });
+});
+
+describe("buildMixDurationArgs", () => {
+  it("bounds the output to the measured narration duration", () => {
+    expect(buildMixDurationArgs(true, 12.5)).toBe("-t 12.5");
+  });
+
+  it("leaves narration without a measured duration unbounded here, relying on amix=duration=first", () => {
+    expect(buildMixDurationArgs(true, 0)).toBe("");
+  });
+
+  it("bounds a music-only mix with -shortest so the infinite BGM loop terminates (regression test for the hang)", () => {
+    // The BGM input is opened with -stream_loop -1 (infinite). With no
+    // narración to bound the output, ffmpeg would otherwise mix a finite
+    // video against an infinite audio stream and write until disk fills.
+    expect(buildMixDurationArgs(false, 0)).toBe("-shortest");
+  });
+
+  it("bounds the case with neither narration nor music, matching the anullsrc branch's own -shortest", () => {
+    expect(buildMixDurationArgs(false, 0)).toBe("-shortest");
+  });
+
+  it("prefers a measured duration over the music-only default", () => {
+    expect(buildMixDurationArgs(false, 8)).toBe("-t 8");
+  });
+});
+
+describe("command timeout ceilings", () => {
+  it("keeps the probe ceiling well below the default heavy-command ceiling", () => {
+    expect(PROBE_COMMAND_TIMEOUT_MS).toBeLessThan(DEFAULT_COMMAND_TIMEOUT_MS);
+  });
+
+  it("are both positive finite numbers", () => {
+    expect(Number.isFinite(DEFAULT_COMMAND_TIMEOUT_MS)).toBe(true);
+    expect(DEFAULT_COMMAND_TIMEOUT_MS).toBeGreaterThan(0);
+    expect(Number.isFinite(PROBE_COMMAND_TIMEOUT_MS)).toBe(true);
+    expect(PROBE_COMMAND_TIMEOUT_MS).toBeGreaterThan(0);
   });
 });
