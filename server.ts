@@ -369,6 +369,24 @@ let globalConfig = {
   }
 };
 
+// Only these config.toml keys are mirrored into process.env. A blanket mirror
+// hands every credential in the file to every child process the renderer
+// spawns; keep this list to what the code genuinely reads.
+const CONFIG_TOML_ENV_ALLOWLIST = new Set([
+  "pexels_api_key",
+  "pexels_api_keys",
+  "pexels_key", // undocumented alias read as a fallback in getPexelsApiKey()
+  "gemini_api_key",
+  "llm_provider",
+  "openai_api_base",
+  "openai_api_key",
+  "openai_model",
+  "youtube_client_id",
+  "youtube_client_secret",
+  "tiktok_client_key",
+  "tiktok_client_secret",
+]);
+
 async function startServer() {
   const app = express();
   const PORT = 3000;
@@ -407,7 +425,7 @@ async function startServer() {
               const value = rawValue.replace(/^["']|["']$/g, "").trim();
               if (value) {
                 const envKey = key.toUpperCase();
-                if (!process.env[envKey]) {
+                if (CONFIG_TOML_ENV_ALLOWLIST.has(key) && !process.env[envKey]) {
                   process.env[envKey] = value;
                   console.log(`[Config] Loaded ${envKey} from config.toml`);
                 }
