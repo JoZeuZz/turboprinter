@@ -61,7 +61,7 @@ export const saveTiktokChannels = (rootDir: string, creds: TiktokCredentials): v
   if (creds.verification_filename) data.verification_filename = creds.verification_filename;
   if (creds.verification_content) data.verification_content = creds.verification_content;
   fs.mkdirSync(path.dirname(credsPath), { recursive: true });
-  fs.writeFileSync(credsPath, JSON.stringify(data, null, 2));
+  fs.writeFileSync(credsPath, JSON.stringify(data, null, 2), { encoding: "utf-8", mode: 0o600 });
 };
 
 export const getActiveTiktokChannel = (creds: TiktokCredentials): TiktokChannel | null =>

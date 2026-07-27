@@ -56,7 +56,7 @@ export const saveChannels = (rootDir: string, creds: YoutubeCredentials): void =
     return;
   }
   fs.mkdirSync(path.dirname(credsPath), { recursive: true });
-  fs.writeFileSync(credsPath, JSON.stringify(creds, null, 2));
+  fs.writeFileSync(credsPath, JSON.stringify(creds, null, 2), { encoding: "utf-8", mode: 0o600 });
 };
 
 export const getActiveChannel = (creds: YoutubeCredentials): YoutubeChannel | null =>

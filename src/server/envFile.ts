@@ -27,5 +27,5 @@ export const updateEnvFile = (
     }
     process.env[key] = val;
   }
-  fs.writeFileSync(envPath, lines.join("\n"), "utf-8");
+  fs.writeFileSync(envPath, lines.join("\n"), { encoding: "utf-8", mode: 0o600 });
 };
