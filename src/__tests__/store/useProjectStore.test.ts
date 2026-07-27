@@ -120,6 +120,10 @@ describe("useProjectStore", () => {
     expect(useProjectStore.getState().error).toBe("Crea un proyecto primero");
   });
 
+  // generateViaProjectMode paces the backend pipeline with four real 1.8s
+  // delays (useProjectStore.ts), so the happy path needs >7.2s. Without an
+  // explicit timeout the test aborts at 5s and its in-flight promise leaks
+  // API calls into the next test.
   it("generateViaProjectMode runs plan, media, narration, timeline in order and lands on editor panel", async () => {
     useProjectStore.setState({ projectId: "project-1" });
     vi.mocked(projectsApi.planProject).mockResolvedValue({ project_id: "project-1", segment_count: 3 });
@@ -157,7 +161,7 @@ describe("useProjectStore", () => {
     expect(useProjectStore.getState().orchestrationStep).toBeNull();
     expect(useProjectStore.getState().mode).toBe("ready");
     expect(useProjectWorkspaceStore.getState().panel).toBe("editor");
-  });
+  }, 15000);
 
   it("generateViaProjectMode leaves orchestrationStep pointing at the failed step", async () => {
     useProjectStore.setState({ projectId: "project-1" });
@@ -175,5 +179,5 @@ describe("useProjectStore", () => {
     expect(useProjectStore.getState().error).toBe("no clips found");
     expect(projectsApi.synthesizeNarration).not.toHaveBeenCalled();
     expect(projectsApi.buildTimeline).not.toHaveBeenCalled();
-  });
+  }, 15000);
 });
