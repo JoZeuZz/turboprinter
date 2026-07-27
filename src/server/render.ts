@@ -58,14 +58,43 @@ export const buildFontsConf = (cwd: string, taskId: string): string => `<?xml ve
 export const escapeAssPathForFilter = (relPath: string): string =>
   relPath.replace(/'/g, "'\\\\''").replace(/:/g, "\\:");
 
+/**
+ * How many dB the BGM is attenuated while the narración is speaking.
+ * Decided in plans/plan-011b-ffmpeg-mux.md. 0 disables ducking entirely and
+ * falls back to a flat amix.
+ */
+export const DEFAULT_DUCK_DB = 12;
+
+/** dB → sidechaincompress ratio, per plans/plan-011b-ffmpeg-mux.md. */
+export const duckDbToRatio = (duckDb: number): number =>
+  Math.round(10 ** (duckDb / 20) * 100) / 100;
+
 export const buildAudioMixFilter = (
   hasNarration: boolean,
   hasMusic: boolean,
   voiceVolume: number,
-  musicVolume: number
+  musicVolume: number,
+  duckDb: number = DEFAULT_DUCK_DB
 ): string => {
   if (hasNarration && hasMusic) {
-    return `[1:a]volume=${voiceVolume}[v];[2:a]volume=${musicVolume}[m];[v][m]amix=inputs=2:duration=first[a]`;
+    if (duckDb <= 0) {
+      // Flat mix: BGM sits at a fixed level whether or not the narración is
+      // speaking. Kept as the fallback for FFmpeg builds without
+      // sidechaincompress.
+      return `[1:a]volume=${voiceVolume}[v];[2:a]volume=${musicVolume}[m];[v][m]amix=inputs=2:duration=first[a]`;
+    }
+    // Side-chain ducking: the narración keys a compressor on the BGM, pulling
+    // it down while the voice is present and letting it recover between
+    // phrases. [v] is an intermediate label so it cannot be consumed twice —
+    // asplit duplicates it for the sidechain key and the final mix.
+    const ratio = duckDbToRatio(duckDb);
+    return (
+      `[1:a]volume=${voiceVolume}[v];` +
+      `[2:a]volume=${musicVolume}[m];` +
+      `[v]asplit=2[v1][vsc];` +
+      `[m][vsc]sidechaincompress=threshold=0.02:ratio=${ratio}:attack=5:release=200[mduck];` +
+      `[v1][mduck]amix=inputs=2:duration=first[a]`
+    );
   }
   if (hasNarration) {
     return `[1:a]volume=${voiceVolume}[a]`;
