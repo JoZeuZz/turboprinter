@@ -101,6 +101,7 @@ describe("resolveWithinDir", () => {
 describe("isSafeProjectFolderName", () => {
   it("accepts the shape the server generates", () => {
     expect(isSafeProjectFolderName("gatos/gatos_20260727_120000")).toBe(true);
+    expect(isSafeProjectFolderName("general/guion_de_video_2026-07-29_11-07-00")).toBe(true);
   });
   it("rejects a traversal attempt", () => {
     expect(isSafeProjectFolderName("../escape/x")).toBe(false);

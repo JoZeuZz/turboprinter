@@ -61,5 +61,5 @@ export function isSafeProjectFolderName(name: unknown): name is string {
   if (typeof name !== "string") return false;
   const segments = name.split("/");
   if (segments.length !== 2) return false;
-  return segments.every((segment) => /^[a-z0-9_]{1,100}$/.test(segment));
+  return segments.every((segment) => /^[a-z0-9_-]{1,100}$/.test(segment));
 }
