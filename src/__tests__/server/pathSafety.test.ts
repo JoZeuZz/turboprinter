@@ -120,8 +120,8 @@ describe("isSafeProjectFolderName", () => {
   it("rejects a leading empty segment", () => {
     expect(isSafeProjectFolderName("/tema/x")).toBe(false);
   });
-  it("rejects a segment longer than 40 characters", () => {
-    const longSegment = "a".repeat(41);
+  it("rejects a segment longer than 100 characters", () => {
+    const longSegment = "a".repeat(101);
     expect(isSafeProjectFolderName(`tema/${longSegment}`)).toBe(false);
   });
   it("rejects non-string values", () => {

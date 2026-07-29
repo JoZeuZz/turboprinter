@@ -54,12 +54,12 @@ export function resolveWithinDir(baseDir: string, candidate: unknown): string | 
 
 /**
  * True when `name` has the exact shape this server generates for a proyecto's
- * folder: two "/"-separated segments of [a-z0-9_], each 1..40 characters.
+ * folder: two "/"-separated segments of [a-z0-9_], each 1..100 characters.
  * See sanitizeFolderName in server.ts.
  */
 export function isSafeProjectFolderName(name: unknown): name is string {
   if (typeof name !== "string") return false;
   const segments = name.split("/");
   if (segments.length !== 2) return false;
-  return segments.every((segment) => /^[a-z0-9_]{1,40}$/.test(segment));
+  return segments.every((segment) => /^[a-z0-9_]{1,100}$/.test(segment));
 }
