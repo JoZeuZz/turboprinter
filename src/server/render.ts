@@ -35,7 +35,7 @@ export interface RenderDeps {
   tasks: Map<string, any>;
   logTask: (taskId: string, level: "INFO" | "SUCCESS" | "WARNING" | "ERROR", category: string, message: string) => void;
   localVideosDir: string;
-  bgmFiles: BgmFileEntry[];
+  bgmFiles: BgmFileEntry[] | (() => BgmFileEntry[]);
   sanitizeFolderName: (name: string) => string;
   getFormattedDateTime: () => string;
 }
@@ -502,12 +502,14 @@ export function createRenderer(deps: RenderDeps) {
         const bgmFile = p.params?.bgm_file || p.bgm_file;
         const bgmVolume = p.params?.bgm_volume !== undefined ? p.params.bgm_volume : (p.bgm_volume !== undefined ? p.bgm_volume : 0.2);
 
+        const activeBgmFiles = typeof bgmFiles === "function" ? bgmFiles() : bgmFiles;
+
         musicItem = pickBgm({
           bgmType,
           bgmFile,
           bgmVolume,
           searchSubject: `${p.topic || ""} ${p.script || ""}`,
-          bgmFiles
+          bgmFiles: activeBgmFiles
         });
 
         if (musicItem) {

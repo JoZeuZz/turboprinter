@@ -95,12 +95,61 @@ try {
   console.error("Failed to initialize local videos folder:", err);
 }
 
-// Mock BGM files
-const BGM_FILES = [
-  { name: "Ambient Forest", size: 5410234, file: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3", tags: ["nature", "forest", "ambient", "calm", "slow", "relax", "meditation", "peaceful", "wood", "water", "tree", "river"] },
-  { name: "Cosmic Journey", size: 6109230, file: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3", tags: ["space", "cosmic", "journey", "synth", "futuristic", "tech", "modern", "energy", "inspirational", "fast", "electronic", "star"] },
-  { name: "Sunny Day Acoustic", size: 4892019, file: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3", tags: ["acoustic", "guitar", "happy", "sunny", "day", "cheerful", "organic", "warm", "people", "friend", "life", "fun"] }
-];
+// Dynamic scanning of background music files from public/musics
+const PUBLIC_MUSICS_DIR = path.join(process.cwd(), "public", "musics");
+
+function getBgmFiles() {
+  if (!fs.existsSync(PUBLIC_MUSICS_DIR)) {
+    try {
+      fs.mkdirSync(PUBLIC_MUSICS_DIR, { recursive: true });
+    } catch (err) {
+      console.error("Failed to create public/musics directory:", err);
+    }
+  }
+
+  try {
+    const files = fs.readdirSync(PUBLIC_MUSICS_DIR);
+    const validAudioExts = [".mp3", ".wav", ".m4a", ".ogg", ".aac", ".flac"];
+    const audioFiles = files.filter(f => validAudioExts.includes(path.extname(f).toLowerCase()));
+
+    return audioFiles.map(filename => {
+      const fullPath = path.join(PUBLIC_MUSICS_DIR, filename);
+      let size = 0;
+      try {
+        size = fs.statSync(fullPath).size;
+      } catch {
+        size = 0;
+      }
+
+      const ext = path.extname(filename);
+      const baseName = path.basename(filename, ext);
+
+      // Convert "Comedy_children_background_348019" -> "Comedy Children Background"
+      const nameParts = baseName
+        .split(/[-_]+/)
+        .filter(part => part.length > 0 && !/^\d+$/.test(part));
+
+      const name = nameParts.length > 0
+        ? nameParts.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(" ")
+        : baseName;
+
+      const tags = baseName
+        .toLowerCase()
+        .split(/[^a-z0-9]+/)
+        .filter(t => t.length > 1);
+
+      return {
+        name,
+        size,
+        file: `/public/musics/${filename}`,
+        tags
+      };
+    });
+  } catch (err) {
+    console.error("Failed to read music files from public/musics:", err);
+    return [];
+  }
+}
 
 // Mock Stock Videos
 const SAMPLE_VIDEOS = [
@@ -1378,7 +1427,7 @@ Instrucciones:
   };
 
   app.get("/api/v1/musics", wrap(async (_req: any, res: any) => {
-    res.json({ status: 200, message: "ok", data: { files: BGM_FILES } });
+    res.json({ status: 200, message: "ok", data: { files: getBgmFiles() } });
   }));
 
   // 5. Projects APIs
@@ -2571,7 +2620,7 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
     tasks,
     logTask,
     localVideosDir: LOCAL_VIDEOS_DIR,
-    bgmFiles: BGM_FILES,
+    bgmFiles: getBgmFiles,
     sanitizeFolderName,
     getFormattedDateTime,
   });
@@ -2646,6 +2695,10 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
 
   // Serve local videos from whatever folder is active (either root local_videos or storage/local_videos)
   app.use("/storage/local_videos", express.static(LOCAL_VIDEOS_DIR));
+
+  // Serve background music files directly from public/musics
+  app.use("/public/musics", express.static(PUBLIC_MUSICS_DIR));
+  app.use("/musics", express.static(PUBLIC_MUSICS_DIR));
 
   // Serve only the rendered output. The rest of storage/ holds OAuth refresh
   // tokens (youtube-credentials.json, tiktok-credentials.json) and the project
