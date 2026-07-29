@@ -3,7 +3,7 @@
 // per call so missing env vars never crash server startup.
 import { GoogleGenAI } from "@google/genai";
 
-async function callLmStudio(
+export async function callLmStudio(
   prompt: string,
   jsonMode = false,
   systemInstruction?: string
@@ -50,7 +50,7 @@ async function callLmStudio(
   return text;
 }
 
-async function callGemini(
+export async function callGemini(
   prompt: string,
   jsonMode = false,
   systemInstruction?: string
@@ -82,40 +82,47 @@ async function callGemini(
   return response.text || "";
 }
 
+// Aliases para resolver compatibilidad con referencias externas o imports directos
+export const generateOpenAiCompatibleContent = callLmStudio;
+export const generateGeminiContent = callGemini;
+
 export async function generateLlmContent(
   prompt: string,
   jsonMode = false,
   systemInstruction?: string
 ): Promise<string> {
-  const llmProvider = process.env.LLM_PROVIDER || "gemini";
+  const llmProvider = process.env.LLM_PROVIDER || "lmstudio";
 
   if (llmProvider === "lmstudio" || llmProvider === "openai") {
     console.log(`[LLM] Directing generation to local OpenAI/LM Studio endpoint`);
     try {
       return await callLmStudio(prompt, jsonMode, systemInstruction);
     } catch (err: any) {
-      // If endpoint returned an explicit HTTP error status (e.g. 400), rethrow it
+      // Si el endpoint respondió un HTTP status explícito (ej: 400), se re-lanza la excepción
       if (!err.message?.includes("fetch failed") && !err.message?.includes("ECONNREFUSED") && err.message?.includes("returned error status")) {
         throw err;
       }
-      console.warn(`[LLM Fallback] LM Studio/OpenAI call failed (${err.message}). Checking Gemini fallback...`);
+      console.warn(`[LLM Fallback] LM Studio call failed (${err?.message || err}). Falling back to Gemini...`);
       if (process.env.GEMINI_API_KEY) {
-        console.log(`[LLM Fallback] Falling back to Gemini API...`);
-        return await callGemini(prompt, jsonMode, systemInstruction);
+        try {
+          console.log(`[LLM Fallback] Falling back to Gemini API...`);
+          return await callGemini(prompt, jsonMode, systemInstruction);
+        } catch (fallbackErr: any) {
+          console.error(`[LLM Fallback] Gemini fallback also failed:`, fallbackErr);
+        }
       }
       throw err;
     }
   }
 
-  // Default provider: Gemini
+  // Proveedor por defecto: Gemini
   try {
     return await callGemini(prompt, jsonMode, systemInstruction);
   } catch (err: any) {
-    console.warn(`[LLM Fallback] Gemini call failed (${err.message}). Checking LM Studio fallback...`);
+    console.warn(`[LLM Fallback] Gemini call failed (${err?.message || err}). Checking LM Studio fallback...`);
     try {
       return await callLmStudio(prompt, jsonMode, systemInstruction);
     } catch (fallbackErr: any) {
-      // Re-throw original Gemini error if fallback also fails
       throw err;
     }
   }

@@ -467,7 +467,7 @@ async function startServer() {
                 .split(",")
                 .map((s) => s.trim().replace(/^["']|["']$/g, ""))
                 .filter(Boolean);
-              
+
               if (key === "pexels_api_keys" || key === "pexels_api_key") {
                 globalConfig.settings.app.pexels_api_keys = values as never[];
               } else if (key === "pixabay_api_keys" || key === "pixabay_api_key") {
@@ -539,7 +539,7 @@ async function startServer() {
       // Keep the static verification file served by web/GFE in sync
       writeTiktokVerificationFiles(process.cwd(), tkCreds);
     }
-    
+
     // Auto-populate YouTube keys from environment/process.env variables
     globalConfig.settings.youtube.client_id = process.env.YOUTUBE_CLIENT_ID || "";
     globalConfig.settings.youtube.api_key = process.env.YOUTUBE_CLIENT_SECRET || "";
@@ -765,7 +765,7 @@ async function startServer() {
 
     let tl = "es"; // default to Spanish
     const voiceNameLower = voice_name.toLowerCase();
-    
+
     if (voiceNameLower.includes("en-") || voiceNameLower.includes("us-") || voiceNameLower.includes("guy") || voiceNameLower.includes("jenny") || voiceNameLower.includes("alex") || voiceNameLower.includes("anna") || voiceNameLower.includes("bella") || voiceNameLower.includes("benjamin") || voiceNameLower.includes("charles") || voiceNameLower.includes("claire") || voiceNameLower.includes("david") || voiceNameLower.includes("diana") || voiceNameLower.includes("milo") || voiceNameLower.includes("dean") || voiceNameLower.includes("chloe") || voiceNameLower.includes("mia") || voiceNameLower.includes("puck") || voiceNameLower.includes("charon") || voiceNameLower.includes("zephyr")) {
       tl = "en";
     } else if (voiceNameLower.includes("zh-") || voiceNameLower.includes("cn-") || voiceNameLower.includes("xiaoxiao") || voiceNameLower.includes("yunxi") || voiceNameLower.includes("冰糖") || voiceNameLower.includes("茉莉") || voiceNameLower.includes("苏打") || voiceNameLower.includes("白桦")) {
@@ -835,12 +835,25 @@ async function startServer() {
       throw new Error("No Gemini API key configured. Please set GEMINI_API_KEY.");
     }
 
-    let prompt = `Escribe un guión de video sobre "${video_subject}" en idioma ${video_language}. Es CRÍTICO que el guión tenga exactamente ${paragraph_number} párrafos bien estructurados, completos y detallados.
-Cada párrafo debe ser sustancial y desarrollado por completo (debe tener un rango estricto de entre 45 y 55 palabras por párrafo, compuesto por 3 a 5 oraciones ricas y descriptivas, óptimo para narrar una historia o un documental).
-La longitud total del guión completo debe ser de aproximadamente ${paragraph_number * 45} a ${paragraph_number * 55} palabras en total. A medida que aumenta el número de párrafos, el guión general debe ser proporcionalmente más largo de forma lineal y acumulativa (por ejemplo, 3 párrafos deben sumar unas 150 palabras en total, y 4 párrafos deben sumar unas 200 palabras en total). No reduzcas la longitud de los párrafos individuales al tener más párrafos; cada uno de ellos debe mantener de forma consistente la profundidad, extensión y cantidad de palabras especificadas.
-Separa cada párrafo estrictamente con dos saltos de línea (\\n\\n). Devuelve SOLAMENTE el texto del guión, sin títulos, introducciones ni comentarios adicionales.
+    let prompt = `Escribe un guión de video sobre "${video_subject}" en idioma ${video_language} neutro. Es CRÍTICO que el guión tenga exactamente ${paragraph_number} párrafos bien estructurados, completos y detallados. Debe de seguir la siguiente estructura y estilo
 
-CRÍTICO: No utilices NINGÚN tipo de formato de texto como asteriscos (* o **), comillas (" o “ o ”) o palabras entre paréntesis o corchetes, ya que el guión se usará directamente con un generador de voz automática y estos caracteres provocan lecturas raras. Escribe solo texto limpio y natural.`;
+ESTRUCTURA Y CONTEXTO (CRÍTICO):
+1. En la primera oracion debe haber un gancho que "atrape" al espectador, luego debe establecer el contexto inicial y la premisa clara del tema desde el principio para que cualquier espectador entienda de qué trata la historia sin dar nada por sentado.
+2. La primera oración debe ser un gancho impactante que capte la atención de inmediato, pero que al mismo tiempo introduzca con claridad la situación o el problema central.
+3. A lo largo del guión, cada 4 oraciones busca reenganchar al espectador con un giro inesperado, una pregunta provocativa o un dato sorprendente.
+
+ESTILO Y PÚBLICO:
+- Público objetivo: entre 16 y 45 años.
+- Redacción clara, concisa, directa y sin palabras rebuscadas ni tecnicismos innecesarios. Debe ser totalmente comprensible para todo público.
+
+LONGITUD Y FORMATO:
+- Cada párrafo debe ser sustancial y desarrollado por completo (rango estricto de entre 45 y 55 palabras por párrafo, compuesto por 3 a 5 oraciones ricas y descriptivas, óptimo para narrar una historia o documental).
+- La longitud total del guión completo debe ser de aproximadamente ${paragraph_number * 45} a ${paragraph_number * 55} palabras en total. La longitud debe ser acumulativa y consistente; no reduzcas la extensión de los párrafos individuales al aumentar la cantidad total.
+- Separa cada párrafo estrictamente con dos saltos de línea (\\n\\n).
+- Devuelve SOLAMENTE el texto del guión, sin títulos, introducciones ni comentarios adicionales.
+
+RESTRICCIONES DE FORMATO PARA TEXT-TO-SPEECH (CRÍTICO):
+- No utilices NINGÚN tipo de formato de texto como asteriscos (* o **), comillas (" o “ o ”), paréntesis, corchetes, ni guiones. El guión se usará directamente en un generador de voz automática y estos caracteres arruinan la lectura. Escribe únicamente texto limpio, continuo y natural.`;
 
     if (video_script_prompt) {
       prompt += `\n\nInstrucciones adicionales para el guión:\n${video_script_prompt}`;
@@ -1808,7 +1821,7 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
     }
 
     const videoSource = req.body.video_source || p.params?.video_source || p.video_source || "pexels";
-    
+
     // Explicitly persist the active parameters into the project DB
     if (!p.params) {
       p.params = {};
@@ -1857,7 +1870,7 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
       for (let idx = 0; idx < segments.length; idx++) {
         const seg = segments[idx];
         const filename = finalChosen[idx % finalChosen.length];
-        
+
         // Let's get the real duration of this local video to populate the metadata
         const fullDiskPath = path.join(LOCAL_VIDEOS_DIR, filename);
         let durationSec = 15;
@@ -1908,7 +1921,7 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
         const segments = p.shot_plan?.segments || [];
         for (let idx = 0; idx < segments.length; idx++) {
           const seg = segments[idx];
-          
+
           let results: any[] = [];
           let successfulQuery = "";
           const queries = seg.search_queries && seg.search_queries.length > 0 ? seg.search_queries : [p.topic || "nature"];
@@ -1967,10 +1980,10 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
 
         selected = p.shot_plan?.segments?.map((seg: any, idx: number) => {
           const queryKeywords = seg.search_queries || [];
-          const matches = SAMPLE_VIDEOS.filter(v => 
+          const matches = SAMPLE_VIDEOS.filter(v =>
             queryKeywords.some((q: string) => v.query.toLowerCase().includes(q.toLowerCase()) || v.title.toLowerCase().includes(q.toLowerCase()))
           );
-          
+
           let best = matches.find(m => !usedVideoIds.has(m.id || m.source_url)) || matches[0];
           if (!best) {
             best = SAMPLE_VIDEOS.find(v => !usedVideoIds.has(v.id || v.source_url)) || SAMPLE_VIDEOS[idx % SAMPLE_VIDEOS.length];
@@ -2091,7 +2104,7 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
           const videoExtensions = [".mp4", ".mkv", ".avi", ".mov", ".webm"];
           const availableLocalFiles = files.filter(f => videoExtensions.includes(path.extname(f).toLowerCase()));
           const chosenFiles = availableLocalFiles.length > 0 ? availableLocalFiles : ["nature_cinematic.mp4", "urban_streets.mp4", "retro_animation.mp4"];
-          
+
           for (const filename of chosenFiles) {
             const sourceUrl = `/storage/local_videos/${filename}`;
             if (!seen.has(sourceUrl)) {
@@ -2120,13 +2133,13 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
         const videoExtensions = [".mp4", ".mkv", ".avi", ".mov", ".webm"];
         const diskFiles = filesOnDisk.filter(f => videoExtensions.includes(path.extname(f).toLowerCase()));
         const hasCustomFilesOnDisk = diskFiles.some(f => !defaultLocalVideos.includes(f));
-        
+
         if (hasCustomFilesOnDisk && chosenLocalFiles.length === 0) {
           const filteredUnique = uniqueFiles.filter(med => {
             const filename = path.basename(med.source_url || med.asset_url || "");
             return !defaultLocalVideos.includes(filename);
           });
-          
+
           if (filteredUnique.length > 0) {
             uniqueFiles.length = 0;
             uniqueFiles.push(...filteredUnique);
@@ -2196,7 +2209,7 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
 
         // 1. Get candidates for this active segment
         const segCandidates = (p.media_candidates || []).filter((c: any) => c.segment_id === activeSeg.id);
-        
+
         // 2. Get primary selected media for this active segment
         const primaryMedia = (p.selected_media || []).find((m: any) => m.segment_id === activeSeg.id);
 
@@ -2383,12 +2396,12 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
       const text = seg.narration_text || "Silencio";
       const destPath = path.join(cacheDir, `narration_chunk_${projectId}_${idx}.mp3`);
       const wavPath = path.join(cacheDir, `narration_chunk_${projectId}_${idx}.wav`);
-      
+
       try {
         const audioBuffer = await synthesizeSpeech(voice_name, text, tl, voice_rate, voice_volume);
         await fs.promises.writeFile(destPath, audioBuffer);
         localPaths.push(destPath);
-        
+
         // Convert MP3 to WAV for precise timing and gapless concatenation
         await executeCommand(`ffmpeg -y -i "${destPath}" -acodec pcm_s16le -ar 44100 -ac 2 "${wavPath}"`);
         wavPaths.push(wavPath);
@@ -2397,7 +2410,7 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
         const fallbackPath = path.join(cacheDir, `narration_chunk_${projectId}_${idx}_fallback.mp3`);
         await executeCommand(`ffmpeg -y -f lavfi -i anullsrc=r=44100:cl=stereo -t 3 "${fallbackPath}"`);
         localPaths.push(fallbackPath);
-        
+
         await executeCommand(`ffmpeg -y -i "${fallbackPath}" -acodec pcm_s16le -ar 44100 -ac 2 "${wavPath}"`);
         wavPaths.push(wavPath);
       }
