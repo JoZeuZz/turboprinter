@@ -94,6 +94,10 @@ export async function generateLlmContent(
     try {
       return await callLmStudio(prompt, jsonMode, systemInstruction);
     } catch (err: any) {
+      // If endpoint returned an explicit HTTP error status (e.g. 400), rethrow it
+      if (!err.message?.includes("fetch failed") && !err.message?.includes("ECONNREFUSED") && err.message?.includes("returned error status")) {
+        throw err;
+      }
       console.warn(`[LLM Fallback] LM Studio/OpenAI call failed (${err.message}). Checking Gemini fallback...`);
       if (process.env.GEMINI_API_KEY) {
         console.log(`[LLM Fallback] Falling back to Gemini API...`);
