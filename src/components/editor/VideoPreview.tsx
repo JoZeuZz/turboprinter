@@ -17,7 +17,6 @@ interface VideoPreviewProps {
   partOffsetSec?: number;
   selectedId: string | null;
   onTimeUpdate?: (globalTimeSec: number) => void;
-  renderedVideoUrl?: string;
 }
 
 function isTypingTarget(target: EventTarget | null): boolean {
@@ -35,7 +34,6 @@ export function VideoPreview({
   partOffsetSec = 0,
   selectedId,
   onTimeUpdate,
-  renderedVideoUrl,
 }: VideoPreviewProps) {
   const { t } = useTranslation();
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -45,7 +43,6 @@ export function VideoPreview({
   const [clipTime, setClipTime] = useState(0);
   const [clipDuration, setClipDuration] = useState(0);
   const [videoDims, setVideoDims] = useState({ width: 0, height: 0 });
-  const [useRenderedMode, setUseRenderedMode] = useState<boolean>(!!renderedVideoUrl);
 
   const projectStore = useProjectStore();
   const subtitleTrack = projectStore.project?.tracks.find((t) => t.type === "subtitle");
@@ -56,12 +53,6 @@ export function VideoPreview({
   const activeSubtitles = propsSubtitleItems ?? subtitleItems;
 
   const videoAspect = useVideoStore((s) => s.video_aspect) ?? "9:16";
-
-  useEffect(() => {
-    if (renderedVideoUrl) {
-      setUseRenderedMode(true);
-    }
-  }, [renderedVideoUrl]);
 
   useEffect(() => {
     setPlayingId(selectedId ?? items[0]?.id ?? null);
@@ -331,11 +322,11 @@ export function VideoPreview({
     }
   };
 
-  let containerClass = "w-full max-w-2xl mx-auto aspect-video";
+  let aspectWrapperClass = "w-full max-h-full aspect-video";
   if (videoAspect === "9:16") {
-    containerClass = "h-full max-h-[540px] w-auto max-w-[310px] sm:max-w-[325px] mx-auto aspect-[9/16]";
+    aspectWrapperClass = "h-full max-w-full aspect-[9/16]";
   } else if (videoAspect === "1:1") {
-    containerClass = "h-full max-h-[450px] w-auto max-w-[450px] mx-auto aspect-square";
+    aspectWrapperClass = "h-full max-w-full aspect-square";
   }
 
   const animType = subtitleAnimation ?? "pop";
@@ -360,75 +351,58 @@ export function VideoPreview({
     };
   }
 
-  // If rendered video URL is provided and user is in rendered mode
-  if (renderedVideoUrl && useRenderedMode) {
-    return (
-      <div className={`flex flex-col bg-black rounded-2xl overflow-hidden shadow-2xl border border-border/80 ${containerClass}`}>
-        <div className="relative flex-1 min-h-0 w-full bg-black flex items-center justify-center overflow-hidden">
-          <video
-            key={renderedVideoUrl}
-            src={renderedVideoUrl.includes("?") ? renderedVideoUrl : `${renderedVideoUrl}?v=${Date.now()}`}
-            controls
-            preload="auto"
-            playsInline
-            {...{ referrerPolicy: "no-referrer" }}
-            className="w-full h-full object-contain mx-auto block rounded-xl"
-          />
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className={`flex flex-col bg-black rounded-2xl overflow-hidden shadow-2xl border border-border/80 ${containerClass}`}>
+    <div className="w-full h-full max-w-5xl max-h-[620px] mx-auto flex flex-col bg-black rounded-2xl overflow-hidden shadow-2xl border border-border/80">
       {src ? (
-        <div className="relative flex-1 min-h-0 w-full bg-black flex items-center justify-center overflow-hidden">
-          <video
-            ref={videoRef}
-            data-testid="video-preview"
-            src={src}
-            {...{ referrerPolicy: "no-referrer" }}
-            className="w-full h-full object-contain"
-            onEnded={handleEnded}
-            onTimeUpdate={handleTimeUpdate}
-            onPlay={handlePlay}
-            onPause={handlePause}
-            onSeeking={handleSeeking}
-            onLoadedMetadata={() => setClipDuration(videoRef.current?.duration ?? 0)}
-          />
-          {narrationUrl && (
-            <audio
-              ref={audioRef}
-              src={narrationUrl}
-              preload="auto"
-              style={{ display: "none" }}
+        <div className="relative flex-1 min-h-0 w-full bg-black flex items-center justify-center overflow-hidden p-2">
+          <div className={`relative flex items-center justify-center bg-black overflow-hidden rounded-xl ${aspectWrapperClass}`}>
+            <video
+              ref={videoRef}
+              data-testid="video-preview"
+              src={src}
+              {...{ referrerPolicy: "no-referrer" }}
+              className="w-full h-full object-contain"
+              onEnded={handleEnded}
+              onTimeUpdate={handleTimeUpdate}
+              onPlay={handlePlay}
+              onPause={handlePause}
+              onSeeking={handleSeeking}
+              onLoadedMetadata={() => setClipDuration(videoRef.current?.duration ?? 0)}
             />
-          )}
-          {subtitleEnabled && activeSubtitle && activeSubtitle.text && (
-            <div style={positionStyle}>
-              <motion.div
-                key={`${activeSubtitle.id || activeSubtitle.text}-${animType}-${textColor}-${fontName}-${fontSize}-${strokeColor}-${strokeWidth}-${roundedBackground}-${subtitleBgStyle}`}
-                className={`inline-block max-w-full px-3 py-1.5 leading-tight transition-all ${borderStyleClass} ${
-                  subtitleBgStyle === "blur" && textBackgroundColor !== false ? "backdrop-blur-md border border-white/20" : ""
-                }`}
-                style={bgStyle}
-                {...motionProps}
-              >
-                <span
-                  className="block break-words"
-                  style={{
-                    color: textColor,
-                    fontFamily: fontNameStyle,
-                    fontWeight: fontWeightStyle,
-                    fontSize: `${fontSizePx}px`,
-                    textShadow: textShadowStyle,
-                  }}
+            {narrationUrl && (
+              <audio
+                ref={audioRef}
+                src={narrationUrl}
+                preload="auto"
+                style={{ display: "none" }}
+              />
+            )}
+            {subtitleEnabled && activeSubtitle && activeSubtitle.text && (
+              <div style={positionStyle}>
+                <motion.div
+                  key={`${activeSubtitle.id || activeSubtitle.text}-${animType}-${textColor}-${fontName}-${fontSize}-${strokeColor}-${strokeWidth}-${roundedBackground}-${subtitleBgStyle}`}
+                  className={`inline-block max-w-full px-3 py-1.5 leading-tight transition-all ${borderStyleClass} ${
+                    subtitleBgStyle === "blur" && textBackgroundColor !== false ? "backdrop-blur-md border border-white/20" : ""
+                  }`}
+                  style={bgStyle}
+                  {...motionProps}
                 >
-                  {activeSubtitle.text}
-                </span>
-              </motion.div>
-            </div>
-          )}
+                  <span
+                    className="block break-words"
+                    style={{
+                      color: textColor,
+                      fontFamily: fontNameStyle,
+                      fontWeight: fontWeightStyle,
+                      fontSize: `${fontSizePx}px`,
+                      textShadow: textShadowStyle,
+                    }}
+                  >
+                    {activeSubtitle.text}
+                  </span>
+                </motion.div>
+              </div>
+            )}
+          </div>
         </div>
       ) : (
         <div className="w-full flex-1 flex items-center justify-center bg-surface text-muted text-sm min-h-[200px]">

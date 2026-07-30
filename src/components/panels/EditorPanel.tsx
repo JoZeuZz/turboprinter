@@ -60,10 +60,6 @@ export function EditorPanel() {
   const scopedAudioTrack = audioTrack ? { ...audioTrack, items: audioItems } : undefined;
   const scopedSubtitleTrack = subtitleTrack ? { ...subtitleTrack, items: subItems } : undefined;
 
-  const renderedVideoUrl = typeof selectedPart === "number"
-    ? (videoUrls[selectedPart - 1] || videoUrls[0])
-    : videoUrls[0];
-
   const allClips = [
     ...videoItems,
     ...audioItems,
@@ -205,8 +201,8 @@ export function EditorPanel() {
       )}
 
       {/* Top: preview + inspector */}
-      <div className="flex flex-1 overflow-hidden">
-        <div className="flex-[3] p-4 flex flex-col items-center justify-center h-full overflow-hidden">
+      <div className="flex flex-1 min-h-0 overflow-hidden">
+        <div className="flex-[3] p-3 flex flex-col items-center justify-center h-full min-h-0 w-full overflow-hidden">
           <VideoPreview
             items={videoItems}
             subtitleItems={subItems}
@@ -215,7 +211,6 @@ export function EditorPanel() {
             partOffsetSec={partOffsetSec}
             selectedId={selectedId}
             onTimeUpdate={setCurrentTime}
-            renderedVideoUrl={renderedVideoUrl}
           />
         </div>
         <div className="flex-[2] border-l border-border overflow-y-auto">
