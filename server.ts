@@ -300,22 +300,22 @@ function ensurePartHeader(scriptText: string, partNum: number, subject: string):
   let trimmed = (scriptText || "").trim();
 
   // Strip out raw "Parte X:" or "Parte X -" or "--- PARTE X ---" prefix if present
-  trimmed = trimmed.replace(new RegExp(`^(---+\\s*)?parte\\s*#?\\s*${partNum}\\s*[-:]*\\s*(---+\\s*)?`, "i"), "").trim();
+  trimmed = trimmed.replace(new RegExp(`^(---+\\s*)?parte\\s*#?\\s*${partNum}\\s*[-:.]*\\s*(---+\\s*)?`, "i"), "").trim();
 
   // Check if it already starts with title + parte X (e.g. "Mi familia no es quien dice ser, parte 2")
   if (cleanSubject) {
-    const fullRegex = new RegExp(`^${cleanSubject.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*,?\\s*parte\\s*#?\\s*${partNum}`, "i");
+    const fullRegex = new RegExp(`^${cleanSubject.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*,?\\s*parte\\s*#?\\s*${partNum}[,.]?`, "i");
     if (fullRegex.test(trimmed)) {
       return trimmed;
     }
   } else {
-    const simpleRegex = new RegExp(`^parte\\s*#?\\s*${partNum}`, "i");
+    const simpleRegex = new RegExp(`^parte\\s*#?\\s*${partNum}[,.]?`, "i");
     if (simpleRegex.test(trimmed)) {
       return trimmed;
     }
   }
 
-  const header = cleanSubject ? `${cleanSubject}, parte ${partNum}, ` : `Parte ${partNum}, `;
+  const header = cleanSubject ? `${cleanSubject}, Parte ${partNum}. ` : `Parte ${partNum}. `;
   return header + trimmed;
 }
 
@@ -965,9 +965,9 @@ ESTRUCTURA Y CONTEXTO POR PARTE:
 
 2. ENCABEZADO Y COMIENZO DE CADA PARTE (CRÍTICO Y OBLIGATORIO):
    - PARTE 1: Comienza directamente con la historia y el gancho demoledor inicial sobre "${video_subject}".
-   - PARTE 2 (y PARTE 3 si aplica, es decir, cada PARTE X donde X >= 2): DEBE comenzar OBLIGATORIAMENTE diciendo el título del video/proyecto seguido de ', parte X,' y luego continuar con la historia.
-     Ejemplo exacto: Si el tema es "${video_subject}", la primera oración de la Parte 2 DEBE ser: "${video_subject}, parte 2, [continuación de la historia...]" (y para la Parte 3: "${video_subject}, parte 3, [continuación de la historia...]").
-   - NO agregues introducciones adicionales, resúmenes ni repeticiones del final de la Parte 1. Entra directo a la continuación inmediatamente después de la frase inicial "${video_subject}, parte X,".
+   - PARTE 2 (y PARTE 3 si aplica, es decir, cada PARTE X donde X >= 2): DEBE comenzar OBLIGATORIAMENTE diciendo el título del video/proyecto seguido de ', Parte X.' y luego continuar con la historia.
+     Ejemplo exacto: Si el tema es "${video_subject}", la primera oración de la Parte 2 DEBE ser: "${video_subject}, Parte 2. [continuación de la historia...]" (y para la Parte 3: "${video_subject}, Parte 3. [continuación de la historia...]").
+   - NO agregues introducciones adicionales, resúmenes ni repeticiones del final de la Parte 1. Entra directo a la continuación inmediatamente después de la frase inicial "${video_subject}, Parte X.".
 3. DESENLACE SATISFACTORIO EN LA PARTE FINAL:
 ${numParts === 2 ? `   - PARTE 2 (PARTE FINAL Y DESENLACE): Mantiene la tensión en la primera mitad, pero en los párrafos finales DEBE conducir la historia hacia una CONCLUSIÓN DEFINITIVA Y SATISFACTORIA. No dejes la historia inconclusa ni en un suspenso abierto (ej: NO termines solo descubriendo una foto o un objeto sin resolver qué pasa después). Cierra el conflicto central con una confrontación, una decisión drástica o una revelación final resolutiva que deje la historia 100% concluida.` : `   - PARTE 2: Mantiene la tensión alta, profundiza la investigación con descubrimientos lógicos y culmina en un segundo giro o suspenso (cliffhanger).\n   - PARTE 3 (PARTE FINAL Y DESENLACE): Desarrolla el clímax y conduce la historia hacia una CONCLUSIÓN DEFINITIVA Y SATISFACTORIA. Resuelve el conflicto central de forma clara y resolutiva, asegurando que el espectador reciba un cierre total sin dejar la historia a medias.`}
 
