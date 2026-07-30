@@ -9,7 +9,7 @@ import { Button } from "../ui";
 import { useProjectStore } from "../../store/useProjectStore";
 import { useProjectWorkspaceStore } from "../../store/useProjectWorkspaceStore";
 import { useVideoStore } from "../../store/useVideoStore";
-import { getNormalizedItemsForPart } from "../../lib/partUtils";
+import { getClipsForPart, getNormalizedItemsForPart } from "../../lib/partUtils";
 import type { EditCommand, TimelineItem } from "../../api/types";
 
 function isTypingTarget(target: EventTarget | null): boolean {
@@ -39,9 +39,22 @@ export function EditorPanel() {
   const rawAudioItems: TimelineItem[] = audioTrack?.items ?? [];
   const rawSubItems: TimelineItem[] = subtitleTrack?.items ?? [];
 
-  const videoItems = getNormalizedItemsForPart(rawVideoItems, selectedPart, multiPartCount);
-  const audioItems = getNormalizedItemsForPart(rawAudioItems, selectedPart, multiPartCount);
-  const subItems = getNormalizedItemsForPart(rawSubItems, selectedPart, multiPartCount);
+  const partVideoClips = getClipsForPart(rawVideoItems, selectedPart, multiPartCount);
+  const partAudioClips = getClipsForPart(rawAudioItems, selectedPart, multiPartCount);
+  const partSubClips = getClipsForPart(rawSubItems, selectedPart, multiPartCount);
+
+  const allPartStarts = [
+    ...partVideoClips.map((c) => c.start_sec ?? 0),
+    ...partAudioClips.map((c) => c.start_sec ?? 0),
+    ...partSubClips.map((c) => c.start_sec ?? 0),
+  ];
+  const partOffsetSec = (selectedPart !== "all" && allPartStarts.length > 0)
+    ? Math.min(...allPartStarts)
+    : 0;
+
+  const videoItems = getNormalizedItemsForPart(rawVideoItems, selectedPart, multiPartCount, partOffsetSec);
+  const audioItems = getNormalizedItemsForPart(rawAudioItems, selectedPart, multiPartCount, partOffsetSec);
+  const subItems = getNormalizedItemsForPart(rawSubItems, selectedPart, multiPartCount, partOffsetSec);
 
   const scopedVideoTrack = videoTrack ? { ...videoTrack, items: videoItems } : undefined;
   const scopedAudioTrack = audioTrack ? { ...audioTrack, items: audioItems } : undefined;
@@ -196,6 +209,10 @@ export function EditorPanel() {
         <div className="flex-[3] p-4 flex flex-col items-center justify-center h-full overflow-hidden">
           <VideoPreview
             items={videoItems}
+            subtitleItems={subItems}
+            audioItems={audioItems}
+            selectedPart={selectedPart}
+            partOffsetSec={partOffsetSec}
             selectedId={selectedId}
             onTimeUpdate={setCurrentTime}
             renderedVideoUrl={renderedVideoUrl}

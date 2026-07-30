@@ -25,13 +25,14 @@ export function getClipsForPart<T extends { part_index?: number }>(
 export function getNormalizedItemsForPart<T extends { start_sec: number; end_sec?: number | null; duration_sec?: number; part_index?: number }>(
   items: T[],
   partIndex: number | "all",
-  multiPartCount: number = 2
+  multiPartCount: number = 2,
+  commonOffsetSec?: number
 ): T[] {
   if (!items || items.length === 0) return [];
   const selected = getClipsForPart(items, partIndex, multiPartCount);
   if (partIndex === "all" || selected.length === 0) return selected;
 
-  const minStartSec = Math.min(...selected.map((item) => item.start_sec ?? 0));
+  const minStartSec = commonOffsetSec !== undefined ? commonOffsetSec : Math.min(...selected.map((item) => item.start_sec ?? 0));
   if (minStartSec <= 0) return selected;
 
   return selected.map((item) => ({

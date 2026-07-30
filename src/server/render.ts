@@ -904,11 +904,16 @@ export function createRenderer(deps: RenderDeps) {
         if (subtitles.length > 0) {
           const minStart = Math.min(...subtitles.map((s: any) => s.start_sec || 0));
           if (minStart > 0) {
-            subtitles = subtitles.map((s: any) => ({
-              ...s,
-              start_sec: Math.max(0, (s.start_sec || 0) - minStart),
-              end_sec: Math.max(0.5, (s.end_sec || 0) - minStart)
-            }));
+            subtitles = subtitles.map((s: any) => {
+              const dur = Number(s.duration_sec) || (s.end_sec ? s.end_sec - s.start_sec : 5);
+              const newStart = Math.max(0, (s.start_sec || 0) - minStart);
+              return {
+                ...s,
+                start_sec: newStart,
+                duration_sec: dur,
+                end_sec: newStart + dur
+              };
+            });
           }
         }
 

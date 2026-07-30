@@ -126,15 +126,16 @@ export function DonePanel() {
             : [Math.min(Math.max((selectedPart as number) - 1, 0), videoUrls.length - 1)];
 
           return visibleVideoIndices.map((index) => {
-            const url = videoUrls[index] || videoUrls[0];
+            const rawUrl = videoUrls[index] || videoUrls[0];
             const partNum = index + 1;
             const filename = downloadFilename.includes(".")
               ? downloadFilename.replace(/(\.[\w]+)$/, `_parte${partNum}$1`)
               : `${downloadFilename}_parte${partNum}.mp4`;
+            const videoSrc = rawUrl ? (rawUrl.includes("?") ? rawUrl : `${rawUrl}?v=${Date.now()}`) : "";
 
             return (
               <div
-                key={`${url}-${index}`}
+                key={`${rawUrl}-${index}`}
                 className={`w-full ${maxWidthClass} shrink-0 mx-auto rounded-2xl overflow-hidden border border-border bg-neutral-900/60 shadow-2xl p-2.5 transition-all duration-300 hover:shadow-accent/5 hover:border-accent/20`}
               >
                 {isMultiPart && (
@@ -144,8 +145,11 @@ export function DonePanel() {
                 )}
                 <div className={`relative w-full shrink-0 rounded-xl overflow-hidden bg-black flex items-center justify-center ${aspectClass}`}>
                   <video
-                    src={url}
+                    key={videoSrc}
+                    src={videoSrc}
                     controls
+                    preload="auto"
+                    playsInline
                     {...{ referrerPolicy: "no-referrer" }}
                     className="w-full h-full object-contain mx-auto block rounded-lg"
                   />
@@ -155,7 +159,7 @@ export function DonePanel() {
                     {filename}
                   </span>
                   <a
-                    href={url}
+                    href={rawUrl}
                     download={filename}
                     className="inline-flex items-center gap-1.5 text-xs text-accent hover:text-accent-hover font-medium bg-accent/10 px-3 py-1.5 rounded-md transition-colors"
                   >

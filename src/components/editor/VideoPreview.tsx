@@ -11,6 +11,10 @@ import { getSubtitleFontFamily, getSubtitleFontWeight } from "../subtitles/Subti
 
 interface VideoPreviewProps {
   items: TimelineItem[];
+  subtitleItems?: TimelineItem[];
+  audioItems?: TimelineItem[];
+  selectedPart?: number | "all";
+  partOffsetSec?: number;
   selectedId: string | null;
   onTimeUpdate?: (globalTimeSec: number) => void;
   renderedVideoUrl?: string;
@@ -23,7 +27,16 @@ function isTypingTarget(target: EventTarget | null): boolean {
   return tag === "INPUT" || tag === "TEXTAREA" || el.isContentEditable;
 }
 
-export function VideoPreview({ items, selectedId, onTimeUpdate, renderedVideoUrl }: VideoPreviewProps) {
+export function VideoPreview({
+  items,
+  subtitleItems: propsSubtitleItems,
+  audioItems: _propsAudioItems,
+  selectedPart,
+  partOffsetSec = 0,
+  selectedId,
+  onTimeUpdate,
+  renderedVideoUrl,
+}: VideoPreviewProps) {
   const { t } = useTranslation();
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -39,6 +52,8 @@ export function VideoPreview({ items, selectedId, onTimeUpdate, renderedVideoUrl
   const subtitleItems = subtitleTrack?.items ?? [];
   const audioTrack = projectStore.project?.tracks.find((t) => t.type === "audio");
   const narrationUrl = projectStore.project?.narration_audio_path || audioTrack?.items?.find((item) => item.asset_url)?.asset_url;
+
+  const activeSubtitles = propsSubtitleItems ?? subtitleItems;
 
   const videoAspect = useVideoStore((s) => s.video_aspect) ?? "9:16";
 
@@ -62,6 +77,7 @@ export function VideoPreview({ items, selectedId, onTimeUpdate, renderedVideoUrl
     : (clipDuration || 0);
 
   const globalTime = currentItem ? currentItem.start_sec + clipTime : 0;
+  const targetAudioTime = (selectedPart === "all" ? 0 : partOffsetSec) + globalTime;
 
   useEffect(() => {
     if (videoRef.current) {
@@ -69,23 +85,24 @@ export function VideoPreview({ items, selectedId, onTimeUpdate, renderedVideoUrl
     }
     if (playing) {
       void videoRef.current?.play().catch(() => {});
-      if (audioRef.current && isFinite(globalTime)) {
+      if (audioRef.current && isFinite(targetAudioTime)) {
         try {
-          audioRef.current.currentTime = globalTime;
+          audioRef.current.currentTime = targetAudioTime;
           void audioRef.current.play().catch(() => {});
         } catch (e) {
           console.warn(e);
         }
       }
     } else {
-      if (audioRef.current && isFinite(globalTime)) {
+      if (audioRef.current && isFinite(targetAudioTime)) {
         try {
-          audioRef.current.currentTime = globalTime;
+          audioRef.current.currentTime = targetAudioTime;
         } catch (e) {}
       }
     }
   }, [playingId]);
-  const activeSubtitle = subtitleItems.find(
+
+  const activeSubtitle = activeSubtitles.find(
     (item) => globalTime >= item.start_sec && globalTime < (item.start_sec + item.duration_sec)
   );
 
@@ -214,9 +231,9 @@ export function VideoPreview({ items, selectedId, onTimeUpdate, renderedVideoUrl
   const handlePlay = () => {
     setPlaying(true);
     if (audioRef.current) {
-      if (isFinite(globalTime)) {
+      if (isFinite(targetAudioTime)) {
         try {
-          audioRef.current.currentTime = globalTime;
+          audioRef.current.currentTime = targetAudioTime;
         } catch (e) {}
       }
       void audioRef.current.play();
@@ -233,9 +250,10 @@ export function VideoPreview({ items, selectedId, onTimeUpdate, renderedVideoUrl
       const vTime = videoRef.current?.currentTime ?? 0;
       if (currentItem) {
         const gTime = currentItem.start_sec + vTime;
-        if (isFinite(gTime)) {
+        const targetTime = (selectedPart === "all" ? 0 : partOffsetSec) + gTime;
+        if (isFinite(targetTime)) {
           try {
-            audioRef.current.currentTime = gTime;
+            audioRef.current.currentTime = targetTime;
           } catch (e) {}
         }
       }
@@ -348,8 +366,11 @@ export function VideoPreview({ items, selectedId, onTimeUpdate, renderedVideoUrl
       <div className={`flex flex-col bg-black rounded-2xl overflow-hidden shadow-2xl border border-border/80 ${containerClass}`}>
         <div className="relative flex-1 min-h-0 w-full bg-black flex items-center justify-center overflow-hidden">
           <video
-            src={renderedVideoUrl}
+            key={renderedVideoUrl}
+            src={renderedVideoUrl.includes("?") ? renderedVideoUrl : `${renderedVideoUrl}?v=${Date.now()}`}
             controls
+            preload="auto"
+            playsInline
             {...{ referrerPolicy: "no-referrer" }}
             className="w-full h-full object-contain mx-auto block rounded-xl"
           />

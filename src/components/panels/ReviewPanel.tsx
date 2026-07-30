@@ -125,7 +125,15 @@ export function ReviewPanel() {
         {finalVideo ? (
           <div className={`w-full ${maxWidthClass} shrink-0 mx-auto rounded-2xl overflow-hidden border border-border bg-neutral-900/60 shadow-2xl p-2.5 transition-all duration-300 hover:shadow-accent/5 hover:border-accent/20`}>
             <div className={`relative w-full shrink-0 rounded-xl overflow-hidden bg-black flex items-center justify-center ${aspectClass}`}>
-              <video src={finalVideo} controls {...{ referrerPolicy: "no-referrer" }} className="w-full h-full object-contain mx-auto block rounded-lg" />
+              <video
+                key={finalVideo}
+                src={finalVideo.includes("?") ? finalVideo : `${finalVideo}?v=${Date.now()}`}
+                controls
+                preload="auto"
+                playsInline
+                {...{ referrerPolicy: "no-referrer" }}
+                className="w-full h-full object-contain mx-auto block rounded-lg"
+              />
             </div>
           </div>
         ) : (
