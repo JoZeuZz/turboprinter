@@ -255,15 +255,106 @@ export function AudioSubtitlePanel() {
         </div>
       )}
 
-      <Slider
-        label={t("audioSubtitle.bgmVolume")}
-        value={store.bgm_volume ?? 0.2}
-        min={0}
-        max={1}
-        step={0.05}
-        onChange={(v) => store.set("bgm_volume", v)}
-        displayValue={(store.bgm_volume ?? 0.2).toFixed(2)}
-      />
+      {/* BGM Volume */}
+      <div className="flex flex-col gap-2 rounded-lg border border-border bg-surface p-3 transition-all">
+        <div className="flex items-center justify-between">
+          <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+            <span>{t("audioSubtitle.bgmVolume")}</span>
+            <span className="text-[10px] text-muted font-normal">
+              (0% - 100%)
+            </span>
+          </label>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => {
+                const current = Math.round((store.bgm_volume ?? 0.2) * 100);
+                const next = Math.max(0, current - 1);
+                store.set("bgm_volume", +(next / 100).toFixed(2));
+              }}
+              className="w-6 h-6 rounded border border-border bg-surface-2 hover:bg-accent/10 hover:border-accent text-xs font-bold text-foreground flex items-center justify-center transition-colors"
+              title="Disminuir 1%"
+            >
+              -
+            </button>
+            <div className="relative flex items-center">
+              <input
+                type="number"
+                min={0}
+                max={100}
+                step={1}
+                value={Math.round((store.bgm_volume ?? 0.2) * 100)}
+                onChange={(e) => {
+                  const val = parseFloat(e.target.value);
+                  if (isNaN(val)) return;
+                  const clamped = Math.min(100, Math.max(0, val));
+                  store.set("bgm_volume", +(clamped / 100).toFixed(2));
+                }}
+                className="w-14 h-7 text-center text-xs font-bold font-mono rounded border border-border bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-accent pr-3"
+              />
+              <span className="absolute right-1.5 text-[10px] font-semibold text-muted pointer-events-none">
+                %
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                const current = Math.round((store.bgm_volume ?? 0.2) * 100);
+                const next = Math.min(100, current + 1);
+                store.set("bgm_volume", +(next / 100).toFixed(2));
+              }}
+              className="w-6 h-6 rounded border border-border bg-surface-2 hover:bg-accent/10 hover:border-accent text-xs font-bold text-foreground flex items-center justify-center transition-colors"
+              title="Aumentar 1%"
+            >
+              +
+            </button>
+          </div>
+        </div>
+
+        {/* Continuous Smooth Slider */}
+        <input
+          type="range"
+          min={0}
+          max={1}
+          step={0.01}
+          value={store.bgm_volume ?? 0.2}
+          onChange={(e) => {
+            const val = parseFloat(e.target.value);
+            store.set("bgm_volume", +(val.toFixed(2)));
+          }}
+          className="w-full h-2 rounded-full appearance-none bg-border cursor-pointer accent-accent"
+        />
+
+        {/* Quick Presets */}
+        <div className="flex items-center justify-between gap-1 pt-1">
+          <span className="text-[10px] text-muted font-medium">Presets:</span>
+          <div className="flex items-center gap-1 flex-wrap">
+            {[
+              { label: "5% (Suave)", val: 0.05 },
+              { label: "10%", val: 0.1 },
+              { label: "15% (Ideal)", val: 0.15 },
+              { label: "25%", val: 0.25 },
+              { label: "40%", val: 0.4 },
+            ].map((p) => {
+              const isActive = Math.abs((store.bgm_volume ?? 0.2) - p.val) < 0.01;
+              return (
+                <button
+                  key={p.val}
+                  type="button"
+                  onClick={() => store.set("bgm_volume", p.val)}
+                  className={`px-2 py-0.5 text-[10px] font-medium rounded border transition-all ${
+                    isActive
+                      ? "bg-accent text-accent-foreground border-accent font-semibold shadow-xs"
+                      : "bg-surface-2 text-muted hover:text-foreground border-border hover:border-accent/40"
+                  }`}
+                >
+                  {p.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
 
       {/* Subtitles */}
       <Checkbox
