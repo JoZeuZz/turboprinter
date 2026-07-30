@@ -8,16 +8,15 @@ export default defineConfig({
     emptyOutDir: true,
   },
   server: {
-    port: 5173,
-    proxy: {
-      "/api": { target: "http://localhost:8080", changeOrigin: true },
-      "/tasks": { target: "http://localhost:8080", changeOrigin: true },
-    },
+    host: "0.0.0.0",
+    port: 3000,
+    allowedHosts: true,
   },
   test: {
     environment: "jsdom",
     setupFiles: ["./src/test-setup.ts"],
     globals: true,
     passWithNoTests: true,
+    include: ["src/**/*.{test,spec}.{ts,tsx}"],
   },
 });

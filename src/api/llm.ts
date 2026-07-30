@@ -6,6 +6,8 @@ export interface ScriptRequest {
   paragraph_number?: number;
   video_script_prompt?: string;
   custom_system_prompt?: string;
+  is_multi_part?: boolean;
+  parts_count?: number;
 }
 
 export interface TermsRequest {
@@ -16,7 +18,7 @@ export interface TermsRequest {
 
 export const llmApi = {
   generateScript: (params: ScriptRequest) =>
-    apiFetch<{ video_script: string }>("/scripts", {
+    apiFetch<{ video_script: string; multi_part_scripts?: string[] }>("/scripts", {
       method: "POST",
       body: JSON.stringify(params),
     }),

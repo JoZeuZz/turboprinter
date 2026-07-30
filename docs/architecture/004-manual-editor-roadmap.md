@@ -1,5 +1,11 @@
 # 004 — Manual editor roadmap
 
+> **Provenance**: written for the pre-rewrite Python architecture (FastAPI +
+> Streamlit + MoviePy). The design intent is current; the file paths, module
+> names and commands are not — this project is now TypeScript (Express +
+> React + Vite + FFmpeg CLI). See `MAP.md` for the real layout and
+> `CONTEXT.md` for canonical vocabulary.
+
 > Fase 7 of the project-mode evolution (see `plans/spec/spec-001.md`). Standalone,
 > opt-in, additive. The legacy WebUI (`webui/Main.py`) is untouched.
 

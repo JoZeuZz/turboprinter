@@ -57,6 +57,12 @@ export function VideoConfigPanel() {
     };
   }, [audioElement, playTimeout]);
 
+  useEffect(() => {
+    if (audioElement) {
+      audioElement.volume = Math.min(1, Math.max(0, store.bgm_volume ?? 0.2));
+    }
+  }, [store.bgm_volume, audioElement]);
+
   const togglePlayBgm = (url: string) => {
     if (previewTrack === url) {
       if (audioElement) {
@@ -77,7 +83,7 @@ export function VideoConfigPanel() {
       }
 
       const audio = new Audio(url);
-      audio.volume = 0.4;
+      audio.volume = Math.min(1, Math.max(0, store.bgm_volume ?? 0.2));
       setPreviewTrack(url);
       setAudioElement(audio);
 
@@ -270,22 +276,9 @@ export function VideoConfigPanel() {
         console.log("[VideoConfigPanel] Saved current parameters to localStorage: mpt-last-generated-config");
       }
 
-      const isProjectMode = projectStore.mode !== "disabled" && projectStore.projectId;
-      console.log("[VideoConfigPanel] Checking generation mode:", {
-        projectModeEnabled: isProjectMode,
-        projectStoreMode: projectStore.mode,
-        projectId: projectStore.projectId
-      });
-
-      if (isProjectMode) {
-        console.log("[VideoConfigPanel] Setting workspace panel to 'generating' for Project Mode");
-        workspaceStore.setPanel("generating");
-        console.log("[VideoConfigPanel] Dispatching generateViaProjectMode with params");
-        await projectStore.generateViaProjectMode(params);
-      } else {
-        console.log("[VideoConfigPanel] Dispatching standard generateVideo with params");
-        await workspaceStore.generateVideo(params);
-      }
+      workspaceStore.setPanel("generating");
+      console.log("[VideoConfigPanel] Dispatching generateViaProjectMode with params");
+      await projectStore.generateViaProjectMode(params);
     } catch (err) {
       console.error("[VideoConfigPanel] Error during handleGenerate:", err);
     } finally {
@@ -720,15 +713,102 @@ export function VideoConfigPanel() {
                 </div>
               </div>
             )}
-            <Slider
-              label={t("audioSubtitle.bgmVolume")}
-              value={store.bgm_volume ?? 0.2}
-              min={0}
-              max={1}
-              step={0.05}
-              onChange={(v) => store.set("bgm_volume", v)}
-              displayValue={(store.bgm_volume ?? 0.2).toFixed(2)}
-            />
+            <div className="space-y-2 text-left pt-2 border-t border-border/40">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-foreground">
+                  {t("audioSubtitle.bgmVolume")}
+                </label>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const url = store.bgm_file || bgmFiles[0]?.file;
+                      if (url) {
+                        togglePlayBgm(url);
+                      }
+                    }}
+                    className={`px-2 py-0.5 text-[11px] font-semibold rounded-md border transition-all flex items-center gap-1 ${
+                      previewTrack
+                        ? "bg-amber-500 text-black border-amber-400 animate-pulse"
+                        : "bg-surface-2 hover:bg-accent hover:text-accent-foreground text-foreground border-border"
+                    }`}
+                  >
+                    {previewTrack ? "⏹ Pausar" : "🔊 Probar"}
+                  </button>
+                  <span className="text-xs font-mono font-bold text-accent bg-accent/10 px-2 py-0.5 rounded-md border border-accent/20">
+                    {Math.round((store.bgm_volume ?? 0.2) * 100)}% ({(store.bgm_volume ?? 0.2).toFixed(2)})
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const cur = Math.round((store.bgm_volume ?? 0.2) * 100);
+                    const next = Math.max(0, cur - 1);
+                    store.set("bgm_volume", +(next / 100).toFixed(2));
+                  }}
+                  className="h-8 w-8 shrink-0 rounded-lg border border-border bg-surface hover:bg-neutral-800 text-foreground text-sm font-bold flex items-center justify-center transition-colors"
+                  title="-1%"
+                >
+                  -
+                </button>
+                <input
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  value={store.bgm_volume ?? 0.2}
+                  onChange={(e) => {
+                    const val = parseFloat(e.target.value);
+                    store.set("bgm_volume", +(val.toFixed(2)));
+                  }}
+                  className="w-full accent-accent h-2 bg-neutral-800 rounded-lg appearance-none cursor-pointer"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const cur = Math.round((store.bgm_volume ?? 0.2) * 100);
+                    const next = Math.min(100, cur + 1);
+                    store.set("bgm_volume", +(next / 100).toFixed(2));
+                  }}
+                  className="h-8 w-8 shrink-0 rounded-lg border border-border bg-surface hover:bg-neutral-800 text-foreground text-sm font-bold flex items-center justify-center transition-colors"
+                  title="+1%"
+                >
+                  +
+                </button>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                <span className="text-[10px] text-muted-foreground mr-1">Rápido:</span>
+                {[
+                  { label: "1%", val: 0.01 },
+                  { label: "2%", val: 0.02 },
+                  { label: "3%", val: 0.03 },
+                  { label: "5%", val: 0.05 },
+                  { label: "10%", val: 0.10 },
+                  { label: "15%", val: 0.15 },
+                  { label: "20%", val: 0.20 },
+                ].map((p) => {
+                  const isActive = Math.abs((store.bgm_volume ?? 0.2) - p.val) < 0.005;
+                  return (
+                    <button
+                      key={p.label}
+                      type="button"
+                      onClick={() => store.set("bgm_volume", p.val)}
+                      className={`text-[10px] font-semibold px-2 py-0.5 rounded-md border transition-all ${
+                        isActive
+                          ? "bg-accent text-white border-accent shadow-xs"
+                          : "bg-surface/50 text-muted-foreground border-border hover:bg-surface hover:text-foreground"
+                      }`}
+                    >
+                      {p.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </>
         )}
 

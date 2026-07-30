@@ -31,8 +31,6 @@ export function ProjectSidebar() {
   const projectReset = useProjectStore((s) => s.reset);
   const videoReset = useVideoStore((s) => s.reset);
   const setVideo = useVideoStore((s) => s.set);
-  const taskId = useProjectWorkspaceStore((s) => s.taskId);
-  const taskState = useProjectWorkspaceStore((s) => s.taskStatus?.state);
   const topic = useProjectWorkspaceStore((s) => s.topic);
   const [projects, setProjects] = useState<ProjectRow[]>([]);
   const [renamingId, setRenamingId] = useState<string | null>(null);
@@ -190,7 +188,7 @@ export function ProjectSidebar() {
 
   useEffect(() => {
     refreshProjects();
-  }, [location.pathname, taskId, taskState, topic]);
+  }, [location.pathname, topic]);
 
   useEffect(() => {
     fetchAllStatus();

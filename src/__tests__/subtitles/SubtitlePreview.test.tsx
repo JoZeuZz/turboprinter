@@ -1,5 +1,5 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { act, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { SubtitlePreview } from "../../components/subtitles/SubtitlePreview";
 
 describe("SubtitlePreview", () => {
@@ -19,5 +19,42 @@ describe("SubtitlePreview", () => {
     const text = screen.getByText("Sin fondo");
     expect(text).toBeInTheDocument();
     expect((text.parentElement as HTMLElement).style.backgroundColor).toBe("transparent");
+  });
+
+  describe("real cue playback", () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("shows the first real cue from the shared splitter, then cycles to the next", () => {
+      vi.useFakeTimers();
+      render(
+        <SubtitlePreview
+          enabled
+          position="bottom"
+          fontSize={60}
+          sampleText="uno dos tres cuatro cinco"
+        />
+      );
+      // 5 words -> cues of the shared engine: "uno dos tres" + "cuatro cinco"
+      expect(screen.getByText("uno dos tres")).toBeInTheDocument();
+      expect(screen.queryByText("cuatro cinco")).not.toBeInTheDocument();
+
+      act(() => {
+        vi.advanceTimersByTime(1200); // 3 units * 0.4s per unit
+      });
+      expect(screen.getByText("cuatro cinco")).toBeInTheDocument();
+      expect(screen.queryByText("uno dos tres")).not.toBeInTheDocument();
+    });
+
+    it("keeps a short sample as a single cue", () => {
+      vi.useFakeTimers();
+      render(<SubtitlePreview enabled position="bottom" fontSize={60} sampleText="Hola mundo" />);
+      expect(screen.getByText("Hola mundo")).toBeInTheDocument();
+      act(() => {
+        vi.advanceTimersByTime(5000);
+      });
+      expect(screen.getByText("Hola mundo")).toBeInTheDocument();
+    });
   });
 });

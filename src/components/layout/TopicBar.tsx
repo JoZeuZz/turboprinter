@@ -10,12 +10,10 @@ import { deriveVideoOrigin } from "../../lib/videoOrigin";
 
 export function TopicBar() {
   const { t } = useTranslation();
-  const { topic, setTopic, panel, taskId, taskStatus, videoUrls } = useProjectWorkspaceStore();
+  const { topic, setTopic, panel, videoUrls } = useProjectWorkspaceStore();
   const { id: routeId } = useParams();
   const origin = deriveVideoOrigin({
     routeId,
-    taskId,
-    taskState: taskStatus?.state,
     panel,
     videoUrls,
   });

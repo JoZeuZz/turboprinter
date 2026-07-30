@@ -45,28 +45,19 @@ export interface VideoParams {
   custom_system_prompt?: string;
   local_video_files?: string[];
   video_niche?: string;
+  is_multi_part?: boolean;
+  multi_part_count?: number;
+  active_part_index?: number;
+  multi_part_scripts?: string[];
 }
 
 export const TASK_STATE_FAILED = -1 as const;
 export const TASK_STATE_COMPLETE = 1 as const;
-export const TASK_STATE_PROCESSING = 4 as const;
-
-export interface TaskStatus {
-  state: number;
-  progress: number;
-  videos: string[];
-  combined_videos: string[];
-  logs?: string[];
-}
 
 export interface ApiResponse<T> {
   status: number;
   message: string;
   data: T;
-}
-
-export interface CreateTaskResponse {
-  task_id: string;
 }
 
 export interface UiConfig {
@@ -366,6 +357,7 @@ export interface TimelineItem {
   volume?: number | null;
   text?: string | null;
   keywords?: string[];
+  part_index?: number;
 }
 
 export type TrackType = "video" | "audio" | "subtitle" | "overlay";

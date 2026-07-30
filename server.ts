@@ -1,11 +1,39 @@
 import express from "express";
 import path from "path";
 import fs from "fs";
-import { exec } from "child_process";
 import { createServer as createViteServer } from "vite";
-import WebSocket from "ws";
-import crypto from "crypto";
-import { GoogleGenAI } from "@google/genai";
+import {
+  generateSrt,
+  splitTextIntoTikTokSubtitles,
+} from "./src/lib/subtitleLayout";
+import {
+  loadChannels,
+  saveChannels,
+  getActiveChannel,
+  upsertChannel,
+  selectChannel,
+  removeChannel,
+} from "./src/server/youtubeChannels";
+import { updateEnvFile } from "./src/server/envFile";
+import { maskSecrets, stripSentinelSecrets } from "./src/server/configMasking";
+import { synthesizeSpeech } from "./src/server/tts";
+import { generateLlmContent } from "./src/server/llm";
+import { searchPexelsVideos, pickUniqueClip } from "./src/server/pexels";
+import { createRenderer, executeCommand } from "./src/server/render";
+import { createProjectsRepo } from "./src/server/projectsRepo";
+import { shouldSweepProject, resolveRenderStatus } from "./src/server/projectLifecycle";
+import { isSafeMediaFilename, isSafeProjectFolderName, resolveWithinDir } from "./src/server/pathSafety";
+import {
+  loadTiktokChannels,
+  saveTiktokChannels,
+  getActiveTiktokChannel,
+  upsertTiktokChannel,
+  selectTiktokChannel,
+  removeTiktokChannel,
+  setTiktokVerification,
+  clearTiktokCredentials,
+  writeTiktokVerificationFiles,
+} from "./src/server/tiktokCredentials";
 import { google } from "googleapis";
 import multer from "multer";
 
@@ -39,11 +67,16 @@ if (fs.existsSync(path.join(process.cwd(), "local_videos"))) {
 }
 
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
+  destination: (_req, _file, cb) => {
     cb(null, LOCAL_VIDEOS_DIR);
   },
-  filename: (req, file, cb) => {
+  filename: (_req, file, cb) => {
     const safeName = path.basename(file.originalname);
+    if (!isSafeMediaFilename(safeName)) {
+      // Un nombre que el pipeline nunca podrá usar no debe llegar al disco:
+      // acabaría interpolado en una línea de comandos ffprobe.
+      return cb(new Error("Nombre de archivo de video no válido."), "");
+    }
     cb(null, safeName);
   }
 });
@@ -62,12 +95,61 @@ try {
   console.error("Failed to initialize local videos folder:", err);
 }
 
-// Mock BGM files
-const BGM_FILES = [
-  { name: "Ambient Forest", size: 5410234, file: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3", tags: ["nature", "forest", "ambient", "calm", "slow", "relax", "meditation", "peaceful", "wood", "water", "tree", "river"] },
-  { name: "Cosmic Journey", size: 6109230, file: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3", tags: ["space", "cosmic", "journey", "synth", "futuristic", "tech", "modern", "energy", "inspirational", "fast", "electronic", "star"] },
-  { name: "Sunny Day Acoustic", size: 4892019, file: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3", tags: ["acoustic", "guitar", "happy", "sunny", "day", "cheerful", "organic", "warm", "people", "friend", "life", "fun"] }
-];
+// Dynamic scanning of background music files from public/musics
+const PUBLIC_MUSICS_DIR = path.join(process.cwd(), "public", "musics");
+
+function getBgmFiles() {
+  if (!fs.existsSync(PUBLIC_MUSICS_DIR)) {
+    try {
+      fs.mkdirSync(PUBLIC_MUSICS_DIR, { recursive: true });
+    } catch (err) {
+      console.error("Failed to create public/musics directory:", err);
+    }
+  }
+
+  try {
+    const files = fs.readdirSync(PUBLIC_MUSICS_DIR);
+    const validAudioExts = [".mp3", ".wav", ".m4a", ".ogg", ".aac", ".flac"];
+    const audioFiles = files.filter(f => validAudioExts.includes(path.extname(f).toLowerCase()));
+
+    return audioFiles.map(filename => {
+      const fullPath = path.join(PUBLIC_MUSICS_DIR, filename);
+      let size = 0;
+      try {
+        size = fs.statSync(fullPath).size;
+      } catch {
+        size = 0;
+      }
+
+      const ext = path.extname(filename);
+      const baseName = path.basename(filename, ext);
+
+      // Convert "Comedy_children_background_348019" -> "Comedy Children Background"
+      const nameParts = baseName
+        .split(/[-_]+/)
+        .filter(part => part.length > 0 && !/^\d+$/.test(part));
+
+      const name = nameParts.length > 0
+        ? nameParts.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(" ")
+        : baseName;
+
+      const tags = baseName
+        .toLowerCase()
+        .split(/[^a-z0-9]+/)
+        .filter(t => t.length > 1);
+
+      return {
+        name,
+        size,
+        file: `/public/musics/${filename}`,
+        tags
+      };
+    });
+  } catch (err) {
+    console.error("Failed to read music files from public/musics:", err);
+    return [];
+  }
+}
 
 // Mock Stock Videos
 const SAMPLE_VIDEOS = [
@@ -196,6 +278,11 @@ const SAMPLE_VIDEOS = [
 function cleanScriptSymbols(text: string): string {
   if (!text) return "";
   return text
+    // Convert literal backslash-n strings ("\n") into real newlines if returned by LLM
+    .replace(/\\n/g, "\n")
+    // Remove part separator lines like "--- PARTE 2 ---" or "--- PARTE 2"
+    .replace(/---+\s*PARTE\s*\d+\s*---+/gi, "")
+    .replace(/---+\s*PARTE\s*\d+/gi, "")
     // Remove asterisks (*) and underscores (_) used for markdown bold/italic
     .replace(/[\*_]/g, "")
     // Remove various types of quotation marks: ", “, ”, «, », ‘, ’, '
@@ -207,88 +294,99 @@ function cleanScriptSymbols(text: string): string {
     .trim();
 }
 
-// Helper to call LLM (Gemini or local/OpenAI compatible server)
-async function generateGeminiContent(prompt: string, jsonMode = false, systemInstruction?: string): Promise<string> {
-  const llmProvider = process.env.LLM_PROVIDER || "gemini";
+function ensurePartHeader(scriptText: string, partNum: number, subject: string): string {
+  if (partNum <= 1) return scriptText;
+  const cleanSubject = (subject || "").trim();
+  let trimmed = (scriptText || "").trim();
 
-  if (llmProvider === "lmstudio" || llmProvider === "openai") {
-    const apiBase = process.env.OPENAI_API_BASE || "http://localhost:1234/v1";
-    const apiKey = process.env.OPENAI_API_KEY || "lm-studio";
-    const model = process.env.OPENAI_MODEL || "loaded-model";
+  // Strip out raw "Parte X:" or "Parte X -" or "--- PARTE X ---" prefix if present
+  trimmed = trimmed.replace(new RegExp(`^(---+\\s*)?parte\\s*#?\\s*${partNum}\\s*[-:.]*\\s*(---+\\s*)?`, "i"), "").trim();
 
-    console.log(`[LLM] Directing generation to local OpenAI/LM Studio endpoint: ${apiBase}`);
-
-    const messages: any[] = [];
-    if (systemInstruction) {
-      messages.push({ role: "system", content: systemInstruction });
+  // Check if it already starts with title + parte X (e.g. "Mi familia no es quien dice ser, parte 2")
+  if (cleanSubject) {
+    const fullRegex = new RegExp(`^${cleanSubject.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*,?\\s*parte\\s*#?\\s*${partNum}[,.]?`, "i");
+    if (fullRegex.test(trimmed)) {
+      return trimmed;
     }
-    
-    let finalPrompt = prompt;
-    if (jsonMode && (llmProvider === "lmstudio" || !apiBase.includes("api.openai.com"))) {
-      finalPrompt += "\n\nCRITICAL: Return ONLY a valid JSON object. Do not include any explanations, markdown code block backticks (like ```json), or text before or after the JSON.";
-    }
-    messages.push({ role: "user", content: finalPrompt });
-
-    try {
-      const response = await fetch(`${apiBase}/chat/completions`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({
-          model,
-          messages,
-          temperature: 0.7,
-          ...(jsonMode && apiBase.includes("api.openai.com") ? { response_format: { type: "json_object" } } : {})
-        })
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`LM Studio / OpenAI returned error status ${response.status}: ${errorText}`);
-      }
-
-      const data: any = await response.json();
-      let text = data.choices?.[0]?.message?.content || "";
-      if (jsonMode) {
-        text = text.replace(/```json/gi, "").replace(/```/g, "").trim();
-      }
-      return text;
-    } catch (err: any) {
-      console.error("Failed calling LM Studio/OpenAI API:", err);
-      throw err;
+  } else {
+    const simpleRegex = new RegExp(`^parte\\s*#?\\s*${partNum}[,.]?`, "i");
+    if (simpleRegex.test(trimmed)) {
+      return trimmed;
     }
   }
 
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    throw new Error("No Gemini API key configured. Set GEMINI_API_KEY or configure LLM_PROVIDER=lmstudio.");
-  }
-  try {
-    const ai = new GoogleGenAI({
-      apiKey,
-      httpOptions: {
-        headers: {
-          'User-Agent': 'aistudio-build',
+  const header = cleanSubject ? `${cleanSubject}, Parte ${partNum}. ` : `Parte ${partNum}. `;
+  return header + trimmed;
+}
+
+interface SentencePart {
+  text: string;
+  partIndex: number;
+}
+
+function extractSentencesWithParts(p: any): SentencePart[] {
+  const scriptHasParts = Boolean(p.script && p.script.match(/---+\s*PARTE\s*\d+\s*---+/i));
+  const isMultiPart = Boolean(p.params?.is_multi_part || p.is_multi_part || scriptHasParts);
+
+  const cleanBlock = (text: string) => {
+    return (text || "")
+      .replace(/---+\s*PARTE\s*\d+\s*---+/gi, "")
+      .replace(/---+\s*PARTE\s*\d+/gi, "")
+      .trim();
+  };
+
+  if (isMultiPart) {
+    let rawParts: string[] = [];
+    if (p.params?.multi_part_scripts && Array.isArray(p.params.multi_part_scripts) && p.params.multi_part_scripts.length > 0) {
+      rawParts = p.params.multi_part_scripts.map((s: string) => cleanBlock(s)).filter(Boolean);
+    } else if (scriptHasParts) {
+      rawParts = (p.script || "")
+        .split(/---+\s*PARTE\s*\d+\s*---+/i)
+        .map((s: string) => cleanBlock(s))
+        .filter(Boolean);
+    }
+
+    if (rawParts.length > 0) {
+      const results: SentencePart[] = [];
+      const subject = p.video_subject || p.topic || p.params?.video_subject || "";
+      rawParts.forEach((partText, pIdx) => {
+        const partNum = pIdx + 1;
+        const cleanedPartText = ensurePartHeader(cleanScriptSymbols(partText), partNum, subject);
+        const partSentences = cleanedPartText
+          .split(/[.!?]+/)
+          .map((s: string) => s.trim())
+          .filter((s: string) => s.length > 3);
+
+        if (partSentences.length === 0 && cleanedPartText.length > 0) {
+          partSentences.push(cleanedPartText);
         }
-      }
-    });
 
-    const response = await ai.models.generateContent({
-      model: "gemini-3.1-flash-lite",
-      contents: prompt,
-      config: {
-        ...(jsonMode ? { responseMimeType: "application/json" } : {}),
-        ...(systemInstruction ? { systemInstruction } : {}),
-      },
-    });
-
-    return response.text || "";
-  } catch (err: any) {
-    console.error("Failed calling Gemini API via SDK:", err);
-    throw err;
+        partSentences.forEach((sentence) => {
+          results.push({
+            text: sentence,
+            partIndex: partNum,
+          });
+        });
+      });
+      if (results.length > 0) return results;
+    }
   }
+
+  // Single part fallback
+  const cleanScript = cleanScriptSymbols(cleanBlock(p.script || p.topic || ""));
+  const sentences = cleanScript
+    .split(/[.!?]+/)
+    .map((s: string) => s.trim())
+    .filter((s: string) => s.length > 3);
+
+  if (sentences.length === 0) {
+    sentences.push(cleanScript || "Esto es un video de prueba de generación.");
+  }
+
+  return sentences.map((sentence) => ({
+    text: sentence,
+    partIndex: 1,
+  }));
 }
 
 function sanitizeFolderName(name: string): string {
@@ -308,55 +406,8 @@ function getFormattedDateTime(): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_${pad(d.getHours())}-${pad(d.getMinutes())}-${pad(d.getSeconds())}`;
 }
 
-// Persistent Project Database helper
-const PROJECTS_FILE = path.join(process.cwd(), "storage", "projects_db.json");
-
-function loadProjects() {
-  try {
-    const dir = path.dirname(PROJECTS_FILE);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-    if (fs.existsSync(PROJECTS_FILE)) {
-      const data = fs.readFileSync(PROJECTS_FILE, "utf-8");
-      const parsed = JSON.parse(data);
-      const map = new Map<string, any>();
-      for (const [k, v] of Object.entries(parsed)) {
-        map.set(k, v);
-      }
-      return map;
-    }
-  } catch (err) {
-    console.error("Error loading projects from file, using empty map:", err);
-  }
-  return new Map<string, any>();
-}
-
-function saveProjects(map: Map<string, any>) {
-  try {
-    const obj = Object.fromEntries(map);
-    fs.writeFileSync(PROJECTS_FILE, JSON.stringify(obj, null, 2), "utf-8");
-  } catch (err) {
-    console.error("Error saving projects to file:", err);
-  }
-}
-
-const projects = loadProjects();
-
-// Override set and delete to automatically save to disk
-const originalSet = projects.set.bind(projects);
-projects.set = function (key: string, value: any) {
-  const result = originalSet(key, value);
-  saveProjects(projects);
-  return result;
-};
-
-const originalDelete = projects.delete.bind(projects);
-projects.delete = function (key: string) {
-  const result = originalDelete(key);
-  saveProjects(projects);
-  return result;
-};
+// Project database: repository with explicit persistence on set/delete.
+const projects = createProjectsRepo();
 
 const tasks = new Map<string, any>();
 
@@ -369,7 +420,7 @@ let globalConfig = {
     app: {
       video_source: "pexels",
       tls_verify: true,
-      pexels_api_keys: [process.env.PEXELS_API_KEY || "PEXELS_KEY_REMOVED_FROM_HISTORY_ROTATE_IT"],
+      pexels_api_keys: process.env.PEXELS_API_KEY ? [process.env.PEXELS_API_KEY] : [],
       pixabay_api_keys: [],
       coverr_api_keys: [],
       llm_provider: "gemini",
@@ -377,7 +428,7 @@ let globalConfig = {
       llm_request_timeout_seconds: 60,
       llm_connect_timeout_seconds: 10,
       gemini_api_key: "",
-      gemini_model_name: "gemini-3.5-flash",
+      gemini_model_name: "gemini-3.1-flash-lite",
       subtitle_provider: "whisper",
       endpoint: "",
       material_directory: "",
@@ -470,240 +521,25 @@ let globalConfig = {
   }
 };
 
-function cleanVoiceName(voice: string): string {
-  let name = voice;
-  if (name.includes(":")) {
-    const parts = name.split(":");
-    name = parts[parts.length - 1];
-  }
-  name = name.replace(/[-:](male|female)$/i, "");
-  return name;
-}
-
-function getEdgeVoiceAndLang(rawVoiceName: string, defaultLang: string = "es"): { voice: string; lang: string } {
-  let voice = cleanVoiceName(rawVoiceName);
-  let lang = defaultLang;
-
-  const localeMatch = voice.match(/^([a-z]{2})-([A-Z]{2})/);
-  if (localeMatch) {
-    lang = localeMatch[0];
-  } else {
-    const lower = rawVoiceName.toLowerCase();
-    if (lower.includes("en-") || lower.includes("us-") || lower.includes("guy") || lower.includes("jenny") || lower.includes("alex") || lower.includes("anna") || lower.includes("bella") || lower.includes("benjamin") || lower.includes("charles") || lower.includes("claire") || lower.includes("david") || lower.includes("diana") || lower.includes("milo") || lower.includes("dean") || lower.includes("chloe") || lower.includes("mia") || lower.includes("puck") || lower.includes("charon") || lower.includes("zephyr")) {
-      lang = "en-US";
-    } else if (lower.includes("zh-") || lower.includes("cn-") || lower.includes("xiaoxiao") || lower.includes("yunxi") || lower.includes("冰糖") || lower.includes("茉莉") || lower.includes("苏打") || lower.includes("白桦")) {
-      lang = "zh-CN";
-    } else if (lower.includes("es-") || lower.includes("mx-") || lower.includes("alvaro") || lower.includes("elvira") || lower.includes("dalia") || lower.includes("jorge")) {
-      lang = "es-ES";
-    } else if (lower.includes("pt-") || lower.includes("br-")) {
-      lang = "pt-BR";
-    } else if (lower.includes("de-")) {
-      lang = "de-DE";
-    } else if (lower.includes("fr-")) {
-      lang = "fr-FR";
-    } else if (lower.includes("it-")) {
-      lang = "it-IT";
-    } else if (lower.includes("ru-")) {
-      lang = "ru-RU";
-    } else if (lower.includes("ja-") || lower.includes("jp-")) {
-      lang = "ja-JP";
-    }
-  }
-
-  const lowerVoice = voice.toLowerCase();
-  if (!voice.includes("-") || voice.length < 5) {
-    const isMale = lowerVoice.includes("male") || lowerVoice.includes("guy") || lowerVoice.includes("david") || lowerVoice.includes("charles") || lowerVoice.includes("benjamin") || lowerVoice.includes("puck") || lowerVoice.includes("charon") || lowerVoice.includes("zephyr") || lowerVoice.includes("milo") || lowerVoice.includes("dean") || lowerVoice.includes("suda") || lowerVoice.includes("苏打") || lowerVoice.includes("alvaro") || lowerVoice.includes("jorge");
-    
-    if (lang.startsWith("es")) {
-      voice = isMale ? "es-ES-AlvaroNeural" : "es-ES-ElviraNeural";
-    } else if (lang.startsWith("en")) {
-      voice = isMale ? "en-US-GuyNeural" : "en-US-JennyNeural";
-    } else if (lang.startsWith("zh")) {
-      voice = isMale ? "zh-CN-YunxiNeural" : "zh-CN-XiaoxiaoNeural";
-    } else if (lang.startsWith("pt")) {
-      voice = isMale ? "pt-BR-JulioNeural" : "pt-BR-FranciscaNeural";
-    } else if (lang.startsWith("de")) {
-      voice = isMale ? "de-DE-ConradNeural" : "de-DE-AmalaNeural";
-    } else if (lang.startsWith("fr")) {
-      voice = isMale ? "fr-FR-HenriNeural" : "fr-FR-DeniseNeural";
-    } else if (lang.startsWith("it")) {
-      voice = isMale ? "it-IT-DiegoNeural" : "it-IT-ElsaNeural";
-    } else if (lang.startsWith("ru")) {
-      voice = isMale ? "ru-RU-DmitryNeural" : "ru-RU-SvetlanaNeural";
-    } else if (lang.startsWith("ja")) {
-      voice = isMale ? "ja-JP-KeitaNeural" : "ja-JP-NanamiNeural";
-    } else {
-      voice = isMale ? "en-US-GuyNeural" : "en-US-JennyNeural";
-    }
-  }
-
-  return { voice, lang };
-}
-
-const WIN_EPOCH = 11644473600;
-const S_TO_NS = 1e9;
-const TRUSTED_CLIENT_TOKEN = "6A5AA1D4EAFF4E9FB37E23D68491D6F4";
-const SEC_MS_GEC_VERSION = "1-143.0.3650.75";
-
-function generateSecMsGec(): string {
-  let ticks = Math.floor(Date.now() / 1000);
-  ticks += WIN_EPOCH;
-  ticks -= ticks % 300;
-  const intervals = ticks * (S_TO_NS / 100);
-  const strToHash = `${intervals.toFixed(0)}${TRUSTED_CLIENT_TOKEN}`;
-  return crypto.createHash("sha256").update(strToHash, "ascii").digest("hex").toUpperCase();
-}
-
-function getJSStyleDateString(): string {
-  const d = new Date();
-  const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  
-  const dayName = days[d.getUTCDay()];
-  const monthName = months[d.getUTCMonth()];
-  const dateNum = String(d.getUTCDate()).padStart(2, '0');
-  const year = d.getUTCFullYear();
-  const hours = String(d.getUTCHours()).padStart(2, '0');
-  const minutes = String(d.getUTCMinutes()).padStart(2, '0');
-  const seconds = String(d.getUTCSeconds()).padStart(2, '0');
-  
-  return `${dayName} ${monthName} ${dateNum} ${year} ${hours}:${minutes}:${seconds} GMT+0000 (Coordinated Universal Time)`;
-}
-
-function synthesizeSpeechWithEdge(
-  voiceName: string,
-  text: string,
-  defaultLang: string = "es",
-  voiceRate: number = 1.0,
-  voiceVolume: number = 1.0
-): Promise<Buffer> {
-  return new Promise((resolve, reject) => {
-    const { voice, lang } = getEdgeVoiceAndLang(voiceName, defaultLang);
-    console.log(`[EdgeTTS] Requesting voice: "${voice}" (lang: "${lang}", rate: ${voiceRate}, volume: ${voiceVolume}) for text: "${text.substring(0, 60)}..."`);
-    
-    const requestId = Array.from({ length: 32 }, () => Math.floor(Math.random() * 16).toString(16)).join("");
-    const secMsGec = generateSecMsGec();
-    const wsUrl = `wss://speech.platform.bing.com/consumer/speech/synthesize/readaloud/edge/v1?TrustedClientToken=${TRUSTED_CLIENT_TOKEN}&ConnectionId=${requestId}&Sec-MS-GEC=${secMsGec}&Sec-MS-GEC-Version=${SEC_MS_GEC_VERSION}`;
-    
-    const ws = new WebSocket(wsUrl, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0",
-        "Pragma": "no-cache",
-        "Cache-Control": "no-cache",
-        "Origin": "chrome-extension://jdiccldimpdaibmpdkjnbmckianbfold",
-        "Sec-WebSocket-Version": "13"
-      }
-    });
-
-    const audioBuffers: Buffer[] = [];
-    let isFinished = false;
-
-    ws.on("open", () => {
-      const timestampStr = getJSStyleDateString();
-      
-      const configPayload = JSON.stringify({
-        context: {
-          synthesis: {
-            audio: {
-              metadataoptions: {
-                sentenceBoundaryEnabled: "false",
-                wordBoundaryEnabled: "true"
-              },
-              outputFormat: "audio-24khz-48kbitrate-mono-mp3"
-            }
-          }
-        }
-      });
-      
-      const configMsg = `X-Timestamp:${timestampStr}Z\r\nContent-Type:application/json; charset=utf-8\r\nPath:speech.config\r\n\r\n${configPayload}`;
-      ws.send(configMsg);
-
-      const cleanText = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-      
-      // Calculate SSML relative percentage for rate (speed)
-      const ratePct = Math.round((voiceRate - 1.0) * 100);
-      const rateStr = ratePct >= 0 ? `+${ratePct}%` : `${ratePct}%`;
-
-      // Calculate SSML relative percentage for volume
-      const volPct = Math.round((voiceVolume - 1.0) * 100);
-      const volStr = volPct >= 0 ? `+${volPct}%` : `${volPct}%`;
-
-      const ssml = `<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='${lang}'><voice name='${voice}'><prosody pitch='+0Hz' rate='${rateStr}' volume='${volStr}'>${cleanText}</prosody></voice></speak>`;
-      const ssmlMsg = `X-RequestId:${requestId}\r\nContent-Type:application/ssml+xml\r\nX-Timestamp:${timestampStr}Z\r\nPath:ssml\r\n\r\n${ssml}`;
-      ws.send(ssmlMsg);
-    });
-
-    ws.on("message", (data, isBinary) => {
-      if (isBinary) {
-        const buffer = Buffer.from(data as any);
-        if (buffer.length >= 2) {
-          const headerLen = buffer.readUInt16BE(0);
-          const header = buffer.toString("utf8", 2, 2 + headerLen);
-          if (header.includes("Path: audio") || header.includes("Path:audio")) {
-            const audioPayload = buffer.subarray(2 + headerLen);
-            audioBuffers.push(audioPayload);
-          }
-        }
-      } else {
-        const textMsg = data.toString();
-        if (textMsg.includes("Path: turn.end") || textMsg.includes("Path:turn.end")) {
-          isFinished = true;
-          ws.close();
-        }
-      }
-    });
-
-    ws.on("close", () => {
-      if (audioBuffers.length > 0) {
-        resolve(Buffer.concat(audioBuffers));
-      } else {
-        reject(new Error("No audio data received from Edge TTS WebSocket"));
-      }
-    });
-
-    ws.on("error", (err) => {
-      reject(err);
-    });
-
-    setTimeout(() => {
-      if (!isFinished) {
-        ws.close();
-        if (audioBuffers.length > 0) {
-          resolve(Buffer.concat(audioBuffers));
-        } else {
-          reject(new Error("Edge TTS timeout"));
-        }
-      }
-    }, 15000);
-  });
-}
-
-async function synthesizeSpeech(
-  voiceName: string,
-  text: string,
-  defaultLang: string = "es",
-  voiceRate: number = 1.0,
-  voiceVolume: number = 1.0
-): Promise<Buffer> {
-  try {
-    return await synthesizeSpeechWithEdge(voiceName, text, defaultLang, voiceRate, voiceVolume);
-  } catch (err) {
-    console.warn(`[SpeechSynthesis] Edge TTS failed for voice "${voiceName}", falling back to Google TTS:`, err);
-    const { lang } = getEdgeVoiceAndLang(voiceName, defaultLang);
-    const shortLang = lang.split("-")[0];
-    const googleTtsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=${shortLang}&client=tw-ob&q=${encodeURIComponent(text.substring(0, 200))}`;
-    const response = await fetch(googleTtsUrl, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-      }
-    });
-    if (!response.ok) {
-      throw new Error(`Google TTS fallback failed with status ${response.status}`);
-    }
-    const arrayBuffer = await response.arrayBuffer();
-    return Buffer.from(arrayBuffer);
-  }
-}
+// Only these config.toml keys are mirrored into process.env. A blanket mirror
+// hands every credential in the file to every child process the renderer
+// spawns; keep this list to what the code genuinely reads.
+const CONFIG_TOML_ENV_ALLOWLIST = new Set([
+  "pexels_api_key",
+  "pexels_api_keys",
+  "pexels_key", // undocumented alias read as a fallback in getPexelsApiKey()
+  "gemini_api_key",
+  "gemini_model_name",
+  "gemini_model",
+  "llm_provider",
+  "openai_api_base",
+  "openai_api_key",
+  "openai_model",
+  "youtube_client_id",
+  "youtube_client_secret",
+  "tiktok_client_key",
+  "tiktok_client_secret",
+]);
 
 async function startServer() {
   const app = express();
@@ -733,7 +569,7 @@ async function startServer() {
                 .split(",")
                 .map((s) => s.trim().replace(/^["']|["']$/g, ""))
                 .filter(Boolean);
-              
+
               if (key === "pexels_api_keys" || key === "pexels_api_key") {
                 globalConfig.settings.app.pexels_api_keys = values as never[];
               } else if (key === "pixabay_api_keys" || key === "pixabay_api_key") {
@@ -743,7 +579,7 @@ async function startServer() {
               const value = rawValue.replace(/^["']|["']$/g, "").trim();
               if (value) {
                 const envKey = key.toUpperCase();
-                if (!process.env[envKey]) {
+                if (CONFIG_TOML_ENV_ALLOWLIST.has(key) && !process.env[envKey]) {
                   process.env[envKey] = value;
                   console.log(`[Config] Loaded ${envKey} from config.toml`);
                 }
@@ -751,6 +587,12 @@ async function startServer() {
                   process.env.GEMINI_API_KEY = value;
                   globalConfig.settings.app.gemini_api_key = value;
                   console.log(`[Config] Loaded GEMINI_API_KEY from config.toml`);
+                }
+                if (key === "gemini_model_name" || key === "gemini_model") {
+                  process.env.GEMINI_MODEL = value;
+                  process.env.GEMINI_MODEL_NAME = value;
+                  globalConfig.settings.app.gemini_model_name = value;
+                  console.log(`[Config] Loaded GEMINI_MODEL (${value}) from config.toml`);
                 }
                 if (key === "pexels_api_key" && globalConfig.settings.app.pexels_api_keys.length === 0) {
                   globalConfig.settings.app.pexels_api_keys = [value] as never[];
@@ -774,7 +616,7 @@ async function startServer() {
   app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
   // Add Request logger middleware
-  app.use((req, res, next) => {
+  app.use((req, _res, next) => {
     console.log(`[API] ${req.method} ${req.url}`);
     next();
   });
@@ -785,88 +627,27 @@ async function startServer() {
   };
 
   // 1. Config APIs
-  app.get("/api/v1/config", wrap(async (req: any, res: any) => {
-    const credsPath = path.join(process.cwd(), "storage", "youtube-credentials.json");
-    if (fs.existsSync(credsPath)) {
-      try {
-        const data = JSON.parse(fs.readFileSync(credsPath, "utf8"));
-        let channels = data.channels || [];
-        let activeChannelId = data.activeChannelId || null;
-        let channelName = data.channelName || "";
-
-        if (channels.length === 0 && data.tokens) {
-          const channelId = "legacy";
-          activeChannelId = channelId;
-          channels = [{ channelId, channelName: data.channelName || "Mi Canal de YouTube", tokens: data.tokens }];
-        }
-
-        const activeChannel = channels.find((c: any) => c.channelId === activeChannelId) || channels[0];
-
-        globalConfig.settings.youtube.is_linked = channels.length > 0;
-        globalConfig.settings.youtube.channel_name = activeChannel ? activeChannel.channelName : channelName;
-      } catch (e) {
-        globalConfig.settings.youtube.is_linked = false;
-        globalConfig.settings.youtube.channel_name = "";
-      }
-    } else {
-      globalConfig.settings.youtube.is_linked = false;
-      globalConfig.settings.youtube.channel_name = "";
+  app.get("/api/v1/config", wrap(async (_req: any, res: any) => {
+    {
+      const creds = loadChannels();
+      const activeChannel = getActiveChannel(creds);
+      globalConfig.settings.youtube.is_linked = creds.channels.length > 0;
+      globalConfig.settings.youtube.channel_name = activeChannel ? activeChannel.channelName : "";
     }
 
-    const tiktokCredsPath = path.join(process.cwd(), "storage", "tiktok-credentials.json");
-    if (fs.existsSync(tiktokCredsPath)) {
-      try {
-        const data = JSON.parse(fs.readFileSync(tiktokCredsPath, "utf8"));
-        let channels = data.channels || [];
-        let activeChannelId = data.activeChannelId || null;
-        let channelName = data.channelName || "";
-
-        const activeChannel = channels.find((c: any) => c.channelId === activeChannelId) || channels[0];
-
-        globalConfig.settings.tiktok.is_linked = channels.length > 0;
-        globalConfig.settings.tiktok.account_name = activeChannel ? activeChannel.channelName : channelName;
-        globalConfig.settings.tiktok.verification_filename = data.verification_filename || "";
-        globalConfig.settings.tiktok.verification_content = data.verification_content || "";
-
-        // Write verification file to static directories so they are served directly by web/GFE
-        if (data.verification_filename && data.verification_content) {
-          try {
-            const publicPath = path.join(process.cwd(), "public", data.verification_filename);
-            const publicDir = path.dirname(publicPath);
-            if (!fs.existsSync(publicDir)) {
-              fs.mkdirSync(publicDir, { recursive: true });
-            }
-            fs.writeFileSync(publicPath, data.verification_content, "utf8");
-            console.log(`[Config] Initialized static verification file at public/${data.verification_filename}`);
-          } catch (err) {
-            console.error(`[Config] Failed to write startup verification file to public/`, err);
-          }
-
-          try {
-            const distPath = path.join(process.cwd(), "dist", data.verification_filename);
-            const distDir = path.dirname(distPath);
-            if (!fs.existsSync(distDir)) {
-              fs.mkdirSync(distDir, { recursive: true });
-            }
-            fs.writeFileSync(distPath, data.verification_content, "utf8");
-            console.log(`[Config] Initialized static verification file at dist/${data.verification_filename}`);
-          } catch (err) {
-            console.error(`[Config] Failed to write startup verification file to dist/`, err);
-          }
-        }
-      } catch (e) {
-        globalConfig.settings.tiktok.is_linked = false;
-        globalConfig.settings.tiktok.account_name = "";
-        globalConfig.settings.tiktok.verification_filename = "";
-        globalConfig.settings.tiktok.verification_content = "";
-      }
-    } else {
-      globalConfig.settings.tiktok.is_linked = false;
-      globalConfig.settings.tiktok.account_name = "";
-      globalConfig.settings.tiktok.verification_filename = "";
-      globalConfig.settings.tiktok.verification_content = "";
+    {
+      const tkCreds = loadTiktokChannels();
+      const activeTkChannel = getActiveTiktokChannel(tkCreds);
+      globalConfig.settings.tiktok.is_linked = tkCreds.channels.length > 0;
+      globalConfig.settings.tiktok.account_name = activeTkChannel
+        ? activeTkChannel.channelName
+        : tkCreds.legacyAccountName || "";
+      globalConfig.settings.tiktok.verification_filename = tkCreds.verification_filename || "";
+      globalConfig.settings.tiktok.verification_content = tkCreds.verification_content || "";
+      // Keep the static verification file served by web/GFE in sync
+      writeTiktokVerificationFiles(process.cwd(), tkCreds);
     }
-    
+
     // Auto-populate YouTube keys from environment/process.env variables
     globalConfig.settings.youtube.client_id = process.env.YOUTUBE_CLIENT_ID || "";
     globalConfig.settings.youtube.api_key = process.env.YOUTUBE_CLIENT_SECRET || "";
@@ -875,10 +656,14 @@ async function startServer() {
     globalConfig.settings.tiktok.client_id = process.env.TIKTOK_CLIENT_KEY || "";
     globalConfig.settings.tiktok.client_secret = process.env.TIKTOK_CLIENT_SECRET || "";
 
-    res.json({ status: 200, message: "ok", data: globalConfig });
+    res.json({
+      status: 200,
+      message: "ok",
+      data: { ...globalConfig, settings: maskSecrets(globalConfig.settings) },
+    });
   }));
 
-  app.get("/api/v1/local-videos", wrap(async (req: any, res: any) => {
+  app.get("/api/v1/local-videos", wrap(async (_req: any, res: any) => {
     try {
       const files = fs.readdirSync(LOCAL_VIDEOS_DIR);
       const videoExtensions = [".mp4", ".mkv", ".avi", ".mov", ".webm"];
@@ -918,6 +703,9 @@ async function startServer() {
   }));
 
   app.put("/api/v1/config", wrap(async (req: any, res: any) => {
+    // A sentinel means "the user did not change this secret" — drop it so the
+    // stored value survives instead of being overwritten with the mask.
+    req.body = stripSentinelSecrets(req.body);
     globalConfig.settings = { ...globalConfig.settings, ...req.body };
 
     // Save YouTube credentials to .env file if they are passed in from the UI
@@ -931,27 +719,7 @@ async function startServer() {
       }
       if (Object.keys(updates).length > 0) {
         try {
-          const envPath = path.join(process.cwd(), ".env");
-          let content = "";
-          if (fs.existsSync(envPath)) {
-            content = fs.readFileSync(envPath, "utf-8");
-          }
-          let lines = content.split(/\r?\n/);
-          for (const [key, val] of Object.entries(updates)) {
-            let found = false;
-            for (let i = 0; i < lines.length; i++) {
-              if (lines[i].trim().startsWith(`${key}=`)) {
-                lines[i] = `${key}=${val}`;
-                found = true;
-                break;
-              }
-            }
-            if (!found) {
-              lines.push(`${key}=${val}`);
-            }
-            process.env[key] = val;
-          }
-          fs.writeFileSync(envPath, lines.join("\n"), "utf-8");
+          updateEnvFile(updates);
           console.log("[Config] Updated .env file with YouTube credentials from UI save:", Object.keys(updates));
         } catch (err) {
           console.error("[Config] Failed to update .env file with YouTube credentials:", err);
@@ -961,60 +729,22 @@ async function startServer() {
 
     // Save TikTok credentials to .env file if they are passed in from the UI
     if (req.body.tiktok) {
-      // Save verification filename and content to tiktok-credentials.json for durability across restarts
-      const tiktokCredsPath = path.join(process.cwd(), "storage", "tiktok-credentials.json");
-      let credData: any = {};
-      if (fs.existsSync(tiktokCredsPath)) {
-        try {
-          credData = JSON.parse(fs.readFileSync(tiktokCredsPath, "utf8"));
-        } catch (e) {
-          credData = {};
-        }
-      }
-      if (req.body.tiktok.verification_filename !== undefined) {
-        credData.verification_filename = req.body.tiktok.verification_filename;
-        globalConfig.settings.tiktok.verification_filename = req.body.tiktok.verification_filename;
-      }
-      if (req.body.tiktok.verification_content !== undefined) {
-        credData.verification_content = req.body.tiktok.verification_content;
-        globalConfig.settings.tiktok.verification_content = req.body.tiktok.verification_content;
-      }
+      // Persist verification metadata in the credentials repo for durability across restarts
       try {
-        const storageDir = path.dirname(tiktokCredsPath);
-        if (!fs.existsSync(storageDir)) {
-          fs.mkdirSync(storageDir, { recursive: true });
+        let tkCreds = loadTiktokChannels();
+        tkCreds = setTiktokVerification(tkCreds, {
+          filename: req.body.tiktok.verification_filename,
+          content: req.body.tiktok.verification_content,
+        });
+        if (req.body.tiktok.verification_filename !== undefined) {
+          globalConfig.settings.tiktok.verification_filename = req.body.tiktok.verification_filename;
         }
-        fs.writeFileSync(tiktokCredsPath, JSON.stringify(credData, null, 2), "utf8");
+        if (req.body.tiktok.verification_content !== undefined) {
+          globalConfig.settings.tiktok.verification_content = req.body.tiktok.verification_content;
+        }
+        saveTiktokChannels(process.cwd(), tkCreds);
         console.log("[Config] Persisted TikTok verification metadata to disk.");
-
-        // Immediately write the verification file to the public and dist folders
-        const filename = credData.verification_filename;
-        const content = credData.verification_content;
-        if (filename && content) {
-          try {
-            const publicPath = path.join(process.cwd(), "public", filename);
-            const publicDir = path.dirname(publicPath);
-            if (!fs.existsSync(publicDir)) {
-              fs.mkdirSync(publicDir, { recursive: true });
-            }
-            fs.writeFileSync(publicPath, content, "utf8");
-            console.log(`[Config] Wrote verification file to public/${filename}`);
-          } catch (e) {
-            console.error(`[Config] Failed to write verification file to public/`, e);
-          }
-
-          try {
-            const distPath = path.join(process.cwd(), "dist", filename);
-            const distDir = path.dirname(distPath);
-            if (!fs.existsSync(distDir)) {
-              fs.mkdirSync(distDir, { recursive: true });
-            }
-            fs.writeFileSync(distPath, content, "utf8");
-            console.log(`[Config] Wrote verification file to dist/${filename}`);
-          } catch (e) {
-            console.error(`[Config] Failed to write verification file to dist/`, e);
-          }
-        }
+        writeTiktokVerificationFiles(process.cwd(), tkCreds);
       } catch (err) {
         console.error("[Config] Failed to save verification metadata to tiktok-credentials.json:", err);
       }
@@ -1028,27 +758,7 @@ async function startServer() {
       }
       if (Object.keys(updates).length > 0) {
         try {
-          const envPath = path.join(process.cwd(), ".env");
-          let content = "";
-          if (fs.existsSync(envPath)) {
-            content = fs.readFileSync(envPath, "utf-8");
-          }
-          let lines = content.split(/\r?\n/);
-          for (const [key, val] of Object.entries(updates)) {
-            let found = false;
-            for (let i = 0; i < lines.length; i++) {
-              if (lines[i].trim().startsWith(`${key}=`)) {
-                lines[i] = `${key}=${val}`;
-                found = true;
-                break;
-              }
-            }
-            if (!found) {
-              lines.push(`${key}=${val}`);
-            }
-            process.env[key] = val;
-          }
-          fs.writeFileSync(envPath, lines.join("\n"), "utf-8");
+          updateEnvFile(updates);
           console.log("[Config] Updated .env file with TikTok credentials from UI save:", Object.keys(updates));
         } catch (err) {
           console.error("[Config] Failed to update .env file with TikTok credentials:", err);
@@ -1056,7 +766,11 @@ async function startServer() {
       }
     }
 
-    res.json({ status: 200, message: "ok", data: globalConfig });
+    res.json({
+      status: 200,
+      message: "ok",
+      data: { ...globalConfig, settings: maskSecrets(globalConfig.settings) },
+    });
   }));
 
   // 2. Voices APIs
@@ -1151,23 +865,6 @@ async function startServer() {
     });
   }));
 
-  function getFallbackScript(subject: string, paragraph_number: number): string {
-    const fallbackParagraphs = [
-      `Bienvenidos a este viaje fascinante y profundamente revelador por el maravilloso mundo de ${subject}. En este relato, nos disponemos a desentrañar los secretos más asombrosos, las leyendas ocultas y los acontecimientos históricos que han dado forma a este tema y que despiertan una inmensa pasión en todos aquellos que se atreven a explorarlo con una mirada curiosa y atenta.`,
-      `Al adentrarnos en las profundidades de ${subject}, comenzamos a descubrir detalles verdaderamente sorprendentes que desafían lo unconventional y cambian por completo nuestra percepción cotidiana de la realidad. Es un espectáculo absolutamente asombroso contemplar cómo la ciencia rigurosa, la majestuosidad de la naturaleza indómita y la chispa inagotable de la creatividad humana se entrelazan de manera perfecta para crear algo único.`,
-      `Cada rincón y cada época relacionados con ${subject} albergan lecciones valiosas de perseverancia, ingenio y misterio. A través de los años, grandes pensadores y exploradores dedicaron sus vidas enteras a comprender estas dinámicas, dejando un legado imborrable que hoy en día continúa inspirando a nuevas generaciones de entusiastas en todo el planeta.`,
-      `Además, el impacto cultural y social de ${subject} no solo se limita al pasado, sino que sigue moldeando activamente nuestras interacciones modernas y la forma en que concebimos el mañana. Comprender su esencia misma nos permite conectar con un propósito mayor, reconociendo las influencias invisibles pero poderosas que guían constantemente nuestras decisiones y nuestra evolución colectiva.`,
-      `Es fascinante observar cómo las diferentes corrientes de pensamiento han convergido en torno a ${subject}, aportando cada una de ellas una perspectiva valiosa y única que enriquece el debate global. Desde las aplicaciones más prácticas del día a día hasta las teorías más abstractas de la filosofía y el arte, este campo de estudio se consolida como un puente indispensable entre diversas disciplinas del saber humano.`,
-      `A medida que la tecnología y la investigación avanzan a pasos agigantados, nuevas dimensiones de ${subject} comienzan a revelarse ante nuestros ojos, planteando desafíos emocionantes y oportunidades sin precedentes. Los expertos coinciden en que apenas estamos rozando la superficie de lo que es posible alcanzar, lo que convierte a esta disciplina en un terreno sumamente fértil para la innovación y el descubrimiento continuo.`,
-      `Por otro lado, la vertiente humana de ${subject} nos recuerda la importancia de la empatía, la colaboración y el esfuerzo compartido en la construcción de un futuro más próspero. Las grandes historias de éxito asociadas a este ámbito suelen estar protagonizadas por personas comunes que, impulsadas por una visión extraordinaria, lograron superar barreras aparentemente insalvables.`,
-      `Al reflexionar con mayor profundidad sobre la trascendencia de ${subject}, nos damos cuenta de que cada pequeño avance en esta materia contribuye a tejer una red global de conocimiento interconectado. Esta sinergia no solo acelera el progreso técnico, sino que también fomenta un entendimiento más profundo y compasivo entre las diversas comunidades que cohabitan en nuestro planeta.`,
-      `De cara a los próximos años, se vislumbra que ${subject} jugará un papel crucial en la resolución de algunos de los interrogantes más complejos del nuevo milenio. Estar preparados para comprender estos cambios y adaptarnos a ellos con flexibilidad será, sin duda, una de las habilidades más valiosas para las generaciones venideras.`,
-      `Esperamos sinceramente que hayan disfrutado al máximo de este enriquecedor recorrido lleno de aprendizaje y asombro por el universo de ${subject}. Los invitamos cordialmente a seguir explorando este y otros enigmas con la mente abierta, recordando siempre que la curiosidad insaciable es el verdadero motor que impulsa el conocimiento humano hacia horizontes infinitos.`
-    ];
-
-    return fallbackParagraphs.slice(0, paragraph_number).join("\n\n");
-  }
-
   app.post("/api/v1/voices/preview", wrap(async (req: any, res: any) => {
     const voice_name = req.body.voice_name || "";
     const text = req.body.text || "Hola, probando esta voz.";
@@ -1176,7 +873,7 @@ async function startServer() {
 
     let tl = "es"; // default to Spanish
     const voiceNameLower = voice_name.toLowerCase();
-    
+
     if (voiceNameLower.includes("en-") || voiceNameLower.includes("us-") || voiceNameLower.includes("guy") || voiceNameLower.includes("jenny") || voiceNameLower.includes("alex") || voiceNameLower.includes("anna") || voiceNameLower.includes("bella") || voiceNameLower.includes("benjamin") || voiceNameLower.includes("charles") || voiceNameLower.includes("claire") || voiceNameLower.includes("david") || voiceNameLower.includes("diana") || voiceNameLower.includes("milo") || voiceNameLower.includes("dean") || voiceNameLower.includes("chloe") || voiceNameLower.includes("mia") || voiceNameLower.includes("puck") || voiceNameLower.includes("charon") || voiceNameLower.includes("zephyr")) {
       tl = "en";
     } else if (voiceNameLower.includes("zh-") || voiceNameLower.includes("cn-") || voiceNameLower.includes("xiaoxiao") || voiceNameLower.includes("yunxi") || voiceNameLower.includes("冰糖") || voiceNameLower.includes("茉莉") || voiceNameLower.includes("苏打") || voiceNameLower.includes("白桦")) {
@@ -1238,7 +935,9 @@ async function startServer() {
       video_language = "es",
       paragraph_number = 3,
       video_script_prompt = "",
-      custom_system_prompt = ""
+      custom_system_prompt = "",
+      is_multi_part = false,
+      parts_count = 2
     } = req.body;
 
     const llmProvider = process.env.LLM_PROVIDER || "gemini";
@@ -1246,12 +945,80 @@ async function startServer() {
       throw new Error("No Gemini API key configured. Please set GEMINI_API_KEY.");
     }
 
-    let prompt = `Escribe un guión de video sobre "${video_subject}" en idioma ${video_language}. Es CRÍTICO que el guión tenga exactamente ${paragraph_number} párrafos bien estructurados, completos y detallados.
-Cada párrafo debe ser sustancial y desarrollado por completo (debe tener un rango estricto de entre 45 y 55 palabras por párrafo, compuesto por 3 a 5 oraciones ricas y descriptivas, óptimo para narrar una historia o un documental).
-La longitud total del guión completo debe ser de aproximadamente ${paragraph_number * 45} a ${paragraph_number * 55} palabras en total. A medida que aumenta el número de párrafos, el guión general debe ser proporcionalmente más largo de forma lineal y acumulativa (por ejemplo, 3 párrafos deben sumar unas 150 palabras en total, y 4 párrafos deben sumar unas 200 palabras en total). No reduzcas la longitud de los párrafos individuales al tener más párrafos; cada uno de ellos debe mantener de forma consistente la profundidad, extensión y cantidad de palabras especificadas.
-Separa cada párrafo estrictamente con dos saltos de línea (\\n\\n). Devuelve SOLAMENTE el texto del guión, sin títulos, introducciones ni comentarios adicionales.
+    let prompt = "";
 
-CRÍTICO: No utilices NINGÚN tipo de formato de texto como asteriscos (* o **), comillas (" o “ o ”) o palabras entre paréntesis o corchetes, ya que el guión se usará directamente con un generador de voz automática y estos caracteres provocan lecturas raras. Escribe solo texto limpio y natural.`;
+    if (is_multi_part) {
+      const numParts = Math.min(Math.max(Number(parts_count) || 2, 2), 3);
+      prompt = `Escribe una historia continua dividida en EXACTAMENTE ${numParts} PARTES sobre "${video_subject}" en idioma ${video_language} neutro.
+
+INSTRUCCIONES DE ESTRUCTURA MULTI-PARTE Y PÁRRAFOS POR PARTE (CRÍTICO):
+- Es CRÍTICO que CADA PARTE tenga EXACTAMENTE ${paragraph_number} párrafos bien estructurados, completos y detallados.
+- Separa la PARTE 1, PARTE 2${numParts === 3 ? " y PARTE 3" : ""} colocando explícitamente la línea divisoria de encabezado en mayúsculas:
+  "--- PARTE 2 ---"
+  ${numParts === 3 ? '"--- PARTE 3 ---"\n' : ""}
+
+ESTRUCTURA Y CONTEXTO POR PARTE:
+1. PARTE 1 (GANCHO INMEDIATO Y PREMISA CENTRAL):
+   - La PRIMERA ORACIÓN de la Parte 1 DEBE ser el gancho principal y demoledor. DEBE revelar o introducir directamente la premisa central ("${video_subject}") desde los primeros 3 a 5 segundos. NUNCA pierdas oraciones en preámbulos o rodeos contextuales irrelevantes (ej: NUNCA empieces con "Mi hermano acaba de volver de un viaje...", "No te voy a mentir...", "¿Alguna vez te has preguntado...?").
+   - Integra la premisa central ("${video_subject}") de forma natural, fluida y gramaticalmente impecable. Adapta la sintaxis si el texto del tema es tosco o tiene palabras repetidas (ej: usa "Sospecho seriamente que el papá de la novia de mi hermano es un asesino a sueldo" en lugar de redundancias o frases mal construidas).
+   - FINAL DE PARTE 1 (SUSPENSO / CLIFFHANGER ELEVADO): El último párrafo de la Parte 1 DEBE culminar obligatoriamente en un punto de máxima intriga, revelación perturbadora o peligro inminente (cliffhanger potente). Debe cortar en el instante de mayor tensión para dejar al espectador deseando saber qué ocurrió después.
+
+2. ENCABEZADO Y COMIENZO DE CADA PARTE (CRÍTICO Y OBLIGATORIO):
+   - PARTE 1: Comienza directamente con la historia y el gancho demoledor inicial sobre "${video_subject}".
+   - PARTE 2 (y PARTE 3 si aplica, es decir, cada PARTE X donde X >= 2): DEBE comenzar OBLIGATORIAMENTE diciendo el título del video/proyecto seguido de ', Parte X.' y luego continuar con la historia.
+     Ejemplo exacto: Si el tema es "${video_subject}", la primera oración de la Parte 2 DEBE ser: "${video_subject}, Parte 2. [continuación de la historia...]" (y para la Parte 3: "${video_subject}, Parte 3. [continuación de la historia...]").
+   - NO agregues introducciones adicionales, resúmenes ni repeticiones del final de la Parte 1. Entra directo a la continuación inmediatamente después de la frase inicial "${video_subject}, Parte X.".
+
+3. FINAL DE PARTES INTERMEDIAS Y DESENLACE IMPACTANTE DE LA PARTE FINAL:
+${numParts === 2 ? `   - PARTE 1: Finaliza con un potente cliffhanger o revelación inquietante que genere un deseo urgente de ver la Parte 2.
+   - PARTE 2 (PARTE FINAL Y DESENLACE): Desarrolla el clímax con revelaciones impactantes y conduce la historia hacia un final llamativo, memorable y sorprendente, pero manteniendo siempre el realismo y la plausibilidad (ej: una revelación inesperada sobre los motivos, un giro inquietante pero lógico, o una decisión drástica). Resuelve el conflicto central de forma clara para dar una conclusión 100% resolutiva que deje impactado al espectador.` : `   - PARTE 1: Culmina en un cliffhanger impactante que deje en suspenso al espectador.
+   - PARTE 2: Mantiene la tensión alta, profundiza la historia con descubrimientos inquietantes y culmina obligatoriamente en un segundo cliffhanger de máxima intriga justo antes del desenlace.
+   - PARTE 3 (PARTE FINAL Y DESENLACE): Desarrolla el clímax y conduce la historia hacia una CONCLUSIÓN DEFINITIVA, SORPRENDENTE Y LLAMATIVA. Incluye un giro memorable pero realista que resuelva el conflicto de forma impactante sin dejar la historia a medias.`}
+
+4. RITMO, LÓGICA Y COHERENCIA REALISTA:
+   - PLAUSIBILIDAD DE INVESTIGACIÓN: Las acciones del protagonista deben ser realistas para una persona común. Evita giros absurdos o habilidades inverosímiles (ej: un civil no rastrea "empresas fachada bancarias complejas" de la nada en 5 minutos; prioriza sospechas, conversaciones escuchadas, notas, fotos u objetos físicos tangibles).
+   - Mantén una LÍNEA NARRATIVA COHERENTE: Todos los eventos deben conectarse de forma lógica sin saltos bruscos. La historia debe tener sentido orgánico de principio a fin.
+
+ESTILO Y TONO NARRATIVO (REDDIT REALISTA Y CONCRETO):
+- PERSPECTIVA OBLIGATORIA: Narración estrictamente en PRIMERA PERSONA ("yo", "mi", "me sucedió a mí", "sentí", "descubrí"). NUNCA hables en segunda persona ("tú", "te observan") ni como un narrador omnisciente externo.
+- REALISMO Y DETALLES CONCRETOS: La historia debe sonar como una confesión real de Reddit de alguien contando una vivencia propia de carne y hueso. Fundamenta la historia en hechos reales, objetos tangibles, conversaciones y sospechas fundamentadas. Evita desviarte hacia elementos sobrenaturales o fantasmas a menos que se solicite.
+- TONO Y VOZ: Lenguaje natural, directo, fluido y expresivo.
+- Público objetivo: entre 16 y 45 años.
+- Redacción clara, fluida, directa y sin palabras rebuscadas ni tecnicismos innecesarios. Debe ser totalmente comprensible para todo público.
+
+LONGITUD Y FORMATO POR PARTE:
+- CADA PARTE individual debe ser sustancial y estar compuesta por exactamente ${paragraph_number} párrafos (rango estricto de entre 45 y 55 palabras por párrafo, compuesto por 3 a 5 oraciones ricas y descriptivas por párrafo).
+- Separa los párrafos dejando una línea en blanco entre ellos. NUNCA escribas la cadena literal de texto "\\n" en la respuesta.
+- COHERENCIA DE OBJETOS: Los objetos y acciones narradas deben ser 100% lógicos y plausibles en el entorno inmediato. NUNCA introduzcas objetos inverosímiles fuera de lugar (como telescopios de caza en una conversación cercana).
+- CONCORDANCIA GRAMATICAL: Mantén concordancia impecable en primera persona (ej: "un arma que no reconocí" en vez de "que no me reconoció").
+- Devuelve SOLAMENTE el texto del guión con las etiquetas de divisoria ("--- PARTE X ---"), sin títulos ni comentarios adicionales.
+
+RESTRICCIONES DE FORMATO PARA TEXT-TO-SPEECH (CRÍTICO):
+- No utilices NINGÚN tipo de formato de texto como asteriscos (* o **), comillas (" o “ o ”), paréntesis, corchetes, ni guiones dentro del texto narrado (salvo las líneas con las marcas divisoria "--- PARTE X ---"). El guión se usará directamente en un generador de voz automática y estos caracteres arruinan la lectura. Escribe únicamente texto limpio, continuo y natural apto para síntesis de voz.`;
+    } else {
+      prompt = `Escribe un guión de video sobre "${video_subject}" en idioma ${video_language} neutro. Es CRÍTICO que el guión tenga exactamente ${paragraph_number} párrafos bien estructurados, completos y detallados. Debe seguir la siguiente estructura y estilo:
+
+ESTRUCTURA Y CONTEXTO (CRÍTICO):
+1. GANCHO IMPACTANTE Y CONTEXTO CLARO (PRIMER PÁRRAFO): La primera oración (los primeros 3 a 5 segundos) DEBE ser un gancho demoledor y directo. NUNCA empieces con preguntas reflexivas ni clichés genéricos ("¿Alguna vez te has preguntado...?", "No te voy a mentir..."). Además, en el primer párrafo DEBES integrar la premisa central de la historia ("${video_subject}") de forma natural, fluida y gramaticalmente impecable (evita duplicar verbos como 'creo que creo que' o copiar frases crudas incompletas).
+2. RITMO Y CONCLUSIÓN SATISFACTORIA: Mantén la intriga y el suspenso elevados a lo largo de todo el relato. A medida que avanza hacia los párrafos finales, lleva la historia hacia un clímax definitivo y una CONCLUSIÓN SATISFACTORIA Y DECISIVA que resuelva el conflicto central o revele la verdad definitiva sin dejar el final inconcluso o flotando en la ambigüedad.
+3. COHERENCIA NARRATIVA: Mantén una línea argumental lógica y uniforme. Todos los detalles, objetos y situaciones deben guardar coherencia entre sí.
+
+ESTILO Y TONO NARRATIVO (REDDIT REALISTA Y CONCRETO):
+- PERSPECTIVA OBLIGATORIA: Narración strictly en PRIMERA PERSONA ("yo", "mi", "me sucedió a mí", "sentí", "descubrí"). NUNCA hables en segunda persona ("tú", "te observan") ni como un narrador omnisciente externo.
+- REALISMO Y DETALLES CONCRETOS: La historia debe sonar como una confesión real de Reddit de alguien contando una vivencia propia de carne y hueso. Fundamenta la historia en hechos reales, objetos tangibles, conversaciones y sospechas fundamentadas.
+- TONO Y VOZ: Lenguaje natural, directo, fluido y expresivo.
+- Público objetivo: entre 16 y 45 años.
+- Redacción clara, fluida, directa y comprensible para todo público.
+
+LONGITUD Y FORMATO:
+- Cada párrafo debe ser sustancial y desarrollado por completo (rango estricto de entre 45 y 55 palabras por párrafo, compuesto por 3 a 5 oraciones ricas y descriptivas).
+- La longitud total del guión completo debe ser de aproximadamente ${paragraph_number * 45} a ${paragraph_number * 55} palabras en total. La longitud debe ser acumulativa y consistente.
+- Separa los párrafos dejando una línea en blanco entre ellos. NUNCA escribas la cadena literal de texto "\\n" en la respuesta.
+- Devuelve SOLAMENTE el texto del guión, sin títulos, introducciones ni comentarios adicionales.
+
+RESTRICCIONES DE FORMATO PARA TEXT-TO-SPEECH (CRÍTICO):
+- No utilices NINGÚN tipo de formato de texto como asteriscos (* o **), comillas (" o “ o ”), paréntesis, corchetes, ni guiones. El guión se usará directamente en un generador de voz automática. Escribe únicamente texto limpio, continuo y natural.`;
+    }
 
     if (video_script_prompt) {
       prompt += `\n\nInstrucciones adicionales para el guión:\n${video_script_prompt}`;
@@ -1262,21 +1029,43 @@ CRÍTICO: No utilices NINGÚN tipo de formato de texto como asteriscos (* o **),
       finalSystemPrompt += `\n\n[INSTRUCCIÓN DE PRIORIDAD ABSOLUTA PARA EL NÚMERO DE PÁRRAFOS]: El usuario ha solicitado exactamente ${paragraph_number} párrafos. Ignora cualquier restricción de límite de palabras total anterior (como "extensión total de entre 120 y 140 palabras" o similar). En su lugar, aplica ese límite de palabras a cada párrafo de manera individual (es decir, cada uno de los ${paragraph_number} párrafos debe tener unas 45-55 palabras de forma consistente). El guion completo debe crecer de manera lineal y proporcional (aproximadamente de ${paragraph_number * 45} a ${paragraph_number * 55} palabras en total) para asegurar que la duración de la locución aumente según la cantidad de párrafos solicitados.`;
     }
 
-    const rawScript = await generateGeminiContent(prompt, false, finalSystemPrompt || undefined);
-    const scriptText = cleanScriptSymbols(rawScript);
+    const rawScript = await generateLlmContent(prompt, false, finalSystemPrompt || undefined);
 
+    if (is_multi_part) {
+      // Split rawScript by separator markers
+      const rawParts = rawScript.split(/---+\s*PARTE\s*\d+\s*---+/i).map((p) => cleanScriptSymbols(p).trim()).filter(Boolean);
+      const multi_part_scripts = (rawParts.length > 0 ? rawParts : [cleanScriptSymbols(rawScript)])
+        .map((partText, idx) => ensurePartHeader(partText, idx + 1, video_subject));
+      
+      // Reconstruct combined script with clear part markers
+      const fullScriptText = multi_part_scripts.map((script, idx) => {
+        return idx === 0 ? script : `--- PARTE ${idx + 1} ---\n\n${script}`;
+      }).join("\n\n");
+
+      res.json({
+        status: 200,
+        message: "ok",
+        data: {
+          video_script: fullScriptText,
+          multi_part_scripts,
+        }
+      });
+      return;
+    }
+
+    const scriptText = cleanScriptSymbols(rawScript);
     res.json({ status: 200, message: "ok", data: { video_script: scriptText } });
   }));
 
   app.post("/api/v1/terms", wrap(async (req: any, res: any) => {
-    const { video_subject, video_script = "" } = req.body;
+    const { video_script = "" } = req.body;
     const llmProvider = process.env.LLM_PROVIDER || "gemini";
     if (llmProvider === "gemini" && !process.env.GEMINI_API_KEY) {
       throw new Error("No Gemini API key configured. Please set GEMINI_API_KEY.");
     }
 
     const prompt = `Analiza el siguiente guión de video y genera una lista de exactamente 5 términos de búsqueda en inglés (para buscar videos de stock relevantes). Devuelve una respuesta JSON con el formato: { "terms": ["term1", "term2", ...] }. Guión: ${video_script}`;
-    const resp = await generateGeminiContent(prompt, true);
+    const resp = await generateLlmContent(prompt, true);
     const parsed = JSON.parse(resp);
     const terms = parsed.terms || [];
 
@@ -1302,7 +1091,7 @@ Instrucciones:
 - El formato final debe ser una sola línea de hashtags separados por un espacio, por ejemplo: "#hashtag1 #hashtag2 #hashtag3" (sin comas ni saltos de línea).
 - Devuelve la respuesta en formato JSON estructurado: { "hashtags": "#hashtag1 #hashtag2 #hashtag3" }`;
 
-    const resp = await generateGeminiContent(prompt, true);
+    const resp = await generateLlmContent(prompt, true);
     let hashtags = "";
     try {
       const parsed = JSON.parse(resp);
@@ -1377,46 +1166,12 @@ Instrucciones:
     }
 
     // Save credentials to local storage
-    const storageDir = path.join(process.cwd(), "storage");
-    if (!fs.existsSync(storageDir)) {
-      fs.mkdirSync(storageDir, { recursive: true });
-    }
-
-    const credsPath = path.join(storageDir, "youtube-credentials.json");
-    let credData: any = {
-      activeChannelId: channelId,
-      channels: []
-    };
-
-    if (fs.existsSync(credsPath)) {
-      try {
-        const existing = JSON.parse(fs.readFileSync(credsPath, "utf8"));
-        let channels = existing.channels || [];
-        if (channels.length === 0 && existing.tokens) {
-          channels = [{ channelId: "legacy", channelName: existing.channelName || "Mi Canal de YouTube", tokens: existing.tokens }];
-        }
-        credData.channels = channels;
-        credData.activeChannelId = existing.activeChannelId || channelId;
-      } catch (e) {
-        console.error("Error reading existing credentials:", e);
-      }
-    }
-
-    // Update or insert channel
-    const existingIndex = credData.channels.findIndex((c: any) => c.channelId === channelId);
-    if (existingIndex > -1) {
-      credData.channels[existingIndex].tokens = tokens;
-      credData.channels[existingIndex].channelName = channelName;
-    } else {
-      credData.channels.push({ channelId, channelName, tokens });
-    }
-
-    // Set as active if only one or if active was not set
-    if (!credData.activeChannelId || credData.activeChannelId === "unknown" || credData.channels.length === 1) {
-      credData.activeChannelId = channelId;
-    }
-
-    fs.writeFileSync(credsPath, JSON.stringify(credData, null, 2));
+    const creds = upsertChannel(loadChannels(), {
+      channelId,
+      channelName,
+      tokens: tokens as unknown as Record<string, unknown>,
+    });
+    saveChannels(process.cwd(), creds);
 
     // Send postMessage to closing popup
     res.send(`
@@ -1447,48 +1202,24 @@ Instrucciones:
   }));
 
   // YouTube OAuth Status Endpoint
-  app.get("/api/v1/youtube/status", wrap(async (req: any, res: any) => {
-    const credsPath = path.join(process.cwd(), "storage", "youtube-credentials.json");
-    if (!fs.existsSync(credsPath)) {
-      return res.json({ status: 200, message: "ok", data: { is_linked: false, channel_name: null, active_channel_id: null, channels: [] } });
-    }
-
-    try {
-      const data = JSON.parse(fs.readFileSync(credsPath, "utf8"));
-      let channels = data.channels || [];
-      let activeChannelId = data.activeChannelId || null;
-      let channelName = data.channelName || null;
-
-      if (channels.length === 0 && data.tokens) {
-        const channelId = "legacy";
-        activeChannelId = channelId;
-        channels = [{ channelId, channelName: data.channelName || "Mi Canal de YouTube", tokens: data.tokens }];
+  app.get("/api/v1/youtube/status", wrap(async (_req: any, res: any) => {
+    const creds = loadChannels();
+    const activeChannel = getActiveChannel(creds);
+    return res.json({
+      status: 200,
+      message: "ok",
+      data: {
+        is_linked: creds.channels.length > 0,
+        channel_name: activeChannel ? activeChannel.channelName : null,
+        active_channel_id: activeChannel ? activeChannel.channelId : null,
+        channels: creds.channels.map((c) => ({ channelId: c.channelId, channelName: c.channelName }))
       }
-
-      const activeChannel = channels.find((c: any) => c.channelId === activeChannelId) || channels[0];
-      const activeName = activeChannel ? activeChannel.channelName : channelName;
-
-      return res.json({
-        status: 200,
-        message: "ok",
-        data: {
-          is_linked: channels.length > 0,
-          channel_name: activeName,
-          active_channel_id: activeChannel ? activeChannel.channelId : null,
-          channels: channels.map((c: any) => ({ channelId: c.channelId, channelName: c.channelName }))
-        }
-      });
-    } catch (e) {
-      return res.json({ status: 200, message: "ok", data: { is_linked: false, channel_name: null, active_channel_id: null, channels: [] } });
-    }
+    });
   }));
 
   // YouTube OAuth Disconnect Endpoint
-  app.post("/api/v1/youtube/disconnect", wrap(async (req: any, res: any) => {
-    const credsPath = path.join(process.cwd(), "storage", "youtube-credentials.json");
-    if (fs.existsSync(credsPath)) {
-      fs.unlinkSync(credsPath);
-    }
+  app.post("/api/v1/youtube/disconnect", wrap(async (_req: any, res: any) => {
+    saveChannels(process.cwd(), { activeChannelId: null, channels: [] });
     return res.json({ status: 200, message: "ok" });
   }));
 
@@ -1499,29 +1230,18 @@ Instrucciones:
       return res.status(400).json({ status: 400, message: "Falta el channelId." });
     }
 
-    const credsPath = path.join(process.cwd(), "storage", "youtube-credentials.json");
-    if (!fs.existsSync(credsPath)) {
+    const creds = loadChannels();
+    if (creds.channels.length === 0) {
       return res.status(404).json({ status: 404, message: "No se encontraron credenciales de YouTube." });
     }
 
     try {
-      const data = JSON.parse(fs.readFileSync(credsPath, "utf8"));
-      let channels = data.channels || [];
-      if (channels.length === 0 && data.tokens) {
-        const cId = "legacy";
-        data.activeChannelId = cId;
-        data.channels = [{ channelId: cId, channelName: data.channelName || "Mi Canal de YouTube", tokens: data.tokens }];
-        channels = data.channels;
-      }
-
-      const found = channels.find((c: any) => c.channelId === channelId);
-      if (!found) {
+      const updated = selectChannel(creds, channelId);
+      if (!updated) {
         return res.status(404).json({ status: 404, message: "Canal no encontrado en las cuentas vinculadas." });
       }
 
-      data.activeChannelId = channelId;
-      fs.writeFileSync(credsPath, JSON.stringify(data, null, 2));
-
+      saveChannels(process.cwd(), updated);
       return res.json({ status: 200, message: "ok", activeChannelId: channelId });
     } catch (e: any) {
       return res.status(500).json({ status: 500, message: e.message });
@@ -1535,34 +1255,13 @@ Instrucciones:
       return res.status(400).json({ status: 400, message: "Falta el channelId." });
     }
 
-    const credsPath = path.join(process.cwd(), "storage", "youtube-credentials.json");
-    if (!fs.existsSync(credsPath)) {
+    const creds = loadChannels();
+    if (creds.channels.length === 0) {
       return res.status(404).json({ status: 404, message: "No se encontraron credenciales de YouTube." });
     }
 
     try {
-      const data = JSON.parse(fs.readFileSync(credsPath, "utf8"));
-      let channels = data.channels || [];
-      if (channels.length === 0 && data.tokens) {
-        const cId = "legacy";
-        data.activeChannelId = cId;
-        data.channels = [{ channelId: cId, channelName: data.channelName || "Mi Canal de YouTube", tokens: data.tokens }];
-        channels = data.channels;
-      }
-
-      data.channels = channels.filter((c: any) => c.channelId !== channelId);
-      if (data.activeChannelId === channelId) {
-        data.activeChannelId = data.channels.length > 0 ? data.channels[0].channelId : null;
-      }
-
-      if (data.channels.length === 0) {
-        if (fs.existsSync(credsPath)) {
-          fs.unlinkSync(credsPath);
-        }
-      } else {
-        fs.writeFileSync(credsPath, JSON.stringify(data, null, 2));
-      }
-
+      saveChannels(process.cwd(), removeChannel(creds, channelId));
       return res.json({ status: 200, message: "ok" });
     } catch (e: any) {
       return res.status(500).json({ status: 500, message: e.message });
@@ -1576,22 +1275,12 @@ Instrucciones:
       return res.status(400).json({ status: 400, message: "Falta el videoUrl del video a subir." });
     }
 
-    const credsPath = path.join(process.cwd(), "storage", "youtube-credentials.json");
-    if (!fs.existsSync(credsPath)) {
+    const creds = loadChannels();
+    if (creds.channels.length === 0) {
       return res.status(401).json({ status: 401, message: "YouTube no está vinculado. Por favor, vincúlalo primero." });
     }
 
-    const cred = JSON.parse(fs.readFileSync(credsPath, "utf8"));
-    let channels = cred.channels || [];
-    let activeChannelId = cred.activeChannelId || null;
-
-    if (channels.length === 0 && cred.tokens) {
-      const channelId = "legacy";
-      activeChannelId = channelId;
-      channels = [{ channelId, channelName: cred.channelName || "Mi Canal de YouTube", tokens: cred.tokens }];
-    }
-
-    const activeChannel = channels.find((c: any) => c.channelId === activeChannelId) || channels[0];
+    const activeChannel = getActiveChannel(creds);
     if (!activeChannel) {
       return res.status(401).json({ status: 401, message: "YouTube no está vinculado o el canal activo no existe." });
     }
@@ -1606,15 +1295,20 @@ Instrucciones:
     // Handle token refresh events automatically
     oauth2Client.on("tokens", (newTokens) => {
       activeChannel.tokens = { ...activeChannel.tokens, ...newTokens };
-      fs.writeFileSync(credsPath, JSON.stringify(cred, null, 2));
+      saveChannels(process.cwd(), creds);
     });
 
     const youtube = google.youtube({ version: "v3", auth: oauth2Client });
 
-    // Locate file on disk
-    const filePath = path.join(process.cwd(), videoUrl);
+    // Locate file on disk. Solo se publica lo que el render escribió:
+    // cualquier ruta fuera de storage/renders se rechaza, no se normaliza.
+    const rendersDir = path.join(process.cwd(), "storage", "renders");
+    const filePath = resolveWithinDir(rendersDir, path.join(process.cwd(), videoUrl));
+    if (!filePath) {
+      return res.status(400).json({ status: 400, message: "videoUrl debe apuntar a un render dentro de storage/renders.", data: null });
+    }
     if (!fs.existsSync(filePath)) {
-      return res.status(404).json({ status: 404, message: `No se encontró el archivo de video en el disco: ${filePath}` });
+      return res.status(404).json({ status: 404, message: "No se encontró el archivo de video en el disco.", data: null });
     }
 
     const response = await youtube.videos.insert({
@@ -1717,29 +1411,7 @@ Instrucciones:
     const username = user?.username || "";
     const avatarUrl = user?.avatar_url || "";
 
-    // Save credentials to local storage
-    const storageDir = path.join(process.cwd(), "storage");
-    if (!fs.existsSync(storageDir)) {
-      fs.mkdirSync(storageDir, { recursive: true });
-    }
-
-    const credsPath = path.join(storageDir, "tiktok-credentials.json");
-    let credData: any = {
-      activeChannelId: channelId,
-      channels: []
-    };
-
-    if (fs.existsSync(credsPath)) {
-      try {
-        const existing = JSON.parse(fs.readFileSync(credsPath, "utf8"));
-        credData.channels = existing.channels || [];
-        credData.activeChannelId = existing.activeChannelId || channelId;
-      } catch (e) {
-        console.error("Error reading existing tiktok credentials:", e);
-      }
-    }
-
-    // Update or insert channel
+    // Save credentials via the repo (preserves verification metadata)
     const tokens = {
       access_token: tokenData.access_token,
       refresh_token: tokenData.refresh_token,
@@ -1747,22 +1419,9 @@ Instrucciones:
       refresh_expires_at: Date.now() + (tokenData.refresh_expires_in * 1000)
     };
 
-    const existingIndex = credData.channels.findIndex((c: any) => c.channelId === channelId);
-    if (existingIndex > -1) {
-      credData.channels[existingIndex].tokens = tokens;
-      credData.channels[existingIndex].channelName = channelName;
-      credData.channels[existingIndex].username = username;
-      credData.channels[existingIndex].avatarUrl = avatarUrl;
-    } else {
-      credData.channels.push({ channelId, channelName, username, avatarUrl, tokens });
-    }
-
-    // Set active
-    if (!credData.activeChannelId || credData.activeChannelId === "unknown" || credData.channels.length === 1) {
-      credData.activeChannelId = channelId;
-    }
-
-    fs.writeFileSync(credsPath, JSON.stringify(credData, null, 2));
+    let tkCreds = loadTiktokChannels();
+    tkCreds = upsertTiktokChannel(tkCreds, { channelId, channelName, username, avatarUrl, tokens });
+    saveTiktokChannels(process.cwd(), tkCreds);
 
     // Send postMessage to closing popup
     res.send(`
@@ -1793,41 +1452,25 @@ Instrucciones:
   }));
 
   // TikTok OAuth Status Endpoint
-  app.get("/api/v1/tiktok/status", wrap(async (req: any, res: any) => {
-    const credsPath = path.join(process.cwd(), "storage", "tiktok-credentials.json");
-    if (!fs.existsSync(credsPath)) {
-      return res.json({ status: 200, message: "ok", data: { is_linked: false, channel_name: null, active_channel_id: null, channels: [] } });
-    }
+  app.get("/api/v1/tiktok/status", wrap(async (_req: any, res: any) => {
+    const tkCreds = loadTiktokChannels();
+    const activeChannel = getActiveTiktokChannel(tkCreds);
 
-    try {
-      const data = JSON.parse(fs.readFileSync(credsPath, "utf8"));
-      let channels = data.channels || [];
-      let activeChannelId = data.activeChannelId || null;
-
-      const activeChannel = channels.find((c: any) => c.channelId === activeChannelId) || channels[0];
-      const activeName = activeChannel ? activeChannel.channelName : null;
-
-      return res.json({
-        status: 200,
-        message: "ok",
-        data: {
-          is_linked: channels.length > 0,
-          channel_name: activeName,
-          active_channel_id: activeChannel ? activeChannel.channelId : null,
-          channels: channels.map((c: any) => ({ channelId: c.channelId, channelName: c.channelName, username: c.username, avatarUrl: c.avatarUrl }))
-        }
-      });
-    } catch (e) {
-      return res.json({ status: 200, message: "ok", data: { is_linked: false, channel_name: null, active_channel_id: null, channels: [] } });
-    }
+    return res.json({
+      status: 200,
+      message: "ok",
+      data: {
+        is_linked: tkCreds.channels.length > 0,
+        channel_name: activeChannel ? activeChannel.channelName : null,
+        active_channel_id: activeChannel ? activeChannel.channelId : null,
+        channels: tkCreds.channels.map((c) => ({ channelId: c.channelId, channelName: c.channelName, username: c.username, avatarUrl: c.avatarUrl }))
+      }
+    });
   }));
 
   // TikTok OAuth Disconnect Endpoint
-  app.post("/api/v1/tiktok/disconnect", wrap(async (req: any, res: any) => {
-    const credsPath = path.join(process.cwd(), "storage", "tiktok-credentials.json");
-    if (fs.existsSync(credsPath)) {
-      fs.unlinkSync(credsPath);
-    }
+  app.post("/api/v1/tiktok/disconnect", wrap(async (_req: any, res: any) => {
+    clearTiktokCredentials(process.cwd());
     return res.json({ status: 200, message: "ok" });
   }));
 
@@ -1838,27 +1481,18 @@ Instrucciones:
       return res.status(400).json({ status: 400, message: "Falta el channelId." });
     }
 
-    const credsPath = path.join(process.cwd(), "storage", "tiktok-credentials.json");
-    if (!fs.existsSync(credsPath)) {
+    const tkCreds = loadTiktokChannels();
+    if (tkCreds.channels.length === 0) {
       return res.status(404).json({ status: 404, message: "No se encontraron credenciales de TikTok." });
     }
 
-    try {
-      const data = JSON.parse(fs.readFileSync(credsPath, "utf8"));
-      let channels = data.channels || [];
-
-      const found = channels.find((c: any) => c.channelId === channelId);
-      if (!found) {
-        return res.status(404).json({ status: 404, message: "Cuenta no encontrada en las cuentas vinculadas." });
-      }
-
-      data.activeChannelId = channelId;
-      fs.writeFileSync(credsPath, JSON.stringify(data, null, 2));
-
-      return res.json({ status: 200, message: "ok", activeChannelId: channelId });
-    } catch (e: any) {
-      return res.status(500).json({ status: 500, message: e.message });
+    const updated = selectTiktokChannel(tkCreds, channelId);
+    if (!updated) {
+      return res.status(404).json({ status: 404, message: "Cuenta no encontrada en las cuentas vinculadas." });
     }
+
+    saveTiktokChannels(process.cwd(), updated);
+    return res.json({ status: 200, message: "ok", activeChannelId: channelId });
   }));
 
   // TikTok OAuth Disconnect Single Channel Endpoint
@@ -1868,32 +1502,13 @@ Instrucciones:
       return res.status(400).json({ status: 400, message: "Falta el channelId." });
     }
 
-    const credsPath = path.join(process.cwd(), "storage", "tiktok-credentials.json");
-    if (!fs.existsSync(credsPath)) {
+    const tkCreds = loadTiktokChannels();
+    if (tkCreds.channels.length === 0) {
       return res.status(404).json({ status: 404, message: "No se encontraron credenciales de TikTok." });
     }
 
-    try {
-      const data = JSON.parse(fs.readFileSync(credsPath, "utf8"));
-      let channels = data.channels || [];
-
-      data.channels = channels.filter((c: any) => c.channelId !== channelId);
-      if (data.activeChannelId === channelId) {
-        data.activeChannelId = data.channels.length > 0 ? data.channels[0].channelId : null;
-      }
-
-      if (data.channels.length === 0) {
-        if (fs.existsSync(credsPath)) {
-          fs.unlinkSync(credsPath);
-        }
-      } else {
-        fs.writeFileSync(credsPath, JSON.stringify(data, null, 2));
-      }
-
-      return res.json({ status: 200, message: "ok" });
-    } catch (e: any) {
-      return res.status(500).json({ status: 500, message: e.message });
-    }
+    saveTiktokChannels(process.cwd(), removeTiktokChannel(tkCreds, channelId));
+    return res.json({ status: 200, message: "ok" });
   }));
 
   // TikTok Video Upload/Publish Endpoint
@@ -1902,17 +1517,17 @@ Instrucciones:
     if (!videoUrl) {
       return res.status(400).json({ status: 400, message: "Falta el videoUrl del video a subir." });
     }
+    // Misma regla que YouTube: solo se publica un render de storage/renders.
+    if (!resolveWithinDir(path.join(process.cwd(), "storage", "renders"), path.join(process.cwd(), videoUrl))) {
+      return res.status(400).json({ status: 400, message: "videoUrl debe apuntar a un render dentro de storage/renders.", data: null });
+    }
 
-    const credsPath = path.join(process.cwd(), "storage", "tiktok-credentials.json");
-    if (!fs.existsSync(credsPath)) {
+    const tkCreds = loadTiktokChannels();
+    if (tkCreds.channels.length === 0) {
       return res.status(401).json({ status: 401, message: "TikTok no está vinculado. Por favor, vincúlalo primero." });
     }
 
-    const cred = JSON.parse(fs.readFileSync(credsPath, "utf8"));
-    const channels = cred.channels || [];
-    const activeChannelId = cred.activeChannelId || null;
-    const activeChannel = channels.find((c: any) => c.channelId === activeChannelId) || channels[0];
-
+    const activeChannel = getActiveTiktokChannel(tkCreds);
     if (!activeChannel) {
       return res.status(401).json({ status: 401, message: "TikTok no está vinculado o la cuenta activa no existe." });
     }
@@ -1938,7 +1553,7 @@ Instrucciones:
           activeChannel.tokens.access_token = refreshData.access_token;
           activeChannel.tokens.refresh_token = refreshData.refresh_token;
           activeChannel.tokens.expires_at = Date.now() + (refreshData.expires_in * 1000);
-          fs.writeFileSync(credsPath, JSON.stringify(cred, null, 2));
+          saveTiktokChannels(process.cwd(), tkCreds);
           accessToken = refreshData.access_token;
           console.log("[TikTok] Access token refreshed successfully.");
         } else {
@@ -2011,195 +1626,22 @@ Instrucciones:
     }
   };
 
-  app.post("/api/v1/videos", wrap(async (req: any, res: any) => {
-    const {
-      video_source,
-      local_video_files,
-      video_script,
-      video_subject,
-      voice_name,
-      bgm_file,
-      video_aspect,
-      font_name,
-      font_size,
-      text_fore_color,
-      video_concat_mode,
-      bgm_volume,
-      n_threads,
-      video_codec,
-      tts_provider
-    } = req.body;
-
-    const taskId = "task_" + Math.random().toString(36).substring(2, 9);
-    
-    // Create initial task state
-    const taskStatus = {
-      state: 4, // TASK_STATE_PROCESSING
-      progress: 0,
-      videos: [],
-      combined_videos: [],
-      logs: []
-    };
-
-    tasks.set(taskId, taskStatus);
-
-    // Initial Logs
-    logTask(taskId, "INFO", "SYSTEM", `Initializing video generation task ${taskId}...`);
-    logTask(taskId, "INFO", "VALIDATION", "Verifying request payload parameters...");
-
-    // Validate video source and files if local
-    let validationFailed = false;
-    let validationErrorMessage = "";
-
-    if (video_source === "local") {
-      logTask(taskId, "INFO", "VALIDATION", `Video source is set to LOCAL. Selected files: ${Array.isArray(local_video_files) ? local_video_files.join(", ") : "None"}`);
-      if (!local_video_files || !Array.isArray(local_video_files) || local_video_files.length === 0) {
-        validationFailed = true;
-        validationErrorMessage = "No local video files were selected. Please choose at least one video in the Configurations panel.";
-      } else {
-        // Check if selected files exist on disk
-        const missingFiles = [];
-        for (const file of local_video_files) {
-          const filePath = path.join(LOCAL_VIDEOS_DIR, file);
-          if (!fs.existsSync(filePath)) {
-            missingFiles.push(file);
-          }
-        }
-        if (missingFiles.length > 0) {
-          validationFailed = true;
-          validationErrorMessage = `The following selected files do not exist in storage/local_videos: ${missingFiles.join(", ")}. Please make sure they exist.`;
-        }
-      }
-    } else {
-      logTask(taskId, "INFO", "VALIDATION", `Video source is set to ONLINE (${video_source || "pexels"}).`);
-    }
-
-    // Validate script or subject
-    if (!validationFailed) {
-      if (!video_script && !video_subject) {
-        validationFailed = true;
-        validationErrorMessage = "Both the video script and subject are empty. Please write a script or enter a subject to generate one.";
-      }
-    }
-
-    if (validationFailed) {
-      logTask(taskId, "ERROR", "VALIDATION", `Validation Failed: ${validationErrorMessage}`);
-      logTask(taskId, "ERROR", "SYSTEM", "Task execution aborted due to pre-requisite failures.");
-      const t = tasks.get(taskId);
-      if (t) {
-        t.state = -1; // TASK_STATE_FAILED
-        tasks.set(taskId, t);
-      }
-      return res.json({ status: 200, message: "ok", data: { task_id: taskId } });
-    }
-
-    // Pre-requisite validation passed
-    logTask(taskId, "SUCCESS", "VALIDATION", `All parameters validated. Script character count: ${video_script?.length || 0}. Format: ${video_aspect || "9:16"}`);
-
-    // Simulate background process step-by-step
-    let progress = 0;
-    const interval = setInterval(() => {
-      progress += 20;
-      const t = tasks.get(taskId);
-      if (!t) {
-        clearInterval(interval);
-        return;
-      }
-
-      t.progress = progress;
-      tasks.set(taskId, t);
-
-      if (progress === 20) {
-        // Phase 1: Audio Synthesis & TTS
-        logTask(taskId, "INFO", "TTS", `Starting Text-to-Speech synthesis using provider: "${tts_provider || "azure-tts-v1"}"...`);
-        if (!voice_name) {
-          logTask(taskId, "WARNING", "TTS", "No voice name specified. Falling back to default neural speaker.");
-        } else {
-          logTask(taskId, "INFO", "TTS", `Synthesizing spoken track with voice: "${voice_name}"...`);
-        }
-        logTask(taskId, "SUCCESS", "TTS", `Audio track synthesized successfully. Duration: 38.4s. Saved as tts_${taskId}.mp3.`);
-
-      } else if (progress === 40) {
-        // Phase 2: Whisper alignment & Subtitles
-        logTask(taskId, "INFO", "SUBTITLES", "Loading Whisper voice-alignment model...");
-        logTask(taskId, "INFO", "SUBTITLES", "Aligning spoken voice audio to original script tokens...");
-        logTask(taskId, "SUCCESS", "SUBTITLES", "Successfully generated subtitle cues (SRT) with timestamp mappings.");
-
-      } else if (progress === 60) {
-        // Phase 3: Video asset sourcing
-        if (video_source === "local") {
-          logTask(taskId, "INFO", "VIDEO_ASSET", `Loading ${local_video_files.length} verified files from local storage...`);
-          local_video_files.forEach((file: string) => {
-            logTask(taskId, "INFO", "VIDEO_ASSET", `Including asset: storage/local_videos/${file}`);
-          });
-          logTask(taskId, "SUCCESS", "VIDEO_ASSET", "All local assets imported successfully.");
-        } else {
-          logTask(taskId, "INFO", "VIDEO_ASSET", `Querying search terms from online API provider (${video_source || "pexels"})...`);
-          logTask(taskId, "SUCCESS", "VIDEO_ASSET", `Successfully retrieved and cached 5 clips matching tags: ${Array.isArray(req.body.video_terms) ? req.body.video_terms.join(", ") : "general"}.`);
-        }
-
-      } else if (progress === 80) {
-        // Phase 4: Composition & Subtitle overlay
-        logTask(taskId, "INFO", "COMPOSITION", `Joining video assets with concat mode: "${video_concat_mode || "random"}"`);
-        if (bgm_file) {
-          logTask(taskId, "INFO", "AUDIO_MIXER", `Mixing background music track: "${bgm_file}" at volume: ${bgm_volume || 0.2}`);
-        } else {
-          logTask(taskId, "INFO", "AUDIO_MIXER", "Injecting ambient background music track...");
-        }
-        logTask(taskId, "INFO", "COMPOSITION", `Burning subtitle overlays onto visual frames (Font: "${font_name || "STHeitiMedium.ttc"}", Size: ${font_size || 60}px, Color: "${text_fore_color || "#FFFFFF"}")...`);
-        logTask(taskId, "SUCCESS", "COMPOSITION", "Composition of video and subtitle tracks complete.");
-
-      } else if (progress >= 100) {
-        // Phase 5: Final render
-        logTask(taskId, "INFO", "RENDER", `Launching FFmpeg encoding task (Threads: ${n_threads || 2}, Codec: "${video_codec || "libx264"}")...`);
-        logTask(taskId, "SUCCESS", "RENDER", `Compression and rendering complete. Output file generated at: storage/renders/render_${taskId}.mp4`);
-        logTask(taskId, "SUCCESS", "SYSTEM", `Task ${taskId} completed successfully!`);
-
-        t.state = 1; // TASK_STATE_COMPLETE
-        t.videos = [SAMPLE_VIDEOS[0].source_url];
-        t.combined_videos = [SAMPLE_VIDEOS[0].source_url];
-        tasks.set(taskId, t);
-        clearInterval(interval);
-      }
-    }, 1500);
-
-    res.json({ status: 200, message: "ok", data: { task_id: taskId } });
-  }));
-
-  app.get("/api/v1/tasks/:id", wrap(async (req: any, res: any) => {
-    const t = tasks.get(req.params.id);
-    if (!t) {
-      return res.status(404).json({ status: 404, message: "Task not found", data: null });
-    }
-    res.json({ status: 200, message: "ok", data: t });
-  }));
-
-  app.get("/api/v1/tasks", wrap(async (req: any, res: any) => {
-    const data: Record<string, any> = {};
-    for (const [k, v] of tasks.entries()) {
-      data[k] = v;
-    }
-    res.json({ status: 200, message: "ok", data });
-  }));
-
-  app.delete("/api/v1/tasks/:id", wrap(async (req: any, res: any) => {
-    tasks.delete(req.params.id);
-    res.json({ status: 200, message: "ok", data: null });
-  }));
-
-  app.get("/api/v1/musics", wrap(async (req: any, res: any) => {
-    res.json({ status: 200, message: "ok", data: { files: BGM_FILES } });
+  app.get("/api/v1/musics", wrap(async (_req: any, res: any) => {
+    res.json({ status: 200, message: "ok", data: { files: getBgmFiles() } });
   }));
 
   // 5. Projects APIs
-  app.get("/api/v1/projects", wrap(async (req: any, res: any) => {
-    // Automatically clean up projects whose storage folders have been deleted
+  app.get("/api/v1/projects", wrap(async (_req: any, res: any) => {
+    // Clean up proyectos whose render folder was deleted from disk. Only
+    // proyectos that actually completed a render (p.videos is populated) are
+    // eligible: a proyecto mid-pipeline has a project_folder_name stamped by
+    // PUT /projects/:id but no folder yet, and sweeping it there destroyed the
+    // user's in-flight work.
     for (const [projectId, p] of Array.from(projects.entries())) {
-      if (p.project_folder_name) {
-        const folderPath = path.join(process.cwd(), "storage", "renders", p.project_folder_name);
-        if (!fs.existsSync(folderPath)) {
-          projects.delete(projectId);
-        }
+      if (!p.project_folder_name) continue;
+      const folderPath = path.join(process.cwd(), "storage", "renders", p.project_folder_name);
+      if (shouldSweepProject(p, fs.existsSync(folderPath))) {
+        projects.delete(projectId);
       }
     }
     const list = Array.from(projects.values()).map(p => ({
@@ -2232,7 +1674,7 @@ No repitas información. No uses relleno. Cada frase debe aportar algo interesan
 Devuelve ÚNICAMENTE el texto del guión, sin títulos, encabezados, listas, notas ni comentarios adicionales.
 
 CRÍTICO: No utilices NINGÚN tipo de formato de texto como asteriscos (* o **), comillas (" o “ o ”) o palabras entre paréntesis o corchetes, ya que el guión se usará directamente con un generador de voz automática y estos caracteres provocan lecturas raras. Escribe solo texto limpio y natural.`;
-      const rawScript = await generateGeminiContent(prompt);
+      const rawScript = await generateLlmContent(prompt);
       scriptText = cleanScriptSymbols(rawScript);
     }
 
@@ -2291,7 +1733,9 @@ CRÍTICO: No utilices NINGÚN tipo de formato de texto como asteriscos (* o **),
   }));
 
   app.post("/api/v1/projects/from-reddit", wrap(async (req: any, res: any) => {
-    const { url, title, body, language = "es" } = req.body;
+    // El campo `url` del body se acepta pero todavía no se usa: no existe
+    // cliente de Reddit en el repo. Ver docs/architecture/008-reddit-ingest.md.
+    const { title, body, language = "es" } = req.body;
     const projectId = "proj_" + Math.random().toString(36).substring(2, 9);
     const script = cleanScriptSymbols(`${title}\n\n${body}`);
 
@@ -2391,7 +1835,16 @@ CRÍTICO: No utilices NINGÚN tipo de formato de texto como asteriscos (* o **),
     if (req.body && req.body.script) {
       req.body.script = cleanScriptSymbols(req.body.script);
     }
-    const updated = { ...p, ...req.body };
+    // Campos que pertenecen al servidor: el cliente no los elige. project_folder_name
+    // se une a una ruta de disco y se crea con mkdir más abajo en el pipeline.
+    const { project_id: _ignoredId, created_at: _ignoredCreatedAt, ...clientPatch } = req.body || {};
+    if (
+      req.body?.project_folder_name !== undefined &&
+      !isSafeProjectFolderName(req.body.project_folder_name)
+    ) {
+      return res.status(400).json({ status: 400, message: "project_folder_name inválido.", data: null });
+    }
+    const updated = { ...p, ...clientPatch };
     const oldNiche = p.params?.video_niche;
     const newNiche = updated.params?.video_niche;
     if (!updated.project_folder_name || (newNiche && oldNiche !== newNiche)) {
@@ -2412,10 +1865,8 @@ CRÍTICO: No utilices NINGÚN tipo de formato de texto como asteriscos (* o **),
 
     const clipDuration = Number(req.body.target_duration_sec) || Number(p.params?.video_clip_duration) || 5;
 
-    const sentences = (p.script || p.topic || "")
-      .split(/[.!?]+/)
-      .map((s: string) => s.trim())
-      .filter((s: string) => s.length > 5);
+    const sentenceParts = extractSentencesWithParts(p);
+    const sentences = sentenceParts.map((sp) => sp.text);
 
     const rawTerms = p.params?.video_terms || p.video_terms || "";
     let userTerms: string[] = [];
@@ -2434,7 +1885,7 @@ CRÍTICO: No utilices NINGÚN tipo de formato de texto como asteriscos (* o **),
     if (process.env.GEMINI_API_KEY || currentLlmProvider === "lmstudio" || currentLlmProvider === "openai") {
       try {
         const prompt = `Analiza las siguientes oraciones de un guión de video en idioma "${p.language || "es"}":
-${sentences.map((s, i) => `Segmento ${i + 1}: "${s}"`).join("\n")}
+${sentences.map((s: string, i: number) => `Segmento ${i + 1}: "${s}"`).join("\n")}
 
 Tema general del video: "${p.topic || ""}"
 Palabras clave/Términos de video preferidos del usuario: "${userTerms.join(", ")}"
@@ -2450,7 +1901,7 @@ Ejemplo de formato de respuesta:
 ]
 No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo el JSON puro.`;
 
-        const responseText = await generateGeminiContent(prompt);
+        const responseText = await generateLlmContent(prompt);
         const cleanedText = responseText.replace(/```json/gi, "").replace(/```/g, "").trim();
         const parsed = JSON.parse(cleanedText);
         if (Array.isArray(parsed) && parsed.length === sentences.length) {
@@ -2463,7 +1914,9 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
       }
     }
 
-    const segments = sentences.map((sentence: string, idx: number) => {
+    const segments = sentenceParts.map((sp, idx) => {
+      const sentence = sp.text;
+      const partIndex = sp.partIndex;
       let segmentQueries: string[] = [];
 
       if (hasGeminiQueries && searchQueriesForSegments[idx]) {
@@ -2508,6 +1961,7 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
         start_sec: idx * clipDuration,
         end_sec: (idx + 1) * clipDuration,
         target_duration_sec: clipDuration,
+        part_index: partIndex,
         visual_goal: `Estilo visual representando: ${sentence}`,
         search_queries: segmentQueries
       };
@@ -2548,39 +2002,6 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
     return null;
   };
 
-  const searchPexelsVideos = async (query: string, apiKey: string, orientation: string = "portrait"): Promise<any[]> => {
-    try {
-      const url = `https://api.pexels.com/videos/search?query=${encodeURIComponent(query)}&per_page=15&orientation=${orientation}`;
-      const res = await fetch(url, {
-        headers: {
-          "Authorization": apiKey
-        }
-      });
-      if (!res.ok) {
-        throw new Error(`Pexels API response error: ${res.status}`);
-      }
-      const data: any = await res.json();
-      return (data.videos || []).map((video: any) => {
-        const file = video.video_files?.find((f: any) => f.quality === "hd" || f.quality === "sd") || video.video_files?.[0];
-        return {
-          id: `pexels_${video.id}`,
-          provider: "pexels",
-          source_url: file?.link || video.video_files?.[0]?.link,
-          download_url: file?.link || video.video_files?.[0]?.link,
-          thumbnail_url: video.image || `https://images.pexels.com/videos/${video.id}/pictures/medium-1.jpg`,
-          width: video.width,
-          height: video.height,
-          duration_sec: video.duration,
-          query: query,
-          title: video.user?.name ? `Video by ${video.user.name}` : "Pexels Video"
-        };
-      });
-    } catch (err) {
-      console.error(`Failed to search Pexels for query "${query}":`, err);
-      return [];
-    }
-  };
-
   app.post("/api/v1/projects/:id/media/search", wrap(async (req: any, res: any) => {
     const p = projects.get(req.params.id);
     if (!p) {
@@ -2588,7 +2009,7 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
     }
 
     const videoSource = req.body.video_source || p.params?.video_source || p.video_source || "pexels";
-    
+
     // Explicitly persist the active parameters into the project DB
     if (!p.params) {
       p.params = {};
@@ -2596,7 +2017,18 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
     p.params.video_source = videoSource;
     p.video_source = videoSource;
     if (req.body.local_video_files !== undefined) {
-      p.params.local_video_files = req.body.local_video_files;
+      // Los nombres llegan del body y acaban en una línea de comandos ffprobe;
+      // solo se aceptan nombres de archivo simples de storage/local_videos.
+      const requested = Array.isArray(req.body.local_video_files) ? req.body.local_video_files : [];
+      const rejected = requested.filter((name: unknown) => !isSafeMediaFilename(name));
+      if (rejected.length > 0) {
+        return res.status(400).json({
+          status: 400,
+          message: "local_video_files solo admite nombres de archivo de video simples.",
+          data: null
+        });
+      }
+      p.params.local_video_files = requested;
     }
     projects.set(req.params.id, p);
 
@@ -2626,7 +2058,7 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
       for (let idx = 0; idx < segments.length; idx++) {
         const seg = segments[idx];
         const filename = finalChosen[idx % finalChosen.length];
-        
+
         // Let's get the real duration of this local video to populate the metadata
         const fullDiskPath = path.join(LOCAL_VIDEOS_DIR, filename);
         let durationSec = 15;
@@ -2677,7 +2109,7 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
         const segments = p.shot_plan?.segments || [];
         for (let idx = 0; idx < segments.length; idx++) {
           const seg = segments[idx];
-          
+
           let results: any[] = [];
           let successfulQuery = "";
           const queries = seg.search_queries && seg.search_queries.length > 0 ? seg.search_queries : [p.topic || "nature"];
@@ -2702,18 +2134,7 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
             })));
 
             // Find first video result that has not been selected for any other segment yet
-            let selectedVideo = results[0];
-            for (const r of results) {
-              const videoId = r.id || r.source_url || r.download_url;
-              if (videoId && !usedVideoIds.has(String(videoId))) {
-                selectedVideo = r;
-                break;
-              }
-            }
-            const chosenId = selectedVideo.id || selectedVideo.source_url || selectedVideo.download_url;
-            if (chosenId) {
-              usedVideoIds.add(String(chosenId));
-            }
+            const selectedVideo = pickUniqueClip(results, usedVideoIds)!;
 
             selected.push({
               ...selectedVideo,
@@ -2722,19 +2143,8 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
             });
           } else {
             console.log(`[Pexels] Segment ${seg.id} search failed for all queries. Falling back to sample video.`);
-            let best = SAMPLE_VIDEOS[idx % SAMPLE_VIDEOS.length];
-            for (let i = 0; i < SAMPLE_VIDEOS.length; i++) {
-              const candidate = SAMPLE_VIDEOS[(idx + i) % SAMPLE_VIDEOS.length];
-              const candId = candidate.id || candidate.source_url;
-              if (candId && !usedVideoIds.has(String(candId))) {
-                best = candidate;
-                break;
-              }
-            }
-            const chosenId = best.id || best.source_url;
-            if (chosenId) {
-              usedVideoIds.add(String(chosenId));
-            }
+            const rotatedSamples = SAMPLE_VIDEOS.map((_, i) => SAMPLE_VIDEOS[(idx + i) % SAMPLE_VIDEOS.length]);
+            const best = pickUniqueClip(rotatedSamples, usedVideoIds)!;
 
             selected.push({
               ...best,
@@ -2758,10 +2168,10 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
 
         selected = p.shot_plan?.segments?.map((seg: any, idx: number) => {
           const queryKeywords = seg.search_queries || [];
-          const matches = SAMPLE_VIDEOS.filter(v => 
+          const matches = SAMPLE_VIDEOS.filter(v =>
             queryKeywords.some((q: string) => v.query.toLowerCase().includes(q.toLowerCase()) || v.title.toLowerCase().includes(q.toLowerCase()))
           );
-          
+
           let best = matches.find(m => !usedVideoIds.has(m.id || m.source_url)) || matches[0];
           if (!best) {
             best = SAMPLE_VIDEOS.find(v => !usedVideoIds.has(v.id || v.source_url)) || SAMPLE_VIDEOS[idx % SAMPLE_VIDEOS.length];
@@ -2810,6 +2220,7 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
         duration_sec: durationSec,
         text: seg.narration_text,
         segment_id: seg.id,
+        part_index: seg.part_index || 1,
         asset_url: p.narration_audio_path || null
       };
     });
@@ -2882,7 +2293,7 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
           const videoExtensions = [".mp4", ".mkv", ".avi", ".mov", ".webm"];
           const availableLocalFiles = files.filter(f => videoExtensions.includes(path.extname(f).toLowerCase()));
           const chosenFiles = availableLocalFiles.length > 0 ? availableLocalFiles : ["nature_cinematic.mp4", "urban_streets.mp4", "retro_animation.mp4"];
-          
+
           for (const filename of chosenFiles) {
             const sourceUrl = `/storage/local_videos/${filename}`;
             if (!seen.has(sourceUrl)) {
@@ -2911,13 +2322,13 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
         const videoExtensions = [".mp4", ".mkv", ".avi", ".mov", ".webm"];
         const diskFiles = filesOnDisk.filter(f => videoExtensions.includes(path.extname(f).toLowerCase()));
         const hasCustomFilesOnDisk = diskFiles.some(f => !defaultLocalVideos.includes(f));
-        
+
         if (hasCustomFilesOnDisk && chosenLocalFiles.length === 0) {
           const filteredUnique = uniqueFiles.filter(med => {
             const filename = path.basename(med.source_url || med.asset_url || "");
             return !defaultLocalVideos.includes(filename);
           });
-          
+
           if (filteredUnique.length > 0) {
             uniqueFiles.length = 0;
             uniqueFiles.push(...filteredUnique);
@@ -2939,6 +2350,13 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
         const fullDuration = (isNaN(rawDuration) || rawDuration <= 0) ? 15 : rawDuration;
         const usedDuration = Math.min(fullDuration, totalDurationSec - currentStartSec);
 
+        const clipMidpoint = currentStartSec + (usedDuration / 2);
+        const activeSeg = (p.shot_plan?.segments || []).find((s: any) => {
+          const sStart = s.start_sec !== undefined ? s.start_sec : 0;
+          const sEnd = s.end_sec !== undefined ? s.end_sec : sStart + (s.target_duration_sec || 5);
+          return clipMidpoint >= sStart && clipMidpoint <= sEnd;
+        }) || (p.shot_plan?.segments || [])[0];
+
         videoItems.push({
           id: `item_${itemId}`,
           media_id: med.id,
@@ -2950,7 +2368,8 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
           duration_sec: usedDuration,
           trim_start_sec: 0,
           trim_end_sec: usedDuration,
-          segment_id: null,
+          segment_id: activeSeg?.id || null,
+          part_index: activeSeg?.part_index || 1,
           provider: "local"
         });
 
@@ -2979,7 +2398,7 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
 
         // Find the segment that covers the midpoint of this video item's time range
         const clipMidpoint = currentStartSec + (usedDuration / 2);
-        const activeSeg = segments.find(s => {
+        const activeSeg = segments.find((s: any) => {
           const sStart = s.start_sec !== undefined ? s.start_sec : 0;
           const sEnd = s.end_sec !== undefined ? s.end_sec : sStart + (s.target_duration_sec || 5);
           return clipMidpoint >= sStart && clipMidpoint <= sEnd;
@@ -2987,7 +2406,7 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
 
         // 1. Get candidates for this active segment
         const segCandidates = (p.media_candidates || []).filter((c: any) => c.segment_id === activeSeg.id);
-        
+
         // 2. Get primary selected media for this active segment
         const primaryMedia = (p.selected_media || []).find((m: any) => m.segment_id === activeSeg.id);
 
@@ -3071,6 +2490,7 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
           trim_start_sec: trimStart,
           trim_end_sec: trimStart + usedDuration,
           segment_id: activeSeg.id,
+          part_index: activeSeg.part_index || 1,
           provider: mediaToUse.provider || "pexels"
         });
 
@@ -3083,7 +2503,8 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
     (p.shot_plan?.segments || []).forEach((seg: any, idx: number) => {
       const startSec = seg.start_sec !== undefined ? seg.start_sec : idx * 5;
       const durationSec = seg.target_duration_sec !== undefined ? seg.target_duration_sec : 5;
-      const splitCues = splitTextIntoTikTokSubtitles(seg.narration_text || "", startSec, durationSec, seg.id, `sub_${idx + 1}`);
+      const splitCues = splitTextIntoTikTokSubtitles(seg.narration_text || "", startSec, durationSec, seg.id, `sub_${idx + 1}`)
+        .map((cue: any) => ({ ...cue, part_index: seg.part_index || 1 }));
       subtitleItems.push(...splitCues);
     });
 
@@ -3144,20 +2565,13 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
     // Ensure we have planned segments
     let segments = p.shot_plan?.segments || [];
     if (segments.length === 0) {
-      const sentences = (p.script || p.topic || "")
-        .split(/[.!?]+/)
-        .map((s: string) => s.trim())
-        .filter((s: string) => s.length > 5);
-
-      if (sentences.length === 0) {
-        sentences.push("Esto es un video de prueba de generación.");
-      }
-
-      segments = sentences.map((sentence: string, idx: number) => ({
+      const sentenceParts = extractSentencesWithParts(p);
+      segments = sentenceParts.map((sp, idx) => ({
         id: `seg_${idx + 1}`,
         order: idx + 1,
-        narration_text: sentence,
-        search_queries: sentence.split(" ").slice(0, 2).map(w => w.replace(/[^a-zA-Z]/g, "")).filter(w => w.length > 2)
+        narration_text: sp.text,
+        part_index: sp.partIndex,
+        search_queries: sp.text.split(" ").slice(0, 2).map(w => w.replace(/[^a-zA-Z]/g, "")).filter(w => w.length > 2)
       }));
 
       p.shot_plan = p.shot_plan || {};
@@ -3174,12 +2588,12 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
       const text = seg.narration_text || "Silencio";
       const destPath = path.join(cacheDir, `narration_chunk_${projectId}_${idx}.mp3`);
       const wavPath = path.join(cacheDir, `narration_chunk_${projectId}_${idx}.wav`);
-      
+
       try {
         const audioBuffer = await synthesizeSpeech(voice_name, text, tl, voice_rate, voice_volume);
         await fs.promises.writeFile(destPath, audioBuffer);
         localPaths.push(destPath);
-        
+
         // Convert MP3 to WAV for precise timing and gapless concatenation
         await executeCommand(`ffmpeg -y -i "${destPath}" -acodec pcm_s16le -ar 44100 -ac 2 "${wavPath}"`);
         wavPaths.push(wavPath);
@@ -3188,7 +2602,7 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
         const fallbackPath = path.join(cacheDir, `narration_chunk_${projectId}_${idx}_fallback.mp3`);
         await executeCommand(`ffmpeg -y -f lavfi -i anullsrc=r=44100:cl=stereo -t 3 "${fallbackPath}"`);
         localPaths.push(fallbackPath);
-        
+
         await executeCommand(`ffmpeg -y -i "${fallbackPath}" -acodec pcm_s16le -ar 44100 -ac 2 "${wavPath}"`);
         wavPaths.push(wavPath);
       }
@@ -3205,6 +2619,52 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
     const finalAudioPath = path.join(renderDir, `narration_${projectId}.mp3`);
     console.log(`[Narration] Converting final WAV to MP3: ${finalAudioPath}`);
     await executeCommand(`ffmpeg -y -i "${finalWavPath}" -codec:a libmp3lame -b:a 192k "${finalAudioPath}"`);
+
+    // Generate per-part narration files for multi-part projects
+    const scriptHasParts = Boolean(p.script && p.script.match(/---+\s*PARTE\s*\d+\s*---+/i));
+    const isMultiPart = Boolean(p.params?.is_multi_part || p.is_multi_part || scriptHasParts);
+
+    if (isMultiPart) {
+      const numParts = Math.max(
+        p.params?.multi_part_scripts?.length || 0,
+        scriptHasParts ? p.script.split(/---+\s*PARTE\s*\d+\s*---+/i).map((s: string) => s.trim()).filter(Boolean).length : 0,
+        Number(p.params?.multi_part_count) || 2
+      );
+
+      console.log(`[Narration] Generating per-part audio files for ${numParts} parts...`);
+      for (let pIdx = 0; pIdx < numParts; pIdx++) {
+        const partNum = pIdx + 1;
+        const partSegmentIndices: number[] = [];
+        segments.forEach((seg: any, sIdx: number) => {
+          if (seg.part_index === partNum) {
+            partSegmentIndices.push(sIdx);
+          }
+        });
+
+        if (partSegmentIndices.length === 0) {
+          const groupSize = Math.ceil(segments.length / numParts);
+          const start = pIdx * groupSize;
+          const end = Math.min(start + groupSize, segments.length);
+          for (let i = start; i < end; i++) {
+            partSegmentIndices.push(i);
+          }
+        }
+
+        const partWavs = partSegmentIndices.map(i => wavPaths[i]).filter(Boolean);
+        if (partWavs.length > 0) {
+          const partConcatListPath = path.join(cacheDir, `concat_audio_${projectId}_p${partNum}.txt`);
+          const partConcatContent = partWavs.map(p => `file '${p.replace(/\\/g, "/")}'`).join("\n");
+          await fs.promises.writeFile(partConcatListPath, partConcatContent, "utf8");
+
+          const partWavPath = path.join(cacheDir, `narration_${projectId}_p${partNum}_temp.wav`);
+          await executeCommand(`ffmpeg -y -f concat -safe 0 -i "${partConcatListPath}" -acodec pcm_s16le "${partWavPath}"`);
+
+          const partAudioPath = path.join(renderDir, `narration_${projectId}_parte${partNum}.mp3`);
+          await executeCommand(`ffmpeg -y -i "${partWavPath}" -codec:a libmp3lame -b:a 192k "${partAudioPath}"`);
+          console.log(`[Narration] Part ${partNum} narration audio ready at: ${partAudioPath}`);
+        }
+      }
+    }
 
     let currentStartSec = 0;
     for (let idx = 0; idx < segments.length; idx++) {
@@ -3256,6 +2716,7 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
         duration_sec: durationSec,
         text: seg.narration_text,
         segment_id: seg.id,
+        part_index: seg.part_index || 1,
         asset_url: p.narration_audio_path || null
       };
     });
@@ -3264,7 +2725,8 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
     (p.shot_plan?.segments || []).forEach((seg: any, idx: number) => {
       const startSec = seg.start_sec !== undefined ? seg.start_sec : idx * 5;
       const durationSec = seg.target_duration_sec !== undefined ? seg.target_duration_sec : 5;
-      const splitCues = splitTextIntoTikTokSubtitles(seg.narration_text || "", startSec, durationSec, seg.id, `sub_${idx + 1}`);
+      const splitCues = splitTextIntoTikTokSubtitles(seg.narration_text || "", startSec, durationSec, seg.id, `sub_${idx + 1}`)
+        .map((cue: any) => ({ ...cue, part_index: seg.part_index || 1 }));
       subtitleItems.push(...splitCues);
     });
 
@@ -3406,1217 +2868,15 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
     });
   }));
 
-  const formatSrtTime = (seconds: number): string => {
-    const hrs = Math.floor(seconds / 3600);
-    const mins = Math.floor((seconds % 3600) / 60);
-    const secs = Math.floor(seconds % 60);
-    const ms = Math.floor((seconds % 1) * 1000);
-    return `${hrs.toString().padStart(2, "0")}:${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")},${ms.toString().padStart(3, "0")}`;
-  };
-
-  const cssHexToAss = (hex: string): string => {
-    if (!hex) return "FFFFFF";
-    let clean = hex.replace("#", "");
-    if (clean.length === 3) {
-      clean = clean[0] + clean[0] + clean[1] + clean[1] + clean[2] + clean[2];
-    }
-    if (clean.length === 6) {
-      const r = clean.substring(0, 2);
-      const g = clean.substring(2, 4);
-      const b = clean.substring(4, 6);
-      return `${b}${g}${r}`; // BBGGRR
-    }
-    if (clean.length === 8) {
-      const r = clean.substring(0, 2);
-      const g = clean.substring(2, 4);
-      const b = clean.substring(4, 6);
-      return `${b}${g}${r}`;
-    }
-    return "FFFFFF";
-  };
-
-  const getAssFontName = (fontName: string): string => {
-    if (!fontName) return "Arial";
-    const clean = fontName.trim();
-    if (clean.startsWith("STHeitiMedium")) return "STHeitiSC-Medium";
-    if (clean.startsWith("STHeitiLight")) return "STHeitiSC-Light";
-    if (clean.startsWith("MicrosoftYaHeiBold")) return "Microsoft YaHei";
-    if (clean.startsWith("MicrosoftYaHeiNormal")) return "Microsoft YaHei";
-    if (clean.startsWith("Charm-Bold")) return "Charm";
-    if (clean.startsWith("Charm-Regular")) return "Charm";
-    if (clean.startsWith("UTM Kabel KY")) return "UTM Kabel KY";
-    if (clean.startsWith("UTM_Kabel_KY")) return "UTM Kabel KY";
-    return clean.split(".")[0] || "Arial";
-  };
-
-  const splitTextIntoTikTokSubtitles = (
-    text: string,
-    startSec: number,
-    durationSec: number,
-    segmentId: string,
-    baseId: string
-  ): any[] => {
-    if (!text || !text.trim()) return [];
-    
-    const cleanText = text.trim().replace(/\s+/g, " ");
-    
-    // Check if the text is predominantly CJK (no spaces, or very few)
-    const isCJK = /[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\uff66-\uff9f\u1100-\u11ff\u3130-\u318f\uac00-\ud7af]/.test(cleanText);
-    
-    let units: string[] = [];
-    if (isCJK) {
-      units = Array.from(cleanText).filter(c => c !== " ");
-    } else {
-      units = cleanText.split(" ");
-    }
-    
-    if (units.length === 0) return [];
-    
-    // Target: 2 to 3 words or characters per subtitle cue (TikTok style is very dynamic)
-    const maxUnits = 3;
-    const groups: string[][] = [];
-    
-    for (let i = 0; i < units.length; i += maxUnits) {
-      groups.push(units.slice(i, i + maxUnits));
-    }
-    
-    // If we have more than one group, and the last group has only 1 unit, 
-    // merge it into the previous group so we don't have a single word/character hanging.
-    if (groups.length > 1 && groups[groups.length - 1].length === 1) {
-      const lastGroup = groups.pop();
-      if (lastGroup) {
-        groups[groups.length - 1].push(...lastGroup);
-      }
-    }
-    
-    const totalUnits = units.length;
-    let elapsed = 0;
-    
-    return groups.map((grp, idx) => {
-      const phrase = isCJK ? grp.join("") : grp.join(" ");
-      const phraseUnitsCount = grp.length;
-      
-      // Proportional start and duration
-      const chunkStart = startSec + (elapsed / totalUnits) * durationSec;
-      const chunkDuration = (phraseUnitsCount / totalUnits) * durationSec;
-      
-      elapsed += phraseUnitsCount;
-      
-      return {
-        id: `${baseId}_part_${idx + 1}`,
-        start_sec: Number(chunkStart.toFixed(3)),
-        duration_sec: Number(chunkDuration.toFixed(3)),
-        text: phrase,
-        segment_id: segmentId
-      };
-    });
-  };
-
-  const generateSrt = (subtitles: any[]): string => {
-    return subtitles
-      .map((sub, idx) => {
-        const startSec = Number(sub.start_sec) || 0;
-        const durationSec = Number(sub.duration_sec) || 5;
-        const start = formatSrtTime(startSec);
-        const end = formatSrtTime(startSec + durationSec);
-        return `${idx + 1}\n${start} --> ${end}\n${sub.text || ""}\n`;
-      })
-      .join("\n");
-  };
-
-  const formatAssTime = (seconds: number): string => {
-    const hrs = Math.floor(seconds / 3600);
-    const mins = Math.floor((seconds % 3600) / 60);
-    const secs = Math.floor(seconds % 60);
-    const ms = Math.floor((seconds % 1) * 1000);
-    const cs = Math.floor(ms / 10);
-    return `${hrs}:${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}.${cs.toString().padStart(2, "0")}`;
-  };
-
-  const generateAss = (
-    subtitles: any[],
-    resWidth: number,
-    resHeight: number,
-    styleParams: {
-      fontName: string;
-      fontSize: number;
-      textColor: string;
-      strokeColor: string;
-      strokeWidth: number;
-      hasBg: boolean | string;
-      position: string;
-      customPosition: number;
-      subtitleBgStyle?: string;
-      roundedBackground?: boolean;
-      subtitleAnimation?: string;
-    }
-  ): string => {
-    const refHeight = 1920;
-    const refWidth = Math.round(1920 * (resWidth / resHeight));
-    const assFont = getAssFontName(styleParams.fontName);
-    const textColor = cssHexToAss(styleParams.textColor);
-    const strokeColor = cssHexToAss(styleParams.strokeColor);
-    
-    let assBgColor = "000000";
-    let assBgAlpha = "00"; // fully opaque box by default
-    
-    const hasBg = styleParams.hasBg === true || (
-      typeof styleParams.hasBg === "string" && 
-      styleParams.hasBg.trim() && 
-      styleParams.hasBg.trim() !== "transparent" && 
-      styleParams.hasBg.trim() !== "none"
-    );
-
-    if (hasBg) {
-      if (typeof styleParams.hasBg === "string" && styleParams.hasBg.trim()) {
-        const cleanBg = styleParams.hasBg.trim();
-        if (cleanBg.startsWith("#")) {
-          assBgColor = cssHexToAss(cleanBg);
-          if (cleanBg.length === 9) {
-            const alphaHex = cleanBg.substring(7, 9);
-            const cssAlphaInt = parseInt(alphaHex, 16);
-            const assAlphaInt = 255 - cssAlphaInt;
-            assBgAlpha = assAlphaInt.toString(16).padStart(2, "0").toUpperCase();
-          } else {
-            assBgAlpha = "00"; // default opaque
-          }
-        } else if (cleanBg.startsWith("rgba")) {
-          const match = cleanBg.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*([\d.]+)\s*\)/);
-          if (match) {
-            const r = parseInt(match[1]).toString(16).padStart(2, "0");
-            const g = parseInt(match[2]).toString(16).padStart(2, "0");
-            const b = parseInt(match[3]).toString(16).padStart(2, "0");
-            assBgColor = `${b}${g}${r}`;
-            const a = parseFloat(match[4]);
-            const assAlphaInt = Math.round((1 - a) * 255);
-            assBgAlpha = assAlphaInt.toString(16).padStart(2, "0").toUpperCase();
-          }
-        } else if (cleanBg.startsWith("rgb")) {
-          const match = cleanBg.match(/rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/);
-          if (match) {
-            const r = parseInt(match[1]).toString(16).padStart(2, "0");
-            const g = parseInt(match[2]).toString(16).padStart(2, "0");
-            const b = parseInt(match[3]).toString(16).padStart(2, "0");
-            assBgColor = `${b}${g}${r}`;
-            assBgAlpha = "00"; // fully opaque
-          }
-        }
-      } else {
-        assBgColor = "000000";
-        assBgAlpha = "00"; // fully opaque box by default
-      }
-
-      // Overrides based on subtitleBgStyle parameter:
-      if (styleParams.subtitleBgStyle === "translucent") {
-        if (assBgAlpha === "00") {
-          assBgAlpha = "80"; // 50% transparency
-        }
-      } else if (styleParams.subtitleBgStyle === "blur") {
-        assBgColor = "FFFFFF";
-        assBgAlpha = "C0"; // 25% opacity / 75% transparent white box
-      } else {
-        // solid: force opaque
-        assBgAlpha = "00";
-      }
-    }
-
-    const marginLR = Math.round(0.07 * refWidth);
-
-    let alignment = 2; // Bottom-center
-    let marginV = Math.round(0.08 * refHeight); // default 8%
-
-    if (styleParams.position === "top") {
-      alignment = 8;
-      marginV = Math.round(0.08 * refHeight);
-    } else if (styleParams.position === "center" || styleParams.position === "middle") {
-      alignment = 5;
-      marginV = 0;
-    } else if (styleParams.position === "custom") {
-      alignment = 8; // Top-center alignment allows 1:1 match with top % from frontend
-      marginV = Math.round((styleParams.customPosition / 100) * refHeight);
-    }
-
-    // Define ASS animation override tags
-    let animTags = "";
-    const animType = styleParams.subtitleAnimation || "none";
-    if (animType === "pop") {
-      animTags = "\\fscx80\\fscy80\\t(0,70,\\fscx114\\fscy114)\\t(70,140,\\fscx100\\fscy100)";
-    } else if (animType === "fade") {
-      animTags = "\\fad(120,120)";
-    } else if (animType === "rotate") {
-      animTags = "\\frz-3.5\\fscx80\\fscy80\\t(0,80,\\frz2\\fscx112\\fscy112)\\t(80,150,\\frz0\\fscx100\\fscy100)";
-    }
-
-    // Determine font weight bold
-    let isBold = 0;
-    if (styleParams.fontName && styleParams.fontName.toLowerCase().includes("bold")) {
-      isBold = -1;
-    }
-
-    // Header section
-    let out = `[Script Info]
-ScriptType: v4.00+
-PlayResX: ${refWidth}
-PlayResY: ${refHeight}
-WrapStyle: 0
-
-[V4+ Styles]
-Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-`;
-
-    if (hasBg) {
-      // Style 1: BgStyle for the vector drawing (rounded or straight rect) - use alignment 5 (middle-center) to scale and rotate from center
-      out += `Style: BgStyle,${assFont},${styleParams.fontSize},&H${assBgAlpha}${assBgColor},&H00000000,&HFF000000,&HFF000000,0,0,0,0,100,100,0,0,1,0,0,5,0,0,0,1\n`;
-      
-      // Style 2: Default for the foreground text
-      const defaultOutline = styleParams.strokeWidth !== undefined ? styleParams.strokeWidth : 1.5;
-      out += `Style: Default,${assFont},${styleParams.fontSize},&H00${textColor},&H00000000,&H00${strokeColor},&HFF000000,${isBold},0,0,0,100,100,0,0,1,${defaultOutline.toFixed(1)},0,${alignment},${marginLR},${marginLR},${marginV},1\n`;
-    } else {
-      let outlineVal = styleParams.strokeWidth !== undefined ? styleParams.strokeWidth : 1.5;
-      out += `Style: Default,${assFont},${styleParams.fontSize},&H00${textColor},&H00000000,&H00${strokeColor},&HFF000000,${isBold},0,0,0,100,100,0,0,1,${outlineVal.toFixed(1)},0,${alignment},${marginLR},${marginLR},${marginV},1\n`;
-    }
-
-    out += `
-[Events]
-Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
-`;
-
-    // Helper functions for precise size/position estimation
-    const estimateLineWidth = (line: string, fontSize: number): number => {
-      let width = 0;
-      for (let i = 0; i < line.length; i++) {
-        const char = line[i];
-        if (char === " ") {
-          width += 0.30;
-        } else if (/[A-Z]/.test(char)) {
-          width += 0.72;
-        } else if (/[a-z]/.test(char)) {
-          width += 0.54;
-        } else if (/[0-9]/.test(char)) {
-          width += 0.58;
-        } else if (/[áéíóúÁÉÍÓÚñÑüÜ]/.test(char)) {
-          width += 0.54;
-        } else {
-          width += 0.45;
-        }
-      }
-      return width * fontSize;
-    };
-
-    const getRoundedRectPath = (w: number, h: number, r: number): string => {
-      if (r <= 0) {
-        return `m 0 0 l ${Math.round(w)} 0 l ${Math.round(w)} ${Math.round(h)} l 0 ${Math.round(h)}`;
-      }
-      const kappa = 0.5522847498;
-      
-      // Top-left starting point after the top-left curve (at r, 0)
-      let p = `m ${Math.round(r)} 0 `;
-      // Line to top-right corner start (at w - r, 0)
-      p += `l ${Math.round(w - r)} 0 `;
-      
-      // Top-right corner curve to (w, r)
-      const tr_x1 = Math.round(w - r + r * kappa);
-      const tr_y1 = 0;
-      const tr_x2 = Math.round(w);
-      const tr_y2 = Math.round(r - r * kappa);
-      const tr_x3 = Math.round(w);
-      const tr_y3 = Math.round(r);
-      p += `b ${tr_x1} ${tr_y1} ${tr_x2} ${tr_y2} ${tr_x3} ${tr_y3} `;
-      
-      // Line to bottom-right corner start (at w, h - r)
-      p += `l ${Math.round(w)} ${Math.round(h - r)} `;
-      
-      // Bottom-right corner curve to (w - r, h)
-      const br_x1 = Math.round(w);
-      const br_y1 = Math.round(h - r + r * kappa);
-      const br_x2 = Math.round(w - r + r * kappa);
-      const br_y2 = Math.round(h);
-      const br_x3 = Math.round(w - r);
-      const br_y3 = Math.round(h);
-      p += `b ${br_x1} ${br_y1} ${br_x2} ${br_y2} ${br_x3} ${br_y3} `;
-      
-      // Line to bottom-left corner start (at r, h)
-      p += `l ${Math.round(r)} ${Math.round(h)} `;
-      
-      // Bottom-left corner curve to (0, h - r)
-      const bl_x1 = Math.round(r - r * kappa);
-      const bl_y1 = Math.round(h);
-      const bl_x2 = 0;
-      const bl_y2 = Math.round(h - r + r * kappa);
-      const bl_x3 = 0;
-      const bl_y3 = Math.round(h - r);
-      p += `b ${bl_x1} ${bl_y1} ${bl_x2} ${bl_y2} ${bl_x3} ${bl_y3} `;
-      
-      // Line to top-left corner start (at 0, r)
-      p += `l 0 ${Math.round(r)} `;
-      
-      // Top-left corner curve to (r, 0)
-      const tl_x1 = 0;
-      const tl_y1 = Math.round(r - r * kappa);
-      const tl_x2 = Math.round(r - r * kappa);
-      const tl_y2 = 0;
-      const tl_x3 = Math.round(r);
-      const tl_y3 = 0;
-      p += `b ${tl_x1} ${tl_y1} ${tl_x2} ${tl_y2} ${tl_x3} ${tl_y3}`;
-      
-      return p;
-    };
-
-    const getCenteredRoundedRectPath = (w: number, h: number, r: number): string => {
-      const kappa = 0.5522847498;
-      const hw = w / 2;
-      const hh = h / 2;
-      
-      // Start at top-left curve end: x = -hw + r, y = -hh
-      let p = `m ${Math.round(-hw + r)} ${Math.round(-hh)} `;
-      // Line to top-right corner start: x = hw - r, y = -hh
-      p += `l ${Math.round(hw - r)} ${Math.round(-hh)} `;
-      
-      // Top-right corner curve to (hw, -hh + r)
-      const tr_x1 = Math.round(hw - r + r * kappa);
-      const tr_y1 = Math.round(-hh);
-      const tr_x2 = Math.round(hw);
-      const tr_y2 = Math.round(-hh + r - r * kappa);
-      const tr_x3 = Math.round(hw);
-      const tr_y3 = Math.round(-hh + r);
-      p += `b ${tr_x1} ${tr_y1} ${tr_x2} ${tr_y2} ${tr_x3} ${tr_y3} `;
-      
-      // Line to bottom-right corner start: x = hw, y = hh - r
-      p += `l ${Math.round(hw)} ${Math.round(hh - r)} `;
-      
-      // Bottom-right corner curve to (hw - r, hh)
-      const br_x1 = Math.round(hw);
-      const br_y1 = Math.round(hh - r + r * kappa);
-      const br_x2 = Math.round(hw - r + r * kappa);
-      const br_y2 = Math.round(hh);
-      const br_x3 = Math.round(hw - r);
-      const br_y3 = Math.round(hh);
-      p += `b ${br_x1} ${br_y1} ${br_x2} ${br_y2} ${br_x3} ${br_y3} `;
-      
-      // Line to bottom-left corner start: x = -hw + r, y = hh
-      p += `l ${Math.round(-hw + r)} ${Math.round(hh)} `;
-      
-      // Bottom-left corner curve to (-hw, hh - r)
-      const bl_x1 = Math.round(-hw + r - r * kappa);
-      const bl_y1 = Math.round(hh);
-      const bl_x2 = Math.round(-hw);
-      const bl_y2 = Math.round(hh - r + r * kappa);
-      const bl_x3 = Math.round(-hw);
-      const bl_y3 = Math.round(hh - r);
-      p += `b ${bl_x1} ${bl_y1} ${bl_x2} ${bl_y2} ${bl_x3} ${bl_y3} `;
-      
-      // Line to top-left corner start: x = -hw, y = -hh + r
-      p += `l ${Math.round(-hw)} ${Math.round(-hh + r)} `;
-      
-      // Top-left corner curve to (-hw + r, -hh)
-      const tl_x1 = Math.round(-hw);
-      const tl_y1 = Math.round(-hh + r - r * kappa);
-      const tl_x2 = Math.round(-hw + r - r * kappa);
-      const tl_y2 = Math.round(-hh);
-      const tl_x3 = Math.round(-hw + r);
-      const tl_y3 = Math.round(-hh);
-      p += `b ${tl_x1} ${tl_y1} ${tl_x2} ${tl_y2} ${tl_x3} ${tl_y3}`;
-      
-      return p;
-    };
-
-    // Dialogue events
-    for (const sub of subtitles) {
-      const startSec = Number(sub.start_sec) || 0;
-      const durationSec = Number(sub.duration_sec) || 5;
-      const start = formatAssTime(startSec);
-      const end = formatAssTime(startSec + durationSec);
-      const text = (sub.text || "").replace(/\\n/g, "\\N").replace(/\n/g, "\\N"); // ASS uses \N for line breaks
-      
-      const centerX = refWidth / 2;
-      let centerY = refHeight - marginV;
-      if (alignment === 8) {
-        centerY = marginV;
-      } else if (alignment === 5) {
-        centerY = refHeight / 2;
-      }
-
-      if (hasBg) {
-        // Calculate the box dimensions
-        const lines = text.split(/\\N/);
-        let maxLineWidth = 0;
-        for (const line of lines) {
-          const w = estimateLineWidth(line, styleParams.fontSize);
-          if (w > maxLineWidth) {
-            maxLineWidth = w;
-          }
-        }
-        
-        const paddingX = styleParams.fontSize * 0.75;
-        const paddingY = styleParams.fontSize * 0.35;
-        const boxWidth = maxLineWidth + paddingX;
-        const textHeight = lines.length * styleParams.fontSize * 1.15;
-        const boxHeight = textHeight + paddingY;
-        const radius = styleParams.roundedBackground === true
-          ? Math.min(boxHeight / 2, styleParams.fontSize * 0.35)
-          : Math.round(styleParams.fontSize * 0.08); // small radius like rounded-sm
-        
-        // Determine the vertical start coordinate for the background box
-        let boxY = refHeight - marginV - boxHeight;
-        if (alignment === 8) {
-          boxY = marginV;
-        } else if (alignment === 5) {
-          boxY = refHeight / 2 - boxHeight / 2;
-        }
-        
-        // Center the background box horizontally
-        const boxX = centerX - boxWidth / 2;
-        const textY = boxY + paddingY / 2;
-        
-        // Use the standard rounded rect path helper with top-left origin (0,0)
-        const pathStr = getRoundedRectPath(boxWidth, boxHeight, radius);
-        
-        // Output background box on Layer 0 using BgStyle, aligned to top-left (boxX, boxY) with \an7
-        out += `Dialogue: 0,${start},${end},BgStyle,,0,0,0,,{\\an7\\pos(${boxX.toFixed(1)},${boxY.toFixed(1)})${animTags}\\p1}${pathStr}{\\p0}\n`;
-        // Output foreground text on Layer 1 using Default style, aligned to top-center (centerX, textY) with \an8 to ensure perfect centering
-        out += `Dialogue: 1,${start},${end},Default,,0,0,0,,{\\an8\\pos(${centerX},${textY.toFixed(1)})${animTags}}${text}\n`;
-      } else {
-        out += `Dialogue: 0,${start},${end},Default,,0,0,0,,{\\an${alignment}\\pos(${centerX},${centerY.toFixed(1)})${animTags}}${text}\n`;
-      }
-    }
-
-    return out;
-  };
-
-  const executeCommand = (cmd: string): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      exec(cmd, { maxBuffer: 1024 * 1024 * 50 }, (error, stdout, stderr) => {
-        if (error) {
-          let customErrorMsg = `Command failed: ${cmd}\nError: ${error.message}\nStderr: ${stderr}`;
-          if (cmd.includes("ffmpeg") || cmd.includes("ffprobe")) {
-            const isFfmpegMissing = 
-              error.message.includes("not recognized") || 
-              error.message.includes("no se reconoce") || 
-              error.message.includes("not found") || 
-              error.message.includes("ENOENT") ||
-              error.code === 127 ||
-              error.code === 9009;
-            
-            if (isFfmpegMissing) {
-              customErrorMsg = `⚠️ [ERROR DE SISTEMA] FFmpeg / FFprobe no está instalado o no se encuentra en el PATH de tu sistema.
-
-Para ejecutar esta aplicación localmente y generar tus videos con éxito, sigue estos pasos:
-1. Descarga FFmpeg desde la página oficial: https://ffmpeg.org/download.html
-   (En Windows, puedes descargar el build de Gyan.dev. En Mac, puedes usar 'brew install ffmpeg')
-2. Extrae el contenido y añade la carpeta 'bin' (que contiene ffmpeg.exe) al PATH de las Variables de Entorno de tu sistema.
-3. Cierra tu terminal actual, abre una nueva terminal y vuelve a iniciar tu servidor con 'npm run dev'.
-
----------------------------------------------------------
-FFmpeg / FFprobe is not installed or found in your system's PATH.
-To run this application locally and render videos successfully, please:
-1. Download FFmpeg from: https://ffmpeg.org/download.html
-2. Extract and add the 'bin' directory to your system's PATH environment variable.
-3. Restart your development terminal and run 'npm run dev' again.
-
-[Detalle técnico / Technical Detail]: ${error.message}`;
-            }
-          }
-          reject(new Error(customErrorMsg));
-          return;
-        }
-        resolve(stdout);
-      });
-    });
-  };
-
-  const downloadFile = async (url: string, destPath: string): Promise<string> => {
-    if (fs.existsSync(destPath)) {
-      const stat = fs.statSync(destPath);
-      if (stat.size > 0) {
-        return destPath;
-      }
-      try {
-        fs.unlinkSync(destPath);
-      } catch (e) {}
-    }
-    
-    let correctedUrl = url;
-    if (url.includes("images.pexels.com/video-files/")) {
-      correctedUrl = url.replace("images.pexels.com/video-files/", "videos.pexels.com/video-files/");
-    }
-
-    let lastError: any = null;
-    // Try fetch up to 3 times
-    for (let attempt = 1; attempt <= 3; attempt++) {
-      try {
-        const response = await fetch(correctedUrl, {
-          headers: {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Accept": "*/*",
-            "Accept-Language": "en-US,en;q=0.9"
-          }
-        });
-        if (response.ok) {
-          const buffer = await response.arrayBuffer();
-          await fs.promises.writeFile(destPath, Buffer.from(buffer));
-          return destPath;
-        } else {
-          throw new Error(`Status ${response.status} ${response.statusText}`);
-        }
-      } catch (err: any) {
-        lastError = err;
-        console.warn(`[Download] Fetch attempt ${attempt} failed for ${correctedUrl}: ${err.message}`);
-        if (attempt < 3) {
-          await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
-        }
-      }
-    }
-
-    // Try curl as fallback
-    console.log(`[Download] Falling back to curl for ${correctedUrl}`);
-    try {
-      const { exec } = await import("child_process");
-      await new Promise<void>((resolve, reject) => {
-        const cmd = `curl -L -f --retry 3 -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" -o "${destPath}" "${correctedUrl}"`;
-        exec(cmd, (error, stdout, stderr) => {
-          if (error) {
-            reject(new Error(`curl failed: ${stderr || error.message}`));
-          } else {
-            resolve();
-          }
-        });
-      });
-
-      if (fs.existsSync(destPath) && fs.statSync(destPath).size > 0) {
-        return destPath;
-      }
-    } catch (curlErr: any) {
-      console.error(`[Download] curl fallback also failed for ${correctedUrl}:`, curlErr);
-      lastError = new Error(`${lastError?.message || ""} (curl fallback also failed: ${curlErr.message})`);
-    }
-
-    throw new Error(`Failed to download ${correctedUrl}: ${lastError?.message}`);
-  };
-
-  const runRealRender = async (projectId: string, taskId: string) => {
-    const updateTaskState = (progress: number, outputPath: string | null, error: string | null, state: number = 4) => {
-      const t = tasks.get(taskId);
-      if (t) {
-        t.progress = progress;
-        t.state = state;
-        t.output_path = outputPath;
-        t.error = error;
-        tasks.set(taskId, t);
-      }
-    };
-
-    try {
-      const p = projects.get(projectId);
-      if (!p) {
-        throw new Error("Project not found");
-      }
-
-      // Dynamic rebuild of local video tracks if isLocalSource is true
-      const isLocalSource = (p.params?.video_source === "local" || p.video_source === "local" || (p.selected_media && p.selected_media[0]?.provider === "local"));
-      if (isLocalSource) {
-        const uniqueFiles: any[] = [];
-        const seen = new Set();
-        const chosenLocalFiles = p.params?.local_video_files || [];
-        console.log(`[Render Rebuild] Rebuilding local video track. chosenLocalFiles:`, chosenLocalFiles);
-
-        if (chosenLocalFiles.length > 0) {
-          for (const filename of chosenLocalFiles) {
-            const existingMed = (p.selected_media || []).find((m: any) => path.basename(m.source_url || m.asset_url || "") === filename);
-            if (existingMed) {
-              if (!seen.has(existingMed.source_url)) {
-                seen.add(existingMed.source_url);
-                if (!existingMed.local_path) {
-                  existingMed.local_path = `storage/local_videos/${filename}`;
-                }
-                uniqueFiles.push(existingMed);
-              }
-            } else {
-              const sourceUrl = `/storage/local_videos/${filename}`;
-              if (!seen.has(sourceUrl)) {
-                seen.add(sourceUrl);
-                const fullDiskPath = path.join(LOCAL_VIDEOS_DIR, filename);
-                let durationSec = 15;
-                if (fs.existsSync(fullDiskPath)) {
-                  try {
-                    const durationStr = await executeCommand(`ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${fullDiskPath}"`);
-                    const d = parseFloat(durationStr.trim());
-                    if (!isNaN(d) && d > 0) {
-                      durationSec = d;
-                    }
-                  } catch (e) {
-                    console.warn(`[Render Rebuild] Failed to get duration for ${filename}, defaulting to 15s`, e);
-                  }
-                }
-                uniqueFiles.push({
-                  id: `${filename}_custom`,
-                  provider: "local",
-                  source_url: sourceUrl,
-                  download_url: sourceUrl,
-                  thumbnail_url: "/dist/assets/background.jpg",
-                  duration_sec: durationSec,
-                  local_path: `storage/local_videos/${filename}`
-                });
-              }
-            }
-          }
-        } else if (p.selected_media && p.selected_media.length > 0) {
-          for (const med of p.selected_media) {
-            if (med.source_url && !seen.has(med.source_url)) {
-              seen.add(med.source_url);
-              uniqueFiles.push(med);
-            }
-          }
-        }
-
-        if (uniqueFiles.length === 0) {
-          try {
-            const files = fs.readdirSync(LOCAL_VIDEOS_DIR);
-            const videoExtensions = [".mp4", ".mkv", ".avi", ".mov", ".webm"];
-            const availableLocalFiles = files.filter(f => videoExtensions.includes(path.extname(f).toLowerCase()));
-            const chosenFiles = availableLocalFiles.length > 0 ? availableLocalFiles : ["nature_cinematic.mp4", "urban_streets.mp4", "retro_animation.mp4"];
-            
-            for (const filename of chosenFiles) {
-              const sourceUrl = `/storage/local_videos/${filename}`;
-              if (!seen.has(sourceUrl)) {
-                seen.add(sourceUrl);
-                uniqueFiles.push({
-                  id: `${filename}_fallback`,
-                  provider: "local",
-                  source_url: sourceUrl,
-                  download_url: sourceUrl,
-                  thumbnail_url: "/dist/assets/background.jpg",
-                  duration_sec: 15,
-                  local_path: `storage/local_videos/${filename}`
-                });
-              }
-            }
-          } catch (e) {
-            console.error("[Render Rebuild] Failed to read fallback local videos:", e);
-          }
-        }
-
-        const defaultLocalVideos = ["nature_cinematic.mp4", "urban_streets.mp4", "retro_animation.mp4"];
-        try {
-          const filesOnDisk = fs.readdirSync(LOCAL_VIDEOS_DIR);
-          const videoExtensions = [".mp4", ".mkv", ".avi", ".mov", ".webm"];
-          const diskFiles = filesOnDisk.filter(f => videoExtensions.includes(path.extname(f).toLowerCase()));
-          const hasCustomFilesOnDisk = diskFiles.some(f => !defaultLocalVideos.includes(f));
-          
-          if (hasCustomFilesOnDisk && chosenLocalFiles.length === 0) {
-            const filteredUnique = uniqueFiles.filter(med => {
-              const filename = path.basename(med.source_url || med.asset_url || "");
-              return !defaultLocalVideos.includes(filename);
-            });
-            
-            if (filteredUnique.length > 0) {
-              uniqueFiles.length = 0;
-              uniqueFiles.push(...filteredUnique);
-            }
-          }
-        } catch (err) {
-          console.error("[Render Rebuild] Failed to filter uniqueFiles against disk:", err);
-        }
-
-        const audioTrack = p.tracks?.find((tr: any) => tr.type === "audio");
-        const audioItems = audioTrack?.items || [];
-        const totalDurationSec = audioItems.reduce((acc: number, item: any) => Math.max(acc, Number(item.start_sec) + Number(item.duration_sec)), 0) || 15;
-
-        console.log(`[Render Rebuild] Rebuilding continuous local video track from ${uniqueFiles.length} files for duration ${totalDurationSec}s`);
-
-        let currentStartSec = 0;
-        let itemId = 1;
-        const videoItems = [];
-        while (currentStartSec < totalDurationSec) {
-          const medIndex = (itemId - 1) % uniqueFiles.length;
-          const med = uniqueFiles[medIndex];
-          const rawDuration = Number(med.duration_sec);
-          const fullDuration = (isNaN(rawDuration) || rawDuration <= 0) ? 15 : rawDuration;
-          const usedDuration = Math.min(fullDuration, totalDurationSec - currentStartSec);
-
-          videoItems.push({
-            id: `item_${itemId}`,
-            media_id: med.id,
-            local_path: med.local_path,
-            asset_url: med.source_url,
-            thumbnail_url: med.thumbnail_url || "/dist/assets/background.jpg",
-            source_url: med.source_url,
-            start_sec: currentStartSec,
-            duration_sec: usedDuration,
-            trim_start_sec: 0,
-            trim_end_sec: usedDuration,
-            segment_id: null,
-            provider: "local"
-          });
-
-          currentStartSec += usedDuration;
-          itemId++;
-        }
-
-        const existingVideoTrack = p.tracks?.find((tr: any) => tr.type === "video");
-        if (existingVideoTrack) {
-          existingVideoTrack.items = videoItems;
-        } else {
-          if (!p.tracks) p.tracks = [];
-          p.tracks.push({
-            id: `track_video_${Date.now()}`,
-            type: "video",
-            items: videoItems
-          });
-        }
-        projects.set(projectId, p);
-      }
-
-      const videoTrack = p.tracks?.find((tr: any) => tr.type === "video");
-      const subtitleTrack = p.tracks?.find((tr: any) => tr.type === "subtitle");
-      
-      let musicItem = p.selected_music?.[0];
-
-      if (!musicItem) {
-        const bgmType = p.params?.bgm_type || p.bgm_type || "none";
-        const bgmFile = p.params?.bgm_file || p.bgm_file;
-        const bgmVolume = p.params?.bgm_volume !== undefined ? p.params.bgm_volume : (p.bgm_volume !== undefined ? p.bgm_volume : 0.2);
-
-        if (bgmType === "random") {
-          const randomIdx = Math.floor(Math.random() * BGM_FILES.length);
-          const randomFile = BGM_FILES[randomIdx];
-          musicItem = {
-            id: `bgm_random_${randomIdx}`,
-            provider: "local",
-            url: randomFile.file,
-            title: randomFile.name,
-            duration_sec: 180,
-            volume: bgmVolume
-          };
-          logTask(taskId, "INFO", "AUDIO_MIXER", `BGM Mode: Random. Selected soundtrack: "${randomFile.name}" at volume: ${bgmVolume}`);
-        } else if (bgmType === "contextual") {
-          // AI Contextual selection (Option B)
-          // Match project topic/script with BGM_FILES tags
-          const searchSubject = `${p.topic || ""} ${p.script || ""}`.toLowerCase();
-          let bestMatch = BGM_FILES[0];
-          let maxMatches = -1;
-
-          for (const file of BGM_FILES) {
-            let matches = 0;
-            if (file.tags) {
-              for (const tag of file.tags) {
-                if (searchSubject.includes(tag.toLowerCase())) {
-                  matches++;
-                }
-              }
-            }
-            if (matches > maxMatches) {
-              maxMatches = matches;
-              bestMatch = file;
-            }
-          }
-
-          musicItem = {
-            id: "bgm_contextual",
-            provider: "local",
-            url: bestMatch.file,
-            title: bestMatch.name,
-            duration_sec: 180,
-            volume: bgmVolume
-          };
-          logTask(taskId, "INFO", "AUDIO_MIXER", `BGM Mode: AI Contextual. Matched: "${bestMatch.name}" with score ${maxMatches} at volume: ${bgmVolume}`);
-        } else if (bgmFile && bgmType === "file") {
-          const matched = BGM_FILES.find(f => f.file === bgmFile || f.name === bgmFile);
-          musicItem = {
-            id: "bgm_param",
-            provider: "local",
-            url: matched ? matched.file : bgmFile,
-            title: matched ? matched.name : path.basename(bgmFile),
-            duration_sec: 180,
-            volume: bgmVolume
-          };
-          logTask(taskId, "INFO", "AUDIO_MIXER", `BGM Mode: Manual. Selected soundtrack: "${musicItem.title}" at volume: ${bgmVolume}`);
-        } else {
-          logTask(taskId, "INFO", "AUDIO_MIXER", "BGM Mode: None or Disabled.");
-        }
-      } else {
-        logTask(taskId, "INFO", "AUDIO_MIXER", `Using existing selected music: "${musicItem.title}" at volume: ${musicItem.volume || 0.2}`);
-      }
-
-      const clips = videoTrack?.items || [];
-      if (clips.length === 0) {
-        throw new Error("No video clips in the timeline to render.");
-      }
-
-      // Ensure we have a project_folder_name
-      if (!p.project_folder_name) {
-        const themeFolder = sanitizeFolderName(p.params?.video_niche || p.topic || 'general');
-        const folderName = `${sanitizeFolderName(p.topic || p.project_id || 'project')}_${getFormattedDateTime()}`;
-        p.project_folder_name = `${themeFolder}/${folderName}`;
-        projects.set(projectId, p);
-      }
-
-      const projectFolder = path.join(process.cwd(), "storage", "renders", p.project_folder_name);
-      const cacheDir = path.join(projectFolder, "cache");
-      const renderDir = projectFolder;
-      await fs.promises.mkdir(cacheDir, { recursive: true });
-      await fs.promises.mkdir(renderDir, { recursive: true });
-
-      logTask(taskId, "INFO", "SUBTITLES", "Generating subtitles");
-      await new Promise(r => setTimeout(r, 600));
-      logTask(taskId, "SUCCESS", "SUBTITLES", "Subtitles ready");
-
-      // Update progress to 10%
-      updateTaskState(10, null, null);
-
-      logTask(taskId, "INFO", "VIDEO_ASSET", "Collecting video materials");
-      
-      const localVideoPaths: string[] = [];
-      for (let i = 0; i < clips.length; i++) {
-        const clip = clips[i];
-        const url = clip.source_url || clip.asset_url;
-        if (!url) {
-          logTask(taskId, "WARNING", "VIDEO_ASSET", `Clip ${clip.id} has no source URL. Generating synthetic placeholder...`);
-          localVideoPaths.push("placeholder");
-          continue;
-        }
-
-        const isLocalUrl = url.startsWith("/") || !url.includes("://") || url.includes("/storage/local_videos/") || url.includes("/local_videos/");
-        if (isLocalUrl) {
-          const cleanUrl = url.split("?")[0];
-          const filename = path.basename(cleanUrl);
-          
-          // Try diskPath 1 (relative to cwd)
-          let cleanLocalPath = cleanUrl.startsWith("/") ? cleanUrl.slice(1) : cleanUrl;
-          if (url.includes("/storage/local_videos/")) {
-            cleanLocalPath = `storage/local_videos/${filename}`;
-          } else if (url.includes("/local_videos/")) {
-            cleanLocalPath = `local_videos/${filename}`;
-          }
-          const diskPath = path.join(process.cwd(), cleanLocalPath);
-          if (fs.existsSync(diskPath)) {
-            localVideoPaths.push(diskPath);
-            continue;
-          }
-
-          // Try diskPath 2 (fallback directly in LOCAL_VIDEOS_DIR)
-          const fallbackPath = path.join(LOCAL_VIDEOS_DIR, filename);
-          if (fs.existsSync(fallbackPath)) {
-            localVideoPaths.push(fallbackPath);
-            continue;
-          }
-
-          // Robust safety net fallback: use any existing local video file if the chosen one is missing
-          try {
-            const availableFiles = fs.readdirSync(LOCAL_VIDEOS_DIR).filter(f => 
-              [".mp4", ".mkv", ".avi", ".mov", ".webm"].includes(path.extname(f).toLowerCase())
-            );
-            if (availableFiles.length > 0) {
-              const safeFallbackPath = path.join(LOCAL_VIDEOS_DIR, availableFiles[0]);
-              console.log(`[Renderer] Selected file ${filename} missing. Falling back to available file: ${availableFiles[0]}`);
-              logTask(taskId, "WARNING", "VIDEO_ASSET", `El archivo local "${filename}" no fue encontrado. Usando archivo "${availableFiles[0]}" como respaldo.`);
-              localVideoPaths.push(safeFallbackPath);
-              continue;
-            }
-          } catch (e) {
-            console.error("[Renderer] Failed to list fallback local videos:", e);
-          }
-        }
-
-        const cleanUrl = url.split("?")[0];
-        const ext = path.extname(cleanUrl) || ".mp4";
-        const urlHash = crypto.createHash("md5").update(url).digest("hex");
-        const dest = path.join(cacheDir, `clip_${clip.id}_${urlHash}${ext}`);
-
-        try {
-          await downloadFile(url, dest);
-          localVideoPaths.push(dest);
-        } catch (downloadErr: any) {
-          console.error(`[Renderer] Failed to download clip ${clip.id}:`, downloadErr);
-          logTask(taskId, "WARNING", "VIDEO_ASSET", `Could not download clip ${clip.id}. Generating synthetic placeholder...`);
-          localVideoPaths.push("placeholder");
-        }
-      }
-
-      logTask(taskId, "SUCCESS", "VIDEO_ASSET", `Collected ${clips.length} video materials`);
-      updateTaskState(30, null, null);
-
-      // Download narration and BGM
-      let localNarrationPath: string | null = null;
-      if (p.narration_audio_path) {
-        // Resolve local relative URLs (e.g. /storage/renders/narration_xxx.mp3)
-        if (p.narration_audio_path.startsWith("/") || !p.narration_audio_path.includes("://")) {
-          const cleanLocalPath = p.narration_audio_path.startsWith("/") ? p.narration_audio_path.slice(1) : p.narration_audio_path;
-          const diskPath = path.join(process.cwd(), cleanLocalPath);
-          if (fs.existsSync(diskPath)) {
-            localNarrationPath = diskPath;
-          }
-        }
-
-        if (!localNarrationPath) {
-          const ext = path.extname(p.narration_audio_path.split("?")[0]) || ".mp3";
-          const dest = path.join(cacheDir, `narration_${projectId}${ext}`);
-          try {
-            await downloadFile(p.narration_audio_path, dest);
-            localNarrationPath = dest;
-          } catch (err) {
-            console.error(`[Renderer] Narration download failed:`, err);
-          }
-        }
-      }
-
-      let localMusicPath: string | null = null;
-      if (musicItem && musicItem.url) {
-        // Resolve local relative BGM URLs
-        if (musicItem.url.startsWith("/") || !musicItem.url.includes("://")) {
-          const cleanLocalPath = musicItem.url.startsWith("/") ? musicItem.url.slice(1) : musicItem.url;
-          const diskPath = path.join(process.cwd(), cleanLocalPath);
-          if (fs.existsSync(diskPath)) {
-            localMusicPath = diskPath;
-          }
-        }
-
-        if (!localMusicPath) {
-          const ext = path.extname(musicItem.url.split("?")[0]) || ".mp3";
-          const dest = path.join(cacheDir, `music_${musicItem.id}${ext}`);
-          try {
-            await downloadFile(musicItem.url, dest);
-            localMusicPath = dest;
-          } catch (err) {
-            console.error(`[Renderer] BGM download failed:`, err);
-          }
-        }
-      }
-
-      logTask(taskId, "INFO", "RENDER", "Rendering final video");
-      updateTaskState(40, null, null);
-
-      // Get exact duration of a video file via ffprobe
-      const getVideoDuration = async (videoPath: string): Promise<number> => {
-        try {
-          const durationStr = await executeCommand(`ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${videoPath}"`);
-          const d = parseFloat(durationStr.trim());
-          return isNaN(d) ? 0 : d;
-        } catch (err) {
-          console.error(`[getVideoDuration] Failed to probe ${videoPath}:`, err);
-          return 0;
-        }
-      };
-
-      // Detect optimal video encoder (NVENC vs. libx264)
-      let encoderArgs = "-c:v libx264 -crf 18 -preset veryfast";
-      try {
-        logTask(taskId, "INFO", "SYSTEM", "Detecting optimal video encoder (NVIDIA NVENC vs. CPU libx264)...");
-        // Run a very quick dummy probe to check if h264_nvenc works on the system
-        await executeCommand('ffmpeg -y -f lavfi -i color=c=black:s=16x16:d=0.1 -c:v h264_nvenc -f null -');
-        encoderArgs = "-c:v h264_nvenc -preset p4 -cq 19 -rc vbr";
-        logTask(taskId, "INFO", "SYSTEM", "🚀 NVIDIA RTX GPU detected! Enabled hardware-accelerated NVENC encoding for maximum performance.");
-      } catch (err) {
-        logTask(taskId, "INFO", "SYSTEM", "No hardware NVENC support detected. Using CPU-based libx264 encoder (server/fallback mode).");
-      }
-
-      // Format clips
-      const formattedClips: string[] = [];
-      const isLandscape = p.global_visual_style === "landscape" || p.aspect_ratio === "landscape";
-      const resWidth = isLandscape ? 1280 : 720;
-      const resHeight = isLandscape ? 720 : 1280;
-
-      for (let i = 0; i < clips.length; i++) {
-        const clip = clips[i];
-        const inputPath = localVideoPaths[i];
-        const formattedPath = path.join(cacheDir, `formatted_${taskId}_${i}.mp4`);
-        const duration = Number(clip.duration_sec) || 5;
-        const start = Number(clip.trim_start_sec) || 0;
-
-        if (inputPath === "placeholder") {
-          console.log(`[Renderer] Building synthetic placeholder clip ${i}`);
-          const cmd = `ffmpeg -y -f lavfi -i color=c=0x1E1E2E:s=${resWidth}x${resHeight}:d=${duration} -r 25 -pix_fmt yuv420p "${formattedPath}"`;
-          await executeCommand(cmd);
-        } else {
-          try {
-            const inputDuration = await getVideoDuration(inputPath);
-            console.log(`[Renderer] Formatting clip ${i}: ${inputPath}, inputDuration: ${inputDuration}, targetDuration: ${duration}`);
-            
-            let loopCmd = "";
-            const neededDuration = start + duration;
-            if (inputDuration > 0 && inputDuration < neededDuration) {
-              const loopCount = Math.ceil(neededDuration / inputDuration);
-              loopCmd = `-stream_loop ${loopCount - 1}`;
-            }
-            
-            // Note: Put -ss and -t after -i for reliable seek/trim when looping is applied
-            const cmd = `ffmpeg -y ${loopCmd ? loopCmd + " " : ""}-i "${inputPath}" -ss ${start} -t ${duration} -vf "scale=${resWidth}:${resHeight}:force_original_aspect_ratio=increase,crop=${resWidth}:${resHeight},setsar=1" -r 25 ${encoderArgs} -pix_fmt yuv420p "${formattedPath}"`;
-            await executeCommand(cmd);
-          } catch (err) {
-            console.error(`[Renderer] Failed to format clip ${i} (${inputPath}), falling back to placeholder:`, err);
-            logTask(taskId, "WARNING", "VIDEO_ASSET", `Failed to process local video file: ${path.basename(inputPath)}. Using a colored placeholder instead.`);
-            const cmd = `ffmpeg -y -f lavfi -i color=c=0x1E1E2E:s=${resWidth}x${resHeight}:d=${duration} -r 25 -pix_fmt yuv420p "${formattedPath}"`;
-            await executeCommand(cmd);
-          }
-        }
-
-        formattedClips.push(formattedPath);
-        updateTaskState(Math.floor(40 + (i / clips.length) * 20), null, null);
-      }
-
-      logTask(taskId, "INFO", "COMPOSITION", "Combining video 1/1");
-      updateTaskState(65, null, null);
-
-      // Concatenate
-      const concatFilePath = path.join(cacheDir, `concat_${taskId}.txt`);
-      const concatContent = formattedClips.map(f => `file '${f.replace(/\\/g, "/")}'`).join("\n");
-      await fs.promises.writeFile(concatFilePath, concatContent, "utf8");
-
-      const concatOutput = path.join(cacheDir, `concatenated_${taskId}.mp4`);
-      const concatCmd = `ffmpeg -y -f concat -safe 0 -i "${concatFilePath}" -c copy "${concatOutput}"`;
-      await executeCommand(concatCmd);
-      updateTaskState(75, null, null);
-
-      logTask(taskId, "INFO", "AUDIO_MIXER", "Applying audio and subtitles 1/1");
-      updateTaskState(80, null, null);
-
-      // Retrieve exact duration of narration audio to trim final render if needed
-      let narrationDuration = 0;
-      if (localNarrationPath && fs.existsSync(localNarrationPath)) {
-        try {
-          const durationStr = await executeCommand(`ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${localNarrationPath}"`);
-          const d = parseFloat(durationStr.trim());
-          if (!isNaN(d) && d > 0) {
-            narrationDuration = d;
-          }
-        } catch (e) {
-          console.error("[Renderer] Failed to get narration duration:", e);
-        }
-      }
-
-      // Mix Audio
-      const audioMixedOutput = path.join(cacheDir, `audio_mixed_${taskId}.mp4`);
-      let audioFilter = "";
-      const audioInputs: string[] = [];
-
-      const voiceVolume = p.params?.voice_volume !== undefined ? p.params.voice_volume : (p.voice_volume !== undefined ? p.voice_volume : 1.0);
-      const musicVolume = musicItem?.volume !== undefined ? musicItem.volume : (p.params?.bgm_volume !== undefined ? p.params.bgm_volume : (p.bgm_volume !== undefined ? p.bgm_volume : 0.2));
-
-      if (localNarrationPath && localMusicPath) {
-        audioInputs.push(`-i "${localNarrationPath}"`, `-stream_loop -1 -i "${localMusicPath}"`);
-        audioFilter = `[1:a]volume=${voiceVolume}[v];[2:a]volume=${musicVolume}[m];[v][m]amix=inputs=2:duration=first[a]`;
-      } else if (localNarrationPath) {
-        audioInputs.push(`-i "${localNarrationPath}"`);
-        audioFilter = `[1:a]volume=${voiceVolume}[a]`;
-      } else if (localMusicPath) {
-        audioInputs.push(`-stream_loop -1 -i "${localMusicPath}"`);
-        audioFilter = `[1:a]volume=${musicVolume}[a]`;
-      }
-
-      let mixCmd = "";
-      const limitDurationOpt = narrationDuration > 0 ? `-t ${narrationDuration}` : "";
-      if (audioFilter) {
-        mixCmd = `ffmpeg -y -i "${concatOutput}" ${audioInputs.join(" ")} -filter_complex "${audioFilter}" -map 0:v -map "[a]" -c:v copy -c:a aac ${limitDurationOpt} "${audioMixedOutput}"`;
-      } else {
-        mixCmd = `ffmpeg -y -i "${concatOutput}" -f lavfi -i anullsrc=r=44100:cl=stereo -c:v copy -c:a aac -shortest ${limitDurationOpt} "${audioMixedOutput}"`;
-      }
-      await executeCommand(mixCmd);
-      updateTaskState(90, null, null);
-
-      // Burn Subtitles
-      let subtitles = subtitleTrack?.items || [];
-      if (subtitles.length === 0 && p.shot_plan?.segments) {
-        console.log(`[Renderer] Subtitle track was empty, falling back to shot_plan segments (${p.shot_plan.segments.length} items)`);
-        const fallbackSubtitles: any[] = [];
-        p.shot_plan.segments.forEach((seg: any, idx: number) => {
-          const startSec = seg.start_sec !== undefined ? seg.start_sec : idx * 5;
-          const durationSec = seg.target_duration_sec !== undefined ? seg.target_duration_sec : 5;
-          const splitItems = splitTextIntoTikTokSubtitles(seg.narration_text || "", startSec, durationSec, seg.id, `sub_fallback_${idx + 1}`);
-          fallbackSubtitles.push(...splitItems);
-        });
-        subtitles = fallbackSubtitles;
-      }
-      let finalOutputPath = audioMixedOutput;
-      const pParams = p.params || {};
-      const subtitleEnabledParam = pParams.subtitle_enabled !== undefined ? pParams.subtitle_enabled : (p.subtitle_enabled !== undefined ? p.subtitle_enabled : true);
-
-      if (subtitles.length > 0 && subtitleEnabledParam) {
-        // Write custom fonts.conf for fontconfig / libass
-        const fontsConfPath = path.join(cacheDir, `fonts_${taskId}.conf`);
-        const fontsConfXml = `<?xml version="1.0"?>
-<!DOCTYPE fontconfig SYSTEM "fonts.dtd">
-<fontconfig>
-  <dir>${path.join(process.cwd(), "public", "fonts")}</dir>
-  <dir>${path.join(process.cwd(), "resource", "fonts")}</dir>
-  <dir>/usr/share/fonts</dir>
-  <dir>/usr/local/share/fonts</dir>
-  <cachedir>/tmp/fonts-cache-${taskId}</cachedir>
-  <include ignore_missing="yes">/etc/fonts/fonts.conf</include>
-</fontconfig>`;
-        await fs.promises.writeFile(fontsConfPath, fontsConfXml, "utf8");
-
-        // Set FONTCONFIG_FILE and FONTCONFIG_PATH in environment variables for ffmpeg
-        process.env.FONTCONFIG_FILE = fontsConfPath;
-        process.env.FONTCONFIG_PATH = cacheDir;
-
-        const fontNameParam = pParams.font_name || p.font_name || "STHeitiMedium.ttc";
-        const fontSizeParam = pParams.font_size || p.font_size || 60;
-        const textColorParam = pParams.text_fore_color || p.text_fore_color || "#FFFFFF";
-        const strokeColorParam = pParams.stroke_color || p.stroke_color || "#000000";
-        const strokeWidthParam = pParams.stroke_width !== undefined ? pParams.stroke_width : (p.stroke_width !== undefined ? p.stroke_width : 1.5);
-        const hasBgParam = pParams.text_background_color !== undefined ? pParams.text_background_color : (p.text_background_color !== undefined ? p.text_background_color : true);
-        const subtitlePosParam = pParams.subtitle_position || p.subtitle_position || "bottom";
-        const customPosParam = pParams.custom_position !== undefined ? pParams.custom_position : (p.custom_position !== undefined ? p.custom_position : 70);
-        const subtitleBgStyleParam = pParams.subtitle_bg_style || p.subtitle_bg_style || "solid";
-        const roundedBgParam = pParams.rounded_subtitle_background !== undefined ? pParams.rounded_subtitle_background : (p.rounded_subtitle_background !== undefined ? p.rounded_subtitle_background : false);
-        const subtitleAnimationParam = pParams.subtitle_animation || p.subtitle_animation || "pop";
-
-        // Generate ASS file with exact styles
-        const assFilePath = path.join(cacheDir, `subtitles_${taskId}.ass`);
-        const assContent = generateAss(subtitles, resWidth, resHeight, {
-          fontName: fontNameParam,
-          fontSize: fontSizeParam,
-          textColor: textColorParam,
-          strokeColor: strokeColorParam,
-          strokeWidth: strokeWidthParam,
-          hasBg: hasBgParam,
-          position: subtitlePosParam,
-          customPosition: customPosParam,
-          subtitleBgStyle: subtitleBgStyleParam,
-          roundedBackground: roundedBgParam,
-          subtitleAnimation: subtitleAnimationParam,
-        });
-        await fs.promises.writeFile(assFilePath, assContent, "utf8");
-
-        const srtOutput = path.join(renderDir, `render_${projectId}.mp4`);
-        const assRelative = path.relative(process.cwd(), assFilePath).replace(/\\/g, "/");
-        const escapedAssPath = assRelative.replace(/'/g, "'\\\\''").replace(/:/g, "\\:");
-
-        const subFilter = `subtitles='${escapedAssPath}'`;
-        const srtCmd = `ffmpeg -y -i "${audioMixedOutput}" -vf "${subFilter}" ${encoderArgs} -c:a copy "${srtOutput}"`;
-        await executeCommand(srtCmd);
-        finalOutputPath = srtOutput;
-      } else {
-        const copyOutput = path.join(renderDir, `render_${projectId}.mp4`);
-        await fs.promises.copyFile(audioMixedOutput, copyOutput);
-        finalOutputPath = copyOutput;
-      }
-
-      // Clean temp files
-      for (const f of formattedClips) {
-        fs.promises.unlink(f).catch(() => {});
-      }
-      fs.promises.unlink(concatFilePath).catch(() => {});
-      fs.promises.unlink(concatOutput).catch(() => {});
-      if (finalOutputPath !== audioMixedOutput) {
-        fs.promises.unlink(audioMixedOutput).catch(() => {});
-      }
-
-      const finalUrl = `/storage/renders/${p.project_folder_name}/render_${projectId}.mp4`;
-      logTask(taskId, "SUCCESS", "RENDER", `Compression and rendering complete. Output file generated at: ${finalUrl}`);
-      logTask(taskId, "SUCCESS", "SYSTEM", `Task ${taskId} completed successfully!`);
-
-      p.videos = [finalUrl];
-      p.combined_videos = [finalUrl];
-      p.updated_at = new Date().toISOString();
-      projects.set(projectId, p);
-
-      updateTaskState(100, finalUrl, null, 1);
-    } catch (err: any) {
-      console.error(`[Renderer] Render failure for project ${projectId}:`, err);
-      logTask(taskId, "ERROR", "RENDER", `Rendering failed: ${err.message}`);
-      updateTaskState(100, null, err.message, -1);
-    }
-  };
+  const { runRealRender } = createRenderer({
+    projects,
+    tasks,
+    logTask,
+    localVideosDir: LOCAL_VIDEOS_DIR,
+    bgmFiles: getBgmFiles,
+    sanitizeFolderName,
+    getFormattedDateTime,
+  });
 
   app.post("/api/v1/projects/:id/render", wrap(async (req: any, res: any) => {
     const renderTaskId = "render_task_" + req.params.id;
@@ -4640,17 +2900,33 @@ To run this application locally and render videos successfully, please:
 
   app.get("/api/v1/projects/:id/render", wrap(async (req: any, res: any) => {
     const renderTaskId = "render_task_" + req.params.id;
-    const t = tasks.get(renderTaskId) || { state: 1, progress: 100, output_path: SAMPLE_VIDEOS[3].source_url };
+    const task = tasks.get(renderTaskId);
+    const p = projects.get(req.params.id);
+
+    // The tasks map is in-process only, so a server restart loses it. Rather
+    // than fabricating a completed render (which used to hand the client a
+    // hardcoded stock clip), reconstruct real state from the proyecto's
+    // recorded output and the file on disk.
+    let renderedFileExists = false;
+    const recordedUrl = p?.videos?.[0];
+    if (!task && typeof recordedUrl === "string" && recordedUrl.length > 0) {
+      const relative = recordedUrl.replace(/^\/+/, "");
+      renderedFileExists = fs.existsSync(path.join(process.cwd(), relative));
+    }
+
+    const status = resolveRenderStatus({ task, project: p, renderedFileExists });
+
     res.json({
       status: 200,
       message: "ok",
       data: {
         task_id: renderTaskId,
-        state: t.state,
-        progress: t.progress,
-        output_path: t.output_path,
-        error: t.error
-      }
+        state: status.state,
+        progress: status.progress,
+        output_path: status.output_path,
+        output_paths: status.output_paths,
+        error: status.error,
+      },
     });
   }));
 
@@ -4666,7 +2942,7 @@ To run this application locally and render videos successfully, please:
     });
   }));
 
-  app.get("/api/v1/projects/:id/assets/*", wrap(async (req: any, res: any) => {
+  app.get("/api/v1/projects/:id/assets/*", wrap(async (_req: any, res: any) => {
     // Redirect asset fetch to online resource
     res.redirect("https://videos.pexels.com/video-files/3248319/3248319-hd_1920_1080_25fps.mp4");
   }));
@@ -4674,8 +2950,14 @@ To run this application locally and render videos successfully, please:
   // Serve local videos from whatever folder is active (either root local_videos or storage/local_videos)
   app.use("/storage/local_videos", express.static(LOCAL_VIDEOS_DIR));
 
-  // Serve storage directory statically
-  app.use("/storage", express.static(path.join(process.cwd(), "storage")));
+  // Serve background music files directly from public/musics
+  app.use("/public/musics", express.static(PUBLIC_MUSICS_DIR));
+  app.use("/musics", express.static(PUBLIC_MUSICS_DIR));
+
+  // Serve only the rendered output. The rest of storage/ holds OAuth refresh
+  // tokens (youtube-credentials.json, tiktok-credentials.json) and the project
+  // database — never web-serve the directory root.
+  app.use("/storage/renders", express.static(path.join(process.cwd(), "storage", "renders")));
 
   // TikTok Domain/URL Verification Endpoint
   app.get("/:filename", (req: any, res: any, next: any) => {
@@ -4684,19 +2966,12 @@ To run this application locally and render videos successfully, please:
     let verificationContent = globalConfig.settings?.tiktok?.verification_content;
 
     // Load from disk directly as a fallback/guarantee to make it 100% robust
-    const tiktokCredsPath = path.join(process.cwd(), "storage", "tiktok-credentials.json");
-    if (fs.existsSync(tiktokCredsPath)) {
-      try {
-        const data = JSON.parse(fs.readFileSync(tiktokCredsPath, "utf8"));
-        if (data.verification_filename) {
-          verificationFilename = data.verification_filename;
-        }
-        if (data.verification_content) {
-          verificationContent = data.verification_content;
-        }
-      } catch (e) {
-        // ignore JSON parse errors
-      }
+    const tkCreds = loadTiktokChannels();
+    if (tkCreds.verification_filename) {
+      verificationFilename = tkCreds.verification_filename;
+    }
+    if (tkCreds.verification_content) {
+      verificationContent = tkCreds.verification_content;
     }
 
     if (verificationFilename && filename === verificationFilename) {
@@ -4715,13 +2990,13 @@ To run this application locally and render videos successfully, please:
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
-    app.get('*', (req, res) => {
+    app.get('*', (_req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }
 
   // Error handler middleware
-  app.use((err: any, req: any, res: any, next: any) => {
+  app.use((err: any, _req: any, res: any, _next: any) => {
     console.error("[Server Error]", err);
     res.status(500).json({ status: 500, message: err.message || "Internal Server Error", data: null });
   });

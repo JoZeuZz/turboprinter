@@ -1,12 +1,4 @@
 // webui-react/src/api/polling.ts
-import { apiFetch } from "./client";
-import i18n from "../i18n";
-import {
-  TaskStatus,
-  TASK_STATE_COMPLETE,
-  TASK_STATE_FAILED,
-} from "./types";
-
 export async function pollUntilComplete<T>(
   fetchStatus: () => Promise<T>,
   onProgress: (status: T) => void,
@@ -23,24 +15,4 @@ export async function pollUntilComplete<T>(
 
     await new Promise((resolve) => setTimeout(resolve, intervalMs));
   }
-}
-
-export function pollTask(
-  taskId: string,
-  onProgress: (status: TaskStatus) => void,
-  intervalMs = 1500
-): Promise<TaskStatus> {
-  return pollUntilComplete(
-    () => apiFetch<TaskStatus>(`/tasks/${taskId}`),
-    onProgress,
-    (status) =>
-      status.state === TASK_STATE_COMPLETE || status.state === TASK_STATE_FAILED,
-    intervalMs
-  ).then((status) => {
-    if (status.state === TASK_STATE_FAILED) {
-      throw new Error(i18n.t("errors.taskFailed"));
-    }
-
-    return status;
-  });
 }

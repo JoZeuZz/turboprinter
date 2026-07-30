@@ -11,6 +11,10 @@ import { getSubtitleFontFamily, getSubtitleFontWeight } from "../subtitles/Subti
 
 interface VideoPreviewProps {
   items: TimelineItem[];
+  subtitleItems?: TimelineItem[];
+  audioItems?: TimelineItem[];
+  selectedPart?: number | "all";
+  partOffsetSec?: number;
   selectedId: string | null;
   onTimeUpdate?: (globalTimeSec: number) => void;
 }
@@ -22,7 +26,15 @@ function isTypingTarget(target: EventTarget | null): boolean {
   return tag === "INPUT" || tag === "TEXTAREA" || el.isContentEditable;
 }
 
-export function VideoPreview({ items, selectedId, onTimeUpdate }: VideoPreviewProps) {
+export function VideoPreview({
+  items,
+  subtitleItems: propsSubtitleItems,
+  audioItems: _propsAudioItems,
+  selectedPart,
+  partOffsetSec = 0,
+  selectedId,
+  onTimeUpdate,
+}: VideoPreviewProps) {
   const { t } = useTranslation();
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -37,6 +49,8 @@ export function VideoPreview({ items, selectedId, onTimeUpdate }: VideoPreviewPr
   const subtitleItems = subtitleTrack?.items ?? [];
   const audioTrack = projectStore.project?.tracks.find((t) => t.type === "audio");
   const narrationUrl = projectStore.project?.narration_audio_path || audioTrack?.items?.find((item) => item.asset_url)?.asset_url;
+
+  const activeSubtitles = propsSubtitleItems ?? subtitleItems;
 
   const videoAspect = useVideoStore((s) => s.video_aspect) ?? "9:16";
 
@@ -54,6 +68,7 @@ export function VideoPreview({ items, selectedId, onTimeUpdate }: VideoPreviewPr
     : (clipDuration || 0);
 
   const globalTime = currentItem ? currentItem.start_sec + clipTime : 0;
+  const targetAudioTime = (selectedPart === "all" ? 0 : partOffsetSec) + globalTime;
 
   useEffect(() => {
     if (videoRef.current) {
@@ -61,23 +76,24 @@ export function VideoPreview({ items, selectedId, onTimeUpdate }: VideoPreviewPr
     }
     if (playing) {
       void videoRef.current?.play().catch(() => {});
-      if (audioRef.current && isFinite(globalTime)) {
+      if (audioRef.current && isFinite(targetAudioTime)) {
         try {
-          audioRef.current.currentTime = globalTime;
+          audioRef.current.currentTime = targetAudioTime;
           void audioRef.current.play().catch(() => {});
         } catch (e) {
           console.warn(e);
         }
       }
     } else {
-      if (audioRef.current && isFinite(globalTime)) {
+      if (audioRef.current && isFinite(targetAudioTime)) {
         try {
-          audioRef.current.currentTime = globalTime;
+          audioRef.current.currentTime = targetAudioTime;
         } catch (e) {}
       }
     }
   }, [playingId]);
-  const activeSubtitle = subtitleItems.find(
+
+  const activeSubtitle = activeSubtitles.find(
     (item) => globalTime >= item.start_sec && globalTime < (item.start_sec + item.duration_sec)
   );
 
@@ -206,9 +222,9 @@ export function VideoPreview({ items, selectedId, onTimeUpdate }: VideoPreviewPr
   const handlePlay = () => {
     setPlaying(true);
     if (audioRef.current) {
-      if (isFinite(globalTime)) {
+      if (isFinite(targetAudioTime)) {
         try {
-          audioRef.current.currentTime = globalTime;
+          audioRef.current.currentTime = targetAudioTime;
         } catch (e) {}
       }
       void audioRef.current.play();
@@ -225,9 +241,10 @@ export function VideoPreview({ items, selectedId, onTimeUpdate }: VideoPreviewPr
       const vTime = videoRef.current?.currentTime ?? 0;
       if (currentItem) {
         const gTime = currentItem.start_sec + vTime;
-        if (isFinite(gTime)) {
+        const targetTime = (selectedPart === "all" ? 0 : partOffsetSec) + gTime;
+        if (isFinite(targetTime)) {
           try {
-            audioRef.current.currentTime = gTime;
+            audioRef.current.currentTime = targetTime;
           } catch (e) {}
         }
       }
@@ -305,11 +322,11 @@ export function VideoPreview({ items, selectedId, onTimeUpdate }: VideoPreviewPr
     }
   };
 
-  let maxWidthClass = "max-w-5xl";
+  let aspectWrapperClass = "w-full max-h-full aspect-video";
   if (videoAspect === "9:16") {
-    maxWidthClass = "max-w-[500px]";
+    aspectWrapperClass = "h-full max-w-full aspect-[9/16]";
   } else if (videoAspect === "1:1") {
-    maxWidthClass = "max-w-[680px]";
+    aspectWrapperClass = "h-full max-w-full aspect-square";
   }
 
   const animType = subtitleAnimation ?? "pop";
@@ -335,55 +352,57 @@ export function VideoPreview({ items, selectedId, onTimeUpdate }: VideoPreviewPr
   }
 
   return (
-    <div className={`flex flex-col bg-black rounded-lg overflow-hidden shadow-lg shadow-black/40 h-full w-full mx-auto ${maxWidthClass}`}>
+    <div className="w-full h-full max-w-5xl max-h-[620px] mx-auto flex flex-col bg-black rounded-2xl overflow-hidden shadow-2xl border border-border/80">
       {src ? (
-        <div className="relative flex-1 min-h-0 w-full bg-black flex items-center justify-center overflow-hidden">
-          <video
-            ref={videoRef}
-            data-testid="video-preview"
-            src={src}
-            {...{ referrerPolicy: "no-referrer" }}
-            className="w-full h-full object-contain"
-            onEnded={handleEnded}
-            onTimeUpdate={handleTimeUpdate}
-            onPlay={handlePlay}
-            onPause={handlePause}
-            onSeeking={handleSeeking}
-            onLoadedMetadata={() => setClipDuration(videoRef.current?.duration ?? 0)}
-          />
-          {narrationUrl && (
-            <audio
-              ref={audioRef}
-              src={narrationUrl}
-              preload="auto"
-              style={{ display: "none" }}
+        <div className="relative flex-1 min-h-0 w-full bg-black flex items-center justify-center overflow-hidden p-2">
+          <div className={`relative flex items-center justify-center bg-black overflow-hidden rounded-xl ${aspectWrapperClass}`}>
+            <video
+              ref={videoRef}
+              data-testid="video-preview"
+              src={src}
+              {...{ referrerPolicy: "no-referrer" }}
+              className="w-full h-full object-contain"
+              onEnded={handleEnded}
+              onTimeUpdate={handleTimeUpdate}
+              onPlay={handlePlay}
+              onPause={handlePause}
+              onSeeking={handleSeeking}
+              onLoadedMetadata={() => setClipDuration(videoRef.current?.duration ?? 0)}
             />
-          )}
-          {subtitleEnabled && activeSubtitle && activeSubtitle.text && (
-            <div style={positionStyle}>
-              <motion.div
-                key={`${activeSubtitle.id || activeSubtitle.text}-${animType}-${textColor}-${fontName}-${fontSize}-${strokeColor}-${strokeWidth}-${roundedBackground}-${subtitleBgStyle}`}
-                className={`inline-block max-w-full px-3 py-1.5 leading-tight transition-all ${borderStyleClass} ${
-                  subtitleBgStyle === "blur" && textBackgroundColor !== false ? "backdrop-blur-md border border-white/20" : ""
-                }`}
-                style={bgStyle}
-                {...motionProps}
-              >
-                <span
-                  className="block break-words"
-                  style={{
-                    color: textColor,
-                    fontFamily: fontNameStyle,
-                    fontWeight: fontWeightStyle,
-                    fontSize: `${fontSizePx}px`,
-                    textShadow: textShadowStyle,
-                  }}
+            {narrationUrl && (
+              <audio
+                ref={audioRef}
+                src={narrationUrl}
+                preload="auto"
+                style={{ display: "none" }}
+              />
+            )}
+            {subtitleEnabled && activeSubtitle && activeSubtitle.text && (
+              <div style={positionStyle}>
+                <motion.div
+                  key={`${activeSubtitle.id || activeSubtitle.text}-${animType}-${textColor}-${fontName}-${fontSize}-${strokeColor}-${strokeWidth}-${roundedBackground}-${subtitleBgStyle}`}
+                  className={`inline-block max-w-full px-3 py-1.5 leading-tight transition-all ${borderStyleClass} ${
+                    subtitleBgStyle === "blur" && textBackgroundColor !== false ? "backdrop-blur-md border border-white/20" : ""
+                  }`}
+                  style={bgStyle}
+                  {...motionProps}
                 >
-                  {activeSubtitle.text}
-                </span>
-              </motion.div>
-            </div>
-          )}
+                  <span
+                    className="block break-words"
+                    style={{
+                      color: textColor,
+                      fontFamily: fontNameStyle,
+                      fontWeight: fontWeightStyle,
+                      fontSize: `${fontSizePx}px`,
+                      textShadow: textShadowStyle,
+                    }}
+                  >
+                    {activeSubtitle.text}
+                  </span>
+                </motion.div>
+              </div>
+            )}
+          </div>
         </div>
       ) : (
         <div className="w-full flex-1 flex items-center justify-center bg-surface text-muted text-sm min-h-[200px]">

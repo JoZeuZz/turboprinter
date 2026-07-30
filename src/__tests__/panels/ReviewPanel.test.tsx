@@ -13,6 +13,12 @@ vi.mock("../../store/useProjectStore", () => ({
   useProjectStore: vi.fn(),
 }));
 
+vi.mock("../../api/video", () => ({
+  videoApi: {
+    getBgmList: vi.fn().mockResolvedValue({ files: [] }),
+  },
+}));
+
 const PROJECT: TimelineProject = {
   project_id: "proj-1",
   tracks: [

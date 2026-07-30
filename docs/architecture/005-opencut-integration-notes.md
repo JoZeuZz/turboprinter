@@ -1,5 +1,11 @@
 # 005 — Render from TimelineProject & OpenCut integration notes
 
+> **Provenance**: written for the pre-rewrite Python architecture (FastAPI +
+> Streamlit + MoviePy). The design intent is current; the file paths, module
+> names and commands are not — this project is now TypeScript (Express +
+> React + Vite + FFmpeg CLI). See `MAP.md` for the real layout and
+> `CONTEXT.md` for canonical vocabulary.
+
 > Fase 5 of the project-mode evolution (see `plans/spec/spec-001.md`). Standalone,
 > opt-in, additive. The legacy render path (`app/services/task.py` →
 > `video.combine_videos` / `video.generate_video`) is untouched.

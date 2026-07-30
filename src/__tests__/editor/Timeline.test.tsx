@@ -108,7 +108,10 @@ describe("Timeline", () => {
     const ruler = screen.getByTestId("timeline-ruler");
     ruler.getBoundingClientRect = () =>
       ({ left: 0, right: 500, top: 0, bottom: 0, width: 500, height: 20 }) as DOMRect;
-    fireEvent.click(ruler, { clientX: 10 }); // well within c1's span at default zoom
+    // The ruler reserves a 72px label gutter on the left (Timeline.tsx
+    // LEFT_OFFSET_PX), so x=84 maps to t=0.5s at the default 24px/sec zoom —
+    // inside c1's 0-5s span.
+    fireEvent.click(ruler, { clientX: 84 });
     expect(onSelect).toHaveBeenCalledWith("c1");
   });
 

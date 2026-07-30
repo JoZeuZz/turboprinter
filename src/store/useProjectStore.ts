@@ -206,9 +206,10 @@ export const useProjectStore = create<ProjectStoreState>()(
             set({ mode: "error", error: status.error ?? i18n.t("errors.renderFailed") });
           } else {
             set({ mode: "ready", error: null });
-            if (status.output_path) {
+            const urls = (status as any)?.output_paths || (status?.output_path ? [status.output_path] : []);
+            if (urls.length > 0) {
               useProjectWorkspaceStore.setState({
-                videoUrls: [status.output_path],
+                videoUrls: urls,
               });
             }
           }
@@ -219,8 +220,8 @@ export const useProjectStore = create<ProjectStoreState>()(
           console.log("[ProjectStore] generateViaProjectMode triggered with params:", params);
           const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
           
-          // Clear any stale non-project task state to avoid false triggers
-          useProjectWorkspaceStore.setState({ taskId: null, taskStatus: null, error: null, videoUrls: [] });
+          // Clear any stale results from a previous generation
+          useProjectWorkspaceStore.setState({ error: null, videoUrls: [] });
           set({ mode: "loading", error: null, orchestrationStep: "plan" });
           console.log("[ProjectStore] Mode set to 'loading', cleared workspace status, orchestrationStep set to 'plan'");
 

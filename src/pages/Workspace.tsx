@@ -33,10 +33,6 @@ export function Workspace() {
       return;
     }
 
-    // A project opened by id must not inherit a previous generation's task
-    // markers (the workspace store persists them in sessionStorage).
-    useProjectWorkspaceStore.setState({ taskId: null, taskStatus: null });
-
     let cancelled = false;
 
     openProject(id)
