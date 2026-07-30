@@ -6,7 +6,7 @@ import { Button, Input, Textarea, Select, TabBar } from "../ui";
 import { useProjectWorkspaceStore } from "../../store/useProjectWorkspaceStore";
 import { useVideoStore } from "../../store/useVideoStore";
 import { useYouTubePublish, useTikTokPublish } from "../../hooks/usePublish";
-import { deriveDownloadFilename } from "../../lib/videoNaming";
+import { deriveDownloadFilename, deriveShortTitle } from "../../lib/videoNaming";
 
 export function DonePanel() {
   const { t } = useTranslation();
@@ -32,7 +32,7 @@ export function DonePanel() {
     const partToUse = partIndex !== undefined ? partIndex : currentPartNum;
     const urlToUse = videoUrls[partToUse - 1] || videoUrls[0];
     setTargetVideoUrl(urlToUse);
-    const baseTitle = videoStore.selected_title || videoSubject;
+    const baseTitle = videoStore.selected_title || deriveShortTitle(videoSubject, "Mi Short");
     if (isMultiPart) {
       youtube.setTitle(`${baseTitle} (Parte ${partToUse}/${multiPartCount})`);
       youtube.setDescription(`📌 Parte ${partToUse} de ${multiPartCount}. ¿Crees que esto fue real? Suscríbete para no perderte las siguientes partes.\n\n#HistoriasDeReddit #CasosReales #Suspenso #Shorts #Viral`);
@@ -47,7 +47,7 @@ export function DonePanel() {
     const partToUse = partIndex !== undefined ? partIndex : currentPartNum;
     const urlToUse = videoUrls[partToUse - 1] || videoUrls[0];
     setTargetVideoUrl(urlToUse);
-    const baseTitle = videoStore.selected_title || videoSubject;
+    const baseTitle = videoStore.selected_title || deriveShortTitle(videoSubject, "Mi Video");
     if (isMultiPart) {
       tiktok.setTitle(`${baseTitle} (Parte ${partToUse}/${multiPartCount}) #HistoriasDeReddit #CasosReales #Suspenso #Shorts #Viral`);
     } else {

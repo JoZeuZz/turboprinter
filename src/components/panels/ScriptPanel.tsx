@@ -11,6 +11,7 @@ import { useProjectStore } from "../../store/useProjectStore";
 import { useVideoStore } from "../../store/useVideoStore";
 import { useProjectWorkspaceStore } from "../../store/useProjectWorkspaceStore";
 import { llmApi } from "../../api/llm";
+import { deriveShortTitle } from "../../lib/videoNaming";
 import { usePresetStore } from "../../store/usePresetStore";
 import { applyPresetToStore } from "../presets/PresetManager";
 
@@ -213,9 +214,7 @@ export function ScriptPanel() {
       }
       if (title_options && title_options.length > 0) {
         store.set("title_options", title_options);
-        if (!store.selected_title) {
-          store.set("selected_title", title_options[0]);
-        }
+        store.set("selected_title", "");
       }
 
       const { video_terms } = await llmApi.generateTerms({
@@ -441,47 +440,53 @@ export function ScriptPanel() {
             <div className="flex items-center justify-between">
               <label className="text-xs font-bold text-foreground flex items-center gap-1.5">
                 <Sparkles className={`h-3.5 w-3.5 ${hasTitles ? "text-accent" : "text-muted-foreground"}`} />
-                <span>Opciones de Título Viral Sugeridas (Elige 1)</span>
+                <span>Opciones de Título Viral Sugeridas (Opcional)</span>
               </label>
               <span className="text-[10px] text-muted-foreground">
-                {hasTitles ? "Clic para aplicar" : "Se generan con el guión"}
+                {hasTitles ? "Clic para seleccionar/deseleccionar" : "Se generan con el guión"}
               </span>
             </div>
             <div className="flex flex-col gap-2 pt-1">
               {hasTitles ? (
-                store.title_options!.map((option, idx) => {
-                  const isSelected = (store.selected_title || store.video_subject) === option;
-                  return (
-                    <button
-                      key={idx}
-                      type="button"
-                      onClick={() => {
-                        store.set("selected_title", option);
-                        store.set("video_subject", option);
-                        if (workspaceStore.setTopic) {
-                          workspaceStore.setTopic(option);
-                        }
-                        if (currentDraftId) {
-                          updateCurrentDraft(option);
-                        }
-                      }}
-                      className={`flex items-center justify-between p-2.5 rounded-lg border text-left transition-all ${
-                        isSelected
-                          ? "border-accent bg-accent/25 text-foreground font-semibold shadow-xs ring-1 ring-accent/50"
-                          : "border-border/60 bg-surface/80 text-muted-foreground hover:bg-surface hover:text-foreground"
-                      }`}
-                    >
-                      <span className="text-xs truncate pr-2">
-                        <span className="text-accent font-bold mr-2">#{idx + 1}</span> {option}
+                <>
+                  {store.title_options!.map((option, idx) => {
+                    const isSelected = store.selected_title === option;
+                    return (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => {
+                          if (isSelected) {
+                            store.set("selected_title", "");
+                          } else {
+                            store.set("selected_title", option);
+                          }
+                        }}
+                        className={`flex items-center justify-between p-2.5 rounded-lg border text-left transition-all ${
+                          isSelected
+                            ? "border-accent bg-accent/25 text-foreground font-semibold shadow-xs ring-1 ring-accent/50"
+                            : "border-border/60 bg-surface/80 text-muted-foreground hover:bg-surface hover:text-foreground"
+                        }`}
+                      >
+                        <span className="text-xs truncate pr-2">
+                          <span className="text-accent font-bold mr-2">#{idx + 1}</span> {option}
+                        </span>
+                        {isSelected ? (
+                          <span className="text-[10px] bg-accent text-white px-2 py-0.5 rounded font-bold shrink-0">Seleccionado</span>
+                        ) : (
+                          <span className="text-[10px] text-muted-foreground/80 hover:text-foreground shrink-0 font-medium">Usar</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                  {!store.selected_title && (
+                    <div className="text-[11px] text-muted-foreground bg-secondary/40 border border-border/40 p-2 rounded-lg flex items-center justify-between">
+                      <span className="truncate mr-2">
+                        ⚪ Ningún título seleccionado (se usará el título original: <strong className="text-foreground">{deriveShortTitle(store.video_subject, "Sin título")}</strong>)
                       </span>
-                      {isSelected ? (
-                        <span className="text-[10px] bg-accent text-white px-2 py-0.5 rounded font-bold shrink-0">Seleccionado</span>
-                      ) : (
-                        <span className="text-[10px] text-muted-foreground/80 hover:text-foreground shrink-0 font-medium">Usar</span>
-                      )}
-                    </button>
-                  );
-                })
+                    </div>
+                  )}
+                </>
               ) : (
                 [1, 2, 3].map((num) => (
                   <div
