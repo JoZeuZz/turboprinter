@@ -858,15 +858,16 @@ INSTRUCCIONES DE ESTRUCTURA MULTI-PARTE Y PÁRRAFOS POR PARTE (CRÍTICO):
   ${numParts === 3 ? '"--- PARTE 3 ---"\n' : ""}
 
 ESTRUCTURA Y CONTEXTO POR PARTE:
-1. PARTE 1: La primera oración (los primeros 3 a 5 segundos) DEBE ser un gancho demoledor, intrigante o perturbador que "atrape" al espectador de inmediato. Además, en el primer párrafo de la Parte 1 DEBES introducir EXPLÍCITAMENTE la premisa y situación central del tema ("${video_subject}") para que cualquier espectador entienda la historia sin dar nada por sentado ni requerir conocimiento previo. La Parte 1 debe finalizar justo en el punto de máxima tensión o suspenso (cliffhanger).
-2. PARTE 2: Debe comenzar obligatoriamente enganchando de forma continua con la escena final de la Parte 1. La Parte 2 DEBE retomar la narración desde un punto más atrás (retomando las últimas 2 a 3 oraciones completas del suspenso de la Parte 1, comenzando desde la penúltima o antepenúltima oración del clímax previo) para brindar un contexto amplio e inmediato y lograr una transición perfectamente natural y sin cortes abruptos, y luego continuar con la narración.${numParts === 3 ? " Al final de la Parte 2, crea un segundo giro o suspenso." : " Llega al desenlace final o conclusión impactante al término de la Parte 2."}
-${numParts === 3 ? '3. PARTE 3: Debe comenzar obligatoriamente enganchando con la escena final de la Parte 2 de la misma manera (retomando las últimas 2 a 3 oraciones completas del suspenso de la Parte 2) antes de llevar el relato hacia su clímax y desenlace definitivo.\n' : ""}
-4. A lo largo del guión de cada parte, cada 4 oraciones busca reenganchar al espectador con un giro inesperado, una pregunta provocativa o un dato sorprendente.
+1. PARTE 1: La primera oración (los primeros 3 a 5 segundos) DEBE ser un gancho demoledor, intrigante o perturbador que "atrape" al espectador de inmediato. Además, en el primer párrafo de la Parte 1 DEBES introducir EXPLÍCITAMENTE la premisa y situación central del tema ("${video_subject}") de manera orgánica para que cualquier espectador entienda la historia sin dar nada por sentado ni requerir conocimiento previo. La Parte 1 debe mantener la tensión en todo momento y finalizar justo en el punto de máxima tensión o suspenso desbordante (cliffhanger).
+2. PARTE 2: Debe comenzar obligatoriamente enganchando de forma continua y fluida con la escena final de la Parte 1. La Parte 2 DEBE retomar la narración repitiendo o retomando exactamente las últimas 2 a 3 oraciones completas del suspenso final de la Parte 1 (el clímax previo en tiempo real) para brindar contexto inmediato a los nuevos espectadores y lograr una transición perfectamente natural sin saltos temporales, y luego continuar con la acción.${numParts === 3 ? " Mantén la tensión viva sin resolver el peligro prematuramente y crea al final de la Parte 2 un segundo giro o suspenso." : " Mantén el suspenso y peligro en alto nivel antes de llegar al desenlace final o clímax definitivo al término de la Parte 2."}
+${numParts === 3 ? '3. PARTE 3: Debe comenzar obligatoriamente enganchando con la escena final de la Parte 2 de la misma manera (retomando y repitiendo las últimas 2 a 3 oraciones completas de la Parte 2) antes de desarrollar el clímax definitivo y desenlace final del relato.\n' : ""}
+4. A lo largo del guión de cada parte, cada 3 o 4 oraciones busca reenganchar al espectador con un giro inesperado, un detalle perturbador o una reflexión angustiante que mantenga el ritmo sin bajar la intensidad.
 
-ESTILO Y PÚBLICO:
-- PERSPECTIVA OBLIGATORIA: Narración estrictamente en PRIMERA PERSONA ("yo", "mi", "me sucedió a mí", al estilo de confesión o vivencia personal de Reddit). La historia debe ser contada como una experiencia propia directa del narrador, NUNCA dirigiéndose al espectador en segunda persona ("tú", "te observan") ni como un observador omnisciente externo.
+ESTILO Y TONO NARRATIVO (REDDIT REALISTA):
+- PERSPECTIVA OBLIGATORIA: Narración estrictamente en PRIMERA PERSONA ("yo", "mi", "me sucedió a mí", "sentí", "descubrí").
+- TONO Y VOZ: Debe sonar como una confesión o historia real narrada en Reddit por una persona de carne y hueso contando sus propias vivencias. Usa un lenguaje natural, directo y expresivo (que incluya dudas, sensaciones reales y reflexiones humanas legítimas que le aporten autenticidad). NUNCA hables en segunda persona ("tú", "te observan") ni como un narrador omnisciente robótico de IA.
 - Público objetivo: entre 16 y 45 años.
-- Redacción clara, concisa, directa y sin palabras rebuscadas ni tecnicismos innecesarios. Debe ser totalmente comprensible para todo público.
+- Redacción clara, fluida, directa y sin palabras rebuscadas ni tecnicismos innecesarios. Debe ser totalmente comprensible para todo público.
 
 LONGITUD Y FORMATO POR PARTE:
 - CADA PARTE individual debe ser sustancial y estar compuesta por exactamente ${paragraph_number} párrafos (rango estricto de entre 45 y 55 palabras por párrafo, compuesto por 3 a 5 oraciones ricas y descriptivas por párrafo).
@@ -876,25 +877,26 @@ LONGITUD Y FORMATO POR PARTE:
 RESTRICCIONES DE FORMATO PARA TEXT-TO-SPEECH (CRÍTICO):
 - No utilices NINGÚN tipo de formato de texto como asteriscos (* o **), comillas (" o “ o ”), paréntesis, corchetes, ni guiones dentro del texto narrado (salvo las líneas con las marcas divisoria "--- PARTE X ---"). El guión se usará directamente en un generador de voz automática y estos caracteres arruinan la lectura. Escribe únicamente texto limpio, continuo y natural apto para síntesis de voz.`;
     } else {
-      prompt = `Escribe un guión de video sobre "${video_subject}" en idioma ${video_language} neutro. Es CRÍTICO que el guión tenga exactamente ${paragraph_number} párrafos bien estructurados, completos y detallados. Debe de seguir la siguiente estructura y estilo:
+      prompt = `Escribe un guión de video sobre "${video_subject}" en idioma ${video_language} neutro. Es CRÍTICO que el guión tenga exactamente ${paragraph_number} párrafos bien estructurados, completos y detallados. Debe seguir la siguiente estructura y estilo:
 
 ESTRUCTURA Y CONTEXTO (CRÍTICO):
-1. GANCHO IMPACTANTE Y CONTEXTO CLARO (PRIMER PÁRRAFO): La primera oración (los primeros 3 a 5 segundos) DEBE ser un gancho demoledor, intrigante o perturbador que "atrape" al espectador de inmediato. Además, en el primer párrafo DEBES introducir EXPLÍCITAMENTE la premisa y situación central del tema ("${video_subject}"). No asumas que el espectador conoce el tema; la historia debe auto-explicarse con claridad desde el inicio sin dar nada por sentado.
-2. A lo largo del guión, cada 4 oraciones busca reenganchar al espectador con un giro inesperado, una pregunta provocativa o un dato sorprendente.
+1. GANCHO IMPACTANTE Y CONTEXTO CLARO (PRIMER PÁRRAFO): La primera oración (los primeros 3 a 5 segundos) DEBE ser un gancho demoledor, intrigante o perturbador que "atrape" al espectador de inmediato. Además, en el primer párrafo DEBES introducir EXPLÍCITAMENTE la premisa y situación central del tema ("${video_subject}") de manera orgánica para que cualquier espectador entienda la historia sin dar nada por sentado ni requerir conocimiento previo.
+2. RITMO Y TENSIÓN: Mantén la intriga y el suspenso elevados en todo momento. Cada 3 o 4 oraciones busca reenganchar al espectador con un giro inesperado, un detalle perturbador o una reflexión angustiante que mantenga el interés sin bajar la intensidad.
 
-ESTILO Y PÚBLICO:
-- PERSPECTIVA OBLIGATORIA: Narración estrictamente en PRIMERA PERSONA ("yo", "mi", "me sucedió a mí", al estilo de confesión o vivencia personal de Reddit). La historia debe ser contada como una experiencia propia directa del narrador, NUNCA dirigiéndose al espectador en segunda persona ("tú", "te observan") ni como un observador omnisciente externo.
+ESTILO Y TONO NARRATIVO (REDDIT REALISTA):
+- PERSPECTIVA OBLIGATORIA: Narración estrictamente en PRIMERA PERSONA ("yo", "mi", "me sucedió a mí", "sentí", "descubrí").
+- TONO Y VOZ: Debe sonar como una confesión o historia real narrada en Reddit por una persona de carne y hueso contando sus propias vivencias. Usa un lenguaje natural, directo y expresivo (que incluya dudas, sensaciones reales y reflexiones humanas legítimas que le aporten autenticidad). NUNCA hables en segunda persona ("tú", "te observan") ni como un narrador omnisciente robótico de IA.
 - Público objetivo: entre 16 y 45 años.
-- Redacción clara, concisa, directa y sin palabras rebuscadas ni tecnicismos innecesarios. Debe ser totalmente comprensible para todo público.
+- Redacción clara, fluida, directa y comprensible para todo público.
 
 LONGITUD Y FORMATO:
-- Cada párrafo debe ser sustancial y desarrollado por completo (rango estricto de entre 45 y 55 palabras por párrafo, compuesto por 3 a 5 oraciones ricas y descriptivas, óptimo para narrar una historia o documental).
-- La longitud total del guión completo debe ser de aproximadamente ${paragraph_number * 45} a ${paragraph_number * 55} palabras en total. La longitud debe ser acumulativa y consistente; no reduzcas la extensión de los párrafos individuales al aumentar la cantidad total.
+- Cada párrafo debe ser sustancial y desarrollado por completo (rango estricto de entre 45 y 55 palabras por párrafo, compuesto por 3 a 5 oraciones ricas y descriptivas).
+- La longitud total del guión completo debe ser de aproximadamente ${paragraph_number * 45} a ${paragraph_number * 55} palabras en total. La longitud debe ser acumulativa y consistente.
 - Separa cada párrafo estrictamente con dos saltos de línea (\\n\\n).
 - Devuelve SOLAMENTE el texto del guión, sin títulos, introducciones ni comentarios adicionales.
 
 RESTRICCIONES DE FORMATO PARA TEXT-TO-SPEECH (CRÍTICO):
-- No utilices NINGÚN tipo de formato de texto como asteriscos (* o **), comillas (" o “ o ”), paréntesis, corchetes, ni guiones. El guión se usará directamente en un generador de voz automática y estos caracteres arruinan la lectura. Escribe únicamente texto limpio, continuo y natural.`;
+- No utilices NINGÚN tipo de formato de texto como asteriscos (* o **), comillas (" o “ o ”), paréntesis, corchetes, ni guiones. El guión se usará directamente en un generador de voz automática. Escribe únicamente texto limpio, continuo y natural.`;
     }
 
     if (video_script_prompt) {
