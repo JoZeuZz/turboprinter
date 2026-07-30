@@ -860,22 +860,21 @@ INSTRUCCIONES DE ESTRUCTURA MULTI-PARTE Y PÁRRAFOS POR PARTE (CRÍTICO):
   ${numParts === 3 ? '"--- PARTE 3 ---"\n' : ""}
 
 ESTRUCTURA Y CONTEXTO POR PARTE:
-1. PARTE 1 (INICIO Y HOOK):
-   - La primera oración (los primeros 3 a 5 segundos) DEBE ser un gancho demoledor y directo. NUNCA empieces con preguntas reflexivas ni clichés genéricos ("¿Alguna vez te has preguntado...?", "¿Has sentido que...?", "No te voy a mentir..."). Debe ser una declaración o revelación impactante que atrape de inmediato.
-   - En el primer párrafo de la Parte 1 DEBES integrar la premisa central de la historia ("${video_subject}") de forma natural, fluida y gramaticalmente impecable (evita duplicar verbos como 'creo que creo que' o copiar frases crudas incompletas). El espectador debe entender claramente la situación sin vaguedades desde el inicio.
-   - La Parte 1 debe culminar en el punto de máxima tensión o peligro inminente (cliffhanger).
+1. PARTE 1 (GANCHO INMEDIATO Y PREMISA CENTRAL):
+   - La PRIMERA ORACIÓN de la Parte 1 DEBE ser el gancho principal y demoledor. DEBE revelar o introducir directamente la premisa central ("${video_subject}") desde los primeros 3 a 5 segundos. NUNCA pierdas oraciones en preámbulos o rodeos contextuales irrelevantes (ej: NUNCA empieces con "Mi hermano acaba de volver de un viaje...", "No te voy a mentir...", "¿Alguna vez te has preguntado...?").
+   - Integra la premisa central ("${video_subject}") de forma natural, fluida y gramaticalmente impecable. Adapta la sintaxis si el texto del tema es tosco o tiene palabras repetidas (ej: usa "Sospecho seriamente que el papá de la novia de mi hermano es un asesino a sueldo" en lugar de redundancias o frases mal construidas).
+   - La Parte 1 debe avanzar en tensión y culminar exactamente en el punto de máxima tensión o peligro inminente (cliffhanger).
 
 2. TRANSICIONES ENTRE PARTES (ORDEN SECUENCIAL EXACTO):
    - La PARTE 2 debe comenzar obligatoriamente REPETIENDO O RETOMANDO TEXTUALMENTE las últimas 2 a 3 oraciones completas del final de la PARTE 1.
-   - ¡MUY IMPORTANTE!: Debes mantener EXACTAMENTE EL MISMO ORDEN SECUENCIAL Y CRONOLÓGICO de las oraciones (Oración 1, luego Oración 2, luego Oración 3). NO inviertas el orden de las oraciones ni las alteres. Esto asegura que la transición sea orgánica y fluida para el espectador.
+   - ¡MUY IMPORTANTE!: Debes mantener EXACTAMENTE EL MISMO ORDEN SECUENCIAL Y CRONOLÓGICO de las oraciones (Oración 1, luego Oración 2, luego Oración 3). NO inviertas ni desordenes las oraciones.
 ${numParts === 3 ? '   - La PARTE 3 debe comenzar de la misma manera, REPETIENDO O RETOMANDO TEXTUALMENTE en el mismo orden cronológico las últimas 2 a 3 oraciones completas del final de la PARTE 2.\n' : ""}
+3. DESENLACE SATISFACTORIO EN LA PARTE FINAL:
+${numParts === 2 ? `   - PARTE 2 (PARTE FINAL Y DESENLACE): Mantiene la tensión en la primera mitad, pero en los párrafos finales DEBE conducir la historia hacia una CONCLUSIÓN DEFINITIVA Y SATISFACTORIA. No dejes la historia inconclusa ni en un suspenso abierto (ej: NO termines solo descubriendo una foto o un objeto sin resolver qué pasa después). Cierra el conflicto central con una confrontación, una decisión drástica o una revelación final resolutiva que deje la historia 100% concluida.` : `   - PARTE 2: Mantiene la tensión alta, profundiza la investigación con descubrimientos lógicos y culmina en un segundo giro o suspenso (cliffhanger).\n   - PARTE 3 (PARTE FINAL Y DESENLACE): Desarrolla el clímax y conduce la historia hacia una CONCLUSIÓN DEFINITIVA Y SATISFACTORIA. Resuelve el conflicto central de forma clara y resolutiva, asegurando que el espectador reciba un cierre total sin dejar la historia a medias.`}
 
-3. DESARROLLO Y FINALIZACIÓN DE CADA PARTE (SEGÚN EL NÚMERO TOTAL DE PARTES):
-${numParts === 2 ? `   - PARTE 2 (PARTE FINAL): Mantiene el suspenso y la aceleración del ritmo en los primeros párrafos, para luego conducir la historia hacia un clímax definitivo y una CONCLUSIÓN SATISFACTORIA Y DECISIVA en los últimos párrafos. No dejes la historia inconclusa ni en un final abierto ambiguo; debe cerrar el conflicto central con una revelación impactante, confrontación o desenlace claro manteniendo la tensión hasta la última palabra.` : `   - PARTE 2: Mantiene la tensión alta, profundiza en el conflicto con nuevos descubrimientos reales y culmina en un segundo suspenso o giro dramático (cliffhanger).\n   - PARTE 3 (PARTE FINAL): Desarrolla el clímax definitivo de la historia y la conduce hacia una CONCLUSIÓN SATISFACTORIA Y DECISIVA. Resuelve el conflicto central con una revelación o desenlace potente que cierre la historia por completo sin dejarla a medias o inconclusa.`}
-
-4. RITMO Y DESARROLLO CONTINUO:
-   - A lo largo del guión, cada 3 o 4 oraciones reengancha con un detalle perturbador, un giro lógico o un descubrimiento tangible.
-   - Mantén una LÍNEA NARRATIVA COHERENTE: No saltes a situaciones inconexas de la nada (como funerales o zonas industriales aleatorias sin preparación previa). La historia debe tener sentido orgánico de principio a fin.
+4. RITMO, LÓGICA Y COHERENCIA REALISTA:
+   - PLAUSIBILIDAD DE INVESTIGACIÓN: Las acciones del protagonista deben ser realistas para una persona común. Evita giros absurdos o habilidades inverosímiles (ej: un civil no rastrea "empresas fachada bancarias complejas" de la nada en 5 minutos; prioriza sospechas, conversaciones escuchadas, notas, fotos u objetos físicos tangibles).
+   - Mantén una LÍNEA NARRATIVA COHERENTE: Todos los eventos deben conectarse de forma lógica sin saltos bruscos. La historia debe tener sentido orgánico de principio a fin.
 
 ESTILO Y TONO NARRATIVO (REDDIT REALISTA Y CONCRETO):
 - PERSPECTIVA OBLIGATORIA: Narración estrictamente en PRIMERA PERSONA ("yo", "mi", "me sucedió a mí", "sentí", "descubrí"). NUNCA hables en segunda persona ("tú", "te observan") ni como un narrador omnisciente externo.
