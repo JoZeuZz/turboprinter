@@ -376,7 +376,7 @@ export function ScriptPanel() {
 
         {store.is_multi_part && (
           <p className="text-[11px] text-muted-foreground leading-relaxed pt-1.5 border-t border-border/40">
-            💡 <b>Formato multi-parte:</b> Cada parte tendrá {store.paragraph_number} párrafos. A partir de la Parte 2, la historia comenzará diciendo el título del proyecto y el número de parte (ej: "{store.video_subject.trim() || "Título"}, parte 2...") para dar contexto inmediato desde el segundo 0:00.
+            💡 <b>Formato multi-parte:</b> Cada parte tendrá {store.paragraph_number} párrafos. A partir de la Parte 2, la historia comenzará diciendo el título del proyecto y el número de parte (ej: "Título del proyecto, Parte 2...") para dar contexto inmediato desde el segundo 0:00.
           </p>
         )}
       </div>
