@@ -858,15 +858,27 @@ INSTRUCCIONES DE ESTRUCTURA MULTI-PARTE Y PÁRRAFOS POR PARTE (CRÍTICO):
   ${numParts === 3 ? '"--- PARTE 3 ---"\n' : ""}
 
 ESTRUCTURA Y CONTEXTO POR PARTE:
-1. PARTE 1: La primera oración (los primeros 3 a 5 segundos) DEBE ser un gancho demoledor y directo. NUNCA empieces con preguntas reflexivas ni clichés genéricos ("¿Alguna vez te has preguntado...?", "¿Has sentido que...?"). Debe ser una declaración o revelación impactante que atrape de inmediato. Además, en el primer párrafo de la Parte 1 DEBES mencionar EXPLÍCITAMENTE y con todas sus letras la premisa y secreto central del tema ("${video_subject}") para que cualquier espectador entienda exactamente el conflicto real desde el primer momento sin vaguedades. La Parte 1 debe finalizar en el punto de máxima tensión o peligro inminente (cliffhanger).
-2. PARTE 2: Debe comenzar obligatoriamente REPETIENDO O RETOMANDO TEXTUALMENTE las últimas 2 a 3 oraciones completas del suspenso final de la Parte 1 (el clímax previo en tiempo real). Esto es VITAL para que los espectadores de la Parte 2 reconozcan la escena inmediatamente y la transición sea fluida sin saltos temporales ni paráfrasis. Luego continúa con la narración de la acción.${numParts === 3 ? " Mantén la tensión alta y crea al final de la Parte 2 un segundo giro o suspenso." : " Mantén el suspenso y peligro en alto nivel antes de llegar al desenlace final al término de la Parte 2."}
-${numParts === 3 ? '3. PARTE 3: Debe comenzar obligatoriamente enganchando de la misma manera (REPETIENDO O RETOMANDO TEXTUALMENTE las últimas 2 a 3 oraciones completas de la Parte 2) antes de desarrollar el clímax definitivo y desenlace final.\n' : ""}
-4. A lo largo del guión, cada 3 o 4 oraciones busca reenganchar al espectador con un giro inesperado, un detalle perturbador o una reflexión angustiante.
+1. PARTE 1 (INICIO Y HOOK):
+   - La primera oración (los primeros 3 a 5 segundos) DEBE ser un gancho demoledor y directo. NUNCA empieces con preguntas reflexivas ni clichés genéricos ("¿Alguna vez te has preguntado...?", "¿Has sentido que...?", "No te voy a mentir..."). Debe ser una declaración o revelación impactante que atrape de inmediato.
+   - En el primer párrafo de la Parte 1 DEBES integrar la premisa central de la historia ("${video_subject}") de forma natural, fluida y gramaticalmente impecable (evita duplicar verbos como 'creo que creo que' o copiar frases crudas incompletas). El espectador debe entender claramente la situación sin vaguedades desde el inicio.
+   - La Parte 1 debe culminar en el punto de máxima tensión o peligro inminente (cliffhanger).
+
+2. TRANSICIONES ENTRE PARTES (ORDEN SECUENCIAL EXACTO):
+   - La PARTE 2 debe comenzar obligatoriamente REPETIENDO O RETOMANDO TEXTUALMENTE las últimas 2 a 3 oraciones completas del final de la PARTE 1.
+   - ¡MUY IMPORTANTE!: Debes mantener EXACTAMENTE EL MISMO ORDEN SECUENCIAL Y CRONOLÓGICO de las oraciones (Oración 1, luego Oración 2, luego Oración 3). NO inviertas el orden de las oraciones ni las alteres. Esto asegura que la transición sea orgánica y fluida para el espectador.
+${numParts === 3 ? '   - La PARTE 3 debe comenzar de la misma manera, REPETIENDO O RETOMANDO TEXTUALMENTE en el mismo orden cronológico las últimas 2 a 3 oraciones completas del final de la PARTE 2.\n' : ""}
+
+3. DESARROLLO Y FINALIZACIÓN DE CADA PARTE (SEGÚN EL NÚMERO TOTAL DE PARTES):
+${numParts === 2 ? `   - PARTE 2 (PARTE FINAL): Mantiene el suspenso y la aceleración del ritmo en los primeros párrafos, para luego conducir la historia hacia un clímax definitivo y una CONCLUSIÓN SATISFACTORIA Y DECISIVA en los últimos párrafos. No dejes la historia inconclusa ni en un final abierto ambiguo; debe cerrar el conflicto central con una revelación impactante, confrontación o desenlace claro manteniendo la tensión hasta la última palabra.` : `   - PARTE 2: Mantiene la tensión alta, profundiza en el conflicto con nuevos descubrimientos reales y culmina en un segundo suspenso o giro dramático (cliffhanger).\n   - PARTE 3 (PARTE FINAL): Desarrolla el clímax definitivo de la historia y la conduce hacia una CONCLUSIÓN SATISFACTORIA Y DECISIVA. Resuelve el conflicto central con una revelación o desenlace potente que cierre la historia por completo sin dejarla a medias o inconclusa.`}
+
+4. RITMO Y DESARROLLO CONTINUO:
+   - A lo largo del guión, cada 3 o 4 oraciones reengancha con un detalle perturbador, un giro lógico o un descubrimiento tangible.
+   - Mantén una LÍNEA NARRATIVA COHERENTE: No saltes a situaciones inconexas de la nada (como funerales o zonas industriales aleatorias sin preparación previa). La historia debe tener sentido orgánico de principio a fin.
 
 ESTILO Y TONO NARRATIVO (REDDIT REALISTA Y CONCRETO):
-- PERSPECTIVA OBLIGATORIA: Narración strictly en PRIMERA PERSONA ("yo", "mi", "me sucedió a mí", "sentí", "descubrí"). NUNCA hables en segunda persona ("tú", "te observan") ni como un narrador omnisciente externo.
-- REALISMO Y DETALLES CONCRETOS: La historia debe sonar como una confesión real de Reddit de alguien contando una vivencia propia. Mantén la historia fundamentada en HECHOS REALES Y TANGIBLES (objetos concretos, sospechas reales, conversaciones, descubrimientos específicos). NO desvíes la historia hacia lo paranormal, fantasmas ni sombras mágicas a menos que el tema lo pida.
-- TONO Y VOZ: Lenguaje natural, directo y expresivo (dudas reales, sensaciones humanas legítimas que le aporten autenticidad).
+- PERSPECTIVA OBLIGATORIA: Narración estrictamente en PRIMERA PERSONA ("yo", "mi", "me sucedió a mí", "sentí", "descubrí"). NUNCA hables en segunda persona ("tú", "te observan") ni como un narrador omnisciente externo.
+- REALISMO Y DETALLES CONCRETOS: La historia debe sonar como una confesión real de Reddit de alguien contando una vivencia propia de carne y hueso. Fundamenta la historia en hechos reales, objetos tangibles, conversaciones y sospechas fundamentadas. Evita desviarte hacia elementos sobrenaturales o fantasmas a menos que se solicite.
+- TONO Y VOZ: Lenguaje natural, directo, fluido y expresivo.
 - Público objetivo: entre 16 y 45 años.
 - Redacción clara, fluida, directa y sin palabras rebuscadas ni tecnicismos innecesarios. Debe ser totalmente comprensible para todo público.
 
@@ -881,12 +893,14 @@ RESTRICCIONES DE FORMATO PARA TEXT-TO-SPEECH (CRÍTICO):
       prompt = `Escribe un guión de video sobre "${video_subject}" en idioma ${video_language} neutro. Es CRÍTICO que el guión tenga exactamente ${paragraph_number} párrafos bien estructurados, completos y detallados. Debe seguir la siguiente estructura y estilo:
 
 ESTRUCTURA Y CONTEXTO (CRÍTICO):
-1. GANCHO IMPACTANTE Y CONTEXTO CLARO (PRIMER PÁRRAFO): La primera oración (los primeros 3 a 5 segundos) DEBE ser un gancho demoledor, intrigante o perturbador que "atrape" al espectador de inmediato. Además, en el primer párrafo DEBES introducir EXPLÍCITAMENTE la premisa y situación central del tema ("${video_subject}") de manera orgánica para que cualquier espectador entienda la historia sin dar nada por sentado ni requerir conocimiento previo.
-2. RITMO Y TENSIÓN: Mantén la intriga y el suspenso elevados en todo momento. Cada 3 o 4 oraciones busca reenganchar al espectador con un giro inesperado, un detalle perturbador o una reflexión angustiante que mantenga el interés sin bajar la intensidad.
+1. GANCHO IMPACTANTE Y CONTEXTO CLARO (PRIMER PÁRRAFO): La primera oración (los primeros 3 a 5 segundos) DEBE ser un gancho demoledor y directo. NUNCA empieces con preguntas reflexivas ni clichés genéricos ("¿Alguna vez te has preguntado...?", "No te voy a mentir..."). Además, en el primer párrafo DEBES integrar la premisa central de la historia ("${video_subject}") de forma natural, fluida y gramaticalmente impecable (evita duplicar verbos como 'creo que creo que' o copiar frases crudas incompletas).
+2. RITMO Y CONCLUSIÓN SATISFACTORIA: Mantén la intriga y el suspenso elevados a lo largo de todo el relato. A medida que avanza hacia los párrafos finales, lleva la historia hacia un clímax definitivo y una CONCLUSIÓN SATISFACTORIA Y DECISIVA que resuelva el conflicto central o revele la verdad definitiva sin dejar el final inconcluso o flotando en la ambigüedad.
+3. COHERENCIA NARRATIVA: Mantén una línea argumental lógica y uniforme. Todos los detalles, objetos y situaciones deben guardar coherencia entre sí.
 
-ESTILO Y TONO NARRATIVO (REDDIT REALISTA):
-- PERSPECTIVA OBLIGATORIA: Narración estrictamente en PRIMERA PERSONA ("yo", "mi", "me sucedió a mí", "sentí", "descubrí").
-- TONO Y VOZ: Debe sonar como una confesión o historia real narrada en Reddit por una persona de carne y hueso contando sus propias vivencias. Usa un lenguaje natural, directo y expresivo (que incluya dudas, sensaciones reales y reflexiones humanas legítimas que le aporten autenticidad). NUNCA hables en segunda persona ("tú", "te observan") ni como un narrador omnisciente robótico de IA.
+ESTILO Y TONO NARRATIVO (REDDIT REALISTA Y CONCRETO):
+- PERSPECTIVA OBLIGATORIA: Narración strictly en PRIMERA PERSONA ("yo", "mi", "me sucedió a mí", "sentí", "descubrí"). NUNCA hables en segunda persona ("tú", "te observan") ni como un narrador omnisciente externo.
+- REALISMO Y DETALLES CONCRETOS: La historia debe sonar como una confesión real de Reddit de alguien contando una vivencia propia de carne y hueso. Fundamenta la historia en hechos reales, objetos tangibles, conversaciones y sospechas fundamentadas.
+- TONO Y VOZ: Lenguaje natural, directo, fluido y expresivo.
 - Público objetivo: entre 16 y 45 años.
 - Redacción clara, fluida, directa y comprensible para todo público.
 
