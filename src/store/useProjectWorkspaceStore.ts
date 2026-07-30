@@ -8,16 +8,29 @@ interface WorkspaceStoreState {
   topic: string;
   error: string | null;
   videoUrls: string[];
+  activePartIndex: number;
+  partVideoUrls: Record<number, string>;
   setTopic: (topic: string) => void;
   setPanel: (panel: WorkspacePanel) => void;
+  setActivePartIndex: (index: number) => void;
+  setPartVideoUrl: (partIndex: number, url: string) => void;
   reset: () => void;
 }
 
-const INITIAL: Omit<WorkspaceStoreState, "setTopic" | "setPanel" | "reset"> = {
+const INITIAL: Omit<
+  WorkspaceStoreState,
+  | "setTopic"
+  | "setPanel"
+  | "setActivePartIndex"
+  | "setPartVideoUrl"
+  | "reset"
+> = {
   panel: "script",
   topic: "",
   error: null,
   videoUrls: [],
+  activePartIndex: 1,
+  partVideoUrls: {},
 };
 
 export const useProjectWorkspaceStore = create<WorkspaceStoreState>()(
@@ -28,6 +41,13 @@ export const useProjectWorkspaceStore = create<WorkspaceStoreState>()(
       setTopic: (topic) => set({ topic }),
 
       setPanel: (panel) => set({ panel }),
+
+      setActivePartIndex: (activePartIndex) => set({ activePartIndex }),
+
+      setPartVideoUrl: (partIndex, url) =>
+        set((state) => ({
+          partVideoUrls: { ...state.partVideoUrls, [partIndex]: url },
+        })),
 
       reset: () => set({ ...INITIAL }),
     }),

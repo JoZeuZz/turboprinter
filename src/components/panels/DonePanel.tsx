@@ -10,15 +10,39 @@ import { deriveDownloadFilename } from "../../lib/videoNaming";
 
 export function DonePanel() {
   const { t } = useTranslation();
-  const { videoUrls, reset, setPanel } = useProjectWorkspaceStore();
+  const { videoUrls, reset, setPanel, setActivePartIndex } = useProjectWorkspaceStore();
 
   const youtube = useYouTubePublish();
   const tiktok = useTikTokPublish();
 
-  const videoSubject = useVideoStore((s) => s.video_subject) || "";
+  const videoStore = useVideoStore();
+  const videoSubject = videoStore.video_subject || "";
+  const isMultiPart = videoStore.is_multi_part || videoUrls.length > 1;
+  const multiPartCount = videoStore.multi_part_count || Math.max(videoUrls.length, 2);
 
+  const [selectedPart, setSelectedPart] = useState<number | "all">(1);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isTiktokModalOpen, setIsTiktokModalOpen] = useState(false);
+
+  // Automatically update youtube/tiktok default title when active part changes
+  const currentPartNum = typeof selectedPart === "number" ? selectedPart : 1;
+
+  const handleOpenYoutubeModal = (partIndex?: number) => {
+    const partToUse = partIndex !== undefined ? partIndex : currentPartNum;
+    if (isMultiPart) {
+      youtube.setTitle(`${videoSubject} - Parte ${partToUse}`);
+      youtube.setDescription(`#parte${partToUse} #historia #${videoSubject.replace(/\s+/g, "")}`);
+    }
+    setIsModalOpen(true);
+  };
+
+  const handleOpenTiktokModal = (partIndex?: number) => {
+    const partToUse = partIndex !== undefined ? partIndex : currentPartNum;
+    if (isMultiPart) {
+      tiktok.setTitle(`${videoSubject} - Parte ${partToUse} #parte${partToUse} #historia #parati`);
+    }
+    setIsTiktokModalOpen(true);
+  };
 
   const handleBack = () => setPanel("config");
   const handleEditClips = () => setPanel("editor");
@@ -44,6 +68,44 @@ export function DonePanel() {
         <p className="text-sm text-muted-foreground">{t("panels.review.taskReviewDescription")}</p>
       </div>
 
+      {isMultiPart && videoUrls.length > 0 && (
+        <div className="flex items-center justify-center gap-2 bg-surface/80 p-1.5 rounded-xl border border-border">
+          <span className="text-xs font-semibold text-muted-foreground px-2">Seleccionar Parte:</span>
+          {Array.from({ length: multiPartCount }).map((_, idx) => {
+            const partNum = idx + 1;
+            const isActive = selectedPart === partNum;
+            return (
+              <button
+                key={partNum}
+                type="button"
+                onClick={() => {
+                  setSelectedPart(partNum);
+                  setActivePartIndex(partNum);
+                }}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+                  isActive
+                    ? "bg-accent text-white shadow-xs"
+                    : "bg-transparent text-muted hover:text-foreground"
+                }`}
+              >
+                Parte {partNum}
+              </button>
+            );
+          })}
+          <button
+            type="button"
+            onClick={() => setSelectedPart("all")}
+            className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+              selectedPart === "all"
+                ? "bg-accent text-white shadow-xs"
+                : "bg-transparent text-muted hover:text-foreground"
+            }`}
+          >
+            Ver Todas las Partes
+          </button>
+        </div>
+      )}
+
       {videoUrls.length === 0 ? (
         <div className="flex min-h-[300px] w-full max-w-md flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-surface p-8 text-sm text-muted-foreground gap-3">
           <Loader2 className="h-10 w-10 text-muted/40 animate-pulse" />
@@ -62,16 +124,27 @@ export function DonePanel() {
             maxWidthClass = "max-w-sm sm:max-w-md";
           }
 
-          return videoUrls.map((url, index) => {
-            const filename = videoUrls.length > 1
-              ? downloadFilename.replace(".mp4", `_${index + 1}.mp4`)
-              : downloadFilename;
+          const visibleVideoIndices = selectedPart === "all"
+            ? videoUrls.map((_, i) => i)
+            : [Math.min(Math.max((selectedPart as number) - 1, 0), videoUrls.length - 1)];
+
+          return visibleVideoIndices.map((index) => {
+            const url = videoUrls[index] || videoUrls[0];
+            const partNum = index + 1;
+            const filename = downloadFilename.includes(".")
+              ? downloadFilename.replace(/(\.[\w]+)$/, `_parte${partNum}$1`)
+              : `${downloadFilename}_parte${partNum}.mp4`;
 
             return (
               <div
-                key={url}
+                key={`${url}-${index}`}
                 className={`w-full ${maxWidthClass} mx-auto rounded-2xl overflow-hidden border border-border bg-neutral-900/60 shadow-2xl p-2 transition-all duration-300 hover:shadow-accent/5 hover:border-accent/20`}
               >
+                {isMultiPart && (
+                  <div className="text-xs font-semibold text-accent px-3 py-1.5 text-left border-b border-border/40 mb-1 flex items-center justify-between">
+                    <span>🎬 Parte {partNum} {isMultiPart && `- ${videoSubject}`}</span>
+                  </div>
+                )}
                 <div className={`relative rounded-xl overflow-hidden bg-black flex items-center justify-center ${aspectClass}`} style={{ display: "contents" }}>
                   <video
                     src={url}
@@ -80,7 +153,10 @@ export function DonePanel() {
                     className="w-full h-full object-contain mx-auto block"
                   />
                 </div>
-                <div className="flex items-center justify-center gap-2 px-3 py-3 border-t border-border/50 mt-2 bg-surface/30 rounded-lg">
+                <div className="flex items-center justify-between gap-2 px-3 py-3 border-t border-border/50 mt-2 bg-surface/30 rounded-lg">
+                  <span className="text-xs font-medium text-foreground truncate max-w-[180px]">
+                    {filename}
+                  </span>
                   <a
                     href={url}
                     download={filename}
@@ -220,7 +296,7 @@ export function DonePanel() {
           <div className="grid grid-cols-5 gap-1.5 sm:gap-2.5 w-full pt-2">
             {/* 1. YouTube Upload */}
             <Button
-              onClick={() => setIsModalOpen(true)}
+              onClick={() => handleOpenYoutubeModal()}
               disabled={!youtube.linked || youtube.status === "uploading" || youtube.status === "success"}
               className={`flex items-center justify-center gap-1.5 font-medium py-2 px-1 sm:px-2 rounded-xl text-[10px] sm:text-xs transition-all truncate whitespace-nowrap ${
                 youtube.linked
@@ -235,6 +311,8 @@ export function DonePanel() {
                   ? "Subido YouTube"
                   : youtube.status === "uploading"
                   ? "Subiendo..."
+                  : isMultiPart
+                  ? `Subir Parte ${currentPartNum} YouTube`
                   : "Subir YouTube"
                 }
               </span>
@@ -242,7 +320,7 @@ export function DonePanel() {
 
             {/* 2. TikTok Upload */}
             <Button
-              onClick={() => setIsTiktokModalOpen(true)}
+              onClick={() => handleOpenTiktokModal()}
               disabled={!tiktok.linked || tiktok.status === "uploading" || tiktok.status === "success"}
               className={`flex items-center justify-center gap-1.5 font-medium py-2 px-1 sm:px-2 rounded-xl text-[10px] sm:text-xs transition-all truncate whitespace-nowrap ${
                 tiktok.linked
@@ -257,6 +335,8 @@ export function DonePanel() {
                   ? "Subido TikTok"
                   : tiktok.status === "uploading"
                   ? "Subiendo..."
+                  : isMultiPart
+                  ? `Subir Parte ${currentPartNum} TikTok`
                   : "Subir TikTok"
                 }
               </span>

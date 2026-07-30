@@ -328,7 +328,7 @@ let globalConfig = {
       llm_request_timeout_seconds: 60,
       llm_connect_timeout_seconds: 10,
       gemini_api_key: "",
-      gemini_model_name: "gemini-3.5-flash",
+      gemini_model_name: "gemini-3.1-flash-lite",
       subtitle_provider: "whisper",
       endpoint: "",
       material_directory: "",
@@ -429,6 +429,8 @@ const CONFIG_TOML_ENV_ALLOWLIST = new Set([
   "pexels_api_keys",
   "pexels_key", // undocumented alias read as a fallback in getPexelsApiKey()
   "gemini_api_key",
+  "gemini_model_name",
+  "gemini_model",
   "llm_provider",
   "openai_api_base",
   "openai_api_key",
@@ -485,6 +487,12 @@ async function startServer() {
                   process.env.GEMINI_API_KEY = value;
                   globalConfig.settings.app.gemini_api_key = value;
                   console.log(`[Config] Loaded GEMINI_API_KEY from config.toml`);
+                }
+                if (key === "gemini_model_name" || key === "gemini_model") {
+                  process.env.GEMINI_MODEL = value;
+                  process.env.GEMINI_MODEL_NAME = value;
+                  globalConfig.settings.app.gemini_model_name = value;
+                  console.log(`[Config] Loaded GEMINI_MODEL (${value}) from config.toml`);
                 }
                 if (key === "pexels_api_key" && globalConfig.settings.app.pexels_api_keys.length === 0) {
                   globalConfig.settings.app.pexels_api_keys = [value] as never[];
@@ -827,7 +835,9 @@ async function startServer() {
       video_language = "es",
       paragraph_number = 3,
       video_script_prompt = "",
-      custom_system_prompt = ""
+      custom_system_prompt = "",
+      is_multi_part = false,
+      parts_count = 2
     } = req.body;
 
     const llmProvider = process.env.LLM_PROVIDER || "gemini";
@@ -835,14 +845,45 @@ async function startServer() {
       throw new Error("No Gemini API key configured. Please set GEMINI_API_KEY.");
     }
 
-    let prompt = `Escribe un guión de video sobre "${video_subject}" en idioma ${video_language} neutro. Es CRÍTICO que el guión tenga exactamente ${paragraph_number} párrafos bien estructurados, completos y detallados. Debe de seguir la siguiente estructura y estilo
+    let prompt = "";
 
-ESTRUCTURA Y CONTEXTO (CRÍTICO):
-1. En la primera oracion debe haber un gancho que "atrape" al espectador, luego debe establecer el contexto inicial y la premisa clara del tema desde el principio para que cualquier espectador entienda de qué trata la historia sin dar nada por sentado.
-2. La primera oración debe ser un gancho impactante que capte la atención de inmediato, pero que al mismo tiempo introduzca con claridad la situación o el problema central.
-3. A lo largo del guión, cada 4 oraciones busca reenganchar al espectador con un giro inesperado, una pregunta provocativa o un dato sorprendente.
+    if (is_multi_part) {
+      const numParts = Math.min(Math.max(Number(parts_count) || 2, 2), 3);
+      prompt = `Escribe una historia continua dividida en EXACTAMENTE ${numParts} PARTES sobre "${video_subject}" en idioma ${video_language} neutro.
+
+INSTRUCCIONES DE ESTRUCTURA MULTI-PARTE Y PÁRRAFOS POR PARTE (CRÍTICO):
+- Es CRÍTICO que CADA PARTE tenga EXACTAMENTE ${paragraph_number} párrafos bien estructurados, completos y detallados.
+- Separa la PARTE 1, PARTE 2${numParts === 3 ? " y PARTE 3" : ""} colocando explícitamente la línea divisoria de encabezado en mayúsculas:
+  "--- PARTE 2 ---"
+  ${numParts === 3 ? '"--- PARTE 3 ---"\n' : ""}
+
+ESTRUCTURA Y CONTEXTO POR PARTE:
+1. PARTE 1: La primera oración (los primeros 3 a 5 segundos) DEBE ser un gancho demoledor, intrigante o perturbador que "atrape" al espectador de inmediato. Además, en el primer párrafo de la Parte 1 DEBES introducir EXPLÍCITAMENTE la premisa y situación central del tema ("${video_subject}") para que cualquier espectador entienda la historia sin dar nada por sentado ni requerir conocimiento previo. La Parte 1 debe finalizar justo en el punto de máxima tensión o suspenso (cliffhanger).
+2. PARTE 2: Debe comenzar obligatoriamente enganchando de forma continua con la escena final de la Parte 1. La Parte 2 DEBE retomar la narración desde un punto más atrás (retomando las últimas 2 a 3 oraciones completas del suspenso de la Parte 1, comenzando desde la penúltima o antepenúltima oración del clímax previo) para brindar un contexto amplio e inmediato y lograr una transición perfectamente natural y sin cortes abruptos, y luego continuar con la narración.${numParts === 3 ? " Al final de la Parte 2, crea un segundo giro o suspenso." : " Llega al desenlace final o conclusión impactante al término de la Parte 2."}
+${numParts === 3 ? '3. PARTE 3: Debe comenzar obligatoriamente enganchando con la escena final de la Parte 2 de la misma manera (retomando las últimas 2 a 3 oraciones completas del suspenso de la Parte 2) antes de llevar el relato hacia su clímax y desenlace definitivo.\n' : ""}
+4. A lo largo del guión de cada parte, cada 4 oraciones busca reenganchar al espectador con un giro inesperado, una pregunta provocativa o un dato sorprendente.
 
 ESTILO Y PÚBLICO:
+- PERSPECTIVA OBLIGATORIA: Narración estrictamente en PRIMERA PERSONA ("yo", "mi", "me sucedió a mí", al estilo de confesión o vivencia personal de Reddit). La historia debe ser contada como una experiencia propia directa del narrador, NUNCA dirigiéndose al espectador en segunda persona ("tú", "te observan") ni como un observador omnisciente externo.
+- Público objetivo: entre 16 y 45 años.
+- Redacción clara, concisa, directa y sin palabras rebuscadas ni tecnicismos innecesarios. Debe ser totalmente comprensible para todo público.
+
+LONGITUD Y FORMATO POR PARTE:
+- CADA PARTE individual debe ser sustancial y estar compuesta por exactamente ${paragraph_number} párrafos (rango estricto de entre 45 y 55 palabras por párrafo, compuesto por 3 a 5 oraciones ricas y descriptivas por párrafo).
+- Separa cada párrafo estrictamente con dos saltos de línea (\\n\\n).
+- Devuelve SOLAMENTE el texto del guión con las etiquetas de divisoria ("--- PARTE X ---"), sin títulos ni comentarios adicionales.
+
+RESTRICCIONES DE FORMATO PARA TEXT-TO-SPEECH (CRÍTICO):
+- No utilices NINGÚN tipo de formato de texto como asteriscos (* o **), comillas (" o “ o ”), paréntesis, corchetes, ni guiones dentro del texto narrado (salvo las líneas con las marcas divisoria "--- PARTE X ---"). El guión se usará directamente en un generador de voz automática y estos caracteres arruinan la lectura. Escribe únicamente texto limpio, continuo y natural apto para síntesis de voz.`;
+    } else {
+      prompt = `Escribe un guión de video sobre "${video_subject}" en idioma ${video_language} neutro. Es CRÍTICO que el guión tenga exactamente ${paragraph_number} párrafos bien estructurados, completos y detallados. Debe de seguir la siguiente estructura y estilo:
+
+ESTRUCTURA Y CONTEXTO (CRÍTICO):
+1. GANCHO IMPACTANTE Y CONTEXTO CLARO (PRIMER PÁRRAFO): La primera oración (los primeros 3 a 5 segundos) DEBE ser un gancho demoledor, intrigante o perturbador que "atrape" al espectador de inmediato. Además, en el primer párrafo DEBES introducir EXPLÍCITAMENTE la premisa y situación central del tema ("${video_subject}"). No asumas que el espectador conoce el tema; la historia debe auto-explicarse con claridad desde el inicio sin dar nada por sentado.
+2. A lo largo del guión, cada 4 oraciones busca reenganchar al espectador con un giro inesperado, una pregunta provocativa o un dato sorprendente.
+
+ESTILO Y PÚBLICO:
+- PERSPECTIVA OBLIGATORIA: Narración estrictamente en PRIMERA PERSONA ("yo", "mi", "me sucedió a mí", al estilo de confesión o vivencia personal de Reddit). La historia debe ser contada como una experiencia propia directa del narrador, NUNCA dirigiéndose al espectador en segunda persona ("tú", "te observan") ni como un observador omnisciente externo.
 - Público objetivo: entre 16 y 45 años.
 - Redacción clara, concisa, directa y sin palabras rebuscadas ni tecnicismos innecesarios. Debe ser totalmente comprensible para todo público.
 
@@ -854,6 +895,7 @@ LONGITUD Y FORMATO:
 
 RESTRICCIONES DE FORMATO PARA TEXT-TO-SPEECH (CRÍTICO):
 - No utilices NINGÚN tipo de formato de texto como asteriscos (* o **), comillas (" o “ o ”), paréntesis, corchetes, ni guiones. El guión se usará directamente en un generador de voz automática y estos caracteres arruinan la lectura. Escribe únicamente texto limpio, continuo y natural.`;
+    }
 
     if (video_script_prompt) {
       prompt += `\n\nInstrucciones adicionales para el guión:\n${video_script_prompt}`;
@@ -865,8 +907,29 @@ RESTRICCIONES DE FORMATO PARA TEXT-TO-SPEECH (CRÍTICO):
     }
 
     const rawScript = await generateLlmContent(prompt, false, finalSystemPrompt || undefined);
-    const scriptText = cleanScriptSymbols(rawScript);
 
+    if (is_multi_part) {
+      // Split rawScript by separator markers
+      const rawParts = rawScript.split(/---+\s*PARTE\s*\d+\s*---+/i).map((p) => cleanScriptSymbols(p).trim()).filter(Boolean);
+      const multi_part_scripts = rawParts.length > 0 ? rawParts : [cleanScriptSymbols(rawScript)];
+      
+      // Reconstruct combined script with clear part markers
+      const fullScriptText = multi_part_scripts.map((script, idx) => {
+        return idx === 0 ? script : `--- PARTE ${idx + 1} ---\n\n${script}`;
+      }).join("\n\n");
+
+      res.json({
+        status: 200,
+        message: "ok",
+        data: {
+          video_script: fullScriptText,
+          multi_part_scripts,
+        }
+      });
+      return;
+    }
+
+    const scriptText = cleanScriptSymbols(rawScript);
     res.json({ status: 200, message: "ok", data: { video_script: scriptText } });
   }));
 

@@ -25,9 +25,12 @@ import type { TimelineItem, EditCommand, BgmFile } from "../../api/types";
 export function ReviewPanel() {
   const { t } = useTranslation();
   const projectStore = useProjectStore();
-  const { setPanel, videoUrls } = useProjectWorkspaceStore();
+  const { setPanel, videoUrls, activePartIndex, setActivePartIndex } = useProjectWorkspaceStore();
   const { config } = useConfigStore();
   const videoStore = useVideoStore();
+
+  const isMultiPart = videoStore.is_multi_part;
+  const multiPartCount = videoStore.multi_part_count || 2;
 
   const isYoutubeLinked = !!config?.settings?.youtube?.is_linked;
   const youtubeChannel = config?.settings?.youtube?.channel_name || "";
@@ -79,7 +82,8 @@ export function ReviewPanel() {
   };
 
   if (projectStore.mode === "disabled" || !projectStore.project) {
-    const finalVideo = videoUrls[0];
+    const finalVideoIndex = Math.min(Math.max(activePartIndex - 1, 0), Math.max(videoUrls.length - 1, 0));
+    const finalVideo = videoUrls[finalVideoIndex] || videoUrls[0];
     const videoAspect = useVideoStore.getState().video_aspect ?? "9:16";
 
     let aspectClass = "aspect-[9/16] max-h-[500px]";
@@ -98,6 +102,30 @@ export function ReviewPanel() {
           <h2 className="text-xl font-bold tracking-tight text-foreground">{t("panels.review.taskReviewTitle")}</h2>
           <p className="text-sm text-muted-foreground">{t("panels.review.taskReviewDescription")}</p>
         </div>
+
+        {isMultiPart && (
+          <div className="flex items-center justify-center gap-2 bg-surface/80 p-1.5 rounded-xl border border-border">
+            <span className="text-xs font-semibold text-muted-foreground px-2">Parte Activa:</span>
+            {Array.from({ length: multiPartCount }).map((_, idx) => {
+              const partNum = idx + 1;
+              const isActive = activePartIndex === partNum;
+              return (
+                <button
+                  key={partNum}
+                  type="button"
+                  onClick={() => setActivePartIndex(partNum)}
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+                    isActive
+                      ? "bg-accent text-white shadow-xs"
+                      : "bg-transparent text-muted hover:text-foreground"
+                  }`}
+                >
+                  Parte {partNum}
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         {finalVideo ? (
           <div className={`w-full ${maxWidthClass} mx-auto rounded-2xl overflow-hidden border border-border bg-neutral-900/60 shadow-2xl p-2 transition-all duration-300 hover:shadow-accent/5 hover:border-accent/20`}>

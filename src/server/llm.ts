@@ -68,7 +68,7 @@ export async function callGemini(
     }
   });
 
-  const modelName = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+  const modelName = process.env.GEMINI_MODEL || process.env.GEMINI_MODEL_NAME || "gemini-3.1-flash-lite";
 
   const response = await ai.models.generateContent({
     model: modelName,
