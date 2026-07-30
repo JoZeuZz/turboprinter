@@ -278,6 +278,8 @@ const SAMPLE_VIDEOS = [
 function cleanScriptSymbols(text: string): string {
   if (!text) return "";
   return text
+    // Convert literal backslash-n strings ("\n") into real newlines if returned by LLM
+    .replace(/\\n/g, "\n")
     // Remove asterisks (*) and underscores (_) used for markdown bold/italic
     .replace(/[\*_]/g, "")
     // Remove various types of quotation marks: ", “, ”, «, », ‘, ’, '
@@ -884,7 +886,9 @@ ESTILO Y TONO NARRATIVO (REDDIT REALISTA Y CONCRETO):
 
 LONGITUD Y FORMATO POR PARTE:
 - CADA PARTE individual debe ser sustancial y estar compuesta por exactamente ${paragraph_number} párrafos (rango estricto de entre 45 y 55 palabras por párrafo, compuesto por 3 a 5 oraciones ricas y descriptivas por párrafo).
-- Separa cada párrafo estrictamente con dos saltos de línea (\\n\\n).
+- Separa los párrafos dejando una línea en blanco entre ellos. NUNCA escribas la cadena literal de texto "\\n" en la respuesta.
+- COHERENCIA DE OBJETOS: Los objetos y acciones narradas deben ser 100% lógicos y plausibles en el entorno inmediato. NUNCA introduzcas objetos inverosímiles fuera de lugar (como telescopios de caza en una conversación cercana).
+- CONCORDANCIA GRAMATICAL: Mantén concordancia impecable en primera persona (ej: "un arma que no reconocí" en vez de "que no me reconoció").
 - Devuelve SOLAMENTE el texto del guión con las etiquetas de divisoria ("--- PARTE X ---"), sin títulos ni comentarios adicionales.
 
 RESTRICCIONES DE FORMATO PARA TEXT-TO-SPEECH (CRÍTICO):
@@ -907,7 +911,7 @@ ESTILO Y TONO NARRATIVO (REDDIT REALISTA Y CONCRETO):
 LONGITUD Y FORMATO:
 - Cada párrafo debe ser sustancial y desarrollado por completo (rango estricto de entre 45 y 55 palabras por párrafo, compuesto por 3 a 5 oraciones ricas y descriptivas).
 - La longitud total del guión completo debe ser de aproximadamente ${paragraph_number * 45} a ${paragraph_number * 55} palabras en total. La longitud debe ser acumulativa y consistente.
-- Separa cada párrafo estrictamente con dos saltos de línea (\\n\\n).
+- Separa los párrafos dejando una línea en blanco entre ellos. NUNCA escribas la cadena literal de texto "\\n" en la respuesta.
 - Devuelve SOLAMENTE el texto del guión, sin títulos, introducciones ni comentarios adicionales.
 
 RESTRICCIONES DE FORMATO PARA TEXT-TO-SPEECH (CRÍTICO):
