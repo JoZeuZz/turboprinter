@@ -21,3 +21,25 @@ export function getClipsForPart<T extends { part_index?: number }>(
   const endIdx = Math.min(startIdx + chunkSize, total);
   return items.slice(startIdx, endIdx);
 }
+
+export function getNormalizedItemsForPart<T extends { start_sec: number; end_sec?: number | null; duration_sec?: number; part_index?: number }>(
+  items: T[],
+  partIndex: number | "all",
+  multiPartCount: number = 2
+): T[] {
+  if (!items || items.length === 0) return [];
+  const selected = getClipsForPart(items, partIndex, multiPartCount);
+  if (partIndex === "all" || selected.length === 0) return selected;
+
+  const minStartSec = Math.min(...selected.map((item) => item.start_sec ?? 0));
+  if (minStartSec <= 0) return selected;
+
+  return selected.map((item) => ({
+    ...item,
+    start_sec: Math.max(0, (item.start_sec ?? 0) - minStartSec),
+    ...(item.end_sec !== undefined && item.end_sec !== null
+      ? { end_sec: Math.max(0, item.end_sec - minStartSec) }
+      : {}),
+  }));
+}
+

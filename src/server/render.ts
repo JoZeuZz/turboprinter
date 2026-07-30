@@ -866,9 +866,30 @@ export function createRenderer(deps: RenderDeps) {
         }
 
         // 4. Burn Subtitles for this part
-        let subtitles = (subtitleTrack?.items || []).filter((s: any) => !s.part_index || s.part_index === partNum);
+        const rawSubs = subtitleTrack?.items || [];
+        const hasSubPartIndex = rawSubs.some((s: any) => s.part_index !== undefined && s.part_index !== null);
+
+        let subtitles: any[] = [];
+        if (hasSubPartIndex) {
+          subtitles = rawSubs.filter((s: any) => (s.part_index || 1) === partNum);
+        } else if (rawSubs.length > 0) {
+          const chunkSize = Math.max(1, Math.ceil(rawSubs.length / multiPartCount));
+          const startIdx = (partNum - 1) * chunkSize;
+          subtitles = rawSubs.slice(startIdx, startIdx + chunkSize);
+        }
+
         if (subtitles.length === 0 && p.shot_plan?.segments) {
-          const partSegments = p.shot_plan.segments.filter((seg: any) => !seg.part_index || seg.part_index === partNum);
+          const allSegs = p.shot_plan.segments;
+          const hasSegPartIndex = allSegs.some((s: any) => s.part_index !== undefined && s.part_index !== null);
+          let partSegments: any[] = [];
+          if (hasSegPartIndex) {
+            partSegments = allSegs.filter((seg: any) => (seg.part_index || 1) === partNum);
+          } else {
+            const chunkSize = Math.max(1, Math.ceil(allSegs.length / multiPartCount));
+            const startIdx = (partNum - 1) * chunkSize;
+            partSegments = allSegs.slice(startIdx, startIdx + chunkSize);
+          }
+
           const fallbackSubtitles: any[] = [];
           partSegments.forEach((seg: any, idx: number) => {
             const startSec = seg.start_sec !== undefined ? seg.start_sec : idx * 5;

@@ -9,7 +9,7 @@ import { Button } from "../ui";
 import { useProjectStore } from "../../store/useProjectStore";
 import { useProjectWorkspaceStore } from "../../store/useProjectWorkspaceStore";
 import { useVideoStore } from "../../store/useVideoStore";
-import { getClipsForPart } from "../../lib/partUtils";
+import { getNormalizedItemsForPart } from "../../lib/partUtils";
 import type { EditCommand, TimelineItem } from "../../api/types";
 
 function isTypingTarget(target: EventTarget | null): boolean {
@@ -39,9 +39,9 @@ export function EditorPanel() {
   const rawAudioItems: TimelineItem[] = audioTrack?.items ?? [];
   const rawSubItems: TimelineItem[] = subtitleTrack?.items ?? [];
 
-  const videoItems = getClipsForPart(rawVideoItems, selectedPart, multiPartCount);
-  const audioItems = getClipsForPart(rawAudioItems, selectedPart, multiPartCount);
-  const subItems = getClipsForPart(rawSubItems, selectedPart, multiPartCount);
+  const videoItems = getNormalizedItemsForPart(rawVideoItems, selectedPart, multiPartCount);
+  const audioItems = getNormalizedItemsForPart(rawAudioItems, selectedPart, multiPartCount);
+  const subItems = getNormalizedItemsForPart(rawSubItems, selectedPart, multiPartCount);
 
   const scopedVideoTrack = videoTrack ? { ...videoTrack, items: videoItems } : undefined;
   const scopedAudioTrack = audioTrack ? { ...audioTrack, items: audioItems } : undefined;

@@ -2144,6 +2144,7 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
         duration_sec: durationSec,
         text: seg.narration_text,
         segment_id: seg.id,
+        part_index: seg.part_index || 1,
         asset_url: p.narration_audio_path || null
       };
     });
@@ -2273,6 +2274,13 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
         const fullDuration = (isNaN(rawDuration) || rawDuration <= 0) ? 15 : rawDuration;
         const usedDuration = Math.min(fullDuration, totalDurationSec - currentStartSec);
 
+        const clipMidpoint = currentStartSec + (usedDuration / 2);
+        const activeSeg = (p.shot_plan?.segments || []).find((s: any) => {
+          const sStart = s.start_sec !== undefined ? s.start_sec : 0;
+          const sEnd = s.end_sec !== undefined ? s.end_sec : sStart + (s.target_duration_sec || 5);
+          return clipMidpoint >= sStart && clipMidpoint <= sEnd;
+        }) || (p.shot_plan?.segments || [])[0];
+
         videoItems.push({
           id: `item_${itemId}`,
           media_id: med.id,
@@ -2284,7 +2292,8 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
           duration_sec: usedDuration,
           trim_start_sec: 0,
           trim_end_sec: usedDuration,
-          segment_id: null,
+          segment_id: activeSeg?.id || null,
+          part_index: activeSeg?.part_index || 1,
           provider: "local"
         });
 
@@ -2405,6 +2414,7 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
           trim_start_sec: trimStart,
           trim_end_sec: trimStart + usedDuration,
           segment_id: activeSeg.id,
+          part_index: activeSeg.part_index || 1,
           provider: mediaToUse.provider || "pexels"
         });
 
@@ -2417,7 +2427,8 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
     (p.shot_plan?.segments || []).forEach((seg: any, idx: number) => {
       const startSec = seg.start_sec !== undefined ? seg.start_sec : idx * 5;
       const durationSec = seg.target_duration_sec !== undefined ? seg.target_duration_sec : 5;
-      const splitCues = splitTextIntoTikTokSubtitles(seg.narration_text || "", startSec, durationSec, seg.id, `sub_${idx + 1}`);
+      const splitCues = splitTextIntoTikTokSubtitles(seg.narration_text || "", startSec, durationSec, seg.id, `sub_${idx + 1}`)
+        .map((cue: any) => ({ ...cue, part_index: seg.part_index || 1 }));
       subtitleItems.push(...splitCues);
     });
 
@@ -2636,6 +2647,7 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
         duration_sec: durationSec,
         text: seg.narration_text,
         segment_id: seg.id,
+        part_index: seg.part_index || 1,
         asset_url: p.narration_audio_path || null
       };
     });
@@ -2644,7 +2656,8 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
     (p.shot_plan?.segments || []).forEach((seg: any, idx: number) => {
       const startSec = seg.start_sec !== undefined ? seg.start_sec : idx * 5;
       const durationSec = seg.target_duration_sec !== undefined ? seg.target_duration_sec : 5;
-      const splitCues = splitTextIntoTikTokSubtitles(seg.narration_text || "", startSec, durationSec, seg.id, `sub_${idx + 1}`);
+      const splitCues = splitTextIntoTikTokSubtitles(seg.narration_text || "", startSec, durationSec, seg.id, `sub_${idx + 1}`)
+        .map((cue: any) => ({ ...cue, part_index: seg.part_index || 1 }));
       subtitleItems.push(...splitCues);
     });
 

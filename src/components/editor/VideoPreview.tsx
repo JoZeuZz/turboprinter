@@ -353,15 +353,6 @@ export function VideoPreview({ items, selectedId, onTimeUpdate, renderedVideoUrl
             {...{ referrerPolicy: "no-referrer" }}
             className="w-full h-full object-contain mx-auto block rounded-xl"
           />
-          {items.length > 0 && (
-            <button
-              type="button"
-              onClick={() => setUseRenderedMode(false)}
-              className="absolute top-2 right-2 bg-black/70 hover:bg-black/90 text-white text-[11px] font-semibold px-2.5 py-1 rounded-lg backdrop-blur-md border border-white/20 transition-all z-20"
-            >
-              ✂ Editar Clips
-            </button>
-          )}
         </div>
       </div>
     );
@@ -369,19 +360,6 @@ export function VideoPreview({ items, selectedId, onTimeUpdate, renderedVideoUrl
 
   return (
     <div className={`flex flex-col bg-black rounded-2xl overflow-hidden shadow-2xl border border-border/80 ${containerClass}`}>
-      {renderedVideoUrl && !useRenderedMode && (
-        <div className="flex items-center justify-between px-3 py-1 bg-surface-2 border-b border-border/60">
-          <span className="text-[10px] font-medium text-muted">Vista previa de clips</span>
-          <button
-            type="button"
-            onClick={() => setUseRenderedMode(true)}
-            className="text-[10px] font-semibold text-accent hover:underline flex items-center gap-1"
-          >
-            🎬 Ver Video Renderizado
-          </button>
-        </div>
-      )}
-
       {src ? (
         <div className="relative flex-1 min-h-0 w-full bg-black flex items-center justify-center overflow-hidden">
           <video
