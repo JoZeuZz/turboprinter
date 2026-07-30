@@ -42,19 +42,19 @@ describe("resolveRenderStatus", () => {
   it("passes through an in-progress task verbatim", () => {
     const task = { state: 4, progress: 55, output_path: null, error: null };
     const result = resolveRenderStatus({ task, project: undefined, renderedFileExists: false });
-    expect(result).toEqual({ state: 4, progress: 55, output_path: null, error: null });
+    expect(result).toEqual({ state: 4, progress: 55, output_path: null, output_paths: [], error: null });
   });
 
   it("passes through a completed task verbatim", () => {
     const task = { state: 1, progress: 100, output_path: "/a.mp4", error: null };
     const result = resolveRenderStatus({ task, project: undefined, renderedFileExists: false });
-    expect(result).toEqual({ state: 1, progress: 100, output_path: "/a.mp4", error: null });
+    expect(result).toEqual({ state: 1, progress: 100, output_path: "/a.mp4", output_paths: ["/a.mp4"], error: null });
   });
 
   it("passes through a failed task and preserves the error", () => {
     const task = { state: -1, progress: 100, output_path: null, error: "ffmpeg died" };
     const result = resolveRenderStatus({ task, project: undefined, renderedFileExists: false });
-    expect(result).toEqual({ state: -1, progress: 100, output_path: null, error: "ffmpeg died" });
+    expect(result).toEqual({ state: -1, progress: 100, output_path: null, output_paths: [], error: "ffmpeg died" });
   });
 
   it("reconstructs a completed render from disk when no task exists but the file is still there", () => {

@@ -57,6 +57,12 @@ export function VideoConfigPanel() {
     };
   }, [audioElement, playTimeout]);
 
+  useEffect(() => {
+    if (audioElement) {
+      audioElement.volume = Math.min(1, Math.max(0, store.bgm_volume ?? 0.2));
+    }
+  }, [store.bgm_volume, audioElement]);
+
   const togglePlayBgm = (url: string) => {
     if (previewTrack === url) {
       if (audioElement) {
@@ -77,7 +83,7 @@ export function VideoConfigPanel() {
       }
 
       const audio = new Audio(url);
-      audio.volume = 0.4;
+      audio.volume = Math.min(1, Math.max(0, store.bgm_volume ?? 0.2));
       setPreviewTrack(url);
       setAudioElement(audio);
 
@@ -712,7 +718,23 @@ export function VideoConfigPanel() {
                 <label className="text-xs font-semibold text-foreground">
                   {t("audioSubtitle.bgmVolume")}
                 </label>
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const url = store.bgm_file || bgmFiles[0]?.file;
+                      if (url) {
+                        togglePlayBgm(url);
+                      }
+                    }}
+                    className={`px-2 py-0.5 text-[11px] font-semibold rounded-md border transition-all flex items-center gap-1 ${
+                      previewTrack
+                        ? "bg-amber-500 text-black border-amber-400 animate-pulse"
+                        : "bg-surface-2 hover:bg-accent hover:text-accent-foreground text-foreground border-border"
+                    }`}
+                  >
+                    {previewTrack ? "⏹ Pausar" : "🔊 Probar"}
+                  </button>
                   <span className="text-xs font-mono font-bold text-accent bg-accent/10 px-2 py-0.5 rounded-md border border-accent/20">
                     {Math.round((store.bgm_volume ?? 0.2) * 100)}% ({(store.bgm_volume ?? 0.2).toFixed(2)})
                   </span>

@@ -518,7 +518,11 @@ export function createRenderer(deps: RenderDeps) {
           logTask(taskId, "INFO", "AUDIO_MIXER", "BGM Mode: None or Disabled.");
         }
       } else {
-        logTask(taskId, "INFO", "AUDIO_MIXER", `Using existing selected music: "${musicItem.title}" at volume: ${musicItem.volume || 0.2}`);
+        const userBgmVolume = p.params?.bgm_volume !== undefined ? p.params.bgm_volume : (p.bgm_volume !== undefined ? p.bgm_volume : undefined);
+        if (userBgmVolume !== undefined && musicItem) {
+          musicItem.volume = userBgmVolume;
+        }
+        logTask(taskId, "INFO", "AUDIO_MIXER", `Using existing selected music: "${musicItem.title}" at volume: ${musicItem.volume}`);
       }
 
       const clips = videoTrack?.items || [];
@@ -793,7 +797,11 @@ export function createRenderer(deps: RenderDeps) {
 
       const finalUrls: string[] = [];
       const voiceVolume = p.params?.voice_volume !== undefined ? p.params.voice_volume : (p.voice_volume !== undefined ? p.voice_volume : 1.0);
-      const musicVolume = musicItem?.volume !== undefined ? musicItem.volume : (p.params?.bgm_volume !== undefined ? p.params.bgm_volume : (p.bgm_volume !== undefined ? p.bgm_volume : 0.2));
+      const userBgmVolume = p.params?.bgm_volume !== undefined ? p.params.bgm_volume : (p.bgm_volume !== undefined ? p.bgm_volume : undefined);
+      const musicVolume = userBgmVolume !== undefined ? userBgmVolume : (musicItem?.volume !== undefined ? musicItem.volume : 0.2);
+      if (musicItem) {
+        musicItem.volume = musicVolume;
+      }
       const pParams = p.params || {};
       const subtitleEnabledParam = pParams.subtitle_enabled !== undefined ? pParams.subtitle_enabled : (p.subtitle_enabled !== undefined ? p.subtitle_enabled : true);
 

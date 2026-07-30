@@ -330,9 +330,12 @@ export function AudioSubtitlePanel() {
           <span className="text-[10px] text-muted font-medium">Presets:</span>
           <div className="flex items-center gap-1 flex-wrap">
             {[
+              { label: "1%", val: 0.01 },
+              { label: "2%", val: 0.02 },
               { label: "5% (Suave)", val: 0.05 },
               { label: "10%", val: 0.1 },
               { label: "15% (Ideal)", val: 0.15 },
+              { label: "20%", val: 0.2 },
               { label: "25%", val: 0.25 },
               { label: "40%", val: 0.4 },
             ].map((p) => {
