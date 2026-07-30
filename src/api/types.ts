@@ -357,6 +357,7 @@ export interface TimelineItem {
   volume?: number | null;
   text?: string | null;
   keywords?: string[];
+  part_index?: number;
 }
 
 export type TrackType = "video" | "audio" | "subtitle" | "overlay";

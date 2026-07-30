@@ -13,6 +13,7 @@ interface VideoPreviewProps {
   items: TimelineItem[];
   selectedId: string | null;
   onTimeUpdate?: (globalTimeSec: number) => void;
+  renderedVideoUrl?: string;
 }
 
 function isTypingTarget(target: EventTarget | null): boolean {
@@ -22,7 +23,7 @@ function isTypingTarget(target: EventTarget | null): boolean {
   return tag === "INPUT" || tag === "TEXTAREA" || el.isContentEditable;
 }
 
-export function VideoPreview({ items, selectedId, onTimeUpdate }: VideoPreviewProps) {
+export function VideoPreview({ items, selectedId, onTimeUpdate, renderedVideoUrl }: VideoPreviewProps) {
   const { t } = useTranslation();
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -31,6 +32,7 @@ export function VideoPreview({ items, selectedId, onTimeUpdate }: VideoPreviewPr
   const [clipTime, setClipTime] = useState(0);
   const [clipDuration, setClipDuration] = useState(0);
   const [videoDims, setVideoDims] = useState({ width: 0, height: 0 });
+  const [useRenderedMode, setUseRenderedMode] = useState<boolean>(!!renderedVideoUrl);
 
   const projectStore = useProjectStore();
   const subtitleTrack = projectStore.project?.tracks.find((t) => t.type === "subtitle");
@@ -39,6 +41,12 @@ export function VideoPreview({ items, selectedId, onTimeUpdate }: VideoPreviewPr
   const narrationUrl = projectStore.project?.narration_audio_path || audioTrack?.items?.find((item) => item.asset_url)?.asset_url;
 
   const videoAspect = useVideoStore((s) => s.video_aspect) ?? "9:16";
+
+  useEffect(() => {
+    if (renderedVideoUrl) {
+      setUseRenderedMode(true);
+    }
+  }, [renderedVideoUrl]);
 
   useEffect(() => {
     setPlayingId(selectedId ?? items[0]?.id ?? null);
@@ -305,11 +313,11 @@ export function VideoPreview({ items, selectedId, onTimeUpdate }: VideoPreviewPr
     }
   };
 
-  let maxWidthClass = "max-w-5xl";
+  let containerClass = "w-full max-w-2xl mx-auto aspect-video";
   if (videoAspect === "9:16") {
-    maxWidthClass = "max-w-[500px]";
+    containerClass = "h-full max-h-[540px] w-auto max-w-[310px] sm:max-w-[325px] mx-auto aspect-[9/16]";
   } else if (videoAspect === "1:1") {
-    maxWidthClass = "max-w-[680px]";
+    containerClass = "h-full max-h-[450px] w-auto max-w-[450px] mx-auto aspect-square";
   }
 
   const animType = subtitleAnimation ?? "pop";
@@ -334,8 +342,46 @@ export function VideoPreview({ items, selectedId, onTimeUpdate }: VideoPreviewPr
     };
   }
 
+  // If rendered video URL is provided and user is in rendered mode
+  if (renderedVideoUrl && useRenderedMode) {
+    return (
+      <div className={`flex flex-col bg-black rounded-2xl overflow-hidden shadow-2xl border border-border/80 ${containerClass}`}>
+        <div className="relative flex-1 min-h-0 w-full bg-black flex items-center justify-center overflow-hidden">
+          <video
+            src={renderedVideoUrl}
+            controls
+            {...{ referrerPolicy: "no-referrer" }}
+            className="w-full h-full object-contain mx-auto block rounded-xl"
+          />
+          {items.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setUseRenderedMode(false)}
+              className="absolute top-2 right-2 bg-black/70 hover:bg-black/90 text-white text-[11px] font-semibold px-2.5 py-1 rounded-lg backdrop-blur-md border border-white/20 transition-all z-20"
+            >
+              ✂ Editar Clips
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className={`flex flex-col bg-black rounded-lg overflow-hidden shadow-lg shadow-black/40 h-full w-full mx-auto ${maxWidthClass}`}>
+    <div className={`flex flex-col bg-black rounded-2xl overflow-hidden shadow-2xl border border-border/80 ${containerClass}`}>
+      {renderedVideoUrl && !useRenderedMode && (
+        <div className="flex items-center justify-between px-3 py-1 bg-surface-2 border-b border-border/60">
+          <span className="text-[10px] font-medium text-muted">Vista previa de clips</span>
+          <button
+            type="button"
+            onClick={() => setUseRenderedMode(true)}
+            className="text-[10px] font-semibold text-accent hover:underline flex items-center gap-1"
+          >
+            🎬 Ver Video Renderizado
+          </button>
+        </div>
+      )}
+
       {src ? (
         <div className="relative flex-1 min-h-0 w-full bg-black flex items-center justify-center overflow-hidden">
           <video

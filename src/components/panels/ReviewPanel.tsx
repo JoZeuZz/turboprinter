@@ -86,25 +86,20 @@ export function ReviewPanel() {
     const finalVideo = videoUrls[finalVideoIndex] || videoUrls[0];
     const videoAspect = useVideoStore.getState().video_aspect ?? "9:16";
 
-    let aspectClass = "aspect-[9/16] max-h-[520px]";
+    let aspectClass = "aspect-[9/16]";
     let maxWidthClass = "max-w-[300px] sm:max-w-[330px]";
     if (videoAspect === "16:9") {
-      aspectClass = "aspect-video max-h-[420px]";
+      aspectClass = "aspect-video";
       maxWidthClass = "max-w-xl sm:max-w-2xl";
     } else if (videoAspect === "1:1") {
-      aspectClass = "aspect-square max-h-[450px]";
+      aspectClass = "aspect-square";
       maxWidthClass = "max-w-sm sm:max-w-md";
     }
 
     return (
-      <div className="flex h-full w-full max-w-4xl mx-auto flex-col items-center justify-center gap-6 px-6 py-8 text-center">
-        <div className="space-y-2 max-w-xl">
-          <h2 className="text-xl font-bold tracking-tight text-foreground">{t("panels.review.taskReviewTitle")}</h2>
-          <p className="text-sm text-muted-foreground">{t("panels.review.taskReviewDescription")}</p>
-        </div>
-
+      <div className="flex min-h-full h-full w-full max-w-4xl mx-auto flex-col items-center justify-start gap-4 px-4 py-6 text-center overflow-y-auto min-h-0">
         {isMultiPart && (
-          <div className="flex items-center justify-center gap-2 bg-surface/80 p-1.5 rounded-xl border border-border">
+          <div className="flex items-center justify-center gap-2 bg-surface/80 p-1.5 rounded-xl border border-border shrink-0">
             <span className="text-xs font-semibold text-muted-foreground px-2">Parte Activa:</span>
             {Array.from({ length: multiPartCount }).map((_, idx) => {
               const partNum = idx + 1;
@@ -128,13 +123,13 @@ export function ReviewPanel() {
         )}
 
         {finalVideo ? (
-          <div className={`w-full ${maxWidthClass} mx-auto rounded-2xl overflow-hidden border border-border bg-neutral-900/60 shadow-2xl p-2.5 transition-all duration-300 hover:shadow-accent/5 hover:border-accent/20`}>
-            <div className={`relative w-full rounded-xl overflow-hidden bg-black flex items-center justify-center ${aspectClass}`}>
+          <div className={`w-full ${maxWidthClass} shrink-0 mx-auto rounded-2xl overflow-hidden border border-border bg-neutral-900/60 shadow-2xl p-2.5 transition-all duration-300 hover:shadow-accent/5 hover:border-accent/20`}>
+            <div className={`relative w-full shrink-0 rounded-xl overflow-hidden bg-black flex items-center justify-center ${aspectClass}`}>
               <video src={finalVideo} controls {...{ referrerPolicy: "no-referrer" }} className="w-full h-full object-contain mx-auto block rounded-lg" />
             </div>
           </div>
         ) : (
-          <div className="flex min-h-[300px] w-full max-w-md flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-surface p-8 text-sm text-muted-foreground gap-3">
+          <div className="flex min-h-[300px] w-full max-w-md flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-surface p-8 text-sm text-muted-foreground gap-3 shrink-0">
             <Clapperboard className="h-10 w-10 text-muted/40 animate-pulse" />
             <span>{t("panels.done.none")}</span>
           </div>
@@ -214,12 +209,6 @@ export function ReviewPanel() {
                 {t("panels.review.continueToDone")}
               </Button>
             </div>
-
-            {!isYoutubeLinked && (
-              <p className="text-xs text-muted-foreground text-center bg-muted/30 py-2 px-4 rounded-lg border border-border/50 max-w-sm mx-auto">
-                ℹ️ {t("panels.review.notLinkedYoutube")}
-              </p>
-            )}
           </div>
         )}
       </div>

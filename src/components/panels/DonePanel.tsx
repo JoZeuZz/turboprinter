@@ -64,17 +64,9 @@ export function DonePanel() {
   const downloadFilename = deriveDownloadFilename(videoSubject);
 
   return (
-    <div className="flex h-full w-full max-w-4xl mx-auto flex-col items-center justify-center gap-6 px-6 py-8 text-center">
-      <div className="space-y-2 max-w-xl">
-        <div className="flex items-center justify-center gap-2 text-green-400">
-          <CheckCircle2 className="h-6 w-6" />
-          <h2 className="text-xl font-bold tracking-tight text-foreground">{t("panels.done.ready")}</h2>
-        </div>
-        <p className="text-sm text-muted-foreground">{t("panels.review.taskReviewDescription")}</p>
-      </div>
-
+    <div className="flex min-h-full h-full w-full max-w-4xl mx-auto flex-col items-center justify-start gap-4 px-4 py-6 text-center overflow-y-auto min-h-0">
       {isMultiPart && videoUrls.length > 0 && (
-        <div className="flex items-center justify-center gap-2 bg-surface/80 p-1.5 rounded-xl border border-border">
+        <div className="flex items-center justify-center gap-2 bg-surface/80 p-1.5 rounded-xl border border-border shrink-0">
           <span className="text-xs font-semibold text-muted-foreground px-2">Seleccionar Parte:</span>
           {Array.from({ length: multiPartCount }).map((_, idx) => {
             const partNum = idx + 1;
@@ -112,20 +104,20 @@ export function DonePanel() {
       )}
 
       {videoUrls.length === 0 ? (
-        <div className="flex min-h-[300px] w-full max-w-md flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-surface p-8 text-sm text-muted-foreground gap-3">
+        <div className="flex min-h-[300px] w-full max-w-md flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-surface p-8 text-sm text-muted-foreground gap-3 shrink-0">
           <Loader2 className="h-10 w-10 text-muted/40 animate-pulse" />
           <span>{t("panels.done.none")}</span>
         </div>
       ) : (
         (() => {
           const videoAspect = useVideoStore.getState().video_aspect ?? "9:16";
-          let aspectClass = "aspect-[9/16] max-h-[520px]";
-          let maxWidthClass = "max-w-[300px] sm:max-w-[330px]";
+          let aspectClass = "aspect-[9/16]";
+          let maxWidthClass = "max-w-[300px] sm:max-w-[320px]";
           if (videoAspect === "16:9") {
-            aspectClass = "aspect-video max-h-[420px]";
+            aspectClass = "aspect-video";
             maxWidthClass = "max-w-xl sm:max-w-2xl";
           } else if (videoAspect === "1:1") {
-            aspectClass = "aspect-square max-h-[450px]";
+            aspectClass = "aspect-square";
             maxWidthClass = "max-w-sm sm:max-w-md";
           }
 
@@ -143,14 +135,14 @@ export function DonePanel() {
             return (
               <div
                 key={`${url}-${index}`}
-                className={`w-full ${maxWidthClass} mx-auto rounded-2xl overflow-hidden border border-border bg-neutral-900/60 shadow-2xl p-2.5 transition-all duration-300 hover:shadow-accent/5 hover:border-accent/20`}
+                className={`w-full ${maxWidthClass} shrink-0 mx-auto rounded-2xl overflow-hidden border border-border bg-neutral-900/60 shadow-2xl p-2.5 transition-all duration-300 hover:shadow-accent/5 hover:border-accent/20`}
               >
                 {isMultiPart && (
                   <div className="text-xs font-semibold text-accent px-3 py-1.5 text-left border-b border-border/40 mb-2 flex items-center justify-between">
                     <span>🎬 Parte {partNum} {isMultiPart && `- ${videoSubject}`}</span>
                   </div>
                 )}
-                <div className={`relative w-full rounded-xl overflow-hidden bg-black flex items-center justify-center ${aspectClass}`}>
+                <div className={`relative w-full shrink-0 rounded-xl overflow-hidden bg-black flex items-center justify-center ${aspectClass}`}>
                   <video
                     src={url}
                     controls
@@ -376,17 +368,6 @@ export function DonePanel() {
               <span className="truncate">{t("panels.done.makeAnother") || "Crear Otro"}</span>
             </Button>
           </div>
-
-          {(!youtube.linked || !tiktok.linked) && (
-            <div className="text-xs text-muted-foreground text-center bg-muted/30 py-3 px-4 rounded-xl border border-border/50 max-w-sm mx-auto space-y-1">
-              {!youtube.linked && (
-                <p>ℹ️ {t("panels.review.notLinkedYoutube")}</p>
-              )}
-              {!tiktok.linked && (
-                <p>ℹ️ TikTok no está vinculado. Vincúlalo en Ajustes para publicar directamente.</p>
-              )}
-            </div>
-          )}
         </div>
       )}
 

@@ -1,13 +1,15 @@
 // webui-react/src/components/panels/EditorPanel.tsx
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Eye } from "lucide-react";
+import { Eye, Clapperboard } from "lucide-react";
 import { VideoPreview } from "../editor/VideoPreview";
 import { ClipInspector } from "../editor/ClipInspector";
 import { Timeline } from "../editor/Timeline";
 import { Button } from "../ui";
 import { useProjectStore } from "../../store/useProjectStore";
 import { useProjectWorkspaceStore } from "../../store/useProjectWorkspaceStore";
+import { useVideoStore } from "../../store/useVideoStore";
+import { getClipsForPart } from "../../lib/partUtils";
 import type { EditCommand, TimelineItem } from "../../api/types";
 
 function isTypingTarget(target: EventTarget | null): boolean {
@@ -20,19 +22,39 @@ function isTypingTarget(target: EventTarget | null): boolean {
 export function EditorPanel() {
   const { t } = useTranslation();
   const projectStore = useProjectStore();
-  const { setPanel, videoUrls } = useProjectWorkspaceStore();
+  const videoStore = useVideoStore();
+  const { setPanel, videoUrls, activePartIndex, setActivePartIndex } = useProjectWorkspaceStore();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
+
+  const isMultiPart = videoStore.is_multi_part || (videoStore.multi_part_count ?? 1) > 1 || videoUrls.length > 1;
+  const multiPartCount = videoStore.multi_part_count ?? Math.max(videoUrls.length, 2);
+  const [selectedPart, setSelectedPart] = useState<number | "all">(activePartIndex || 1);
 
   const videoTrack = projectStore.project?.tracks.find((t) => t.type === "video");
   const audioTrack = projectStore.project?.tracks.find((t) => t.type === "audio");
   const subtitleTrack = projectStore.project?.tracks.find((t) => t.type === "subtitle");
-  const items: TimelineItem[] = videoTrack?.items ?? [];
+
+  const rawVideoItems: TimelineItem[] = videoTrack?.items ?? [];
+  const rawAudioItems: TimelineItem[] = audioTrack?.items ?? [];
+  const rawSubItems: TimelineItem[] = subtitleTrack?.items ?? [];
+
+  const videoItems = getClipsForPart(rawVideoItems, selectedPart, multiPartCount);
+  const audioItems = getClipsForPart(rawAudioItems, selectedPart, multiPartCount);
+  const subItems = getClipsForPart(rawSubItems, selectedPart, multiPartCount);
+
+  const scopedVideoTrack = videoTrack ? { ...videoTrack, items: videoItems } : undefined;
+  const scopedAudioTrack = audioTrack ? { ...audioTrack, items: audioItems } : undefined;
+  const scopedSubtitleTrack = subtitleTrack ? { ...subtitleTrack, items: subItems } : undefined;
+
+  const renderedVideoUrl = typeof selectedPart === "number"
+    ? (videoUrls[selectedPart - 1] || videoUrls[0])
+    : videoUrls[0];
 
   const allClips = [
-    ...(videoTrack?.items ?? []),
-    ...(audioTrack?.items ?? []),
-    ...(subtitleTrack?.items ?? []),
+    ...videoItems,
+    ...audioItems,
+    ...subItems,
   ];
   const selectedClip = allClips.find((c) => c.id === selectedId) ?? null;
 
@@ -123,10 +145,61 @@ export function EditorPanel() {
 
   return (
     <div className="flex flex-col h-full">
+      {/* Multi-part navigation header if isMultiPart */}
+      {isMultiPart && (
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-surface-2/60 px-4 py-2">
+          <div className="flex items-center gap-2">
+            <Clapperboard className="h-4 w-4 text-accent" />
+            <span className="text-xs font-bold text-foreground">
+              Seleccionar Parte ({multiPartCount} Partes):
+            </span>
+          </div>
+          <div className="flex items-center gap-1 bg-surface-3 p-1 rounded-xl border border-border">
+            {Array.from({ length: multiPartCount }).map((_, idx) => {
+              const partNum = idx + 1;
+              const isActive = selectedPart === partNum;
+              return (
+                <button
+                  key={partNum}
+                  type="button"
+                  onClick={() => {
+                    setSelectedPart(partNum);
+                    setActivePartIndex(partNum);
+                  }}
+                  className={`px-3 py-1 text-xs font-semibold rounded-lg transition-all ${
+                    isActive
+                      ? "bg-accent text-white shadow-xs"
+                      : "text-muted hover:text-foreground"
+                  }`}
+                >
+                  Parte {partNum}
+                </button>
+              );
+            })}
+            <button
+              type="button"
+              onClick={() => setSelectedPart("all")}
+              className={`px-3 py-1 text-xs font-semibold rounded-lg transition-all ${
+                selectedPart === "all"
+                  ? "bg-accent text-white shadow-xs"
+                  : "text-muted hover:text-foreground"
+              }`}
+            >
+              Ver Todo
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Top: preview + inspector */}
       <div className="flex flex-1 overflow-hidden">
         <div className="flex-[3] p-4 flex flex-col items-center justify-center h-full overflow-hidden">
-          <VideoPreview items={items} selectedId={selectedId} onTimeUpdate={setCurrentTime} />
+          <VideoPreview
+            items={videoItems}
+            selectedId={selectedId}
+            onTimeUpdate={setCurrentTime}
+            renderedVideoUrl={renderedVideoUrl}
+          />
         </div>
         <div className="flex-[2] border-l border-border overflow-y-auto">
           <ClipInspector
@@ -140,9 +213,9 @@ export function EditorPanel() {
 
       {/* Bottom: timeline */}
       <Timeline
-        videoTrack={videoTrack}
-        audioTrack={audioTrack}
-        subtitleTrack={subtitleTrack}
+        videoTrack={scopedVideoTrack}
+        audioTrack={scopedAudioTrack}
+        subtitleTrack={scopedSubtitleTrack}
         selectedId={selectedId}
         onSelect={setSelectedId}
         onReorder={handleReorder}
