@@ -49,6 +49,9 @@ export interface VideoParams {
   multi_part_count?: number;
   active_part_index?: number;
   multi_part_scripts?: string[];
+  hook_style?: string;
+  title_options?: string[];
+  selected_title?: string;
 }
 
 export const TASK_STATE_FAILED = -1 as const;

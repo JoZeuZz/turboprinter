@@ -930,19 +930,30 @@ async function startServer() {
 
   // 3. LLM APIs (Scripts & Terms)
   app.post("/api/v1/scripts", wrap(async (req: any, res: any) => {
-    const {
+    let {
       video_subject,
       video_language = "es",
       paragraph_number = 3,
       video_script_prompt = "",
       custom_system_prompt = "",
       is_multi_part = false,
-      parts_count = 2
+      parts_count = 2,
+      hook_style = "misterio"
     } = req.body;
 
     const llmProvider = process.env.LLM_PROVIDER || "gemini";
     if (llmProvider === "gemini" && !process.env.GEMINI_API_KEY) {
       throw new Error("No Gemini API key configured. Please set GEMINI_API_KEY.");
+    }
+
+    const hookDirectives: Record<string, string> = {
+      misterio: "\n\n[ESTILO DE GANCHO DE APERTURA: MISTERIO IMPACTANTE]: Comienza la historia desde la primera frase con un secreto inquietante, un misterio perturbador o una revelación directa que ponga en duda lo cotidiano y atrape al espectador en los primeros 3 segundos.",
+      confesion: "\n\n[ESTILO DE GANCHO DE APERTURA: CONFESIÓN EN 1ª PERSONA]: Comienza la historia en primera persona confesando de inmediato un hecho personal drástico, perturbador o un descubrimiento grave ('Nunca debí investigar a mi vecino...', 'Hoy descubrí algo aterrador en mi propia casa...').",
+      pregunta: "\n\n[ESTILO DE GANCHO DE APERTURA: PREGUNTA DIRECTA]: Comienza la historia lanzando una pregunta o cuestionamiento inquietante directamente al espectador que cuestione su seguridad o sus creencias desde el segundo 0:00.",
+    };
+
+    if (hook_style && hookDirectives[hook_style]) {
+      video_script_prompt = (video_script_prompt ? video_script_prompt + "\n" : "") + hookDirectives[hook_style];
     }
 
     let prompt = "";
@@ -1031,6 +1042,25 @@ RESTRICCIONES DE FORMATO PARA TEXT-TO-SPEECH (CRÍTICO):
 
     const rawScript = await generateLlmContent(prompt, false, finalSystemPrompt || undefined);
 
+    let title_options: string[] = [];
+    try {
+      const titlePrompt = `Basándote en el tema "${video_subject}" y en este fragmento del guión: "${(rawScript || "").substring(0, 300)}...", genera EXACTAMENTE 3 opciones de títulos virales, sumamente llamativos e intrigantes (máximo 60 caracteres cada uno, en español) ideales para TikTok y YouTube Shorts.
+Devuelve únicamente un JSON válido con la estructura:
+{"title_options": ["Título Opción 1", "Título Opción 2", "Título Opción 3"]}`;
+      const titleJsonRaw = await generateLlmContent(titlePrompt, true);
+      const parsedTitleObj = JSON.parse(titleJsonRaw);
+      if (parsedTitleObj && Array.isArray(parsedTitleObj.title_options) && parsedTitleObj.title_options.length > 0) {
+        title_options = parsedTitleObj.title_options.slice(0, 3).map((s: string) => String(s).trim());
+      }
+    } catch (e) {
+      console.warn("[LLM] Failed to generate title options, falling back to defaults:", e);
+      title_options = [
+        `${video_subject} - Caso Real`,
+        `El Secreto Oculto de ${video_subject}`,
+        `Lo que no te contaron sobre ${video_subject}`
+      ];
+    }
+
     if (is_multi_part) {
       // Split rawScript by separator markers
       const rawParts = rawScript.split(/---+\s*PARTE\s*\d+\s*---+/i).map((p) => cleanScriptSymbols(p).trim()).filter(Boolean);
@@ -1048,13 +1078,14 @@ RESTRICCIONES DE FORMATO PARA TEXT-TO-SPEECH (CRÍTICO):
         data: {
           video_script: fullScriptText,
           multi_part_scripts,
+          title_options,
         }
       });
       return;
     }
 
     const scriptText = cleanScriptSymbols(rawScript);
-    res.json({ status: 200, message: "ok", data: { video_script: scriptText } });
+    res.json({ status: 200, message: "ok", data: { video_script: scriptText, title_options } });
   }));
 
   app.post("/api/v1/terms", wrap(async (req: any, res: any) => {

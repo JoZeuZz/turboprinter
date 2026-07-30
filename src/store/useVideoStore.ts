@@ -49,6 +49,9 @@ const DEFAULTS: VideoParams & VideoStoreExtras = {
   multi_part_count: 2,
   active_part_index: 1,
   multi_part_scripts: [],
+  hook_style: "misterio",
+  title_options: [],
+  selected_title: "",
   tts_provider: "azure-tts-v1",
   preview_text: "Este es un texto de ejemplo para probar la sintesis de voz.",
 };

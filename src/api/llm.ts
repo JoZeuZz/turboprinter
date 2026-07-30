@@ -8,6 +8,7 @@ export interface ScriptRequest {
   custom_system_prompt?: string;
   is_multi_part?: boolean;
   parts_count?: number;
+  hook_style?: string;
 }
 
 export interface TermsRequest {
@@ -18,7 +19,7 @@ export interface TermsRequest {
 
 export const llmApi = {
   generateScript: (params: ScriptRequest) =>
-    apiFetch<{ video_script: string; multi_part_scripts?: string[] }>("/scripts", {
+    apiFetch<{ video_script: string; multi_part_scripts?: string[]; title_options?: string[] }>("/scripts", {
       method: "POST",
       body: JSON.stringify(params),
     }),

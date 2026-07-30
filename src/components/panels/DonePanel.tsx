@@ -32,9 +32,13 @@ export function DonePanel() {
     const partToUse = partIndex !== undefined ? partIndex : currentPartNum;
     const urlToUse = videoUrls[partToUse - 1] || videoUrls[0];
     setTargetVideoUrl(urlToUse);
+    const baseTitle = videoStore.selected_title || videoSubject;
     if (isMultiPart) {
-      youtube.setTitle(`${videoSubject} - Parte ${partToUse}`);
-      youtube.setDescription(`#parte${partToUse} #historia #${videoSubject.replace(/\s+/g, "")}`);
+      youtube.setTitle(`${baseTitle} (Parte ${partToUse}/${multiPartCount})`);
+      youtube.setDescription(`📌 Parte ${partToUse} de ${multiPartCount}. ¿Crees que esto fue real? Suscríbete para no perderte las siguientes partes.\n\n#HistoriasDeReddit #CasosReales #Suspenso #Shorts #Viral`);
+    } else {
+      youtube.setTitle(baseTitle);
+      youtube.setDescription(`¿Crees que esto fue real? Suscríbete para más historias impactantes.\n\n#HistoriasDeReddit #CasosReales #Suspenso #Shorts #Viral`);
     }
     setIsModalOpen(true);
   };
@@ -43,8 +47,11 @@ export function DonePanel() {
     const partToUse = partIndex !== undefined ? partIndex : currentPartNum;
     const urlToUse = videoUrls[partToUse - 1] || videoUrls[0];
     setTargetVideoUrl(urlToUse);
+    const baseTitle = videoStore.selected_title || videoSubject;
     if (isMultiPart) {
-      tiktok.setTitle(`${videoSubject} - Parte ${partToUse} #parte${partToUse} #historia #parati`);
+      tiktok.setTitle(`${baseTitle} (Parte ${partToUse}/${multiPartCount}) #HistoriasDeReddit #CasosReales #Suspenso #Shorts #Viral`);
+    } else {
+      tiktok.setTitle(`${baseTitle} #HistoriasDeReddit #CasosReales #Suspenso #Shorts #Viral`);
     }
     setIsTiktokModalOpen(true);
   };
