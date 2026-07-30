@@ -280,6 +280,9 @@ function cleanScriptSymbols(text: string): string {
   return text
     // Convert literal backslash-n strings ("\n") into real newlines if returned by LLM
     .replace(/\\n/g, "\n")
+    // Remove part separator lines like "--- PARTE 2 ---" or "--- PARTE 2"
+    .replace(/---+\s*PARTE\s*\d+\s*---+/gi, "")
+    .replace(/---+\s*PARTE\s*\d+/gi, "")
     // Remove asterisks (*) and underscores (_) used for markdown bold/italic
     .replace(/[\*_]/g, "")
     // Remove various types of quotation marks: ", “, ”, «, », ‘, ’, '
@@ -289,6 +292,101 @@ function cleanScriptSymbols(text: string): string {
     // Clean up any double spaces that might have been introduced
     .replace(/ {2,}/g, " ")
     .trim();
+}
+
+function ensurePartHeader(scriptText: string, partNum: number, subject: string): string {
+  if (partNum <= 1) return scriptText;
+  const cleanSubject = (subject || "").trim();
+  let trimmed = (scriptText || "").trim();
+
+  // Strip out raw "Parte X:" or "Parte X -" or "--- PARTE X ---" prefix if present
+  trimmed = trimmed.replace(new RegExp(`^(---+\\s*)?parte\\s*#?\\s*${partNum}\\s*[-:]*\\s*(---+\\s*)?`, "i"), "").trim();
+
+  // Check if it already starts with title + parte X (e.g. "Mi familia no es quien dice ser, parte 2")
+  if (cleanSubject) {
+    const fullRegex = new RegExp(`^${cleanSubject.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*,?\\s*parte\\s*#?\\s*${partNum}`, "i");
+    if (fullRegex.test(trimmed)) {
+      return trimmed;
+    }
+  } else {
+    const simpleRegex = new RegExp(`^parte\\s*#?\\s*${partNum}`, "i");
+    if (simpleRegex.test(trimmed)) {
+      return trimmed;
+    }
+  }
+
+  const header = cleanSubject ? `${cleanSubject}, parte ${partNum}, ` : `Parte ${partNum}, `;
+  return header + trimmed;
+}
+
+interface SentencePart {
+  text: string;
+  partIndex: number;
+}
+
+function extractSentencesWithParts(p: any): SentencePart[] {
+  const scriptHasParts = Boolean(p.script && p.script.match(/---+\s*PARTE\s*\d+\s*---+/i));
+  const isMultiPart = Boolean(p.params?.is_multi_part || p.is_multi_part || scriptHasParts);
+
+  const cleanBlock = (text: string) => {
+    return (text || "")
+      .replace(/---+\s*PARTE\s*\d+\s*---+/gi, "")
+      .replace(/---+\s*PARTE\s*\d+/gi, "")
+      .trim();
+  };
+
+  if (isMultiPart) {
+    let rawParts: string[] = [];
+    if (p.params?.multi_part_scripts && Array.isArray(p.params.multi_part_scripts) && p.params.multi_part_scripts.length > 0) {
+      rawParts = p.params.multi_part_scripts.map((s: string) => cleanBlock(s)).filter(Boolean);
+    } else if (scriptHasParts) {
+      rawParts = (p.script || "")
+        .split(/---+\s*PARTE\s*\d+\s*---+/i)
+        .map((s: string) => cleanBlock(s))
+        .filter(Boolean);
+    }
+
+    if (rawParts.length > 0) {
+      const results: SentencePart[] = [];
+      const subject = p.video_subject || p.topic || p.params?.video_subject || "";
+      rawParts.forEach((partText, pIdx) => {
+        const partNum = pIdx + 1;
+        const cleanedPartText = ensurePartHeader(cleanScriptSymbols(partText), partNum, subject);
+        const partSentences = cleanedPartText
+          .split(/[.!?]+/)
+          .map((s: string) => s.trim())
+          .filter((s: string) => s.length > 3);
+
+        if (partSentences.length === 0 && cleanedPartText.length > 0) {
+          partSentences.push(cleanedPartText);
+        }
+
+        partSentences.forEach((sentence) => {
+          results.push({
+            text: sentence,
+            partIndex: partNum,
+          });
+        });
+      });
+      if (results.length > 0) return results;
+    }
+  }
+
+  // Single part fallback
+  const cleanScript = cleanScriptSymbols(cleanBlock(p.script || p.topic || ""));
+  const sentences = cleanScript
+    .split(/[.!?]+/)
+    .map((s: string) => s.trim())
+    .filter((s: string) => s.length > 3);
+
+  if (sentences.length === 0) {
+    sentences.push(cleanScript || "Esto es un video de prueba de generación.");
+  }
+
+  return sentences.map((sentence) => ({
+    text: sentence,
+    partIndex: 1,
+  }));
 }
 
 function sanitizeFolderName(name: string): string {
@@ -865,10 +963,11 @@ ESTRUCTURA Y CONTEXTO POR PARTE:
    - Integra la premisa central ("${video_subject}") de forma natural, fluida y gramaticalmente impecable. Adapta la sintaxis si el texto del tema es tosco o tiene palabras repetidas (ej: usa "Sospecho seriamente que el papá de la novia de mi hermano es un asesino a sueldo" en lugar de redundancias o frases mal construidas).
    - La Parte 1 debe avanzar en tensión y culminar exactamente en el punto de máxima tensión o peligro inminente (cliffhanger).
 
-2. TRANSICIONES ENTRE PARTES (ORDEN SECUENCIAL EXACTO):
-   - La PARTE 2 debe comenzar obligatoriamente REPETIENDO O RETOMANDO TEXTUALMENTE las últimas 2 a 3 oraciones completas del final de la PARTE 1.
-   - ¡MUY IMPORTANTE!: Debes mantener EXACTAMENTE EL MISMO ORDEN SECUENCIAL Y CRONOLÓGICO de las oraciones (Oración 1, luego Oración 2, luego Oración 3). NO inviertas ni desordenes las oraciones.
-${numParts === 3 ? '   - La PARTE 3 debe comenzar de la misma manera, REPETIENDO O RETOMANDO TEXTUALMENTE en el mismo orden cronológico las últimas 2 a 3 oraciones completas del final de la PARTE 2.\n' : ""}
+2. ENCABEZADO Y COMIENZO DE CADA PARTE (CRÍTICO Y OBLIGATORIO):
+   - PARTE 1: Comienza directamente con la historia y el gancho demoledor inicial sobre "${video_subject}".
+   - PARTE 2 (y PARTE 3 si aplica, es decir, cada PARTE X donde X >= 2): DEBE comenzar OBLIGATORIAMENTE diciendo el título del video/proyecto seguido de ', parte X,' y luego continuar con la historia.
+     Ejemplo exacto: Si el tema es "${video_subject}", la primera oración de la Parte 2 DEBE ser: "${video_subject}, parte 2, [continuación de la historia...]" (y para la Parte 3: "${video_subject}, parte 3, [continuación de la historia...]").
+   - NO agregues introducciones adicionales, resúmenes ni repeticiones del final de la Parte 1. Entra directo a la continuación inmediatamente después de la frase inicial "${video_subject}, parte X,".
 3. DESENLACE SATISFACTORIO EN LA PARTE FINAL:
 ${numParts === 2 ? `   - PARTE 2 (PARTE FINAL Y DESENLACE): Mantiene la tensión en la primera mitad, pero en los párrafos finales DEBE conducir la historia hacia una CONCLUSIÓN DEFINITIVA Y SATISFACTORIA. No dejes la historia inconclusa ni en un suspenso abierto (ej: NO termines solo descubriendo una foto o un objeto sin resolver qué pasa después). Cierra el conflicto central con una confrontación, una decisión drástica o una revelación final resolutiva que deje la historia 100% concluida.` : `   - PARTE 2: Mantiene la tensión alta, profundiza la investigación con descubrimientos lógicos y culmina en un segundo giro o suspenso (cliffhanger).\n   - PARTE 3 (PARTE FINAL Y DESENLACE): Desarrolla el clímax y conduce la historia hacia una CONCLUSIÓN DEFINITIVA Y SATISFACTORIA. Resuelve el conflicto central de forma clara y resolutiva, asegurando que el espectador reciba un cierre total sin dejar la historia a medias.`}
 
@@ -931,7 +1030,8 @@ RESTRICCIONES DE FORMATO PARA TEXT-TO-SPEECH (CRÍTICO):
     if (is_multi_part) {
       // Split rawScript by separator markers
       const rawParts = rawScript.split(/---+\s*PARTE\s*\d+\s*---+/i).map((p) => cleanScriptSymbols(p).trim()).filter(Boolean);
-      const multi_part_scripts = rawParts.length > 0 ? rawParts : [cleanScriptSymbols(rawScript)];
+      const multi_part_scripts = (rawParts.length > 0 ? rawParts : [cleanScriptSymbols(rawScript)])
+        .map((partText, idx) => ensurePartHeader(partText, idx + 1, video_subject));
       
       // Reconstruct combined script with clear part markers
       const fullScriptText = multi_part_scripts.map((script, idx) => {
@@ -1761,10 +1861,8 @@ CRÍTICO: No utilices NINGÚN tipo de formato de texto como asteriscos (* o **),
 
     const clipDuration = Number(req.body.target_duration_sec) || Number(p.params?.video_clip_duration) || 5;
 
-    const sentences = (p.script || p.topic || "")
-      .split(/[.!?]+/)
-      .map((s: string) => s.trim())
-      .filter((s: string) => s.length > 5);
+    const sentenceParts = extractSentencesWithParts(p);
+    const sentences = sentenceParts.map((sp) => sp.text);
 
     const rawTerms = p.params?.video_terms || p.video_terms || "";
     let userTerms: string[] = [];
@@ -1812,16 +1910,9 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
       }
     }
 
-    const scriptHasParts = Boolean(p.script && p.script.match(/---+\s*PARTE\s*\d+\s*---+/i));
-    const isMultiPart = Boolean(p.params?.is_multi_part || p.is_multi_part || scriptHasParts);
-
-    // Compute sentence-to-part mapping if multi-part
-    const rawParts = scriptHasParts
-      ? (p.script || "").split(/---+\s*PARTE\s*\d+\s*---+/i).map((s: string) => s.trim()).filter(Boolean)
-      : [];
-    const numParts = isMultiPart ? Math.max(rawParts.length, Number(p.params?.multi_part_count) || 2) : 1;
-
-    const segments = sentences.map((sentence: string, idx: number) => {
+    const segments = sentenceParts.map((sp, idx) => {
+      const sentence = sp.text;
+      const partIndex = sp.partIndex;
       let segmentQueries: string[] = [];
 
       if (hasGeminiQueries && searchQueriesForSegments[idx]) {
@@ -1858,25 +1949,6 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
 
       // Ensure queries are cleaned, trimmed and unique
       segmentQueries = Array.from(new Set(segmentQueries.map(q => q.trim()).filter(Boolean)));
-
-      // Calculate part_index for multi-part scripts
-      let partIndex = 1;
-      if (isMultiPart) {
-        if (rawParts.length > 1) {
-          let accum = 0;
-          for (let pI = 0; pI < rawParts.length; pI++) {
-            const pSentences = rawParts[pI].split(/[.!?]+/).map((s: string) => s.trim()).filter((s: string) => s.length > 5);
-            if (idx < accum + pSentences.length) {
-              partIndex = pI + 1;
-              break;
-            }
-            accum += pSentences.length;
-          }
-        } else {
-          const chunkSize = Math.ceil(sentences.length / numParts);
-          partIndex = Math.min(Math.floor(idx / chunkSize) + 1, numParts);
-        }
-      }
 
       return {
         id: `seg_${idx + 1}`,
@@ -2489,20 +2561,13 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
     // Ensure we have planned segments
     let segments = p.shot_plan?.segments || [];
     if (segments.length === 0) {
-      const sentences = (p.script || p.topic || "")
-        .split(/[.!?]+/)
-        .map((s: string) => s.trim())
-        .filter((s: string) => s.length > 5);
-
-      if (sentences.length === 0) {
-        sentences.push("Esto es un video de prueba de generación.");
-      }
-
-      segments = sentences.map((sentence: string, idx: number) => ({
+      const sentenceParts = extractSentencesWithParts(p);
+      segments = sentenceParts.map((sp, idx) => ({
         id: `seg_${idx + 1}`,
         order: idx + 1,
-        narration_text: sentence,
-        search_queries: sentence.split(" ").slice(0, 2).map(w => w.replace(/[^a-zA-Z]/g, "")).filter(w => w.length > 2)
+        narration_text: sp.text,
+        part_index: sp.partIndex,
+        search_queries: sp.text.split(" ").slice(0, 2).map(w => w.replace(/[^a-zA-Z]/g, "")).filter(w => w.length > 2)
       }));
 
       p.shot_plan = p.shot_plan || {};

@@ -264,7 +264,14 @@ export const splitTextIntoTikTokSubtitles = (
 ): SplitSubtitleCue[] => {
   if (!text || !text.trim()) return [];
 
-  const cleanText = text.trim().replace(/\s+/g, " ");
+  const cleanText = text
+    .replace(/\\n/g, " ")
+    .replace(/---+\s*PARTE\s*\d+\s*---+/gi, "")
+    .replace(/---+\s*PARTE\s*\d+/gi, "")
+    .trim()
+    .replace(/\s+/g, " ");
+
+  if (!cleanText) return [];
 
   // Check if the text is predominantly CJK (no spaces, or very few)
   const isCJK =
