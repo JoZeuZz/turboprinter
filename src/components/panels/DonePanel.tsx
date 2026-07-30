@@ -21,6 +21,7 @@ export function DonePanel() {
   const multiPartCount = videoStore.multi_part_count || Math.max(videoUrls.length, 2);
 
   const [selectedPart, setSelectedPart] = useState<number | "all">(1);
+  const [targetVideoUrl, setTargetVideoUrl] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isTiktokModalOpen, setIsTiktokModalOpen] = useState(false);
 
@@ -29,6 +30,8 @@ export function DonePanel() {
 
   const handleOpenYoutubeModal = (partIndex?: number) => {
     const partToUse = partIndex !== undefined ? partIndex : currentPartNum;
+    const urlToUse = videoUrls[partToUse - 1] || videoUrls[0];
+    setTargetVideoUrl(urlToUse);
     if (isMultiPart) {
       youtube.setTitle(`${videoSubject} - Parte ${partToUse}`);
       youtube.setDescription(`#parte${partToUse} #historia #${videoSubject.replace(/\s+/g, "")}`);
@@ -38,6 +41,8 @@ export function DonePanel() {
 
   const handleOpenTiktokModal = (partIndex?: number) => {
     const partToUse = partIndex !== undefined ? partIndex : currentPartNum;
+    const urlToUse = videoUrls[partToUse - 1] || videoUrls[0];
+    setTargetVideoUrl(urlToUse);
     if (isMultiPart) {
       tiktok.setTitle(`${videoSubject} - Parte ${partToUse} #parte${partToUse} #historia #parati`);
     }
@@ -114,8 +119,8 @@ export function DonePanel() {
       ) : (
         (() => {
           const videoAspect = useVideoStore.getState().video_aspect ?? "9:16";
-          let aspectClass = "aspect-[9/16] max-h-[500px]";
-          let maxWidthClass = "max-w-sm sm:max-w-md";
+          let aspectClass = "aspect-[9/16] max-h-[520px]";
+          let maxWidthClass = "max-w-[300px] sm:max-w-[330px]";
           if (videoAspect === "16:9") {
             aspectClass = "aspect-video max-h-[420px]";
             maxWidthClass = "max-w-xl sm:max-w-2xl";
@@ -138,19 +143,19 @@ export function DonePanel() {
             return (
               <div
                 key={`${url}-${index}`}
-                className={`w-full ${maxWidthClass} mx-auto rounded-2xl overflow-hidden border border-border bg-neutral-900/60 shadow-2xl p-2 transition-all duration-300 hover:shadow-accent/5 hover:border-accent/20`}
+                className={`w-full ${maxWidthClass} mx-auto rounded-2xl overflow-hidden border border-border bg-neutral-900/60 shadow-2xl p-2.5 transition-all duration-300 hover:shadow-accent/5 hover:border-accent/20`}
               >
                 {isMultiPart && (
-                  <div className="text-xs font-semibold text-accent px-3 py-1.5 text-left border-b border-border/40 mb-1 flex items-center justify-between">
+                  <div className="text-xs font-semibold text-accent px-3 py-1.5 text-left border-b border-border/40 mb-2 flex items-center justify-between">
                     <span>🎬 Parte {partNum} {isMultiPart && `- ${videoSubject}`}</span>
                   </div>
                 )}
-                <div className={`relative rounded-xl overflow-hidden bg-black flex items-center justify-center ${aspectClass}`} style={{ display: "contents" }}>
+                <div className={`relative w-full rounded-xl overflow-hidden bg-black flex items-center justify-center ${aspectClass}`}>
                   <video
                     src={url}
                     controls
                     {...{ referrerPolicy: "no-referrer" }}
-                    className="w-full h-full object-contain mx-auto block"
+                    className="w-full h-full object-contain mx-auto block rounded-lg"
                   />
                 </div>
                 <div className="flex items-center justify-between gap-2 px-3 py-3 border-t border-border/50 mt-2 bg-surface/30 rounded-lg">
@@ -527,7 +532,7 @@ export function DonePanel() {
               <Button
                 onClick={() => {
                   setIsModalOpen(false);
-                  youtube.upload();
+                  youtube.upload(targetVideoUrl || undefined);
                 }}
                 className="bg-red-600 hover:bg-red-700 text-white text-xs py-1.5 h-9"
               >
@@ -627,7 +632,7 @@ export function DonePanel() {
               <Button
                 onClick={() => {
                   setIsTiktokModalOpen(false);
-                  tiktok.upload();
+                  tiktok.upload(targetVideoUrl || undefined);
                 }}
                 className="bg-cyan-500 hover:bg-cyan-600 text-zinc-950 text-xs py-1.5 h-9 font-bold"
               >

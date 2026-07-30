@@ -170,8 +170,9 @@ export function useYouTubePublish() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [channelStatus.linked, hashtags.hasKeywords]);
 
-  const upload = useCallback(async () => {
+  const upload = useCallback(async (customVideoUrl?: string) => {
     if (!channelStatus.linked || videoUrls.length === 0) return;
+    const targetUrl = customVideoUrl || videoUrls[0];
     await lifecycle.run(async () => {
       let publishAt: string | undefined = undefined;
       if (mode === "schedule") {
@@ -180,7 +181,7 @@ export function useYouTubePublish() {
         publishAt = new Date(year, month - 1, day, hour, minute).toISOString();
       }
       const res = await videoApi.uploadToYouTube({
-        videoUrl: videoUrls[0],
+        videoUrl: targetUrl,
         title: title || "YouTube Short",
         description: description || "",
         privacyStatus: mode === "now" ? privacy : "private",
@@ -233,11 +234,12 @@ export function useTikTokPublish() {
   const [title, setTitle] = useState(() => deriveShortTitle(videoSubject, "Mi TikTok Video"));
   const lifecycle = useUploadLifecycle();
 
-  const upload = useCallback(async () => {
+  const upload = useCallback(async (customVideoUrl?: string) => {
     if (!channelStatus.linked || videoUrls.length === 0) return;
+    const targetUrl = customVideoUrl || videoUrls[0];
     await lifecycle.run(async () => {
       const res = await videoApi.uploadToTikTok({
-        videoUrl: videoUrls[0],
+        videoUrl: targetUrl,
         title: title || "TikTok Video",
       });
       return res.url || null;

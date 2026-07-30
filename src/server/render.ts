@@ -314,15 +314,14 @@ export function createRenderer(deps: RenderDeps) {
   const { projects, tasks, logTask, localVideosDir, bgmFiles } = deps;
 
   const runRealRender = async (projectId: string, taskId: string) => {
-    const updateTaskState = (progress: number, outputPath: string | null, error: string | null, state: number = 4) => {
-      const t = tasks.get(taskId);
-      if (t) {
-        t.progress = progress;
-        t.state = state;
-        t.output_path = outputPath;
-        t.error = error;
-        tasks.set(taskId, t);
-      }
+    const updateTaskState = (progress: number, outputPath: string | null, error: string | null, state: number = 4, outputPaths?: string[]) => {
+      const t = tasks.get(taskId) || {};
+      t.progress = progress;
+      t.state = state;
+      t.output_path = outputPath;
+      if (outputPaths) t.output_paths = outputPaths;
+      t.error = error;
+      tasks.set(taskId, t);
     };
 
     try {
@@ -738,170 +737,227 @@ export function createRenderer(deps: RenderDeps) {
         updateTaskState(Math.floor(40 + (i / clips.length) * 20), null, null);
       }
 
-      logTask(taskId, "INFO", "COMPOSITION", "Combining video 1/1");
-      updateTaskState(65, null, null);
+      const scriptHasParts = Boolean(p.script && p.script.match(/---+\s*PARTE\s*\d+\s*---+/i));
+      const isMultiPart = Boolean(
+        p.params?.is_multi_part ||
+        p.is_multi_part ||
+        (p.params?.multi_part_scripts && p.params.multi_part_scripts.length > 1) ||
+        scriptHasParts
+      );
 
-      // Concatenate
-      const concatFilePath = path.join(cacheDir, `concat_${taskId}.txt`);
-      const concatContent = formattedClips.map(f => `file '${f.replace(/\\/g, "/")}'`).join("\n");
-      await fs.promises.writeFile(concatFilePath, concatContent, "utf8");
-
-      const concatOutput = path.join(cacheDir, `concatenated_${taskId}.mp4`);
-      const concatCmd = `ffmpeg -y -f concat -safe 0 -i "${concatFilePath}" -c copy "${concatOutput}"`;
-      await executeCommand(concatCmd);
-      updateTaskState(75, null, null);
-
-      logTask(taskId, "INFO", "AUDIO_MIXER", "Applying audio and subtitles 1/1");
-      updateTaskState(80, null, null);
-
-      // Retrieve exact duration of narration audio to trim final render if needed
-      let narrationDuration = 0;
-      if (localNarrationPath && fs.existsSync(localNarrationPath)) {
-        try {
-          const durationStr = await executeCommand(`ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${localNarrationPath}"`, PROBE_COMMAND_TIMEOUT_MS);
-          const d = parseFloat(durationStr.trim());
-          if (!isNaN(d) && d > 0) {
-            narrationDuration = d;
-          }
-        } catch (e) {
-          console.error("[Renderer] Failed to get narration duration:", e);
+      let multiPartCount = 1;
+      if (isMultiPart) {
+        if (p.params?.multi_part_scripts?.length) {
+          multiPartCount = p.params.multi_part_scripts.length;
+        } else if (scriptHasParts) {
+          const rawParts = p.script.split(/---+\s*PARTE\s*\d+\s*---+/i).map((s: string) => s.trim()).filter(Boolean);
+          multiPartCount = Math.max(rawParts.length, 2);
+        } else {
+          multiPartCount = Number(p.params?.multi_part_count) || Number(p.multi_part_count) || 2;
         }
       }
 
-      // Mix Audio
-      const audioMixedOutput = path.join(cacheDir, `audio_mixed_${taskId}.mp4`);
-      const audioInputs: string[] = [];
+      logTask(taskId, "INFO", "COMPOSITION", `Combining video (${multiPartCount} part${multiPartCount > 1 ? "s" : ""})`);
+      updateTaskState(65, null, null);
 
+      // Partition formatted clips per part
+      const formattedByPart: { path: string; duration: number }[][] = Array.from({ length: multiPartCount }, () => []);
+      const clipHasPartIndex = clips.some((c: any) => c.part_index);
+
+      if (clipHasPartIndex) {
+        for (let i = 0; i < clips.length; i++) {
+          const clip = clips[i];
+          const pIdx = Math.min(Math.max((clip.part_index || 1) - 1, 0), multiPartCount - 1);
+          formattedByPart[pIdx].push({
+            path: formattedClips[i],
+            duration: Number(clip.duration_sec) || 5
+          });
+        }
+      } else {
+        const chunkSize = Math.max(1, Math.ceil(clips.length / multiPartCount));
+        for (let i = 0; i < clips.length; i++) {
+          const pIdx = Math.min(Math.floor(i / chunkSize), multiPartCount - 1);
+          formattedByPart[pIdx].push({
+            path: formattedClips[i],
+            duration: Number(clips[i].duration_sec) || 5
+          });
+        }
+      }
+
+      // Ensure no part has 0 clips
+      for (let pIdx = 0; pIdx < multiPartCount; pIdx++) {
+        if (formattedByPart[pIdx].length === 0 && formattedClips.length > 0) {
+          formattedByPart[pIdx].push({ path: formattedClips[0], duration: 5 });
+        }
+      }
+
+      const finalUrls: string[] = [];
       const voiceVolume = p.params?.voice_volume !== undefined ? p.params.voice_volume : (p.voice_volume !== undefined ? p.voice_volume : 1.0);
       const musicVolume = musicItem?.volume !== undefined ? musicItem.volume : (p.params?.bgm_volume !== undefined ? p.params.bgm_volume : (p.bgm_volume !== undefined ? p.bgm_volume : 0.2));
-
-      if (localNarrationPath) {
-        audioInputs.push(`-i "${localNarrationPath}"`);
-      }
-      if (localMusicPath) {
-        audioInputs.push(`-stream_loop -1 -i "${localMusicPath}"`);
-      }
-      const audioFilter = buildAudioMixFilter(Boolean(localNarrationPath), Boolean(localMusicPath), voiceVolume, musicVolume);
-
-      const limitDurationOpt = buildMixDurationArgs(Boolean(localNarrationPath), narrationDuration);
-      const buildMixCmd = (filter: string): string =>
-        `ffmpeg -y -i "${concatOutput}" ${audioInputs.join(" ")} -filter_complex "${filter}" -map 0:v -map "[a]" -c:v copy -c:a aac ${limitDurationOpt} "${audioMixedOutput}"`;
-
-      let mixCmd = "";
-      if (audioFilter) {
-        mixCmd = buildMixCmd(audioFilter);
-      } else {
-        mixCmd = `ffmpeg -y -i "${concatOutput}" -f lavfi -i anullsrc=r=44100:cl=stereo -c:v copy -c:a aac -shortest ${limitDurationOpt} "${audioMixedOutput}"`;
-      }
-
-      try {
-        await executeCommand(mixCmd);
-      } catch (err: any) {
-        const isDucked = audioFilter.includes("sidechaincompress");
-        if (!isDucked) throw err;
-        // Some FFmpeg builds ship without sidechaincompress. Fall back to the
-        // flat mix rather than losing the whole render.
-        logTask(taskId, "WARNING", "RENDER", "BGM ducking unavailable, falling back to a flat audio mix.");
-        const flatFilter = buildAudioMixFilter(
-          Boolean(localNarrationPath),
-          Boolean(localMusicPath),
-          voiceVolume,
-          musicVolume,
-          0
-        );
-        await executeCommand(buildMixCmd(flatFilter));
-      }
-      updateTaskState(90, null, null);
-
-      // Burn Subtitles
-      let subtitles = subtitleTrack?.items || [];
-      if (subtitles.length === 0 && p.shot_plan?.segments) {
-        console.log(`[Renderer] Subtitle track was empty, falling back to shot_plan segments (${p.shot_plan.segments.length} items)`);
-        const fallbackSubtitles: any[] = [];
-        p.shot_plan.segments.forEach((seg: any, idx: number) => {
-          const startSec = seg.start_sec !== undefined ? seg.start_sec : idx * 5;
-          const durationSec = seg.target_duration_sec !== undefined ? seg.target_duration_sec : 5;
-          const splitItems = splitTextIntoTikTokSubtitles(seg.narration_text || "", startSec, durationSec, seg.id, `sub_fallback_${idx + 1}`);
-          fallbackSubtitles.push(...splitItems);
-        });
-        subtitles = fallbackSubtitles;
-      }
-      let finalOutputPath = audioMixedOutput;
       const pParams = p.params || {};
       const subtitleEnabledParam = pParams.subtitle_enabled !== undefined ? pParams.subtitle_enabled : (p.subtitle_enabled !== undefined ? p.subtitle_enabled : true);
 
-      if (subtitles.length > 0 && subtitleEnabledParam) {
-        // Write custom fonts.conf for fontconfig / libass
-        const fontsConfPath = path.join(cacheDir, `fonts_${taskId}.conf`);
-        await fs.promises.writeFile(fontsConfPath, buildFontsConf(process.cwd(), taskId), "utf8");
+      for (let pIdx = 0; pIdx < multiPartCount; pIdx++) {
+        const partNum = pIdx + 1;
+        const partClips = formattedByPart[pIdx];
 
-        // Set FONTCONFIG_FILE and FONTCONFIG_PATH in environment variables for ffmpeg
-        process.env.FONTCONFIG_FILE = fontsConfPath;
-        process.env.FONTCONFIG_PATH = cacheDir;
+        logTask(taskId, "INFO", "COMPOSITION", `Processing Part ${partNum}/${multiPartCount}...`);
 
-        const fontNameParam = pParams.font_name || p.font_name || "STHeitiMedium.ttc";
-        const fontSizeParam = pParams.font_size || p.font_size || 60;
-        const textColorParam = pParams.text_fore_color || p.text_fore_color || "#FFFFFF";
-        const strokeColorParam = pParams.stroke_color || p.stroke_color || "#000000";
-        const strokeWidthParam = pParams.stroke_width !== undefined ? pParams.stroke_width : (p.stroke_width !== undefined ? p.stroke_width : 1.5);
-        const hasBgParam = pParams.text_background_color !== undefined ? pParams.text_background_color : (p.text_background_color !== undefined ? p.text_background_color : true);
-        const subtitlePosParam = pParams.subtitle_position || p.subtitle_position || "bottom";
-        const customPosParam = pParams.custom_position !== undefined ? pParams.custom_position : (p.custom_position !== undefined ? p.custom_position : 70);
-        const subtitleBgStyleParam = pParams.subtitle_bg_style || p.subtitle_bg_style || "solid";
-        const roundedBgParam = pParams.rounded_subtitle_background !== undefined ? pParams.rounded_subtitle_background : (p.rounded_subtitle_background !== undefined ? p.rounded_subtitle_background : false);
-        const subtitleAnimationParam = pParams.subtitle_animation || p.subtitle_animation || "pop";
+        // 1. Concatenate part clips
+        const concatFilePath = path.join(cacheDir, `concat_${taskId}_p${partNum}.txt`);
+        const concatContent = partClips.map(f => `file '${f.path.replace(/\\/g, "/")}'`).join("\n");
+        await fs.promises.writeFile(concatFilePath, concatContent, "utf8");
 
-        // Generate ASS file with exact styles
-        const assFilePath = path.join(cacheDir, `subtitles_${taskId}.ass`);
-        const assContent = generateAss(subtitles, resWidth, resHeight, {
-          fontName: fontNameParam,
-          fontSize: fontSizeParam,
-          textColor: textColorParam,
-          strokeColor: strokeColorParam,
-          strokeWidth: strokeWidthParam,
-          hasBg: hasBgParam,
-          position: subtitlePosParam,
-          customPosition: customPosParam,
-          subtitleBgStyle: subtitleBgStyleParam,
-          roundedBackground: roundedBgParam,
-          subtitleAnimation: subtitleAnimationParam,
-        });
-        await fs.promises.writeFile(assFilePath, assContent, "utf8");
+        const concatOutput = path.join(cacheDir, `concatenated_${taskId}_p${partNum}.mp4`);
+        const concatCmd = `ffmpeg -y -f concat -safe 0 -i "${concatFilePath}" -c copy "${concatOutput}"`;
+        await executeCommand(concatCmd);
 
-        const srtOutput = path.join(renderDir, `render_${projectId}.mp4`);
-        const assRelative = path.relative(process.cwd(), assFilePath).replace(/\\/g, "/");
-        const escapedAssPath = escapeAssPathForFilter(assRelative);
+        // 2. Determine narration file for this part
+        const partNarrationDiskPath = path.join(renderDir, `narration_${projectId}_parte${partNum}.mp3`);
+        const activeNarrationPath = fs.existsSync(partNarrationDiskPath) ? partNarrationDiskPath : localNarrationPath;
 
-        const subFilter = `subtitles='${escapedAssPath}'`;
-        const srtCmd = `ffmpeg -y -i "${audioMixedOutput}" -vf "${subFilter}" ${encoderArgs} -c:a copy "${srtOutput}"`;
-        await executeCommand(srtCmd);
-        finalOutputPath = srtOutput;
-      } else {
-        const copyOutput = path.join(renderDir, `render_${projectId}.mp4`);
-        await fs.promises.copyFile(audioMixedOutput, copyOutput);
-        finalOutputPath = copyOutput;
+        let narrationDuration = 0;
+        if (activeNarrationPath && fs.existsSync(activeNarrationPath)) {
+          try {
+            const durationStr = await executeCommand(`ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${activeNarrationPath}"`, PROBE_COMMAND_TIMEOUT_MS);
+            const d = parseFloat(durationStr.trim());
+            if (!isNaN(d) && d > 0) narrationDuration = d;
+          } catch (e) {
+            console.error(`[Renderer] Failed to get narration duration for part ${partNum}:`, e);
+          }
+        }
+
+        // 3. Audio mix for this part
+        const audioMixedOutput = path.join(cacheDir, `audio_mixed_${taskId}_p${partNum}.mp4`);
+        const audioInputs: string[] = [];
+
+        if (activeNarrationPath) {
+          audioInputs.push(`-i "${activeNarrationPath}"`);
+        }
+        if (localMusicPath) {
+          audioInputs.push(`-stream_loop -1 -i "${localMusicPath}"`);
+        }
+        const audioFilter = buildAudioMixFilter(Boolean(activeNarrationPath), Boolean(localMusicPath), voiceVolume, musicVolume);
+        const limitDurationOpt = buildMixDurationArgs(Boolean(activeNarrationPath), narrationDuration);
+
+        const buildMixCmd = (filter: string): string =>
+          `ffmpeg -y -i "${concatOutput}" ${audioInputs.join(" ")} -filter_complex "${filter}" -map 0:v -map "[a]" -c:v copy -c:a aac ${limitDurationOpt} "${audioMixedOutput}"`;
+
+        let mixCmd = audioFilter
+          ? buildMixCmd(audioFilter)
+          : `ffmpeg -y -i "${concatOutput}" -f lavfi -i anullsrc=r=44100:cl=stereo -c:v copy -c:a aac -shortest ${limitDurationOpt} "${audioMixedOutput}"`;
+
+        try {
+          await executeCommand(mixCmd);
+        } catch (err: any) {
+          const isDucked = audioFilter.includes("sidechaincompress");
+          if (!isDucked) throw err;
+          logTask(taskId, "WARNING", "RENDER", "BGM ducking unavailable, falling back to a flat audio mix.");
+          const flatFilter = buildAudioMixFilter(Boolean(activeNarrationPath), Boolean(localMusicPath), voiceVolume, musicVolume, 0);
+          await executeCommand(buildMixCmd(flatFilter));
+        }
+
+        // 4. Burn Subtitles for this part
+        let subtitles = (subtitleTrack?.items || []).filter((s: any) => !s.part_index || s.part_index === partNum);
+        if (subtitles.length === 0 && p.shot_plan?.segments) {
+          const partSegments = p.shot_plan.segments.filter((seg: any) => !seg.part_index || seg.part_index === partNum);
+          const fallbackSubtitles: any[] = [];
+          partSegments.forEach((seg: any, idx: number) => {
+            const startSec = seg.start_sec !== undefined ? seg.start_sec : idx * 5;
+            const durationSec = seg.target_duration_sec !== undefined ? seg.target_duration_sec : 5;
+            const splitItems = splitTextIntoTikTokSubtitles(seg.narration_text || "", startSec, durationSec, seg.id, `sub_p${partNum}_${idx + 1}`);
+            fallbackSubtitles.push(...splitItems);
+          });
+          subtitles = fallbackSubtitles;
+        }
+
+        // Reset subtitle timestamps relative to start of part
+        if (subtitles.length > 0) {
+          const minStart = Math.min(...subtitles.map((s: any) => s.start_sec || 0));
+          if (minStart > 0) {
+            subtitles = subtitles.map((s: any) => ({
+              ...s,
+              start_sec: Math.max(0, (s.start_sec || 0) - minStart),
+              end_sec: Math.max(0.5, (s.end_sec || 0) - minStart)
+            }));
+          }
+        }
+
+        let finalOutputPath = audioMixedOutput;
+        const partFilename = multiPartCount > 1 ? `render_${projectId}_parte${partNum}.mp4` : `render_${projectId}.mp4`;
+        const partTargetOutput = path.join(renderDir, partFilename);
+
+        if (subtitles.length > 0 && subtitleEnabledParam) {
+          const fontsConfPath = path.join(cacheDir, `fonts_${taskId}.conf`);
+          await fs.promises.writeFile(fontsConfPath, buildFontsConf(process.cwd(), taskId), "utf8");
+          process.env.FONTCONFIG_FILE = fontsConfPath;
+          process.env.FONTCONFIG_PATH = cacheDir;
+
+          const fontNameParam = pParams.font_name || p.font_name || "STHeitiMedium.ttc";
+          const fontSizeParam = pParams.font_size || p.font_size || 60;
+          const textColorParam = pParams.text_fore_color || p.text_fore_color || "#FFFFFF";
+          const strokeColorParam = pParams.stroke_color || p.stroke_color || "#000000";
+          const strokeWidthParam = pParams.stroke_width !== undefined ? pParams.stroke_width : (p.stroke_width !== undefined ? p.stroke_width : 1.5);
+          const hasBgParam = pParams.text_background_color !== undefined ? pParams.text_background_color : (p.text_background_color !== undefined ? p.text_background_color : true);
+          const subtitlePosParam = pParams.subtitle_position || p.subtitle_position || "bottom";
+          const customPosParam = pParams.custom_position !== undefined ? pParams.custom_position : (p.custom_position !== undefined ? p.custom_position : 70);
+          const subtitleBgStyleParam = pParams.subtitle_bg_style || p.subtitle_bg_style || "solid";
+          const roundedBgParam = pParams.rounded_subtitle_background !== undefined ? pParams.rounded_subtitle_background : (p.rounded_subtitle_background !== undefined ? p.rounded_subtitle_background : false);
+          const subtitleAnimationParam = pParams.subtitle_animation || p.subtitle_animation || "pop";
+
+          const assFilePath = path.join(cacheDir, `subtitles_${taskId}_p${partNum}.ass`);
+          const assContent = generateAss(subtitles, resWidth, resHeight, {
+            fontName: fontNameParam,
+            fontSize: fontSizeParam,
+            textColor: textColorParam,
+            strokeColor: strokeColorParam,
+            strokeWidth: strokeWidthParam,
+            hasBg: hasBgParam,
+            position: subtitlePosParam,
+            customPosition: customPosParam,
+            subtitleBgStyle: subtitleBgStyleParam,
+            roundedBackground: roundedBgParam,
+            subtitleAnimation: subtitleAnimationParam,
+          });
+          await fs.promises.writeFile(assFilePath, assContent, "utf8");
+
+          const assRelative = path.relative(process.cwd(), assFilePath).replace(/\\/g, "/");
+          const escapedAssPath = escapeAssPathForFilter(assRelative);
+
+          const subFilter = `subtitles='${escapedAssPath}'`;
+          const srtCmd = `ffmpeg -y -i "${audioMixedOutput}" -vf "${subFilter}" ${encoderArgs} -c:a copy "${partTargetOutput}"`;
+          await executeCommand(srtCmd);
+          finalOutputPath = partTargetOutput;
+        } else {
+          await fs.promises.copyFile(audioMixedOutput, partTargetOutput);
+          finalOutputPath = partTargetOutput;
+        }
+
+        // Cleanup temporary files for this part
+        fs.promises.unlink(concatFilePath).catch(() => {});
+        fs.promises.unlink(concatOutput).catch(() => {});
+        if (finalOutputPath !== audioMixedOutput) {
+          fs.promises.unlink(audioMixedOutput).catch(() => {});
+        }
+
+        const partUrl = `/storage/renders/${p.project_folder_name}/${partFilename}`;
+        finalUrls.push(partUrl);
       }
 
-      // Clean temp files
+      // Cleanup formatted clips
       for (const f of formattedClips) {
         fs.promises.unlink(f).catch(() => {});
       }
-      fs.promises.unlink(concatFilePath).catch(() => {});
-      fs.promises.unlink(concatOutput).catch(() => {});
-      if (finalOutputPath !== audioMixedOutput) {
-        fs.promises.unlink(audioMixedOutput).catch(() => {});
-      }
 
-      const finalUrl = `/storage/renders/${p.project_folder_name}/render_${projectId}.mp4`;
-      logTask(taskId, "SUCCESS", "RENDER", `Compression and rendering complete. Output file generated at: ${finalUrl}`);
+      logTask(taskId, "SUCCESS", "RENDER", `Rendering complete (${finalUrls.length} video parts generated).`);
       logTask(taskId, "SUCCESS", "SYSTEM", `Task ${taskId} completed successfully!`);
 
-      p.videos = [finalUrl];
-      p.combined_videos = [finalUrl];
+      p.videos = finalUrls;
+      p.combined_videos = finalUrls;
       p.updated_at = new Date().toISOString();
       projects.set(projectId, p);
 
-      updateTaskState(100, finalUrl, null, 1);
+      updateTaskState(100, finalUrls[0], null, 1, finalUrls);
     } catch (err: any) {
       console.error(`[Renderer] Render failure for project ${projectId}:`, err);
       logTask(taskId, "ERROR", "RENDER", `Rendering failed: ${err.message}`);

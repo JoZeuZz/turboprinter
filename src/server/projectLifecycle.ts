@@ -16,6 +16,7 @@ export interface RenderTaskView {
   state: number;
   progress: number;
   output_path?: string | null;
+  output_paths?: string[] | null;
   error?: string | null;
 }
 
@@ -23,6 +24,7 @@ export interface RenderStatusResult {
   state: number;
   progress: number;
   output_path: string | null;
+  output_paths: string[];
   error: string | null;
 }
 
@@ -46,20 +48,24 @@ export const resolveRenderStatus = (args: {
   const { task, project, renderedFileExists } = args;
 
   if (task) {
+    const paths = task.output_paths || (task.output_path ? [task.output_path] : []);
     return {
       state: task.state,
       progress: task.progress,
-      output_path: task.output_path ?? null,
+      output_path: task.output_path ?? (paths[0] || null),
+      output_paths: paths,
       error: task.error ?? null,
     };
   }
 
-  const recordedUrl = project?.videos?.[0];
+  const recordedUrls = project?.videos || [];
+  const recordedUrl = recordedUrls[0];
   if (typeof recordedUrl === "string" && recordedUrl.length > 0 && renderedFileExists) {
     return {
       state: TASK_STATE_COMPLETE,
       progress: 100,
       output_path: recordedUrl,
+      output_paths: recordedUrls,
       error: null,
     };
   }
@@ -68,6 +74,7 @@ export const resolveRenderStatus = (args: {
     state: TASK_STATE_FAILED,
     progress: 100,
     output_path: null,
+    output_paths: [],
     error: "No hay un render disponible para este proyecto. Vuelve a renderizar.",
   };
 };

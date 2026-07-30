@@ -1812,6 +1812,15 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
       }
     }
 
+    const scriptHasParts = Boolean(p.script && p.script.match(/---+\s*PARTE\s*\d+\s*---+/i));
+    const isMultiPart = Boolean(p.params?.is_multi_part || p.is_multi_part || scriptHasParts);
+
+    // Compute sentence-to-part mapping if multi-part
+    const rawParts = scriptHasParts
+      ? (p.script || "").split(/---+\s*PARTE\s*\d+\s*---+/i).map((s: string) => s.trim()).filter(Boolean)
+      : [];
+    const numParts = isMultiPart ? Math.max(rawParts.length, Number(p.params?.multi_part_count) || 2) : 1;
+
     const segments = sentences.map((sentence: string, idx: number) => {
       let segmentQueries: string[] = [];
 
@@ -1850,6 +1859,25 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
       // Ensure queries are cleaned, trimmed and unique
       segmentQueries = Array.from(new Set(segmentQueries.map(q => q.trim()).filter(Boolean)));
 
+      // Calculate part_index for multi-part scripts
+      let partIndex = 1;
+      if (isMultiPart) {
+        if (rawParts.length > 1) {
+          let accum = 0;
+          for (let pI = 0; pI < rawParts.length; pI++) {
+            const pSentences = rawParts[pI].split(/[.!?]+/).map((s: string) => s.trim()).filter((s: string) => s.length > 5);
+            if (idx < accum + pSentences.length) {
+              partIndex = pI + 1;
+              break;
+            }
+            accum += pSentences.length;
+          }
+        } else {
+          const chunkSize = Math.ceil(sentences.length / numParts);
+          partIndex = Math.min(Math.floor(idx / chunkSize) + 1, numParts);
+        }
+      }
+
       return {
         id: `seg_${idx + 1}`,
         order: idx + 1,
@@ -1857,6 +1885,7 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
         start_sec: idx * clipDuration,
         end_sec: (idx + 1) * clipDuration,
         target_duration_sec: clipDuration,
+        part_index: partIndex,
         visual_goal: `Estilo visual representando: ${sentence}`,
         search_queries: segmentQueries
       };
@@ -2511,6 +2540,52 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
     console.log(`[Narration] Converting final WAV to MP3: ${finalAudioPath}`);
     await executeCommand(`ffmpeg -y -i "${finalWavPath}" -codec:a libmp3lame -b:a 192k "${finalAudioPath}"`);
 
+    // Generate per-part narration files for multi-part projects
+    const scriptHasParts = Boolean(p.script && p.script.match(/---+\s*PARTE\s*\d+\s*---+/i));
+    const isMultiPart = Boolean(p.params?.is_multi_part || p.is_multi_part || scriptHasParts);
+
+    if (isMultiPart) {
+      const numParts = Math.max(
+        p.params?.multi_part_scripts?.length || 0,
+        scriptHasParts ? p.script.split(/---+\s*PARTE\s*\d+\s*---+/i).map((s: string) => s.trim()).filter(Boolean).length : 0,
+        Number(p.params?.multi_part_count) || 2
+      );
+
+      console.log(`[Narration] Generating per-part audio files for ${numParts} parts...`);
+      for (let pIdx = 0; pIdx < numParts; pIdx++) {
+        const partNum = pIdx + 1;
+        const partSegmentIndices: number[] = [];
+        segments.forEach((seg: any, sIdx: number) => {
+          if (seg.part_index === partNum) {
+            partSegmentIndices.push(sIdx);
+          }
+        });
+
+        if (partSegmentIndices.length === 0) {
+          const groupSize = Math.ceil(segments.length / numParts);
+          const start = pIdx * groupSize;
+          const end = Math.min(start + groupSize, segments.length);
+          for (let i = start; i < end; i++) {
+            partSegmentIndices.push(i);
+          }
+        }
+
+        const partWavs = partSegmentIndices.map(i => wavPaths[i]).filter(Boolean);
+        if (partWavs.length > 0) {
+          const partConcatListPath = path.join(cacheDir, `concat_audio_${projectId}_p${partNum}.txt`);
+          const partConcatContent = partWavs.map(p => `file '${p.replace(/\\/g, "/")}'`).join("\n");
+          await fs.promises.writeFile(partConcatListPath, partConcatContent, "utf8");
+
+          const partWavPath = path.join(cacheDir, `narration_${projectId}_p${partNum}_temp.wav`);
+          await executeCommand(`ffmpeg -y -f concat -safe 0 -i "${partConcatListPath}" -acodec pcm_s16le "${partWavPath}"`);
+
+          const partAudioPath = path.join(renderDir, `narration_${projectId}_parte${partNum}.mp3`);
+          await executeCommand(`ffmpeg -y -i "${partWavPath}" -codec:a libmp3lame -b:a 192k "${partAudioPath}"`);
+          console.log(`[Narration] Part ${partNum} narration audio ready at: ${partAudioPath}`);
+        }
+      }
+    }
+
     let currentStartSec = 0;
     for (let idx = 0; idx < segments.length; idx++) {
       const seg = segments[idx];
@@ -2767,6 +2842,7 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
         state: status.state,
         progress: status.progress,
         output_path: status.output_path,
+        output_paths: status.output_paths,
         error: status.error,
       },
     });

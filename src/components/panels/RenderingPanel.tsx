@@ -70,10 +70,11 @@ export function RenderingPanel() {
           <div className="flex justify-center pt-2">
             <Button
               onClick={() => {
-                if (isDone && status?.output_path) {
-                  useProjectWorkspaceStore.setState({
-                    videoUrls: [status.output_path],
-                  });
+                if (isDone) {
+                  const urls = (status as any)?.output_paths || (status?.output_path ? [status.output_path] : []);
+                  if (urls.length > 0) {
+                    useProjectWorkspaceStore.setState({ videoUrls: urls });
+                  }
                 }
                 setPanel(isDone ? "done" : "editor");
               }}

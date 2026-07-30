@@ -541,13 +541,32 @@ export function ScriptPanel() {
           onChange={(e) => store.set("video_script_prompt", e.target.value)}
           rows={3}
         />
-        <Textarea
-          label={t("panels.script.systemPromptLabel")}
-          placeholder={t("panels.script.systemPromptPlaceholder")}
-          value={store.custom_system_prompt ?? ""}
-          onChange={(e) => store.set("custom_system_prompt", e.target.value)}
-          rows={3}
-        />
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-semibold text-foreground">
+              {t("panels.script.systemPromptLabel")}
+            </label>
+            <button
+              type="button"
+              onClick={() => {
+                const currentNiche = store.video_niche || "terror";
+                if (NICHE_SYSTEM_PROMPTS[currentNiche]) {
+                  store.set("custom_system_prompt", NICHE_SYSTEM_PROMPTS[currentNiche]);
+                }
+              }}
+              className="text-[11px] text-accent hover:underline font-medium"
+            >
+              Restablecer al prompt predeterminado de {store.video_niche || "terror"}
+            </button>
+          </div>
+          <Textarea
+            placeholder={t("panels.script.systemPromptPlaceholder")}
+            value={store.custom_system_prompt ?? ""}
+            onChange={(e) => store.set("custom_system_prompt", e.target.value)}
+            rows={7}
+            className="font-mono text-xs leading-relaxed"
+          />
+        </div>
       </Collapsible>
 
         </div>
