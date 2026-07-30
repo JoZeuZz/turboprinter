@@ -1,4 +1,4 @@
-# MoneyPrinterTurbo 💸 — Rama: `feat/logs-and-video-settings`
+# MoneyPrinterTurbo 💸
 
 Este repositorio es una versión altamente optimizada y personalizada de **MoneyPrinterTurbo**, enfocada en la creación rápida y profesional de **videos verticales de alta retención** (estilo TikTok, Reels y YouTube Shorts) con un flujo de trabajo intuitivo, edición interactiva por clips y renderizado avanzado nativo con FFmpeg.
 
