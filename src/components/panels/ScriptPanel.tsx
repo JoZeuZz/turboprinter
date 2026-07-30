@@ -336,30 +336,10 @@ export function ScriptPanel() {
         </label>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
           {[
-            {
-              id: "misterio",
-              icon: "🔴",
-              title: "Misterio Impactante",
-              desc: "Secreto perturbador o misterio inquietante en los primeros 3s"
-            },
-            {
-              id: "confesion",
-              icon: "🟡",
-              title: "Confesión en 1ª Persona",
-              desc: "Confesión directa en 1ª persona de algo drástico o perturbador"
-            },
-            {
-              id: "pregunta",
-              icon: "🔵",
-              title: "Pregunta Directa al Espectador",
-              desc: "Pregunta desafiante e inquietante lanzada al público desde el 0:00"
-            },
-            {
-              id: "estandar",
-              icon: "⚪",
-              title: "Estándar del Nicho",
-              desc: "Apertura libre con el estilo narrativo tradicional del nicho"
-            },
+            { id: "misterio", icon: "🔴", title: "Misterio Impactante" },
+            { id: "confesion", icon: "🟡", title: "Confesión en 1ª Persona" },
+            { id: "pregunta", icon: "🔵", title: "Pregunta Directa al Espectador" },
+            { id: "estandar", icon: "⚪", title: "Estándar del Nicho" },
           ].map((preset) => {
             const isSelected = (store.hook_style || "misterio") === preset.id;
             return (
@@ -367,19 +347,20 @@ export function ScriptPanel() {
                 key={preset.id}
                 type="button"
                 onClick={() => store.set("hook_style", preset.id)}
-                className={`flex flex-col items-start p-2.5 rounded-lg border text-left transition-all ${
+                className={`flex items-center justify-between p-2.5 rounded-lg border text-left transition-all ${
                   isSelected
                     ? "border-accent bg-accent/15 text-foreground ring-1 ring-accent/50 shadow-xs"
                     : "border-border/60 bg-secondary/30 text-muted-foreground hover:bg-secondary/60 hover:text-foreground"
                 }`}
               >
-                <div className="flex items-center gap-1.5 w-full justify-between">
-                  <span className="text-xs font-bold flex items-center gap-1 text-foreground">
-                    <span>{preset.icon}</span> {preset.title}
+                <span className="text-xs font-bold flex items-center gap-1.5 text-foreground truncate pr-1">
+                  <span>{preset.icon}</span> {preset.title}
+                </span>
+                {isSelected && (
+                  <span className="text-[10px] bg-accent/20 text-accent font-semibold px-1.5 py-0.5 rounded shrink-0">
+                    Activo
                   </span>
-                  {isSelected && <span className="text-[10px] bg-accent/20 text-accent font-semibold px-1.5 py-0.5 rounded">Activo</span>}
-                </div>
-                <span className="text-[11px] leading-tight text-muted-foreground mt-1">{preset.desc}</span>
+                )}
               </button>
             );
           })}
@@ -446,53 +427,78 @@ export function ScriptPanel() {
         )}
       </div>
 
-      {/* Opciones de Títulos Virales Generados */}
-      {store.title_options && store.title_options.length > 0 && (
-        <div className="space-y-2 rounded-lg border border-accent/40 bg-accent/10 p-3.5 shadow-xs">
-          <div className="flex items-center justify-between">
-            <label className="text-xs font-bold text-foreground flex items-center gap-1.5">
-              <Sparkles className="h-3.5 w-3.5 text-accent" />
-              <span>Opciones de Título Viral Sugeridas (Elige 1)</span>
-            </label>
-            <span className="text-[10px] text-muted-foreground">Clic para aplicar</span>
+      {/* Opciones de Títulos Virales Generados (Espacio fijo) */}
+      {(() => {
+        const hasTitles = store.title_options && store.title_options.length > 0;
+        return (
+          <div
+            className={`space-y-2 rounded-lg border p-3.5 transition-all ${
+              hasTitles
+                ? "border-accent/40 bg-accent/10 shadow-xs"
+                : "border-border/50 bg-surface/30 opacity-60"
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                <Sparkles className={`h-3.5 w-3.5 ${hasTitles ? "text-accent" : "text-muted-foreground"}`} />
+                <span>Opciones de Título Viral Sugeridas (Elige 1)</span>
+              </label>
+              <span className="text-[10px] text-muted-foreground">
+                {hasTitles ? "Clic para aplicar" : "Se generan con el guión"}
+              </span>
+            </div>
+            <div className="flex flex-col gap-2 pt-1">
+              {hasTitles ? (
+                store.title_options!.map((option, idx) => {
+                  const isSelected = (store.selected_title || store.video_subject) === option;
+                  return (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => {
+                        store.set("selected_title", option);
+                        store.set("video_subject", option);
+                        if (workspaceStore.setTopic) {
+                          workspaceStore.setTopic(option);
+                        }
+                        if (currentDraftId) {
+                          updateCurrentDraft(option);
+                        }
+                      }}
+                      className={`flex items-center justify-between p-2.5 rounded-lg border text-left transition-all ${
+                        isSelected
+                          ? "border-accent bg-accent/25 text-foreground font-semibold shadow-xs ring-1 ring-accent/50"
+                          : "border-border/60 bg-surface/80 text-muted-foreground hover:bg-surface hover:text-foreground"
+                      }`}
+                    >
+                      <span className="text-xs truncate pr-2">
+                        <span className="text-accent font-bold mr-2">#{idx + 1}</span> {option}
+                      </span>
+                      {isSelected ? (
+                        <span className="text-[10px] bg-accent text-white px-2 py-0.5 rounded font-bold shrink-0">Seleccionado</span>
+                      ) : (
+                        <span className="text-[10px] text-muted-foreground/80 hover:text-foreground shrink-0 font-medium">Usar</span>
+                      )}
+                    </button>
+                  );
+                })
+              ) : (
+                [1, 2, 3].map((num) => (
+                  <div
+                    key={num}
+                    className="flex items-center justify-between p-2.5 rounded-lg border border-border/40 bg-secondary/20 text-muted-foreground/50 text-xs pointer-events-none select-none"
+                  >
+                    <span>
+                      <span className="font-bold mr-2 opacity-50">#{num}</span> Título sugerido {num}...
+                    </span>
+                    <span className="text-[10px] text-muted-foreground/40 font-medium">Pendiente</span>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
-          <div className="flex flex-col gap-2 pt-1">
-            {store.title_options.map((option, idx) => {
-              const isSelected = (store.selected_title || store.video_subject) === option;
-              return (
-                <button
-                  key={idx}
-                  type="button"
-                  onClick={() => {
-                    store.set("selected_title", option);
-                    store.set("video_subject", option);
-                    if (workspaceStore.setTopic) {
-                      workspaceStore.setTopic(option);
-                    }
-                    if (currentDraftId) {
-                      updateCurrentDraft(option);
-                    }
-                  }}
-                  className={`flex items-center justify-between p-2.5 rounded-lg border text-left transition-all ${
-                    isSelected
-                      ? "border-accent bg-accent/25 text-foreground font-semibold shadow-xs ring-1 ring-accent/50"
-                      : "border-border/60 bg-surface/80 text-muted-foreground hover:bg-surface hover:text-foreground"
-                  }`}
-                >
-                  <span className="text-xs truncate pr-2">
-                    <span className="text-accent font-bold mr-2">#{idx + 1}</span> {option}
-                  </span>
-                  {isSelected ? (
-                    <span className="text-[10px] bg-accent text-white px-2 py-0.5 rounded font-bold shrink-0">Seleccionado</span>
-                  ) : (
-                    <span className="text-[10px] text-muted-foreground/80 hover:text-foreground shrink-0 font-medium">Usar</span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
+        );
+      })()}
 
       <Button
         onClick={handleGenerateScript}
