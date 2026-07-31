@@ -65,32 +65,6 @@ function useChannelStatus({ fetchStatus, selectChannel }: ChannelStatusApi) {
   return { linked, channelName, channels, activeChannelId, refresh, select };
 }
 
-function useUploadLifecycle() {
-  const [status, setStatus] = useState<UploadStatus>("idle");
-  const [progress, setProgress] = useState(0);
-  const [error, setError] = useState<string | null>(null);
-  const [uploadedUrl, setUploadedUrl] = useState<string | null>(null);
-
-  const run = useCallback(async (doUpload: () => Promise<string | null>) => {
-    setStatus("uploading");
-    setProgress(15);
-    setError(null);
-    setUploadedUrl(null);
-    try {
-      setProgress(45);
-      const url = await doUpload();
-      setProgress(100);
-      setStatus("success");
-      setUploadedUrl(url);
-    } catch (err: any) {
-      setError(err?.message || "Error al subir el video");
-      setStatus("error");
-    }
-  }, []);
-
-  return { status, progress, error, uploadedUrl, run };
-}
-
 export function useHashtagGenerator() {
   const videoTerms = useVideoStore((s) => s.video_terms) || "";
   const videoSubject = useVideoStore((s) => s.video_subject) || "";
@@ -150,7 +124,25 @@ export function useYouTubePublish() {
   });
   const [publishTime, setPublishTime] = useState("12:00");
 
-  const lifecycle = useUploadLifecycle();
+  const [partStates, setPartStates] = useState<
+    Record<
+      string,
+      {
+        status: UploadStatus;
+        progress: number;
+        error: string | null;
+        uploadedUrl: string | null;
+      }
+    >
+  >({});
+
+  const getPartState = useCallback(
+    (key?: string | number) => {
+      const k = key !== undefined ? String(key) : "1";
+      return partStates[k] || { status: "idle", progress: 0, error: null, uploadedUrl: null };
+    },
+    [partStates]
+  );
 
   const hashtags = useHashtagGenerator();
   const [autoLoading, setAutoLoading] = useState(false);
@@ -170,26 +162,56 @@ export function useYouTubePublish() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [channelStatus.linked, hashtags.hasKeywords]);
 
-  const upload = useCallback(async (customVideoUrl?: string) => {
-    if (!channelStatus.linked || videoUrls.length === 0) return;
-    const targetUrl = customVideoUrl || videoUrls[0];
-    await lifecycle.run(async () => {
-      let publishAt: string | undefined = undefined;
-      if (mode === "schedule") {
-        const [year, month, day] = publishDate.split("-").map(Number);
-        const [hour, minute] = publishTime.split(":").map(Number);
-        publishAt = new Date(year, month - 1, day, hour, minute).toISOString();
+  const upload = useCallback(
+    async (customVideoUrl?: string, partKey?: string | number) => {
+      if (!channelStatus.linked || videoUrls.length === 0) return;
+      const targetUrl = customVideoUrl || videoUrls[0];
+      const key = String(partKey !== undefined ? partKey : customVideoUrl || 1);
+
+      setPartStates((prev) => ({
+        ...prev,
+        [key]: { status: "uploading", progress: 15, error: null, uploadedUrl: null },
+      }));
+
+      try {
+        setPartStates((prev) => ({
+          ...prev,
+          [key]: { status: "uploading", progress: 45, error: null, uploadedUrl: null },
+        }));
+
+        let publishAt: string | undefined = undefined;
+        if (mode === "schedule") {
+          const [year, month, day] = publishDate.split("-").map(Number);
+          const [hour, minute] = publishTime.split(":").map(Number);
+          publishAt = new Date(year, month - 1, day, hour, minute).toISOString();
+        }
+
+        const res = await videoApi.uploadToYouTube({
+          videoUrl: targetUrl,
+          title: title || "YouTube Short",
+          description: description || "",
+          privacyStatus: mode === "now" ? privacy : "private",
+          publishAt,
+        });
+
+        setPartStates((prev) => ({
+          ...prev,
+          [key]: { status: "success", progress: 100, error: null, uploadedUrl: res.url },
+        }));
+      } catch (err: any) {
+        setPartStates((prev) => ({
+          ...prev,
+          [key]: {
+            status: "error",
+            progress: 0,
+            error: err?.message || "Error al subir el video",
+            uploadedUrl: null,
+          },
+        }));
       }
-      const res = await videoApi.uploadToYouTube({
-        videoUrl: targetUrl,
-        title: title || "YouTube Short",
-        description: description || "",
-        privacyStatus: mode === "now" ? privacy : "private",
-        publishAt,
-      });
-      return res.url;
-    });
-  }, [channelStatus.linked, videoUrls, lifecycle, mode, publishDate, publishTime, title, description, privacy]);
+    },
+    [channelStatus.linked, videoUrls, mode, publishDate, publishTime, title, description, privacy]
+  );
 
   return {
     linked: channelStatus.linked,
@@ -210,10 +232,11 @@ export function useYouTubePublish() {
     setPublishDate,
     publishTime,
     setPublishTime,
-    status: lifecycle.status,
-    progress: lifecycle.progress,
-    error: lifecycle.error,
-    uploadedUrl: lifecycle.uploadedUrl,
+    getPartState,
+    status: getPartState(1).status,
+    progress: getPartState(1).progress,
+    error: getPartState(1).error,
+    uploadedUrl: getPartState(1).uploadedUrl,
     upload,
     hashtagsGenerating: hashtags.generating,
     hashtagsAutoLoading: autoLoading,
@@ -232,19 +255,67 @@ export function useTikTokPublish() {
   });
 
   const [title, setTitle] = useState(() => deriveShortTitle(videoSubject, "Mi TikTok Video"));
-  const lifecycle = useUploadLifecycle();
 
-  const upload = useCallback(async (customVideoUrl?: string) => {
-    if (!channelStatus.linked || videoUrls.length === 0) return;
-    const targetUrl = customVideoUrl || videoUrls[0];
-    await lifecycle.run(async () => {
-      const res = await videoApi.uploadToTikTok({
-        videoUrl: targetUrl,
-        title: title || "TikTok Video",
-      });
-      return res.url || null;
-    });
-  }, [channelStatus.linked, videoUrls, lifecycle, title]);
+  const [partStates, setPartStates] = useState<
+    Record<
+      string,
+      {
+        status: UploadStatus;
+        progress: number;
+        error: string | null;
+        uploadedUrl: string | null;
+      }
+    >
+  >({});
+
+  const getPartState = useCallback(
+    (key?: string | number) => {
+      const k = key !== undefined ? String(key) : "1";
+      return partStates[k] || { status: "idle", progress: 0, error: null, uploadedUrl: null };
+    },
+    [partStates]
+  );
+
+  const upload = useCallback(
+    async (customVideoUrl?: string, partKey?: string | number) => {
+      if (!channelStatus.linked || videoUrls.length === 0) return;
+      const targetUrl = customVideoUrl || videoUrls[0];
+      const key = String(partKey !== undefined ? partKey : customVideoUrl || 1);
+
+      setPartStates((prev) => ({
+        ...prev,
+        [key]: { status: "uploading", progress: 15, error: null, uploadedUrl: null },
+      }));
+
+      try {
+        setPartStates((prev) => ({
+          ...prev,
+          [key]: { status: "uploading", progress: 45, error: null, uploadedUrl: null },
+        }));
+
+        const res = await videoApi.uploadToTikTok({
+          videoUrl: targetUrl,
+          title: title || "TikTok Video",
+        });
+
+        setPartStates((prev) => ({
+          ...prev,
+          [key]: { status: "success", progress: 100, error: null, uploadedUrl: res.url || null },
+        }));
+      } catch (err: any) {
+        setPartStates((prev) => ({
+          ...prev,
+          [key]: {
+            status: "error",
+            progress: 0,
+            error: err?.message || "Error al subir el video",
+            uploadedUrl: null,
+          },
+        }));
+      }
+    },
+    [channelStatus.linked, videoUrls, title]
+  );
 
   return {
     linked: channelStatus.linked,
@@ -255,10 +326,11 @@ export function useTikTokPublish() {
     refreshStatus: channelStatus.refresh,
     title,
     setTitle,
-    status: lifecycle.status,
-    progress: lifecycle.progress,
-    error: lifecycle.error,
-    uploadedUrl: lifecycle.uploadedUrl,
+    getPartState,
+    status: getPartState(1).status,
+    progress: getPartState(1).progress,
+    error: getPartState(1).error,
+    uploadedUrl: getPartState(1).uploadedUrl,
     upload,
   };
 }

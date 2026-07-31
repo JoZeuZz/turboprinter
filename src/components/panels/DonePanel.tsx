@@ -8,6 +8,16 @@ import { useVideoStore } from "../../store/useVideoStore";
 import { useYouTubePublish, useTikTokPublish } from "../../hooks/usePublish";
 import { deriveDownloadFilename, deriveShortTitle } from "../../lib/videoNaming";
 
+function updateDescriptionHashtags(existingText: string, newHashtags: string): string {
+  if (!existingText.trim()) return newHashtags;
+  const firstHashIndex = existingText.indexOf("#");
+  if (firstHashIndex !== -1) {
+    const introText = existingText.substring(0, firstHashIndex).trim();
+    return introText ? `${introText}\n\n${newHashtags}` : newHashtags;
+  }
+  return `${existingText.trim()}\n\n${newHashtags}`;
+}
+
 export function DonePanel() {
   const { t } = useTranslation();
   const { videoUrls, reset, setPanel, setActivePartIndex } = useProjectWorkspaceStore();
@@ -22,34 +32,50 @@ export function DonePanel() {
 
   const [selectedPart, setSelectedPart] = useState<number | "all">(1);
   const [targetVideoUrl, setTargetVideoUrl] = useState<string | null>(null);
+  const [targetPartNum, setTargetPartNum] = useState<number>(1);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isTiktokModalOpen, setIsTiktokModalOpen] = useState(false);
 
   // Automatically update youtube/tiktok default title when active part changes
   const currentPartNum = typeof selectedPart === "number" ? selectedPart : 1;
 
+  const activeYtState = youtube.getPartState(currentPartNum);
+  const activeTtState = tiktok.getPartState(currentPartNum);
+
   const handleOpenYoutubeModal = (partIndex?: number) => {
     const partToUse = partIndex !== undefined ? partIndex : currentPartNum;
+    setTargetPartNum(partToUse);
     const urlToUse = videoUrls[partToUse - 1] || videoUrls[0];
     setTargetVideoUrl(urlToUse);
     const baseTitle = videoStore.selected_title || deriveShortTitle(videoSubject, "Mi Short");
     if (isMultiPart) {
       youtube.setTitle(`${baseTitle} (Parte ${partToUse}/${multiPartCount})`);
-      youtube.setDescription(`📌 Parte ${partToUse} de ${multiPartCount}. ¿Crees que esto fue real? Suscríbete para no perderte las siguientes partes.\n\n#HistoriasDeReddit #CasosReales #Suspenso #Shorts #Viral`);
+      const isFinalPart = partToUse >= multiPartCount;
+      const ctaText = isFinalPart
+        ? "Suscríbete para no perderte más historias."
+        : "Suscríbete para no perderte las siguientes partes.";
+      youtube.setDescription(
+        `📌 Parte ${partToUse} de ${multiPartCount}. ${ctaText}\n\n#HistoriasDeReddit #CasosReales #Suspenso #Shorts #Viral`
+      );
     } else {
       youtube.setTitle(baseTitle);
-      youtube.setDescription(`¿Crees que esto fue real? Suscríbete para más historias impactantes.\n\n#HistoriasDeReddit #CasosReales #Suspenso #Shorts #Viral`);
+      youtube.setDescription(
+        `Suscríbete para más historias impactantes.\n\n#HistoriasDeReddit #CasosReales #Suspenso #Shorts #Viral`
+      );
     }
     setIsModalOpen(true);
   };
 
   const handleOpenTiktokModal = (partIndex?: number) => {
     const partToUse = partIndex !== undefined ? partIndex : currentPartNum;
+    setTargetPartNum(partToUse);
     const urlToUse = videoUrls[partToUse - 1] || videoUrls[0];
     setTargetVideoUrl(urlToUse);
     const baseTitle = videoStore.selected_title || deriveShortTitle(videoSubject, "Mi Video");
     if (isMultiPart) {
-      tiktok.setTitle(`${baseTitle} (Parte ${partToUse}/${multiPartCount}) #HistoriasDeReddit #CasosReales #Suspenso #Shorts #Viral`);
+      tiktok.setTitle(
+        `${baseTitle} (Parte ${partToUse}/${multiPartCount}) #HistoriasDeReddit #CasosReales #Suspenso #Shorts #Viral`
+      );
     } else {
       tiktok.setTitle(`${baseTitle} #HistoriasDeReddit #CasosReales #Suspenso #Shorts #Viral`);
     }
@@ -65,7 +91,17 @@ export function DonePanel() {
 
   const handleGenerateHashtags = async () => {
     const tags = await youtube.generateHashtags();
-    if (tags) youtube.setDescription(tags);
+    if (!tags) return;
+
+    if (isTiktokModalOpen) {
+      const currentTitle = tiktok.title || "";
+      const updated = updateDescriptionHashtags(currentTitle, tags);
+      tiktok.setTitle(updated);
+    } else {
+      const currentDesc = youtube.description || "";
+      const updated = updateDescriptionHashtags(currentDesc, tags);
+      youtube.setDescription(updated);
+    }
   };
 
   const downloadFilename = deriveDownloadFilename(videoSubject);
@@ -179,47 +215,47 @@ export function DonePanel() {
       {videoUrls.length > 0 && (
         <div className="w-full max-w-3xl space-y-4">
           {/* YouTube Upload Status Card */}
-          {(youtube.status !== "idle" || youtube.error) && (
+          {(activeYtState.status !== "idle" || activeYtState.error) && (
             <div className={`rounded-xl border p-4 text-left transition-all duration-300 max-w-md mx-auto ${
-              youtube.status === "uploading"
+              activeYtState.status === "uploading"
                 ? "bg-accent/5 border-accent/20 animate-pulse"
-                : youtube.status === "error"
+                : activeYtState.status === "error"
                 ? "bg-red-500/5 border-red-500/20"
                 : "bg-green-500/5 border-green-500/20"
             }`}>
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs font-semibold text-foreground">
-                  {youtube.status === "uploading"
-                    ? `Subiendo a YouTube (${youtube.progress}%)`
-                    : youtube.status === "error"
-                    ? "Error en la subida a YouTube"
-                    : t("panels.review.uploadSuccess")
+                  {activeYtState.status === "uploading"
+                    ? `Subiendo Parte ${currentPartNum} a YouTube (${activeYtState.progress}%)`
+                    : activeYtState.status === "error"
+                    ? `Error en subida de Parte ${currentPartNum} a YouTube`
+                    : `Parte ${currentPartNum} subida a YouTube con éxito`
                   }
                 </span>
-                {youtube.status === "uploading" ? (
+                {activeYtState.status === "uploading" ? (
                   <Loader2 className="h-4 w-4 animate-spin text-accent" />
-                ) : youtube.status === "error" ? (
+                ) : activeYtState.status === "error" ? (
                   <span className="text-red-500 text-xs">❌</span>
                 ) : (
                   <CheckCircle2 className="h-4 w-4 text-green-500" />
                 )}
               </div>
-              {youtube.status === "uploading" && (
+              {activeYtState.status === "uploading" && (
                 <div className="w-full bg-border rounded-full h-1.5 overflow-hidden">
                   <div
                     className="bg-accent h-full transition-all duration-300 ease-out"
-                    style={{ width: `${youtube.progress}%` }}
+                    style={{ width: `${activeYtState.progress}%` }}
                   />
                 </div>
               )}
-              {youtube.status === "success" && (
+              {activeYtState.status === "success" && (
                 <div className="space-y-1">
                   <p className="text-xs text-muted-foreground">
                     {t("panels.review.uploadChannelInfo", { channel: youtube.channelName })}
                   </p>
-                  {youtube.uploadedUrl && (
+                  {activeYtState.uploadedUrl && (
                     <a
-                      href={youtube.uploadedUrl}
+                      href={activeYtState.uploadedUrl}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="inline-block text-xs font-semibold text-accent hover:underline mt-1 bg-accent/10 px-2 py-1 rounded"
@@ -229,56 +265,56 @@ export function DonePanel() {
                   )}
                 </div>
               )}
-              {youtube.status === "error" && (
+              {activeYtState.status === "error" && (
                 <p className="text-xs text-red-400 font-medium">
-                  {youtube.error}
+                  {activeYtState.error}
                 </p>
               )}
             </div>
           )}
 
           {/* TikTok Upload Status Card */}
-          {(tiktok.status !== "idle" || tiktok.error) && (
+          {(activeTtState.status !== "idle" || activeTtState.error) && (
             <div className={`rounded-xl border p-4 text-left transition-all duration-300 max-w-md mx-auto ${
-              tiktok.status === "uploading"
+              activeTtState.status === "uploading"
                 ? "bg-cyan-500/5 border-cyan-500/20 animate-pulse"
-                : tiktok.status === "error"
+                : activeTtState.status === "error"
                 ? "bg-red-500/5 border-red-500/20"
                 : "bg-green-500/5 border-green-500/20"
             }`}>
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs font-semibold text-foreground">
-                  {tiktok.status === "uploading"
-                    ? `Subiendo a TikTok (${tiktok.progress}%)`
-                    : tiktok.status === "error"
-                    ? "Error en la subida a TikTok"
-                    : "Publicado en TikTok con éxito"
+                  {activeTtState.status === "uploading"
+                    ? `Subiendo Parte ${currentPartNum} a TikTok (${activeTtState.progress}%)`
+                    : activeTtState.status === "error"
+                    ? `Error en subida de Parte ${currentPartNum} a TikTok`
+                    : `Parte ${currentPartNum} publicada en TikTok con éxito`
                   }
                 </span>
-                {tiktok.status === "uploading" ? (
+                {activeTtState.status === "uploading" ? (
                   <Loader2 className="h-4 w-4 animate-spin text-cyan-400" />
-                ) : tiktok.status === "error" ? (
+                ) : activeTtState.status === "error" ? (
                   <span className="text-red-500 text-xs">❌</span>
                 ) : (
                   <CheckCircle2 className="h-4 w-4 text-green-500" />
                 )}
               </div>
-              {tiktok.status === "uploading" && (
+              {activeTtState.status === "uploading" && (
                 <div className="w-full bg-border rounded-full h-1.5 overflow-hidden">
                   <div
                     className="bg-cyan-400 h-full transition-all duration-300 ease-out"
-                    style={{ width: `${tiktok.progress}%` }}
+                    style={{ width: `${activeTtState.progress}%` }}
                   />
                 </div>
               )}
-              {tiktok.status === "success" && (
+              {activeTtState.status === "success" && (
                 <div className="space-y-1">
                   <p className="text-xs text-muted-foreground">
                     Subido a la cuenta de TikTok: <strong>{tiktok.channelName}</strong>
                   </p>
-                  {tiktok.uploadedUrl && (
+                  {activeTtState.uploadedUrl && (
                     <a
-                      href={tiktok.uploadedUrl}
+                      href={activeTtState.uploadedUrl}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="inline-block text-xs font-semibold text-cyan-400 hover:underline mt-1 bg-cyan-950/40 border border-cyan-800/40 px-2 py-1 rounded"
@@ -288,9 +324,9 @@ export function DonePanel() {
                   )}
                 </div>
               )}
-              {tiktok.status === "error" && (
+              {activeTtState.status === "error" && (
                 <p className="text-xs text-red-400 font-medium">
-                  {tiktok.error}
+                  {activeTtState.error}
                 </p>
               )}
             </div>
@@ -301,7 +337,7 @@ export function DonePanel() {
             {/* 1. YouTube Upload */}
             <Button
               onClick={() => handleOpenYoutubeModal()}
-              disabled={!youtube.linked || youtube.status === "uploading" || youtube.status === "success"}
+              disabled={!youtube.linked || activeYtState.status === "uploading" || activeYtState.status === "success"}
               className={`flex items-center justify-center gap-1.5 font-medium py-2 px-1 sm:px-2 rounded-xl text-[10px] sm:text-xs transition-all truncate whitespace-nowrap ${
                 youtube.linked
                   ? "bg-red-600 hover:bg-red-700 text-white focus:ring-red-500"
@@ -311,9 +347,9 @@ export function DonePanel() {
             >
               <Youtube className="h-3.5 w-3.5 shrink-0" />
               <span className="truncate">
-                {youtube.status === "success"
-                  ? "Subido YouTube"
-                  : youtube.status === "uploading"
+                {activeYtState.status === "success"
+                  ? `Subido Parte ${currentPartNum} YouTube`
+                  : activeYtState.status === "uploading"
                   ? "Subiendo..."
                   : isMultiPart
                   ? `Subir Parte ${currentPartNum} YouTube`
@@ -325,7 +361,7 @@ export function DonePanel() {
             {/* 2. TikTok Upload */}
             <Button
               onClick={() => handleOpenTiktokModal()}
-              disabled={!tiktok.linked || tiktok.status === "uploading" || tiktok.status === "success"}
+              disabled={!tiktok.linked || activeTtState.status === "uploading" || activeTtState.status === "success"}
               className={`flex items-center justify-center gap-1.5 font-medium py-2 px-1 sm:px-2 rounded-xl text-[10px] sm:text-xs transition-all truncate whitespace-nowrap ${
                 tiktok.linked
                   ? "bg-zinc-950 hover:bg-zinc-900 border border-neutral-800 text-cyan-400 focus:ring-cyan-500"
@@ -335,9 +371,9 @@ export function DonePanel() {
             >
               <Tiktok className="h-3.5 w-3.5 shrink-0" />
               <span className="truncate">
-                {tiktok.status === "success"
-                  ? "Subido TikTok"
-                  : tiktok.status === "uploading"
+                {activeTtState.status === "success"
+                  ? `Subido Parte ${currentPartNum} TikTok`
+                  : activeTtState.status === "uploading"
                   ? "Subiendo..."
                   : isMultiPart
                   ? `Subir Parte ${currentPartNum} TikTok`
@@ -520,7 +556,7 @@ export function DonePanel() {
               <Button
                 onClick={() => {
                   setIsModalOpen(false);
-                  youtube.upload(targetVideoUrl || undefined);
+                  youtube.upload(targetVideoUrl || undefined, targetPartNum);
                 }}
                 className="bg-red-600 hover:bg-red-700 text-white text-xs py-1.5 h-9"
               >
@@ -620,7 +656,7 @@ export function DonePanel() {
               <Button
                 onClick={() => {
                   setIsTiktokModalOpen(false);
-                  tiktok.upload(targetVideoUrl || undefined);
+                  tiktok.upload(targetVideoUrl || undefined, targetPartNum);
                 }}
                 className="bg-cyan-500 hover:bg-cyan-600 text-zinc-950 text-xs py-1.5 h-9 font-bold"
               >
