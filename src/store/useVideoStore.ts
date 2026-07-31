@@ -81,6 +81,10 @@ const getInitialState = (): VideoParams & VideoStoreExtras => {
           video_terms: null,
           video_script_prompt: "",
           custom_system_prompt: "",
+          title_options: [],
+          selected_title: "",
+          multi_part_scripts: [],
+          local_video_files: [],
         };
       }
     } catch (e) {}
@@ -127,6 +131,10 @@ export const useVideoStore = create<VideoStoreState>()(
                 video_terms: null,
                 video_script_prompt: "",
                 custom_system_prompt: "",
+                title_options: [],
+                selected_title: "",
+                multi_part_scripts: [],
+                local_video_files: [],
               });
               return;
             } catch (e) {}
