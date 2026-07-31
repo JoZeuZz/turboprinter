@@ -742,11 +742,12 @@ export function createRenderer(deps: RenderDeps) {
       }
 
       const scriptHasParts = Boolean(p.script && p.script.match(/---+\s*PARTE\s*\d+\s*---+/i));
+      const isMultiPartFlag = p.params?.is_multi_part !== undefined ? p.params.is_multi_part : p.is_multi_part;
       const isMultiPart = Boolean(
-        p.params?.is_multi_part ||
-        p.is_multi_part ||
-        (p.params?.multi_part_scripts && p.params.multi_part_scripts.length > 1) ||
-        scriptHasParts
+        isMultiPartFlag &&
+        ((p.params?.multi_part_scripts && p.params.multi_part_scripts.length > 1) ||
+         scriptHasParts ||
+         (p.params?.multi_part_count !== undefined ? Number(p.params.multi_part_count) > 1 : Number(p.multi_part_count) > 1))
       );
 
       let multiPartCount = 1;
@@ -840,29 +841,50 @@ export function createRenderer(deps: RenderDeps) {
         const audioInputs: string[] = [];
 
         if (activeNarrationPath) {
-          audioInputs.push(`-i "${activeNarrationPath}"`);
+          audioInputs.push(`-analyzeduration 10000000 -probesize 10000000 -i "${activeNarrationPath}"`);
         }
         if (localMusicPath) {
-          audioInputs.push(`-stream_loop -1 -i "${localMusicPath}"`);
+          audioInputs.push(`-analyzeduration 10000000 -probesize 10000000 -stream_loop -1 -i "${localMusicPath}"`);
         }
         const audioFilter = buildAudioMixFilter(Boolean(activeNarrationPath), Boolean(localMusicPath), voiceVolume, musicVolume);
         const limitDurationOpt = buildMixDurationArgs(Boolean(activeNarrationPath), narrationDuration);
 
-        const buildMixCmd = (filter: string): string =>
-          `ffmpeg -y -i "${concatOutput}" ${audioInputs.join(" ")} -filter_complex "${filter}" -map 0:v -map "[a]" -c:v copy -c:a aac ${limitDurationOpt} "${audioMixedOutput}"`;
+        const buildMixCmdWith = (inputs: string[], filter: string): string =>
+          `ffmpeg -y -i "${concatOutput}" ${inputs.join(" ")} -filter_complex "${filter}" -map 0:v -map "[a]" -c:v copy -c:a aac ${limitDurationOpt} "${audioMixedOutput}"`;
 
         let mixCmd = audioFilter
-          ? buildMixCmd(audioFilter)
+          ? buildMixCmdWith(audioInputs, audioFilter)
           : `ffmpeg -y -i "${concatOutput}" -f lavfi -i anullsrc=r=44100:cl=stereo -c:v copy -c:a aac -shortest ${limitDurationOpt} "${audioMixedOutput}"`;
 
         try {
           await executeCommand(mixCmd);
         } catch (err: any) {
+          console.warn(`[Renderer] Audio mix with BGM failed: ${err.message}`);
           const isDucked = audioFilter.includes("sidechaincompress");
-          if (!isDucked) throw err;
-          logTask(taskId, "WARNING", "RENDER", "BGM ducking unavailable, falling back to a flat audio mix.");
-          const flatFilter = buildAudioMixFilter(Boolean(activeNarrationPath), Boolean(localMusicPath), voiceVolume, musicVolume, 0);
-          await executeCommand(buildMixCmd(flatFilter));
+          let mixSuccess = false;
+
+          if (isDucked) {
+            try {
+              logTask(taskId, "WARNING", "RENDER", "BGM ducking unavailable, falling back to a flat audio mix.");
+              const flatFilter = buildAudioMixFilter(Boolean(activeNarrationPath), Boolean(localMusicPath), voiceVolume, musicVolume, 0);
+              await executeCommand(buildMixCmdWith(audioInputs, flatFilter));
+              mixSuccess = true;
+            } catch (flatErr) {
+              console.warn(`[Renderer] Flat audio mix also failed:`, flatErr);
+            }
+          }
+
+          if (!mixSuccess) {
+            if (localMusicPath && activeNarrationPath) {
+              logTask(taskId, "WARNING", "RENDER", "BGM file unreadable by FFmpeg, falling back to narration only.");
+              const narrationOnlyInputs = [`-analyzeduration 10000000 -probesize 10000000 -i "${activeNarrationPath}"`];
+              const narrationOnlyFilter = buildAudioMixFilter(true, false, voiceVolume, musicVolume);
+              const narrationCmd = buildMixCmdWith(narrationOnlyInputs, narrationOnlyFilter);
+              await executeCommand(narrationCmd);
+            } else {
+              throw err;
+            }
+          }
         }
 
         // 4. Burn Subtitles for this part

@@ -27,8 +27,8 @@ export function EditorPanel() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
 
-  const isMultiPart = videoStore.is_multi_part || (videoStore.multi_part_count ?? 1) > 1 || videoUrls.length > 1;
-  const multiPartCount = videoStore.multi_part_count ?? Math.max(videoUrls.length, 2);
+  const isMultiPart = Boolean((videoStore.is_multi_part && (videoStore.multi_part_count ?? 1) > 1) || videoUrls.length > 1);
+  const multiPartCount = isMultiPart ? (videoStore.multi_part_count || videoUrls.length || 2) : 1;
   const [selectedPart, setSelectedPart] = useState<number | "all">(activePartIndex || 1);
 
   const videoTrack = projectStore.project?.tracks.find((t) => t.type === "video");
@@ -155,7 +155,7 @@ export function EditorPanel() {
   return (
     <div className="flex flex-col h-full">
       {/* Multi-part navigation header if isMultiPart */}
-      {isMultiPart && (
+      {isMultiPart && multiPartCount > 1 && (
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-surface-2/60 px-4 py-2">
           <div className="flex items-center gap-2">
             <Clapperboard className="h-4 w-4 text-accent" />

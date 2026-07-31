@@ -376,6 +376,7 @@ export function ScriptPanel() {
               type="button"
               onClick={() => {
                 store.set("is_multi_part", false);
+                store.set("multi_part_count", 1);
                 store.set("video_count", 1);
               }}
               className={`px-2.5 py-1 text-xs font-medium rounded-sm transition-all ${

@@ -29,8 +29,8 @@ export function ReviewPanel() {
   const { config } = useConfigStore();
   const videoStore = useVideoStore();
 
-  const isMultiPart = videoStore.is_multi_part || videoUrls.length > 1;
-  const multiPartCount = videoStore.multi_part_count || Math.max(videoUrls.length, 2);
+  const isMultiPart = Boolean((videoStore.is_multi_part && (videoStore.multi_part_count ?? 1) > 1) || videoUrls.length > 1);
+  const multiPartCount = isMultiPart ? (videoStore.multi_part_count || videoUrls.length || 2) : 1;
 
   const isYoutubeLinked = !!config?.settings?.youtube?.is_linked;
   const youtubeChannel = config?.settings?.youtube?.channel_name || "";
@@ -98,7 +98,7 @@ export function ReviewPanel() {
 
     return (
       <div className="flex min-h-full h-full w-full max-w-4xl mx-auto flex-col items-center justify-start gap-4 px-4 py-6 text-center overflow-y-auto min-h-0">
-        {isMultiPart && (
+        {isMultiPart && multiPartCount > 1 && (
           <div className="flex items-center justify-center gap-2 bg-surface/80 p-1.5 rounded-xl border border-border shrink-0">
             <span className="text-xs font-semibold text-muted-foreground px-2">Parte Activa:</span>
             {Array.from({ length: multiPartCount }).map((_, idx) => {

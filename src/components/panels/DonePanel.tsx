@@ -27,8 +27,8 @@ export function DonePanel() {
 
   const videoStore = useVideoStore();
   const videoSubject = videoStore.video_subject || "";
-  const isMultiPart = videoStore.is_multi_part || videoUrls.length > 1;
-  const multiPartCount = videoStore.multi_part_count || Math.max(videoUrls.length, 2);
+  const isMultiPart = Boolean((videoStore.is_multi_part && (videoStore.multi_part_count ?? 1) > 1) || videoUrls.length > 1);
+  const multiPartCount = isMultiPart ? (videoStore.multi_part_count || videoUrls.length || 2) : 1;
 
   const [selectedPart, setSelectedPart] = useState<number | "all">(1);
   const [targetVideoUrl, setTargetVideoUrl] = useState<string | null>(null);
@@ -108,7 +108,7 @@ export function DonePanel() {
 
   return (
     <div className="flex min-h-full h-full w-full max-w-4xl mx-auto flex-col items-center justify-start gap-4 px-4 py-6 text-center overflow-y-auto min-h-0">
-      {isMultiPart && videoUrls.length > 0 && (
+      {isMultiPart && multiPartCount > 1 && videoUrls.length > 0 && (
         <div className="flex items-center justify-center gap-2 bg-surface/80 p-1.5 rounded-xl border border-border shrink-0">
           <span className="text-xs font-semibold text-muted-foreground px-2">Seleccionar Parte:</span>
           {Array.from({ length: multiPartCount }).map((_, idx) => {
