@@ -1,5 +1,5 @@
 // webui-react/src/components/editor/VideoPreview.tsx
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Play, Pause, SkipBack, SkipForward } from "lucide-react";
 import { motion } from "motion/react";
 import { useTranslation } from "react-i18next";
@@ -8,6 +8,7 @@ import type { TimelineItem } from "../../api/types";
 import { useVideoStore } from "../../store/useVideoStore";
 import { useProjectStore } from "../../store/useProjectStore";
 import { getSubtitleFontFamily, getSubtitleFontWeight } from "../subtitles/SubtitleFontGallery";
+import { splitTextIntoTikTokSubtitles } from "../../lib/subtitleLayout";
 
 interface VideoPreviewProps {
   items: TimelineItem[];
@@ -50,7 +51,37 @@ export function VideoPreview({
   const audioTrack = projectStore.project?.tracks.find((t) => t.type === "audio");
   const narrationUrl = projectStore.project?.narration_audio_path || audioTrack?.items?.find((item) => item.asset_url)?.asset_url;
 
-  const activeSubtitles = propsSubtitleItems ?? subtitleItems;
+  const formattedSubtitles = useMemo(() => {
+    const raw = propsSubtitleItems ?? subtitleItems;
+    if (!raw || raw.length === 0) return [];
+
+    const needsSplitting = raw.some((item) => {
+      const words = (item.text || "").trim().split(/\s+/).length;
+      return words > 4;
+    });
+
+    if (!needsSplitting) {
+      return raw;
+    }
+
+    const splitList: TimelineItem[] = [];
+    raw.forEach((item, idx) => {
+      const words = (item.text || "").trim().split(/\s+/).length;
+      if (words > 4) {
+        const cues = splitTextIntoTikTokSubtitles(
+          item.text || "",
+          item.start_sec,
+          item.duration_sec,
+          item.segment_id || `seg_${idx}`,
+          item.id || `sub_${idx}`
+        ).map((c) => ({ ...c, part_index: item.part_index }));
+        splitList.push(...(cues as TimelineItem[]));
+      } else {
+        splitList.push(item);
+      }
+    });
+    return splitList;
+  }, [propsSubtitleItems, subtitleItems]);
 
   const videoAspect = useVideoStore((s) => s.video_aspect) ?? "9:16";
 
@@ -93,9 +124,22 @@ export function VideoPreview({
     }
   }, [playingId]);
 
-  const activeSubtitle = activeSubtitles.find(
-    (item) => globalTime >= item.start_sec && globalTime < (item.start_sec + item.duration_sec)
-  );
+  const activeSubtitle = useMemo(() => {
+    if (!formattedSubtitles || formattedSubtitles.length === 0) return null;
+    for (let i = 0; i < formattedSubtitles.length; i++) {
+      const item = formattedSubtitles[i];
+      const nextItem = formattedSubtitles[i + 1];
+      const itemEnd = item.start_sec + item.duration_sec;
+      const effectiveEnd = nextItem && nextItem.start_sec > item.start_sec && nextItem.start_sec <= itemEnd + 0.15
+        ? nextItem.start_sec
+        : itemEnd + 0.05;
+
+      if (globalTime >= item.start_sec && globalTime < effectiveEnd) {
+        return item;
+      }
+    }
+    return null;
+  }, [formattedSubtitles, globalTime]);
 
   const subtitleEnabled = useVideoStore((s) => s.subtitle_enabled) ?? true;
   const subtitlePosition = useVideoStore((s) => s.subtitle_position) ?? "bottom";
@@ -380,7 +424,7 @@ export function VideoPreview({
             {subtitleEnabled && activeSubtitle && activeSubtitle.text && (
               <div style={positionStyle}>
                 <motion.div
-                  key={`${activeSubtitle.id || activeSubtitle.text}-${animType}-${textColor}-${fontName}-${fontSize}-${strokeColor}-${strokeWidth}-${roundedBackground}-${subtitleBgStyle}`}
+                  key={`${activeSubtitle.id || 'sub'}_${activeSubtitle.start_sec}_${activeSubtitle.text}-${animType}-${textColor}-${fontName}-${fontSize}-${strokeColor}-${strokeWidth}-${roundedBackground}-${subtitleBgStyle}`}
                   className={`inline-block max-w-full px-3 py-1.5 leading-tight transition-all ${borderStyleClass} ${
                     subtitleBgStyle === "blur" && textBackgroundColor !== false ? "backdrop-blur-md border border-white/20" : ""
                   }`}
