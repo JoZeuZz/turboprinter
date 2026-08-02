@@ -351,6 +351,7 @@ export interface TimelineItem {
   source_url?: string | null;
   start_sec: number;
   duration_sec: number;
+  end_sec?: number | null;
   trim_start_sec?: number;
   trim_end_sec?: number | null;
   segment_id?: string | null;
