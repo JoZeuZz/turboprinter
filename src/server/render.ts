@@ -81,7 +81,7 @@ export const buildAudioMixFilter = (
   if (hasVideoAudio) {
     if (hasNarration && hasMusic) {
       if (duckDb <= 0) {
-        return `[0:a]volume=1.0[vid];[1:a]volume=${voiceVolume}[v];[2:a]volume=${musicVolume}[m];[vid][v][m]amix=inputs=3:duration=first[a]`;
+        return `[0:a]volume=1.0[vid];[1:a]volume=${voiceVolume}[v];[2:a]volume=${musicVolume}[m];[vid][v][m]amix=inputs=3:duration=first:dropout_transition=0:normalize=0[a]`;
       }
       const ratio = duckDbToRatio(duckDb);
       return (
@@ -90,21 +90,21 @@ export const buildAudioMixFilter = (
         `[v]asplit=2[v1][vsc];` +
         `[m][vsc]sidechaincompress=threshold=0.02:ratio=${ratio}:attack=5:release=200[mduck];` +
         `[0:a]volume=1.0[vid];` +
-        `[vid][v1][mduck]amix=inputs=3:duration=first[a]`
+        `[vid][v1][mduck]amix=inputs=3:duration=first:dropout_transition=0:normalize=0[a]`
       );
     }
     if (hasNarration) {
-      return `[0:a]volume=1.0[vid];[1:a]volume=${voiceVolume}[v];[vid][v]amix=inputs=2:duration=first[a]`;
+      return `[0:a]volume=1.0[vid];[1:a]volume=${voiceVolume}[v];[vid][v]amix=inputs=2:duration=first:dropout_transition=0:normalize=0[a]`;
     }
     if (hasMusic) {
-      return `[0:a]volume=1.0[vid];[1:a]volume=${musicVolume}[m];[vid][m]amix=inputs=2:duration=first[a]`;
+      return `[0:a]volume=1.0[vid];[1:a]volume=${musicVolume}[m];[vid][m]amix=inputs=2:duration=first:dropout_transition=0:normalize=0[a]`;
     }
     return `[0:a]volume=1.0[a]`;
   }
 
   if (hasNarration && hasMusic) {
     if (duckDb <= 0) {
-      return `[1:a]volume=${voiceVolume}[v];[2:a]volume=${musicVolume}[m];[v][m]amix=inputs=2:duration=first[a]`;
+      return `[1:a]volume=${voiceVolume}[v];[2:a]volume=${musicVolume}[m];[v][m]amix=inputs=2:duration=first:dropout_transition=0:normalize=0[a]`;
     }
     const ratio = duckDbToRatio(duckDb);
     return (
@@ -112,7 +112,7 @@ export const buildAudioMixFilter = (
       `[2:a]volume=${musicVolume}[m];` +
       `[v]asplit=2[v1][vsc];` +
       `[m][vsc]sidechaincompress=threshold=0.02:ratio=${ratio}:attack=5:release=200[mduck];` +
-      `[v1][mduck]amix=inputs=2:duration=first[a]`
+      `[v1][mduck]amix=inputs=2:duration=first:dropout_transition=0:normalize=0[a]`
     );
   }
   if (hasNarration) {
