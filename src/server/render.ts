@@ -597,6 +597,13 @@ export function createRenderer(deps: RenderDeps) {
             continue;
           }
 
+          if (clip.id === "clip_outro" || clip.asset_url?.includes("outro") || url.includes("outro")) {
+            console.log(`[Renderer] Outro clip file ${filename} missing at public/assets/outro.mp4. Generating synthetic placeholder...`);
+            logTask(taskId, "WARNING", "VIDEO_ASSET", `El archivo de outro "public/assets/outro.mp4" no fue encontrado. Se omitirá o generará un marco de cierre.`);
+            localVideoPaths.push("placeholder");
+            continue;
+          }
+
           // Robust safety net fallback: use any existing local video file if the chosen one is missing
           try {
             const availableFiles = fs.readdirSync(localVideosDir).filter(f =>

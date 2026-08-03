@@ -2636,6 +2636,25 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
       }
     }
 
+    // Automatically append clip_outro if public/assets/outro.mp4 exists or by default
+    const outroPath = path.join(process.cwd(), "public", "assets", "outro.mp4");
+    const outroExists = fs.existsSync(outroPath);
+    const hasOutroInItems = videoItems.some((item: any) => item.id === "clip_outro" || item.asset_url?.includes("outro"));
+    if (!hasOutroInItems && (outroExists || p.params?.outro_enabled !== false)) {
+      const lastVideoItem = videoItems[videoItems.length - 1];
+      const outroStartSec = lastVideoItem ? (lastVideoItem.start_sec + lastVideoItem.duration_sec) : 0;
+      videoItems.push({
+        id: "clip_outro",
+        text: "🎬 Outro / Clip de Cierre",
+        asset_url: "/assets/outro.mp4",
+        source_url: "/assets/outro.mp4",
+        start_sec: outroStartSec,
+        duration_sec: 4,
+        keywords: ["outro", "cierre"],
+        provider: "local",
+      });
+    }
+
     const subtitleItems: any[] = [];
     (p.shot_plan?.segments || []).forEach((seg: any, idx: number) => {
       const startSec = seg.start_sec !== undefined ? seg.start_sec : idx * 5;

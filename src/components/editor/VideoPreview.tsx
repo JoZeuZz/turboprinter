@@ -158,19 +158,31 @@ export function VideoPreview({
   }, [currentTime, selectedPart, partOffsetSec, onTimeUpdate]);
 
   // Handle selectedId selection change from external editor
+  const allTimelineItems = useMemo(() => {
+    return [...items, ...(propsSubtitleItems || storeSubtitleItems || []), ...(_propsAudioItems || [])];
+  }, [items, propsSubtitleItems, storeSubtitleItems, _propsAudioItems]);
+
   useEffect(() => {
-    if (selectedId && items.length > 0) {
-      const target = items.find((item) => item.id === selectedId);
+    if (selectedId && allTimelineItems.length > 0) {
+      const target = allTimelineItems.find((item) => item.id === selectedId);
       if (target && target.start_sec !== undefined) {
-        setCurrentTime(target.start_sec);
+        const newTime = target.start_sec;
+        setCurrentTime(newTime);
+        if (audioRef.current) {
+          try {
+            audioRef.current.currentTime = newTime;
+          } catch (e) {}
+        }
       }
     }
-  }, [selectedId, items]);
+  }, [selectedId, allTimelineItems]);
 
   // Sync video element when active video clip or seeking changes
   const activeClipUrl = activeVideoClip?.asset_url;
   useEffect(() => {
     if (!videoRef.current || !activeClipUrl) return;
+
+    videoRef.current.muted = true;
 
     if (videoRef.current.src !== activeClipUrl) {
       videoRef.current.src = activeClipUrl;
@@ -185,6 +197,8 @@ export function VideoPreview({
 
     if (playing) {
       void videoRef.current.play().catch(() => {});
+    } else {
+      videoRef.current.pause();
     }
   }, [activeClipUrl, clipLocalTime, playing]);
 
@@ -238,7 +252,7 @@ export function VideoPreview({
 
   // Handle Audio element time update
   const handleAudioTimeUpdate = () => {
-    if (!narrationUrl || !audioRef.current || isSeeking) return;
+    if (!narrationUrl || !audioRef.current || isSeeking || !playing) return;
     const t = audioRef.current.currentTime;
     setCurrentTime(t);
   };
