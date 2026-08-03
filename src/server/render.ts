@@ -75,19 +75,37 @@ export const buildAudioMixFilter = (
   hasMusic: boolean,
   voiceVolume: number,
   musicVolume: number,
-  duckDb: number = DEFAULT_DUCK_DB
+  duckDb: number = DEFAULT_DUCK_DB,
+  hasVideoAudio: boolean = false
 ): string => {
+  if (hasVideoAudio) {
+    if (hasNarration && hasMusic) {
+      if (duckDb <= 0) {
+        return `[0:a]volume=1.0[vid];[1:a]volume=${voiceVolume}[v];[2:a]volume=${musicVolume}[m];[vid][v][m]amix=inputs=3:duration=first[a]`;
+      }
+      const ratio = duckDbToRatio(duckDb);
+      return (
+        `[1:a]volume=${voiceVolume}[v];` +
+        `[2:a]volume=${musicVolume}[m];` +
+        `[v]asplit=2[v1][vsc];` +
+        `[m][vsc]sidechaincompress=threshold=0.02:ratio=${ratio}:attack=5:release=200[mduck];` +
+        `[0:a]volume=1.0[vid];` +
+        `[vid][v1][mduck]amix=inputs=3:duration=first[a]`
+      );
+    }
+    if (hasNarration) {
+      return `[0:a]volume=1.0[vid];[1:a]volume=${voiceVolume}[v];[vid][v]amix=inputs=2:duration=first[a]`;
+    }
+    if (hasMusic) {
+      return `[0:a]volume=1.0[vid];[1:a]volume=${musicVolume}[m];[vid][m]amix=inputs=2:duration=first[a]`;
+    }
+    return `[0:a]volume=1.0[a]`;
+  }
+
   if (hasNarration && hasMusic) {
     if (duckDb <= 0) {
-      // Flat mix: BGM sits at a fixed level whether or not the narración is
-      // speaking. Kept as the fallback for FFmpeg builds without
-      // sidechaincompress.
       return `[1:a]volume=${voiceVolume}[v];[2:a]volume=${musicVolume}[m];[v][m]amix=inputs=2:duration=first[a]`;
     }
-    // Side-chain ducking: the narración keys a compressor on the BGM, pulling
-    // it down while the voice is present and letting it recover between
-    // phrases. [v] is an intermediate label so it cannot be consumed twice —
-    // asplit duplicates it for the sidechain key and the final mix.
     const ratio = duckDbToRatio(duckDb);
     return (
       `[1:a]volume=${voiceVolume}[v];` +
@@ -668,9 +686,16 @@ export function createRenderer(deps: RenderDeps) {
         // Resolve local relative BGM URLs
         if (musicItem.url.startsWith("/") || !musicItem.url.includes("://")) {
           const cleanLocalPath = musicItem.url.startsWith("/") ? musicItem.url.slice(1) : musicItem.url;
-          const diskPath = path.join(process.cwd(), cleanLocalPath);
-          if (fs.existsSync(diskPath)) {
-            localMusicPath = diskPath;
+          const candidatePaths = [
+            path.join(process.cwd(), cleanLocalPath),
+            path.join(process.cwd(), "public", cleanLocalPath),
+            path.join(process.cwd(), "public", "musics", path.basename(cleanLocalPath)),
+          ];
+          for (const cand of candidatePaths) {
+            if (fs.existsSync(cand)) {
+              localMusicPath = cand;
+              break;
+            }
           }
         }
 
@@ -860,13 +885,33 @@ export function createRenderer(deps: RenderDeps) {
         const audioMixedOutput = path.join(cacheDir, `audio_mixed_${taskId}_p${partNum}.mp4`);
         const audioInputs: string[] = [];
 
+        let hasVideoAudio = false;
+        try {
+          const probeAudio = await executeCommand(
+            `ffprobe -v error -select_streams a -show_entries stream=index -of csv=p=0 "${concatOutput}"`,
+            PROBE_COMMAND_TIMEOUT_MS
+          );
+          if (probeAudio.trim().length > 0) {
+            hasVideoAudio = true;
+          }
+        } catch (e) {
+          hasVideoAudio = false;
+        }
+
         if (activeNarrationPath) {
           audioInputs.push(`-analyzeduration 10000000 -probesize 10000000 -i "${activeNarrationPath}"`);
         }
         if (localMusicPath) {
           audioInputs.push(`-analyzeduration 10000000 -probesize 10000000 -stream_loop -1 -i "${localMusicPath}"`);
         }
-        const audioFilter = buildAudioMixFilter(Boolean(activeNarrationPath), Boolean(localMusicPath), voiceVolume, musicVolume);
+        const audioFilter = buildAudioMixFilter(
+          Boolean(activeNarrationPath),
+          Boolean(localMusicPath),
+          voiceVolume,
+          musicVolume,
+          DEFAULT_DUCK_DB,
+          hasVideoAudio
+        );
         const partVideoDuration = partClips.reduce((sum, c) => sum + (c.duration || 0), 0);
         const targetRenderDuration = Math.max(partVideoDuration, narrationDuration);
         const limitDurationOpt = targetRenderDuration > 0 ? `-t ${targetRenderDuration.toFixed(2)}` : buildMixDurationArgs(Boolean(activeNarrationPath), narrationDuration);
@@ -876,19 +921,28 @@ export function createRenderer(deps: RenderDeps) {
 
         let mixCmd = audioFilter
           ? buildMixCmdWith(audioInputs, audioFilter)
-          : `ffmpeg -y -i "${concatOutput}" -f lavfi -i anullsrc=r=44100:cl=stereo -c:v copy -c:a aac -shortest ${limitDurationOpt} "${audioMixedOutput}"`;
+          : (hasVideoAudio
+              ? `ffmpeg -y -i "${concatOutput}" -c:v copy -c:a aac ${limitDurationOpt} "${audioMixedOutput}"`
+              : `ffmpeg -y -i "${concatOutput}" -f lavfi -i anullsrc=r=44100:cl=stereo -c:v copy -c:a aac -shortest ${limitDurationOpt} "${audioMixedOutput}"`);
 
         try {
           await executeCommand(mixCmd);
         } catch (err: any) {
-          console.warn(`[Renderer] Audio mix with BGM failed: ${err.message}`);
+          console.warn(`[Renderer] Audio mix failed: ${err.message}`);
           const isDucked = audioFilter.includes("sidechaincompress");
           let mixSuccess = false;
 
           if (isDucked) {
             try {
               logTask(taskId, "WARNING", "RENDER", "BGM ducking unavailable, falling back to a flat audio mix.");
-              const flatFilter = buildAudioMixFilter(Boolean(activeNarrationPath), Boolean(localMusicPath), voiceVolume, musicVolume, 0);
+              const flatFilter = buildAudioMixFilter(
+                Boolean(activeNarrationPath),
+                Boolean(localMusicPath),
+                voiceVolume,
+                musicVolume,
+                0,
+                hasVideoAudio
+              );
               await executeCommand(buildMixCmdWith(audioInputs, flatFilter));
               mixSuccess = true;
             } catch (flatErr) {
@@ -896,11 +950,31 @@ export function createRenderer(deps: RenderDeps) {
             }
           }
 
+          if (!mixSuccess && hasVideoAudio) {
+            try {
+              logTask(taskId, "WARNING", "RENDER", "Retrying audio mix without video audio stream.");
+              const noVidAudioFilter = buildAudioMixFilter(
+                Boolean(activeNarrationPath),
+                Boolean(localMusicPath),
+                voiceVolume,
+                musicVolume,
+                0,
+                false
+              );
+              if (noVidAudioFilter) {
+                await executeCommand(buildMixCmdWith(audioInputs, noVidAudioFilter));
+                mixSuccess = true;
+              }
+            } catch (fallbackErr) {
+              console.warn(`[Renderer] Fallback mix without video audio also failed:`, fallbackErr);
+            }
+          }
+
           if (!mixSuccess) {
             if (localMusicPath && activeNarrationPath) {
               logTask(taskId, "WARNING", "RENDER", "BGM file unreadable by FFmpeg, falling back to narration only.");
               const narrationOnlyInputs = [`-analyzeduration 10000000 -probesize 10000000 -i "${activeNarrationPath}"`];
-              const narrationOnlyFilter = buildAudioMixFilter(true, false, voiceVolume, musicVolume);
+              const narrationOnlyFilter = buildAudioMixFilter(true, false, voiceVolume, musicVolume, 0, false);
               const narrationCmd = buildMixCmdWith(narrationOnlyInputs, narrationOnlyFilter);
               await executeCommand(narrationCmd);
             } else {

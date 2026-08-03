@@ -67,14 +67,16 @@ export function ReviewPanel() {
         setBgmFiles([]);
       });
 
-    videoApi
-      .getOutroStatus()
-      .then((res) => {
-        if (res) setOutroStatus(res);
-      })
-      .catch((err) => {
-        console.error("[ReviewPanel] Failed to load outro status:", err);
-      });
+    if (typeof videoApi.getOutroStatus === "function") {
+      videoApi
+        .getOutroStatus()
+        .then((res) => {
+          if (res) setOutroStatus(res);
+        })
+        .catch((err) => {
+          console.error("[ReviewPanel] Failed to load outro status:", err);
+        });
+    }
   }, []);
 
   // Sync orderedClips when project loads or outroStatus updates
@@ -82,7 +84,7 @@ export function ReviewPanel() {
     let clips = [...sourceClips];
     const hasOutro = clips.some((c) => c.id === "clip_outro" || c.asset_url?.includes("outro"));
     
-    if (!hasOutro) {
+    if (!hasOutro && outroStatus.exists) {
       const outroUrl = outroStatus.url || "/assets/outro.mp4";
       const totalDur = clips.reduce((acc, c) => acc + (c.duration_sec || 0), 0);
       const outroClip: TimelineItem = {
@@ -133,6 +135,10 @@ export function ReviewPanel() {
 
     return (
       <div className="flex min-h-full h-full w-full max-w-4xl mx-auto flex-col items-center justify-start gap-4 px-4 py-6 text-center overflow-y-auto min-h-0">
+        <div>
+          <h2 className="text-[15px] font-semibold text-foreground">{t("panels.review.taskReviewTitle")}</h2>
+          <p className="text-xs text-muted mt-0.5">{t("panels.review.taskReviewDescription")}</p>
+        </div>
         {isMultiPart && multiPartCount > 1 && (
           <div className="flex items-center justify-center gap-2 bg-surface/80 p-1.5 rounded-xl border border-border shrink-0">
             <span className="text-xs font-semibold text-muted-foreground px-2">Parte Activa:</span>

@@ -35,8 +35,8 @@ export function EditorPanel() {
   });
   const [outroEnabled, setOutroEnabled] = useState(true);
 
-  const isMultiPart = Boolean((videoStore.is_multi_part && (videoStore.multi_part_count ?? 1) > 1) || videoUrls.length > 1);
-  const multiPartCount = isMultiPart ? (videoStore.multi_part_count || videoUrls.length || 2) : 1;
+  const isMultiPart = Boolean((videoStore.is_multi_part && (videoStore.multi_part_count ?? 1) > 1) || (videoUrls || []).length > 1);
+  const multiPartCount = isMultiPart ? (videoStore.multi_part_count || (videoUrls || []).length || 2) : 1;
   const [selectedPart, setSelectedPart] = useState<number | "all">(activePartIndex || 1);
 
   const videoTrack = projectStore.project?.tracks.find((t) => t.type === "video");
