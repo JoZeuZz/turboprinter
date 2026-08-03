@@ -2,39 +2,10 @@
 /config.toml
 /storage/
 /.idea/
-/app/services/__pycache__
-/app/__pycache__/
-/app/config/__pycache__/
-/app/models/__pycache__/
-/app/utils/__pycache__/
-/*/__pycache__/*
 .vscode
-/**/.streamlit
-__pycache__
 logs/
 
 node_modules
-# VuePress 
-/sites/docs/.vuepress/.temp
-# VuePress 默认缓存目录
-/sites/docs/.vuepress/.cache
-# VuePress
-/sites/docs/.vuepress/dist
-./models/*
-
-venv/
-.venv
-
-# Debug and test files
-debug/
-debug_*.py
-test_*.py
-!test/services/test_*.py
-!test/domain/test_*.py
-!test/infrastructure/test_*.py
-!test/controllers/test_*.py
-!test/webui/test_*.py
-streamlit.log
 AGENTS.md
 config.toml
 /storage/
@@ -64,7 +35,6 @@ advisor-plans/
 # Codex local workspace artifacts
 .agents/
 skills-lock.json
-.pytest_cache/
 .superpowers/
 plans/
 specs/

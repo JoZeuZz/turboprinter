@@ -12,8 +12,7 @@ never automated.
 
 > This fork was rewritten from Python (FastAPI + Streamlit + MoviePy) to
 > TypeScript (Express + React + Vite + FFmpeg CLI). Everything below describes
-> the TypeScript stack. Design documents under `docs/architecture/` predate the
-> rewrite — their intent is current, their file paths are not.
+> the TypeScript stack.
 
 ---
 
