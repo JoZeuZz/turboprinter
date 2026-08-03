@@ -946,12 +946,12 @@ Genera los metadatos completos para este vídeo cumpliendo las siguientes instru
 Genera 3 opciones de títulos que generen la mayor cantidad de curiosidad posible y llamen la atención del espectador para que entre a ver el vídeo (máximo 60 caracteres cada uno, en español).
 
 2. DESCRIPCIÓN:
-Crea una descripción con la siguiente estructura exacta:
-- Primero: Una oración de 1 sola línea que refuerce la curiosidad y el deseo del espectador por ver el vídeo. Debe comenzar obligatoriamente con un emoji compatible con todas las plataformas relacionado con el contenido de curiosidad de esta línea.
+Crea una descripción completa y estructurada con las siguientes instrucciones exactas:
+- Primera línea: Una oración, que ocupe solamente una línea, que refuerce la curiosidad y el deseo del espectador por ver el vídeo. Debe comenzar obligatoriamente con un emoji compatible con todas las plataformas de texto que guarde relación con el contenido de curiosidad de esta primera línea.
 - Deja una línea en blanco.
-- Debajo: Describe brevemente lo que encontrará el espectador en un único párrafo. Este párrafo debe incorporar 3 palabras clave de cola larga pensadas para atraer mucho tráfico relacionado con la intención de búsqueda más cualificada.
+- Debajo: Un párrafo bien redactado y de contenido rico que describa de forma breve e impactante lo que encontrará el espectador en el vídeo (de entre 3 y 5 oraciones). Este párrafo DEBE incorporar de forma natural e integrada 3 palabras clave de cola larga pensadas para atraer mucho tráfico relacionado con la intención de búsqueda más cualificada para la temática del vídeo.
 - Deja una línea en blanco.
-- Al final: Agrega entre 4 y 6 hashtags de alto impacto relevantes (ejemplo: #Shorts #Viral #Historias ...).
+- Al final: Agrega entre 4 y 6 hashtags de alto impacto relevantes (ejemplo: #Shorts #Viral #Historias #Misterio #CasosReales).
 
 3. ETIQUETAS (TAGS SEO):
 Crea un set de etiquetas:
@@ -992,7 +992,7 @@ Devuelve ÚNICAMENTE un JSON válido con este formato exacto:
     }
     if (!generated_description) {
       const baseTopic = video_subject ? video_subject.split(/[:,]/)[0].trim() : "esta historia";
-      generated_description = `🤯 Descubre el inquietante secreto detrás de ${baseTopic} que nadie se esperaba.\n\nEn este video analizamos a fondo todo sobre ${baseTopic}, explorando los detalles más impactantes para responder a la intención de búsqueda más profunda de esta revelación asombrosa.\n\n#Shorts #Viral #Historias #Misterio`;
+      generated_description = `🤯 ¿Estás listo para descubrir el secreto más perturbador detrás de ${baseTopic} que nadie se atrevió a revelar jamás?\n\nEn este vídeo analizamos a fondo todos los detalles sobre ${baseTopic}, explorando historias reales explicadas paso a paso, misterios sin resolver en español y secretos nunca antes revelados de casos impactantes que responderán a la intención de búsqueda más cualificada de la audiencia.\n\n#Shorts #Viral #Historias #Misterio #CasosReales`;
     }
     if (!generated_tags) {
       const baseTopic = (video_subject ? video_subject.split(/[:,]/)[0].trim() : "historias").toLowerCase();

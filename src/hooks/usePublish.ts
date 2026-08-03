@@ -127,13 +127,16 @@ export function useYouTubePublish() {
   }, [selectedTitle]);
 
   useEffect(() => {
-    if (genDescription && !description) {
+    if (genDescription) {
       setDescription(genDescription);
     }
-    if (genTags && !tags) {
+  }, [genDescription]);
+
+  useEffect(() => {
+    if (genTags) {
       setTags(genTags);
     }
-  }, [genDescription, genTags]);
+  }, [genTags]);
   const [privacy, setPrivacy] = useState<"private" | "unlisted" | "public">("public");
   const [mode, setMode] = useState<"now" | "schedule">("now");
   const [publishDate, setPublishDate] = useState(() => {

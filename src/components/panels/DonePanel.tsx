@@ -49,20 +49,21 @@ export function DonePanel() {
     const urlToUse = videoUrls[partToUse - 1] || videoUrls[0];
     setTargetVideoUrl(urlToUse);
     const baseTitle = videoStore.selected_title || deriveShortTitle(videoSubject, "Mi Short");
+
+    const topicClean = videoSubject ? videoSubject.trim() : "esta historia impactante";
+    const defaultDesc = `😱 ¿Estás listo para descubrir el secreto más perturbador detrás de ${topicClean} que nadie se atrevió a revelar jamás?\n\nEn este vídeo analizamos a fondo todos los detalles sobre ${topicClean}, explorando historias reales explicadas paso a paso, misterios sin resolver en español y secretos nunca antes revelados de casos impactantes que responderán a la intención de búsqueda más cualificada de la audiencia.\n\n#Shorts #Viral #Historias #Misterio #CasosReales`;
+
+    const baseDescription = videoStore.generated_description || defaultDesc;
+
     if (isMultiPart) {
       youtube.setTitle(`${baseTitle} (Parte ${partToUse}/${multiPartCount})`);
-      const isFinalPart = partToUse >= multiPartCount;
-      const ctaText = isFinalPart
-        ? "Suscríbete para no perderte más historias."
-        : "Suscríbete para no perderte las siguientes partes.";
-      youtube.setDescription(
-        `📌 Parte ${partToUse} de ${multiPartCount}. ${ctaText}\n\n#HistoriasDeReddit #CasosReales #Suspenso #Shorts #Viral`
-      );
+      youtube.setDescription(`📌 Parte ${partToUse} de ${multiPartCount}.\n\n${baseDescription}`);
     } else {
       youtube.setTitle(baseTitle);
-      youtube.setDescription(
-        `Suscríbete para más historias impactantes.\n\n#HistoriasDeReddit #CasosReales #Suspenso #Shorts #Viral`
-      );
+      youtube.setDescription(baseDescription);
+    }
+    if (videoStore.generated_tags) {
+      youtube.setTags(videoStore.generated_tags);
     }
     setIsModalOpen(true);
   };
