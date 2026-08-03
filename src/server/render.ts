@@ -753,7 +753,7 @@ export function createRenderer(deps: RenderDeps) {
 
         if (inputPath === "placeholder") {
           console.log(`[Renderer] Building synthetic placeholder clip ${i}`);
-          const cmd = `ffmpeg -y -f lavfi -i color=c=0x1E1E2E:s=${resWidth}x${resHeight}:d=${duration} -r 25 -pix_fmt yuv420p "${formattedPath}"`;
+          const cmd = `ffmpeg -y -f lavfi -i color=c=0x1E1E2E:s=${resWidth}x${resHeight}:d=${duration} -f lavfi -i anullsrc=r=44100:cl=stereo -ss 0 -t ${duration} -r 25 ${encoderArgs} -c:a aac -ar 44100 -ac 2 -shortest -pix_fmt yuv420p "${formattedPath}"`;
           await executeCommand(cmd);
         } else {
           try {
@@ -770,13 +770,31 @@ export function createRenderer(deps: RenderDeps) {
               loopCmd = `-stream_loop ${loopCount - 1}`;
             }
 
+            let hasAudio = false;
+            try {
+              const probeAudio = await executeCommand(
+                `ffprobe -v error -select_streams a -show_entries stream=index -of csv=p=0 "${inputPath}"`,
+                PROBE_COMMAND_TIMEOUT_MS
+              );
+              if (probeAudio.trim().length > 0) {
+                hasAudio = true;
+              }
+            } catch (e) {
+              hasAudio = false;
+            }
+
             // Note: Put -ss and -t after -i for reliable seek/trim when looping is applied
-            const cmd = `ffmpeg -y ${loopCmd ? loopCmd + " " : ""}-i "${inputPath}" -ss ${start} -t ${duration} -vf "scale=${resWidth}:${resHeight}:force_original_aspect_ratio=increase,crop=${resWidth}:${resHeight},setsar=1" -r 25 ${encoderArgs} -pix_fmt yuv420p "${formattedPath}"`;
+            let cmd = "";
+            if (hasAudio) {
+              cmd = `ffmpeg -y ${loopCmd ? loopCmd + " " : ""}-i "${inputPath}" -ss ${start} -t ${duration} -vf "scale=${resWidth}:${resHeight}:force_original_aspect_ratio=increase,crop=${resWidth}:${resHeight},setsar=1" -r 25 ${encoderArgs} -c:a aac -ar 44100 -ac 2 -pix_fmt yuv420p "${formattedPath}"`;
+            } else {
+              cmd = `ffmpeg -y ${loopCmd ? loopCmd + " " : ""}-i "${inputPath}" -f lavfi -i anullsrc=r=44100:cl=stereo -ss ${start} -t ${duration} -vf "scale=${resWidth}:${resHeight}:force_original_aspect_ratio=increase,crop=${resWidth}:${resHeight},setsar=1" -r 25 ${encoderArgs} -c:a aac -ar 44100 -ac 2 -shortest -pix_fmt yuv420p "${formattedPath}"`;
+            }
             await executeCommand(cmd);
           } catch (err) {
             console.error(`[Renderer] Failed to format clip ${i} (${inputPath}), falling back to placeholder:`, err);
             logTask(taskId, "WARNING", "VIDEO_ASSET", `Failed to process local video file: ${path.basename(inputPath)}. Using a colored placeholder instead.`);
-            const cmd = `ffmpeg -y -f lavfi -i color=c=0x1E1E2E:s=${resWidth}x${resHeight}:d=${duration} -r 25 -pix_fmt yuv420p "${formattedPath}"`;
+            const cmd = `ffmpeg -y -f lavfi -i color=c=0x1E1E2E:s=${resWidth}x${resHeight}:d=${duration} -f lavfi -i anullsrc=r=44100:cl=stereo -ss 0 -t ${duration} -r 25 ${encoderArgs} -c:a aac -ar 44100 -ac 2 -shortest -pix_fmt yuv420p "${formattedPath}"`;
             await executeCommand(cmd);
           }
         }
