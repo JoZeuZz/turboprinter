@@ -1,5 +1,5 @@
 // webui-react/src/components/panels/ReviewPanel.tsx
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { ArrowLeft, CheckCircle2, Clapperboard, SlidersHorizontal, Youtube, Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import {
@@ -46,6 +46,13 @@ export function ReviewPanel() {
   const [previewClip, setPreviewClip] = useState<TimelineItem | null>(null);
   const [bgmFiles, setBgmFiles] = useState<BgmFile[]>([]);
 
+  const finalVideoIndex = Math.min(Math.max(activePartIndex - 1, 0), Math.max(videoUrls.length - 1, 0));
+  const finalVideo = videoUrls[finalVideoIndex] || videoUrls[0];
+  const finalVideoSrc = useMemo(() => {
+    if (!finalVideo) return "";
+    return finalVideo.includes("?") ? finalVideo : `${finalVideo}?v=${Date.now()}`;
+  }, [finalVideo]);
+
   // Load BGMs
   useEffect(() => {
     videoApi
@@ -82,8 +89,6 @@ export function ReviewPanel() {
   };
 
   if (projectStore.mode === "disabled" || !projectStore.project) {
-    const finalVideoIndex = Math.min(Math.max(activePartIndex - 1, 0), Math.max(videoUrls.length - 1, 0));
-    const finalVideo = videoUrls[finalVideoIndex] || videoUrls[0];
     const videoAspect = useVideoStore.getState().video_aspect ?? "9:16";
 
     let aspectClass = "aspect-[9/16]";
@@ -127,7 +132,7 @@ export function ReviewPanel() {
             <div className={`relative w-full shrink-0 rounded-xl overflow-hidden bg-black flex items-center justify-center ${aspectClass}`}>
               <video
                 key={finalVideo}
-                src={finalVideo.includes("?") ? finalVideo : `${finalVideo}?v=${Date.now()}`}
+                src={finalVideoSrc}
                 controls
                 preload="auto"
                 playsInline

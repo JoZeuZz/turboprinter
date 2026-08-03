@@ -1,5 +1,5 @@
 // webui-react/src/components/panels/DonePanel.tsx
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Download, RotateCcw, CheckCircle2, Youtube, Loader2, SlidersHorizontal, Scissors, Sparkles, Music as Tiktok, Copy, Check } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button, Input, Textarea, Select, TabBar } from "../ui";
@@ -11,6 +11,14 @@ import { deriveDownloadFilename, deriveShortTitle, updateDescriptionHashtags } f
 export function DonePanel() {
   const { t } = useTranslation();
   const { videoUrls, reset, setPanel, setActivePartIndex } = useProjectWorkspaceStore();
+
+  const videoSrcMap = useMemo(() => {
+    const ts = Date.now();
+    return videoUrls.map((url) => {
+      if (!url) return "";
+      return url.includes("?") ? url : `${url}?v=${ts}`;
+    });
+  }, [videoUrls]);
 
   const youtube = useYouTubePublish();
   const tiktok = useTikTokPublish();
@@ -166,7 +174,7 @@ export function DonePanel() {
             const filename = downloadFilename.includes(".")
               ? downloadFilename.replace(/(\.[\w]+)$/, `_parte${partNum}$1`)
               : `${downloadFilename}_parte${partNum}.mp4`;
-            const videoSrc = rawUrl ? (rawUrl.includes("?") ? rawUrl : `${rawUrl}?v=${Date.now()}`) : "";
+            const videoSrc = videoSrcMap[index] || videoSrcMap[0] || (rawUrl ? `${rawUrl}?v=${Date.now()}` : "");
 
             return (
               <div
@@ -176,7 +184,7 @@ export function DonePanel() {
 
                 <div className={`relative w-full shrink-0 rounded-xl overflow-hidden bg-black flex items-center justify-center ${aspectClass}`}>
                   <video
-                    key={videoSrc}
+                    key={`${rawUrl}-${index}`}
                     src={videoSrc}
                     controls
                     preload="auto"
