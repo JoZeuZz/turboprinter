@@ -50,3 +50,6 @@ specs/
 # Never commit: a leaked secret in server.ts used to end up duplicated here.
 /dist/
 tsconfig.tsbuildinfo
+
+# Custom video assets
+public/assets/*.mp4
