@@ -52,6 +52,8 @@ export interface VideoParams {
   hook_style?: string;
   title_options?: string[];
   selected_title?: string;
+  generated_description?: string;
+  generated_tags?: string;
 }
 
 export const TASK_STATE_FAILED = -1 as const;

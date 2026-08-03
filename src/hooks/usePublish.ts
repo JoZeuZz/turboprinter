@@ -107,14 +107,33 @@ export function useHashtagGenerator() {
 export function useYouTubePublish() {
   const videoUrls = useProjectWorkspaceStore((s) => s.videoUrls);
   const videoSubject = useVideoStore((s) => s.video_subject) || "";
+  const selectedTitle = useVideoStore((s) => s.selected_title) || "";
+  const genDescription = useVideoStore((s) => s.generated_description) || "";
+  const genTags = useVideoStore((s) => s.generated_tags) || "";
 
   const channelStatus = useChannelStatus({
     fetchStatus: () => videoApi.getYouTubeStatus(),
     selectChannel: (id) => videoApi.selectYouTubeChannel(id),
   });
 
-  const [title, setTitle] = useState(() => deriveShortTitle(videoSubject, "Mi YouTube Short"));
-  const [description, setDescription] = useState("");
+  const [title, setTitle] = useState(() => selectedTitle || deriveShortTitle(videoSubject, "Mi YouTube Short"));
+  const [description, setDescription] = useState(() => genDescription);
+  const [tags, setTags] = useState(() => genTags);
+
+  useEffect(() => {
+    if (selectedTitle) {
+      setTitle(selectedTitle);
+    }
+  }, [selectedTitle]);
+
+  useEffect(() => {
+    if (genDescription && !description) {
+      setDescription(genDescription);
+    }
+    if (genTags && !tags) {
+      setTags(genTags);
+    }
+  }, [genDescription, genTags]);
   const [privacy, setPrivacy] = useState<"private" | "unlisted" | "public">("public");
   const [mode, setMode] = useState<"now" | "schedule">("now");
   const [publishDate, setPublishDate] = useState(() => {
@@ -190,6 +209,7 @@ export function useYouTubePublish() {
           videoUrl: targetUrl,
           title: title || "YouTube Short",
           description: description || "",
+          tags: tags || undefined,
           privacyStatus: mode === "now" ? privacy : "private",
           publishAt,
         });
@@ -210,7 +230,7 @@ export function useYouTubePublish() {
         }));
       }
     },
-    [channelStatus.linked, videoUrls, mode, publishDate, publishTime, title, description, privacy]
+    [channelStatus.linked, videoUrls, mode, publishDate, publishTime, title, description, tags, privacy]
   );
 
   return {
@@ -224,6 +244,8 @@ export function useYouTubePublish() {
     setTitle,
     description,
     setDescription,
+    tags,
+    setTags,
     privacy,
     setPrivacy,
     mode,

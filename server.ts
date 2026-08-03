@@ -928,6 +928,80 @@ async function startServer() {
     }
   }));
 
+  // Helper function to generate YouTube video metadata (titles, description, tags)
+  async function generateVideoMetadata(video_subject: string, video_script: string) {
+    let title_options: string[] = [];
+    let generated_description = "";
+    let generated_tags = "";
+
+    const detailText = `Vídeo de YouTube/Shorts sobre: "${video_subject}"\nGuión del vídeo: "${(video_script || "").substring(0, 500)}"`;
+
+    try {
+      const prompt = `Actúa como un experto en SEO y crecimiento viral para YouTube. Analiza la siguiente información de un vídeo:
+${detailText}
+
+Genera los metadatos completos para este vídeo cumpliendo las siguientes instrucciones exactas:
+
+1. TÍTULOS (3 opciones virales):
+Genera 3 opciones de títulos que generen la mayor cantidad de curiosidad posible y llamen la atención del espectador para que entre a ver el vídeo (máximo 60 caracteres cada uno, en español).
+
+2. DESCRIPCIÓN:
+Crea una descripción con la siguiente estructura exacta:
+- Primero: Una oración de 1 sola línea que refuerce la curiosidad y el deseo del espectador por ver el vídeo. Debe comenzar obligatoriamente con un emoji compatible con todas las plataformas relacionado con el contenido de curiosidad de esta línea.
+- Deja una línea en blanco.
+- Debajo: Describe brevemente lo que encontrará el espectador en un único párrafo. Este párrafo debe incorporar 3 palabras clave de cola larga pensadas para atraer mucho tráfico relacionado con la intención de búsqueda más cualificada.
+- Deja una línea en blanco.
+- Al final: Agrega entre 4 y 6 hashtags de alto impacto relevantes (ejemplo: #Shorts #Viral #Historias ...).
+
+3. ETIQUETAS (TAGS SEO):
+Crea un set de etiquetas:
+- La primera etiqueta debe ser una etiqueta corta de 2-3 palabras con la mayor cantidad de búsquedas posibles relacionada directamente con la idea del vídeo.
+- Las siguientes 5 etiquetas deben ser etiquetas de cola larga que respondan a intenciones de búsqueda de la audiencia interesada, pero con poca competencia para posicionarse fácilmente en las primeras posiciones.
+- Entrega las 6 etiquetas en una sola cadena separadas únicamente por comas (ejemplo: "etiqueta principal, etiqueta cola larga 1, etiqueta cola larga 2, etiqueta cola larga 3, etiqueta cola larga 4, etiqueta cola larga 5").
+
+Devuelve ÚNICAMENTE un JSON válido con este formato exacto:
+{
+  "title_options": ["Título Opción 1", "Título Opción 2", "Título Opción 3"],
+  "description": "Texto completo de la descripción",
+  "tags": "etiqueta1, etiqueta2, etiqueta3, etiqueta4, etiqueta5, etiqueta6"
+}`;
+
+      const rawJson = await generateLlmContent(prompt, true);
+      const parsed = JSON.parse(rawJson);
+
+      if (parsed && Array.isArray(parsed.title_options) && parsed.title_options.length > 0) {
+        title_options = parsed.title_options.slice(0, 3).map((s: any) => String(s).trim());
+      }
+      if (parsed && parsed.description) {
+        generated_description = String(parsed.description).trim();
+      }
+      if (parsed && parsed.tags) {
+        generated_tags = Array.isArray(parsed.tags) ? parsed.tags.join(", ") : String(parsed.tags).trim();
+      }
+    } catch (err) {
+      console.warn("[LLM] Error generating video metadata, using fallback:", err);
+    }
+
+    if (!title_options || title_options.length === 0) {
+      const baseTopic = video_subject ? video_subject.split(/[:,]/)[0].trim() : "Caso Real";
+      title_options = [
+        `¡No creerás lo que pasó! ${baseTopic}`,
+        `El Secreto Oculto de ${baseTopic}`,
+        `Lo que no te contaron sobre ${baseTopic}`
+      ];
+    }
+    if (!generated_description) {
+      const baseTopic = video_subject ? video_subject.split(/[:,]/)[0].trim() : "esta historia";
+      generated_description = `🤯 Descubre el inquietante secreto detrás de ${baseTopic} que nadie se esperaba.\n\nEn este video analizamos a fondo todo sobre ${baseTopic}, explorando los detalles más impactantes para responder a la intención de búsqueda más profunda de esta revelación asombrosa.\n\n#Shorts #Viral #Historias #Misterio`;
+    }
+    if (!generated_tags) {
+      const baseTopic = (video_subject ? video_subject.split(/[:,]/)[0].trim() : "historias").toLowerCase();
+      generated_tags = `${baseTopic}, historia real explicada paso a paso, secretos nunca revelados de ${baseTopic}, datos curiosos impactantes que no conocias, mejor documental corto sobre ${baseTopic}, casos misteriosos de la vida real`;
+    }
+
+    return { title_options, generated_description, generated_tags };
+  }
+
   // 3. LLM APIs (Scripts & Terms)
   app.post("/api/v1/scripts", wrap(async (req: any, res: any) => {
     let {
@@ -1042,24 +1116,7 @@ RESTRICCIONES DE FORMATO PARA TEXT-TO-SPEECH (CRÍTICO):
 
     const rawScript = await generateLlmContent(prompt, false, finalSystemPrompt || undefined);
 
-    let title_options: string[] = [];
-    try {
-      const titlePrompt = `Basándote en el tema "${video_subject}" y en este fragmento del guión: "${(rawScript || "").substring(0, 300)}...", genera EXACTAMENTE 3 opciones de títulos virales, sumamente llamativos e intrigantes (máximo 60 caracteres cada uno, en español) ideales para TikTok y YouTube Shorts.
-Devuelve únicamente un JSON válido con la estructura:
-{"title_options": ["Título Opción 1", "Título Opción 2", "Título Opción 3"]}`;
-      const titleJsonRaw = await generateLlmContent(titlePrompt, true);
-      const parsedTitleObj = JSON.parse(titleJsonRaw);
-      if (parsedTitleObj && Array.isArray(parsedTitleObj.title_options) && parsedTitleObj.title_options.length > 0) {
-        title_options = parsedTitleObj.title_options.slice(0, 3).map((s: string) => String(s).trim());
-      }
-    } catch (e) {
-      console.warn("[LLM] Failed to generate title options, falling back to defaults:", e);
-      title_options = [
-        `${video_subject} - Caso Real`,
-        `El Secreto Oculto de ${video_subject}`,
-        `Lo que no te contaron sobre ${video_subject}`
-      ];
-    }
+    const { title_options, generated_description, generated_tags } = await generateVideoMetadata(video_subject, rawScript);
 
     if (is_multi_part) {
       // Split rawScript by separator markers
@@ -1079,13 +1136,35 @@ Devuelve únicamente un JSON válido con la estructura:
           video_script: fullScriptText,
           multi_part_scripts,
           title_options,
+          generated_description,
+          generated_tags,
         }
       });
       return;
     }
 
     const scriptText = cleanScriptSymbols(rawScript);
-    res.json({ status: 200, message: "ok", data: { video_script: scriptText, title_options } });
+    res.json({
+      status: 200,
+      message: "ok",
+      data: {
+        video_script: scriptText,
+        title_options,
+        generated_description,
+        generated_tags,
+      }
+    });
+  }));
+
+  app.post("/api/v1/generate-metadata", wrap(async (req: any, res: any) => {
+    const { video_subject = "", video_script = "" } = req.body;
+    const llmProvider = process.env.LLM_PROVIDER || "gemini";
+    if (llmProvider === "gemini" && !process.env.GEMINI_API_KEY) {
+      throw new Error("No Gemini API key configured. Please set GEMINI_API_KEY.");
+    }
+
+    const meta = await generateVideoMetadata(video_subject, video_script);
+    res.json({ status: 200, message: "ok", data: meta });
   }));
 
   app.post("/api/v1/terms", wrap(async (req: any, res: any) => {
@@ -1301,9 +1380,16 @@ Instrucciones:
 
   // YouTube Video Upload Endpoint
   app.post("/api/v1/youtube/upload", wrap(async (req: any, res: any) => {
-    const { videoUrl, title, description, privacyStatus = "private", publishAt } = req.body;
+    const { videoUrl, title, description, tags, privacyStatus = "private", publishAt } = req.body;
     if (!videoUrl) {
       return res.status(400).json({ status: 400, message: "Falta el videoUrl del video a subir." });
+    }
+
+    let formattedTags = ["shorts", "moneyprinter", "turbo"];
+    if (Array.isArray(tags) && tags.length > 0) {
+      formattedTags = tags.map((t: any) => String(t).trim()).filter(Boolean);
+    } else if (typeof tags === "string" && tags.trim()) {
+      formattedTags = tags.split(",").map((t) => t.trim()).filter(Boolean);
     }
 
     const creds = loadChannels();
@@ -1348,7 +1434,7 @@ Instrucciones:
         snippet: {
           title: title || "YouTube Short",
           description: description || "Creado con MoneyPrinter Turbo",
-          tags: ["shorts", "moneyprinter", "turbo"],
+          tags: formattedTags,
           categoryId: "22" // People & Blogs
         },
         status: {

@@ -1,6 +1,6 @@
 // webui-react/src/components/panels/DonePanel.tsx
 import { useState } from "react";
-import { Download, RotateCcw, CheckCircle2, Youtube, Loader2, SlidersHorizontal, Scissors, Sparkles, Music as Tiktok } from "lucide-react";
+import { Download, RotateCcw, CheckCircle2, Youtube, Loader2, SlidersHorizontal, Scissors, Sparkles, Music as Tiktok, Copy, Check } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button, Input, Textarea, Select, TabBar } from "../ui";
 import { useProjectWorkspaceStore } from "../../store/useProjectWorkspaceStore";
@@ -35,6 +35,7 @@ export function DonePanel() {
   const [targetPartNum, setTargetPartNum] = useState<number>(1);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isTiktokModalOpen, setIsTiktokModalOpen] = useState(false);
+  const [copiedTags, setCopiedTags] = useState(false);
 
   // Automatically update youtube/tiktok default title when active part changes
   const currentPartNum = typeof selectedPart === "number" ? selectedPart : 1;
@@ -470,11 +471,11 @@ export function DonePanel() {
 
             <div className="flex flex-col gap-1.5">
               <Textarea
-                label="Descripción del Short (Solo Hashtags)"
+                label="Descripción del Short (Curiosidad, Párrafo Keyword y Hashtags)"
                 value={youtube.description}
                 onChange={(e) => youtube.setDescription(e.target.value)}
-                placeholder="Añade descripción y hashtags"
-                rows={4}
+                placeholder="Escribe o revisa la descripción del video..."
+                rows={5}
                 className="text-xs"
               />
               <div className="flex items-center justify-between">
@@ -491,7 +492,7 @@ export function DonePanel() {
                   ) : (
                     <Sparkles className="h-3 w-3" />
                   )}
-                  Generar Hashtags con IA (Palabras Clave)
+                  Generar Hashtags Adicionales con IA
                 </Button>
                 {youtube.hashtagsAutoLoading && (
                   <span className="text-[10px] text-muted-foreground animate-pulse">
@@ -502,6 +503,37 @@ export function DonePanel() {
               {youtube.hashtagsError && (
                 <p className="text-[10px] text-red-400">{youtube.hashtagsError}</p>
               )}
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-foreground">
+                  Etiquetas / Keywords SEO (YouTube Tags)
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (youtube.tags) {
+                      navigator.clipboard.writeText(youtube.tags);
+                      setCopiedTags(true);
+                      setTimeout(() => setCopiedTags(false), 2000);
+                    }
+                  }}
+                  className="text-[10px] text-accent hover:underline flex items-center gap-1"
+                >
+                  {copiedTags ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
+                  {copiedTags ? "¡Copiado!" : "Copiar Etiquetas"}
+                </button>
+              </div>
+              <Input
+                value={youtube.tags || ""}
+                onChange={(e) => youtube.setTags(e.target.value)}
+                placeholder="Etiqueta principal, cola larga 1, cola larga 2..."
+                className="text-xs"
+              />
+              <span className="text-[10px] text-muted-foreground">
+                6 etiquetas separadas por comas (1 principal + 5 de cola larga con poca competencia).
+              </span>
             </div>
 
             {youtube.mode === "now" ? (

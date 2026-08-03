@@ -17,9 +17,30 @@ export interface TermsRequest {
   amount?: number;
 }
 
+export interface MetadataRequest {
+  video_subject: string;
+  video_script: string;
+}
+
 export const llmApi = {
   generateScript: (params: ScriptRequest) =>
-    apiFetch<{ video_script: string; multi_part_scripts?: string[]; title_options?: string[] }>("/scripts", {
+    apiFetch<{
+      video_script: string;
+      multi_part_scripts?: string[];
+      title_options?: string[];
+      generated_description?: string;
+      generated_tags?: string;
+    }>("/scripts", {
+      method: "POST",
+      body: JSON.stringify(params),
+    }),
+
+  generateMetadata: (params: MetadataRequest) =>
+    apiFetch<{
+      title_options: string[];
+      generated_description: string;
+      generated_tags: string;
+    }>("/generate-metadata", {
       method: "POST",
       body: JSON.stringify(params),
     }),

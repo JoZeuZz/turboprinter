@@ -1,6 +1,6 @@
 // webui-react/src/components/panels/ScriptPanel.tsx
 import { useState } from "react";
-import { Wand2, Sparkles } from "lucide-react";
+import { Wand2, Sparkles, RefreshCw } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { ApiError } from "../../api/client";
@@ -191,12 +191,39 @@ export function ScriptPanel() {
   const wordCount = getWordCount(targetScriptForDuration);
   const estimatedSeconds = getEstimatedDuration(targetScriptForDuration);
 
+  const [regeneratingMeta, setRegeneratingMeta] = useState(false);
+
+  const handleRegenerateMetadata = async () => {
+    if (!store.video_subject.trim()) return;
+    setRegeneratingMeta(true);
+    try {
+      const { title_options, generated_description, generated_tags } = await llmApi.generateMetadata({
+        video_subject: store.video_subject,
+        video_script: store.video_script || "",
+      });
+      if (title_options && title_options.length > 0) {
+        store.set("title_options", title_options);
+        store.set("selected_title", "");
+      }
+      if (generated_description) {
+        store.set("generated_description", generated_description);
+      }
+      if (generated_tags) {
+        store.set("generated_tags", generated_tags);
+      }
+    } catch (err: any) {
+      console.error("[ScriptPanel] Error regenerating metadata:", err);
+    } finally {
+      setRegeneratingMeta(false);
+    }
+  };
+
   const handleGenerateScript = async () => {
     if (!store.video_subject.trim()) return;
     setGenerating(true);
     setError(null);
     try {
-      const { video_script, multi_part_scripts, title_options } = await llmApi.generateScript({
+      const { video_script, multi_part_scripts, title_options, generated_description, generated_tags } = await llmApi.generateScript({
         video_subject: store.video_subject,
         video_language: store.video_language,
         paragraph_number: store.paragraph_number,
@@ -215,6 +242,12 @@ export function ScriptPanel() {
       if (title_options && title_options.length > 0) {
         store.set("title_options", title_options);
         store.set("selected_title", "");
+      }
+      if (generated_description) {
+        store.set("generated_description", generated_description);
+      }
+      if (generated_tags) {
+        store.set("generated_tags", generated_tags);
       }
 
       const { video_terms } = await llmApi.generateTerms({
@@ -443,9 +476,22 @@ export function ScriptPanel() {
                 <Sparkles className={`h-3.5 w-3.5 ${hasTitles ? "text-accent" : "text-muted-foreground"}`} />
                 <span>Opciones de Título Viral Sugeridas (Opcional)</span>
               </label>
-              <span className="text-[10px] text-muted-foreground">
-                {hasTitles ? "Clic para seleccionar/deseleccionar" : "Se generan con el guión"}
-              </span>
+              <div className="flex items-center gap-2">
+                {hasTitles && (
+                  <button
+                    type="button"
+                    onClick={handleRegenerateMetadata}
+                    disabled={regeneratingMeta || generating}
+                    className="text-[10px] font-semibold text-accent hover:text-accent/80 flex items-center gap-1 px-2 py-0.5 rounded bg-accent/15 border border-accent/30 transition-all disabled:opacity-50"
+                  >
+                    <RefreshCw className={`h-3 w-3 ${regeneratingMeta ? "animate-spin" : ""}`} />
+                    <span>{regeneratingMeta ? "Regenerando..." : "Regenerar Títulos e IA"}</span>
+                  </button>
+                )}
+                <span className="text-[10px] text-muted-foreground hidden sm:inline">
+                  {hasTitles ? "Clic para seleccionar/deseleccionar" : "Se generan con el guión"}
+                </span>
+              </div>
             </div>
             <div className="flex flex-col gap-2 pt-1">
               {hasTitles ? (

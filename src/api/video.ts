@@ -44,7 +44,7 @@ export const videoApi = {
       body: JSON.stringify({ channelId }),
     }),
 
-  uploadToYouTube: (params: { videoUrl: string; title: string; description: string; privacyStatus?: "public" | "private" | "unlisted"; publishAt?: string }) =>
+  uploadToYouTube: (params: { videoUrl: string; title: string; description: string; tags?: string | string[]; privacyStatus?: "public" | "private" | "unlisted"; publishAt?: string }) =>
     apiFetch<{ videoId: string; url: string }>("/youtube/upload", {
       method: "POST",
       body: JSON.stringify(params),
