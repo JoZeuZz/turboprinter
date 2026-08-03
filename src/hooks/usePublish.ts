@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useProjectWorkspaceStore } from "../store/useProjectWorkspaceStore";
 import { useVideoStore } from "../store/useVideoStore";
 import { videoApi } from "../api/video";
-import { deriveShortTitle } from "../lib/videoNaming";
+import { deriveShortTitle, updateDescriptionHashtags } from "../lib/videoNaming";
 
 export type UploadStatus = "idle" | "uploading" | "success" | "error";
 
@@ -178,7 +178,9 @@ export function useYouTubePublish() {
     void hashtags
       .generate()
       .then((tags) => {
-        if (tags) setDescription(tags);
+        if (tags) {
+          setDescription((prev) => (prev ? updateDescriptionHashtags(prev, tags) : tags));
+        }
       })
       .finally(() => setAutoLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -6,17 +6,7 @@ import { Button, Input, Textarea, Select, TabBar } from "../ui";
 import { useProjectWorkspaceStore } from "../../store/useProjectWorkspaceStore";
 import { useVideoStore } from "../../store/useVideoStore";
 import { useYouTubePublish, useTikTokPublish } from "../../hooks/usePublish";
-import { deriveDownloadFilename, deriveShortTitle } from "../../lib/videoNaming";
-
-function updateDescriptionHashtags(existingText: string, newHashtags: string): string {
-  if (!existingText.trim()) return newHashtags;
-  const firstHashIndex = existingText.indexOf("#");
-  if (firstHashIndex !== -1) {
-    const introText = existingText.substring(0, firstHashIndex).trim();
-    return introText ? `${introText}\n\n${newHashtags}` : newHashtags;
-  }
-  return `${existingText.trim()}\n\n${newHashtags}`;
-}
+import { deriveDownloadFilename, deriveShortTitle, updateDescriptionHashtags } from "../../lib/videoNaming";
 
 export function DonePanel() {
   const { t } = useTranslation();

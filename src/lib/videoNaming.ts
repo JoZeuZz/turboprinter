@@ -34,3 +34,13 @@ export const deriveDownloadFilename = (subject: string): string => {
   const sanitized = snippet.replace(/[\\/:*?"<>|]/g, "").trim();
   return sanitized ? `${sanitized}.mp4` : "video.mp4";
 };
+
+export function updateDescriptionHashtags(existingText: string, newHashtags: string): string {
+  if (!existingText.trim()) return newHashtags;
+  const match = existingText.match(/(^|\n)\s*#/);
+  if (match && match.index !== undefined) {
+    const introText = existingText.substring(0, match.index).trim();
+    return introText ? `${introText}\n\n${newHashtags}` : newHashtags;
+  }
+  return `${existingText.trim()}\n\n${newHashtags}`;
+}
