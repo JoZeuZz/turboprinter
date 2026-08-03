@@ -60,7 +60,10 @@ export function SortableClipCard({
       </button>
 
       {/* Thumbnail */}
-      <div className="aspect-video bg-surface flex items-center justify-center relative">
+      <div 
+        onClick={() => onPreview(clip)}
+        className="aspect-video bg-surface flex items-center justify-center relative cursor-pointer group"
+      >
         {clip.thumbnail_url && !imgError ? (
           <img
             src={clip.thumbnail_url}
@@ -69,9 +72,9 @@ export function SortableClipCard({
             onError={() => setImgError(true)}
             className="w-full h-full object-cover"
           />
-        ) : clip.asset_url ? (
+        ) : (clip.asset_url || clip.source_url) ? (
           <video
-            src={clip.asset_url}
+            src={clip.asset_url || clip.source_url || undefined}
             className="w-full h-full object-cover pointer-events-none"
             muted
             preload="metadata"
@@ -84,13 +87,12 @@ export function SortableClipCard({
         )}
 
         {/* Play overlay */}
-        <button
+        <div
           title={t("clips.preview")}
-          onClick={() => onPreview(clip)}
-          className="absolute inset-0 flex items-center justify-center bg-black/0 hover:bg-black/50 transition-colors group"
+          className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/50 transition-colors"
         >
-          <Play className="h-8 w-8 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-        </button>
+          <Play className="h-8 w-8 text-white opacity-80 group-hover:opacity-100 group-hover:scale-110 transition-all drop-shadow" />
+        </div>
       </div>
 
       {/* Footer */}

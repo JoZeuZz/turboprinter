@@ -757,6 +757,7 @@ export function createRenderer(deps: RenderDeps) {
         }
 
         formattedClips.push(formattedPath);
+        clips[i].duration_sec = duration;
         updateTaskState(Math.floor(40 + (i / clips.length) * 20), null, null);
       }
 
@@ -866,7 +867,9 @@ export function createRenderer(deps: RenderDeps) {
           audioInputs.push(`-analyzeduration 10000000 -probesize 10000000 -stream_loop -1 -i "${localMusicPath}"`);
         }
         const audioFilter = buildAudioMixFilter(Boolean(activeNarrationPath), Boolean(localMusicPath), voiceVolume, musicVolume);
-        const limitDurationOpt = buildMixDurationArgs(Boolean(activeNarrationPath), narrationDuration);
+        const partVideoDuration = partClips.reduce((sum, c) => sum + (c.duration || 0), 0);
+        const targetRenderDuration = Math.max(partVideoDuration, narrationDuration);
+        const limitDurationOpt = targetRenderDuration > 0 ? `-t ${targetRenderDuration.toFixed(2)}` : buildMixDurationArgs(Boolean(activeNarrationPath), narrationDuration);
 
         const buildMixCmdWith = (inputs: string[], filter: string): string =>
           `ffmpeg -y -i "${concatOutput}" ${inputs.join(" ")} -filter_complex "${filter}" -map 0:v -map "[a]" -c:v copy -c:a aac ${limitDurationOpt} "${audioMixedOutput}"`;

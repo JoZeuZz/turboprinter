@@ -151,6 +151,8 @@ export function VideoPreview({
     return { activeVideoClip: items[items.length - 1], clipLocalTime: 0 };
   }, [items, currentTime, videoTrackDuration]);
 
+  const [audioDuration, setAudioDuration] = useState(0);
+
   // Notify parent of current global time
   useEffect(() => {
     const globalTime = (selectedPart === "all" ? 0 : partOffsetSec) + currentTime;
@@ -170,12 +172,13 @@ export function VideoPreview({
         setCurrentTime(newTime);
         if (audioRef.current) {
           try {
-            audioRef.current.currentTime = newTime;
+            const maxSeekable = audioDuration > 0 ? Math.min(newTime, audioDuration - 0.05) : newTime;
+            audioRef.current.currentTime = Math.max(0, maxSeekable);
           } catch (e) {}
         }
       }
     }
-  }, [selectedId, allTimelineItems]);
+  }, [selectedId, allTimelineItems, audioDuration]);
 
   // Sync video element when active video clip or seeking changes
   const activeClipUrl = activeVideoClip?.asset_url;
@@ -202,30 +205,27 @@ export function VideoPreview({
     }
   }, [activeClipUrl, clipLocalTime, playing]);
 
-  // Audio playback master clock sync
+  // Audio playback master clock sync & RAF timer fallback past audio duration
+  const isAudioActive = Boolean(narrationUrl && audioDuration > 0 && currentTime < audioDuration - 0.1);
+
   useEffect(() => {
     if (!audioRef.current || !narrationUrl) return;
 
-    if (playing) {
+    if (playing && isAudioActive) {
       if (Math.abs(audioRef.current.currentTime - currentTime) > 0.3) {
         try {
-          audioRef.current.currentTime = currentTime;
+          audioRef.current.currentTime = Math.max(0, currentTime);
         } catch (e) {}
       }
       void audioRef.current.play().catch(() => {});
     } else {
       audioRef.current.pause();
-      if (Math.abs(audioRef.current.currentTime - currentTime) > 0.3) {
-        try {
-          audioRef.current.currentTime = currentTime;
-        } catch (e) {}
-      }
     }
-  }, [playing, currentTime, narrationUrl]);
+  }, [playing, currentTime, narrationUrl, isAudioActive]);
 
-  // Fallback animation frame loop if audio is not available
+  // Fallback animation frame loop if audio is not active or finished
   useEffect(() => {
-    if (!playing || narrationUrl) return;
+    if (!playing || isAudioActive) return;
 
     let lastTime = performance.now();
     let animId: number;
@@ -248,16 +248,26 @@ export function VideoPreview({
 
     animId = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(animId);
-  }, [playing, narrationUrl, totalDuration]);
+  }, [playing, isAudioActive, totalDuration]);
 
   // Handle Audio element time update
   const handleAudioTimeUpdate = () => {
-    if (!narrationUrl || !audioRef.current || isSeeking || !playing) return;
+    if (!narrationUrl || !audioRef.current || isSeeking || !playing || !isAudioActive) return;
     const t = audioRef.current.currentTime;
     setCurrentTime(t);
   };
 
+  const handleAudioLoadedMetadata = () => {
+    if (audioRef.current) {
+      setAudioDuration(audioRef.current.duration || 0);
+    }
+  };
+
   const handleAudioEnded = () => {
+    if (currentTime < totalDuration - 0.2) {
+      // Continue playback via RAF timer if total duration extends beyond audio (e.g. Outro)
+      return;
+    }
     setPlaying(false);
     setCurrentTime(totalDuration);
   };
@@ -457,6 +467,7 @@ export function VideoPreview({
                 ref={audioRef}
                 src={narrationUrl}
                 preload="auto"
+                onLoadedMetadata={handleAudioLoadedMetadata}
                 onTimeUpdate={handleAudioTimeUpdate}
                 onEnded={handleAudioEnded}
                 style={{ display: "none" }}

@@ -22,7 +22,7 @@ export function ClipPreviewModal({ clip, onClose }: ClipPreviewModalProps) {
 
   if (!clip) return null;
 
-  const src = clip.asset_url ?? null;
+  const src = clip.asset_url || clip.source_url || null;
 
   return (
     <div
@@ -51,6 +51,7 @@ export function ClipPreviewModal({ clip, onClose }: ClipPreviewModalProps) {
             src={src}
             controls
             autoPlay
+            playsInline
             className="max-h-[70vh] max-w-[90vw] rounded-md bg-black"
           />
         ) : (
