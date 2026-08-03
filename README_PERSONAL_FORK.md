@@ -75,7 +75,7 @@ but it should **not** be used to configure new setups — use `.env`.
 
 ## 3. LLM providers
 
-LLM support lives in `src/server/llm.ts` (91 lines). It supports **Gemini** and
+LLM support lives in `src/server/llm.ts` (128 lines). It supports **Gemini** and
 any **OpenAI‑compatible endpoint**, including a local one such as LM Studio.
 The runtime does **not** require an OpenAI or Anthropic API key — that is an
 explicit project constraint — and ChatGPT/Claude web are never automated.
@@ -166,7 +166,7 @@ index/stats/list command — the old `library_cli` is gone.
 ## 7. Security hardening (personal deployment)
 
 - **The bind address and port are hardcoded.** The server binds
-  `0.0.0.0:3000` (`server.ts:392` sets `const PORT = 3000;`, `server.ts:2658`
+  `0.0.0.0:3000` (`server.ts:546` sets `const PORT = 3000;`, `server.ts:3121`
   calls `app.listen(PORT, "0.0.0.0", ...)`). There is no configuration knob
   for either. A firewall or a reverse proxy is the only control today.
 - **No CORS middleware exists.** The TypeScript server has no CORS layer and
@@ -186,7 +186,7 @@ index/stats/list command — the old `library_cli` is gone.
 - **Only two `storage/` subdirectories are web‑served**: `storage/renders`
   and `storage/local_videos`. The `storage/` root mount was removed
   precisely because the OAuth credential JSONs live inside it
-  (`server.ts:2609`, `server.ts:2614`).
+  (`server.ts:3068`, `server.ts:3077`).
 - **File permissions.** `.env` and both credential JSONs are written with
   mode `0600` (`src/server/envFile.ts`, `youtubeChannels.ts`,
   `tiktokCredentials.ts`).
