@@ -563,7 +563,7 @@ export function createRenderer(deps: RenderDeps) {
           continue;
         }
 
-        const isLocalUrl = url.startsWith("/") || !url.includes("://") || url.includes("/storage/local_videos/") || url.includes("/local_videos/");
+        const isLocalUrl = url.startsWith("/") || !url.includes("://") || url.includes("/storage/local_videos/") || url.includes("/local_videos/") || url.includes("/assets/");
         if (isLocalUrl) {
           const cleanUrl = url.split("?")[0];
           const filename = path.basename(cleanUrl);
@@ -574,6 +574,8 @@ export function createRenderer(deps: RenderDeps) {
             cleanLocalPath = `storage/local_videos/${filename}`;
           } else if (url.includes("/local_videos/")) {
             cleanLocalPath = `local_videos/${filename}`;
+          } else if (url.includes("/assets/") || url.includes("public/assets/")) {
+            cleanLocalPath = `public/assets/${filename}`;
           }
           const diskPath = path.join(process.cwd(), cleanLocalPath);
           if (fs.existsSync(diskPath)) {
@@ -581,7 +583,14 @@ export function createRenderer(deps: RenderDeps) {
             continue;
           }
 
-          // Try diskPath 2 (fallback directly in localVideosDir)
+          // Try diskPath 2 (public/assets directory)
+          const publicAssetPath = path.join(process.cwd(), "public", "assets", filename);
+          if (fs.existsSync(publicAssetPath)) {
+            localVideoPaths.push(publicAssetPath);
+            continue;
+          }
+
+          // Try diskPath 3 (fallback directly in localVideosDir)
           const fallbackPath = path.join(localVideosDir, filename);
           if (fs.existsSync(fallbackPath)) {
             localVideoPaths.push(fallbackPath);
@@ -707,7 +716,7 @@ export function createRenderer(deps: RenderDeps) {
         const clip = clips[i];
         const inputPath = localVideoPaths[i];
         const formattedPath = path.join(cacheDir, `formatted_${taskId}_${i}.mp4`);
-        const duration = Number(clip.duration_sec) || 5;
+        let duration = Number(clip.duration_sec) || 5;
         const start = Number(clip.trim_start_sec) || 0;
 
         if (inputPath === "placeholder") {
@@ -717,6 +726,9 @@ export function createRenderer(deps: RenderDeps) {
         } else {
           try {
             const inputDuration = await getVideoDuration(inputPath);
+            if ((clip.id === "clip_outro" || clip.asset_url?.includes("outro") || clip.source_url?.includes("outro")) && inputDuration > 0) {
+              duration = inputDuration;
+            }
             console.log(`[Renderer] Formatting clip ${i}: ${inputPath}, inputDuration: ${inputDuration}, targetDuration: ${duration}`);
 
             let loopCmd = "";

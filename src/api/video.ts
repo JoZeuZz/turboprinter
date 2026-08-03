@@ -5,6 +5,9 @@ export const videoApi = {
   getBgmList: () =>
     apiFetch<{ files: BgmFile[] }>("/musics"),
 
+  getOutroStatus: () =>
+    apiFetch<{ exists: boolean; url: string | null; filename: string; path: string }>("/outro-status"),
+
   getLocalVideos: () =>
     apiFetch<{ files: { name: string; size: number; path: string }[] }>("/local-videos"),
 

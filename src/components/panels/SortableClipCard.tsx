@@ -31,15 +31,24 @@ export function SortableClipCard({
     opacity: isDragging ? 0.4 : 1,
   };
 
+  const isOutro = clip.id === "clip_outro" || clip.keywords?.includes("outro") || clip.asset_url?.includes("outro");
+
   return (
     <div
       ref={setNodeRef}
       style={style}
       data-excluded={excluded}
-      className={`relative rounded-lg border border-border bg-surface-2 overflow-hidden flex flex-col ${
-        excluded ? "opacity-40" : ""
-      }`}
+      className={`relative rounded-lg border bg-surface-2 overflow-hidden flex flex-col ${
+        isOutro ? "border-amber-500/50 shadow-sm shadow-amber-500/10" : "border-border"
+      } ${excluded ? "opacity-40" : ""}`}
     >
+      {/* Outro badge */}
+      {isOutro && (
+        <div className="absolute top-1 right-1 z-10 bg-amber-500/90 text-black text-[10px] font-bold px-1.5 py-0.5 rounded shadow">
+          🎬 CIERRE / OUTRO
+        </div>
+      )}
+
       {/* Drag handle */}
       <button
         {...attributes}
@@ -59,6 +68,13 @@ export function SortableClipCard({
             referrerPolicy="no-referrer"
             onError={() => setImgError(true)}
             className="w-full h-full object-cover"
+          />
+        ) : clip.asset_url ? (
+          <video
+            src={clip.asset_url}
+            className="w-full h-full object-cover pointer-events-none"
+            muted
+            preload="metadata"
           />
         ) : (
           <div className="flex flex-col items-center justify-center text-xs text-muted-foreground px-2 text-center truncate">

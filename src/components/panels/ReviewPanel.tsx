@@ -45,6 +45,8 @@ export function ReviewPanel() {
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
   const [previewClip, setPreviewClip] = useState<TimelineItem | null>(null);
   const [bgmFiles, setBgmFiles] = useState<BgmFile[]>([]);
+  const [outroStatus, setOutroStatus] = useState<{ exists: boolean; url: string | null; filename: string; path: string }>({ exists: false, url: null, filename: "outro.mp4", path: "public/assets/outro.mp4" });
+  const [outroEnabled, setOutroEnabled] = useState(true);
 
   const finalVideoIndex = Math.min(Math.max(activePartIndex - 1, 0), Math.max(videoUrls.length - 1, 0));
   const finalVideo = videoUrls[finalVideoIndex] || videoUrls[0];
@@ -53,7 +55,7 @@ export function ReviewPanel() {
     return finalVideo.includes("?") ? finalVideo : `${finalVideo}?v=${Date.now()}`;
   }, [finalVideo]);
 
-  // Load BGMs
+  // Load BGMs and Outro status
   useEffect(() => {
     videoApi
       .getBgmList()
@@ -64,12 +66,40 @@ export function ReviewPanel() {
         console.error("[ReviewPanel] Failed to load BGM list:", err);
         setBgmFiles([]);
       });
+
+    videoApi
+      .getOutroStatus()
+      .then((res) => {
+        if (res) setOutroStatus(res);
+      })
+      .catch((err) => {
+        console.error("[ReviewPanel] Failed to load outro status:", err);
+      });
   }, []);
 
-  // Sync orderedClips when project loads
+  // Sync orderedClips when project loads or outroStatus updates
   useEffect(() => {
-    setOrderedClips(sourceClips);
-  }, [sourceClips.length]);
+    let clips = [...sourceClips];
+    const hasOutro = clips.some((c) => c.id === "clip_outro" || c.asset_url?.includes("outro"));
+    
+    if (!hasOutro) {
+      const outroUrl = outroStatus.url || "/assets/outro.mp4";
+      const totalDur = clips.reduce((acc, c) => acc + (c.duration_sec || 0), 0);
+      const outroClip: TimelineItem = {
+        id: "clip_outro",
+        text: "🎬 Outro / Cierre",
+        asset_url: outroUrl,
+        source_url: outroUrl,
+        start_sec: totalDur,
+        duration_sec: 4,
+        keywords: ["outro", "cierre"],
+        provider: "local",
+      };
+      clips.push(outroClip);
+    }
+
+    setOrderedClips(clips);
+  }, [sourceClips.length, outroStatus.exists]);
 
   const handleYoutubeUpload = () => {
     if (!isYoutubeLinked) return;
@@ -294,8 +324,41 @@ export function ReviewPanel() {
           </p>
         </div>
 
-        {/* BGM Quick Control Widget */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 bg-surface-2/60 border border-border/60 px-4 py-2.5 rounded-xl text-xs w-full sm:w-auto">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
+          {/* Outro Control Widget */}
+          <div className="flex items-center gap-2 bg-surface-2/60 border border-amber-500/30 px-3.5 py-2 rounded-xl text-xs">
+            <input
+              type="checkbox"
+              id="outro-enabled-review"
+              className="h-4 w-4 rounded border-border bg-surface-3 text-amber-500 focus:ring-amber-500 accent-amber-500 cursor-pointer"
+              checked={outroEnabled && !excluded.has("clip_outro")}
+              onChange={(e) => {
+                const checked = e.target.checked;
+                setOutroEnabled(checked);
+                setExcluded((prev) => {
+                  const next = new Set(prev);
+                  if (checked) next.delete("clip_outro");
+                  else next.add("clip_outro");
+                  return next;
+                });
+              }}
+            />
+            <label htmlFor="outro-enabled-review" className="font-semibold text-foreground cursor-pointer whitespace-nowrap flex items-center gap-1.5">
+              <span>🎬 Outro</span>
+              {outroStatus.exists ? (
+                <span className="text-[10px] bg-emerald-500/20 text-emerald-400 font-normal px-1.5 py-0.5 rounded border border-emerald-500/30">
+                  Listo
+                </span>
+              ) : (
+                <span className="text-[10px] bg-amber-500/10 text-amber-400 font-normal px-1.5 py-0.5 rounded border border-amber-500/20" title="Ubica tu video en public/assets/outro.mp4">
+                  Default (outro.mp4)
+                </span>
+              )}
+            </label>
+          </div>
+
+          {/* BGM Quick Control Widget */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 bg-surface-2/60 border border-border/60 px-4 py-2 rounded-xl text-xs w-full sm:w-auto">
           <div className="flex items-center gap-2 select-none py-1">
             <input
               type="checkbox"
@@ -374,6 +437,7 @@ export function ReviewPanel() {
               </div>
             </div>
           )}
+        </div>
         </div>
       </div>
 

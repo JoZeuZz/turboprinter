@@ -683,6 +683,26 @@ async function startServer() {
     }
   }));
 
+  app.get("/api/v1/outro-status", wrap(async (_req: any, res: any) => {
+    try {
+      const publicAssetsDir = path.join(process.cwd(), "public", "assets");
+      const outroPath = path.join(publicAssetsDir, "outro.mp4");
+      const exists = fs.existsSync(outroPath);
+      res.json({
+        status: 200,
+        message: "ok",
+        data: {
+          exists,
+          url: exists ? "/assets/outro.mp4" : null,
+          filename: "outro.mp4",
+          path: "public/assets/outro.mp4"
+        }
+      });
+    } catch (err: any) {
+      res.json({ status: 200, message: "ok", data: { exists: false, url: null, filename: "outro.mp4", path: "public/assets/outro.mp4" } });
+    }
+  }));
+
   app.post("/api/v1/local-videos/upload", upload.single("video"), wrap(async (req: any, res: any) => {
     try {
       if (!req.file) {
@@ -2883,7 +2903,21 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
       if (!track) continue;
 
       if (cmd.type === "move") {
-        const itemIndex = track.items.findIndex((item: any) => item.id === cmd.item_id);
+        let itemIndex = track.items.findIndex((item: any) => item.id === cmd.item_id);
+        if (itemIndex === -1 && (cmd.item_id === "clip_outro" || cmd.item_id.includes("outro")) && cmd.new_start_sec >= 0) {
+          const outroItem = {
+            id: cmd.item_id,
+            text: "🎬 Outro / Clip de Cierre",
+            asset_url: "/assets/outro.mp4",
+            source_url: "/assets/outro.mp4",
+            start_sec: cmd.new_start_sec,
+            duration_sec: 4,
+            keywords: ["outro", "cierre"],
+            provider: "local",
+          };
+          track.items.push(outroItem);
+          itemIndex = track.items.length - 1;
+        }
         if (itemIndex !== -1) {
           if (cmd.new_start_sec < 0) {
             // Delete/remove the item from the track!
@@ -3070,6 +3104,11 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
   // Serve background music files directly from public/musics
   app.use("/public/musics", express.static(PUBLIC_MUSICS_DIR));
   app.use("/musics", express.static(PUBLIC_MUSICS_DIR));
+
+  // Serve static assets from public/assets
+  const PUBLIC_ASSETS_DIR = path.join(process.cwd(), "public", "assets");
+  app.use("/public/assets", express.static(PUBLIC_ASSETS_DIR));
+  app.use("/assets", express.static(PUBLIC_ASSETS_DIR));
 
   // Serve only the rendered output. The rest of storage/ holds OAuth refresh
   // tokens (youtube-credentials.json, tiktok-credentials.json) and the project
