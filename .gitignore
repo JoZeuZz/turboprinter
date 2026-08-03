@@ -12,6 +12,7 @@ config.toml
 
 CLAUDE.md
 CLAUDE.local.md
+CONTEXT.md
 .claude/*
 .claude/settings.json
 
@@ -23,8 +24,10 @@ CLAUDE.local.md
 /superpowers/
 plans/
 specs/
-docs/design/
-docs/superpowers/
+docs/
+
+# Obsidian vault: notas locales, no documentación del repo.
+.obsidian/
 
 # React frontend build artifacts (served from disk, not tracked)
 resource/public/assets/
@@ -35,9 +38,6 @@ advisor-plans/
 # Codex local workspace artifacts
 .agents/
 skills-lock.json
-.superpowers/
-plans/
-specs/
 
 # Environment files
 .env
