@@ -224,9 +224,8 @@ export function VideoPreview({
     const resolvedUrl = activeClipUrl.startsWith("/")
       ? `${window.location.origin}${activeClipUrl}`
       : activeClipUrl;
-    const currentAttr = videoRef.current.getAttribute("src");
 
-    if (currentAttr !== activeClipUrl && videoRef.current.src !== resolvedUrl) {
+    if (videoRef.current.src !== resolvedUrl) {
       videoRef.current.src = activeClipUrl;
       videoRef.current.load();
     }
@@ -321,6 +320,18 @@ export function VideoPreview({
     }
     setPlaying(false);
     setCurrentTime(totalDuration);
+  };
+
+  const handleVideoEnded = () => {
+    if (!items || items.length === 0) return;
+    const currIndex = activeVideoClip ? items.findIndex((c) => c.id === activeVideoClip.id) : 0;
+    if (currIndex >= 0 && currIndex < items.length - 1) {
+      const nextClip = items[currIndex + 1];
+      const nextStart = nextClip.start_sec ?? items.slice(0, currIndex + 1).reduce((sum, c) => sum + (c.duration_sec || 5), 0);
+      setCurrentTime(nextStart);
+    } else {
+      setPlaying(false);
+    }
   };
 
   // User Play / Pause / Seek controls
@@ -511,6 +522,7 @@ export function VideoPreview({
               muted
               playsInline
               onTimeUpdate={handleVideoTimeUpdate}
+              onEnded={handleVideoEnded}
               {...{ referrerPolicy: "no-referrer" }}
               className="w-full h-full object-contain"
             />
