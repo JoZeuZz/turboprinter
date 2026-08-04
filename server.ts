@@ -321,7 +321,13 @@ interface SentencePart {
 
 function extractSentencesWithParts(p: any): SentencePart[] {
   const scriptHasParts = Boolean(p.script && p.script.match(/---+\s*PARTE\s*\d+\s*---+/i));
-  const isMultiPart = Boolean(p.params?.is_multi_part || p.is_multi_part || scriptHasParts);
+  const isMultiPart = Boolean(
+    p.params?.is_multi_part ||
+    p.is_multi_part ||
+    scriptHasParts ||
+    (p.params?.multi_part_count !== undefined && Number(p.params.multi_part_count) > 1) ||
+    (p.multi_part_count !== undefined && Number(p.multi_part_count) > 1)
+  );
 
   const cleanBlock = (text: string) => {
     return (text || "")
@@ -2788,7 +2794,13 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
 
     // Generate per-part narration files for multi-part projects
     const scriptHasParts = Boolean(p.script && p.script.match(/---+\s*PARTE\s*\d+\s*---+/i));
-    const isMultiPart = Boolean(p.params?.is_multi_part || p.is_multi_part || scriptHasParts);
+    const isMultiPart = Boolean(
+      p.params?.is_multi_part ||
+      p.is_multi_part ||
+      scriptHasParts ||
+      (p.params?.multi_part_count !== undefined && Number(p.params.multi_part_count) > 1) ||
+      (p.multi_part_count !== undefined && Number(p.multi_part_count) > 1)
+    );
 
     if (isMultiPart) {
       const numParts = Math.max(

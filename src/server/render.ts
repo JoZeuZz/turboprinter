@@ -958,7 +958,42 @@ export function createRenderer(deps: RenderDeps) {
 
         // 2. Determine narration file for this part
         const partNarrationDiskPath = path.join(renderDir, `narration_${projectId}_parte${partNum}.mp3`);
-        const activeNarrationPath = fs.existsSync(partNarrationDiskPath) ? partNarrationDiskPath : localNarrationPath;
+        let activeNarrationPath: string | null = fs.existsSync(partNarrationDiskPath) ? partNarrationDiskPath : null;
+
+        if (!activeNarrationPath && localNarrationPath && fs.existsSync(localNarrationPath)) {
+          if (multiPartCount > 1) {
+            try {
+              logTask(taskId, "INFO", "RENDER", `Slicing narration audio for Part ${partNum}/${multiPartCount}...`);
+              const allSegs = p.shot_plan?.segments || [];
+              const partSegs = allSegs.filter((s: any) => (s.part_index || 1) === partNum);
+              let sliceStart = 0;
+              let sliceDur = 0;
+
+              if (partSegs.length > 0 && partSegs[0].start_sec !== undefined) {
+                sliceStart = Math.max(0, partSegs[0].start_sec);
+                const lastSeg = partSegs[partSegs.length - 1];
+                const endSec = lastSeg.end_sec !== undefined ? lastSeg.end_sec : (lastSeg.start_sec + (lastSeg.target_duration_sec || 5));
+                sliceDur = Math.max(1, endSec - sliceStart);
+              } else {
+                const totalNarrationStr = await executeCommand(`ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${localNarrationPath}"`, PROBE_COMMAND_TIMEOUT_MS);
+                const totalDur = parseFloat(totalNarrationStr.trim()) || 60;
+                sliceDur = Math.max(1, totalDur / multiPartCount);
+                sliceStart = (partNum - 1) * sliceDur;
+              }
+
+              const slicedTempPath = path.join(cacheDir, `narration_${taskId}_p${partNum}_sliced.mp3`);
+              await executeCommand(`ffmpeg -y -ss ${sliceStart.toFixed(2)} -t ${sliceDur.toFixed(2)} -i "${localNarrationPath}" -codec:a libmp3lame -b:a 192k "${slicedTempPath}"`);
+              if (fs.existsSync(slicedTempPath)) {
+                activeNarrationPath = slicedTempPath;
+              }
+            } catch (sliceErr) {
+              console.error(`[Renderer] Failed to slice narration audio for part ${partNum}:`, sliceErr);
+            }
+          }
+          if (!activeNarrationPath) {
+            activeNarrationPath = localNarrationPath;
+          }
+        }
 
         let narrationDuration = 0;
         if (activeNarrationPath && fs.existsSync(activeNarrationPath)) {
@@ -1003,7 +1038,13 @@ export function createRenderer(deps: RenderDeps) {
           hasVideoAudio
         );
         const partVideoDuration = partClips.reduce((sum, c) => sum + (c.duration || 0), 0);
-        const targetRenderDuration = Math.max(partVideoDuration, narrationDuration);
+        let targetRenderDuration = Math.max(partVideoDuration, narrationDuration);
+
+        if (multiPartCount > 1 && partVideoDuration > 0 && narrationDuration > partVideoDuration + 3) {
+          console.warn(`[Renderer] Part ${partNum} narration duration (${narrationDuration}s) significantly exceeds part video duration (${partVideoDuration}s). Capping target duration.`);
+          targetRenderDuration = partVideoDuration;
+        }
+
         const limitDurationOpt = targetRenderDuration > 0 ? `-t ${targetRenderDuration.toFixed(2)}` : buildMixDurationArgs(Boolean(activeNarrationPath), narrationDuration);
 
         const buildMixCmdWith = (inputs: string[], filter: string): string =>
