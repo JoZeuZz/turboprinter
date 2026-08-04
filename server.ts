@@ -24,6 +24,7 @@ import { createProjectsRepo } from "./src/server/projectsRepo";
 import { shouldSweepProject, resolveRenderStatus } from "./src/server/projectLifecycle";
 import { isSafeMediaFilename, isSafeProjectFolderName, resolveWithinDir } from "./src/server/pathSafety";
 import { issueOauthState, consumeOauthState } from "./src/server/oauthState";
+import { configPatchSchema, projectPatchSchema } from "./src/server/requestSchemas";
 import {
   loadTiktokChannels,
   saveTiktokChannels,
@@ -707,16 +708,24 @@ async function startServer() {
     // A sentinel means "the user did not change this secret" — drop it so the
     // stored value survives instead of being overwritten with the mask.
     req.body = stripSentinelSecrets(req.body);
-    globalConfig.settings = { ...globalConfig.settings, ...req.body };
+    const parsedConfig = configPatchSchema.safeParse(req.body);
+    if (!parsedConfig.success) {
+      return res.status(400).json({ status: 400, message: "Configuración inválida.", data: parsedConfig.error.flatten() });
+    }
+    const configPatch = parsedConfig.data;
+    // configPatch's per-group shape is intentionally loose (see
+    // requestSchemas.ts) — validated at the boundary above, but structurally
+    // wider than globalConfig.settings's inferred literal type.
+    globalConfig.settings = { ...globalConfig.settings, ...(configPatch as any) };
 
     // Save YouTube credentials to .env file if they are passed in from the UI
-    if (req.body.youtube) {
+    if (configPatch.youtube) {
       const updates: Record<string, string> = {};
-      if (req.body.youtube.client_id !== undefined) {
-        updates["YOUTUBE_CLIENT_ID"] = req.body.youtube.client_id;
+      if (configPatch.youtube.client_id !== undefined) {
+        updates["YOUTUBE_CLIENT_ID"] = configPatch.youtube.client_id;
       }
-      if (req.body.youtube.api_key !== undefined) {
-        updates["YOUTUBE_CLIENT_SECRET"] = req.body.youtube.api_key;
+      if (configPatch.youtube.api_key !== undefined) {
+        updates["YOUTUBE_CLIENT_SECRET"] = configPatch.youtube.api_key;
       }
       if (Object.keys(updates).length > 0) {
         try {
@@ -729,19 +738,19 @@ async function startServer() {
     }
 
     // Save TikTok credentials to .env file if they are passed in from the UI
-    if (req.body.tiktok) {
+    if (configPatch.tiktok) {
       // Persist verification metadata in the credentials repo for durability across restarts
       try {
         let tkCreds = loadTiktokChannels();
         tkCreds = setTiktokVerification(tkCreds, {
-          filename: req.body.tiktok.verification_filename,
-          content: req.body.tiktok.verification_content,
+          filename: configPatch.tiktok.verification_filename,
+          content: configPatch.tiktok.verification_content,
         });
-        if (req.body.tiktok.verification_filename !== undefined) {
-          globalConfig.settings.tiktok.verification_filename = req.body.tiktok.verification_filename;
+        if (configPatch.tiktok.verification_filename !== undefined) {
+          globalConfig.settings.tiktok.verification_filename = configPatch.tiktok.verification_filename;
         }
-        if (req.body.tiktok.verification_content !== undefined) {
-          globalConfig.settings.tiktok.verification_content = req.body.tiktok.verification_content;
+        if (configPatch.tiktok.verification_content !== undefined) {
+          globalConfig.settings.tiktok.verification_content = configPatch.tiktok.verification_content;
         }
         saveTiktokChannels(process.cwd(), tkCreds);
         console.log("[Config] Persisted TikTok verification metadata to disk.");
@@ -751,11 +760,11 @@ async function startServer() {
       }
 
       const updates: Record<string, string> = {};
-      if (req.body.tiktok.client_id !== undefined) {
-        updates["TIKTOK_CLIENT_KEY"] = req.body.tiktok.client_id;
+      if (configPatch.tiktok.client_id !== undefined) {
+        updates["TIKTOK_CLIENT_KEY"] = configPatch.tiktok.client_id;
       }
-      if (req.body.tiktok.client_secret !== undefined) {
-        updates["TIKTOK_CLIENT_SECRET"] = req.body.tiktok.client_secret;
+      if (configPatch.tiktok.client_secret !== undefined) {
+        updates["TIKTOK_CLIENT_SECRET"] = configPatch.tiktok.client_secret;
       }
       if (Object.keys(updates).length > 0) {
         try {
@@ -1963,7 +1972,12 @@ CRÍTICO: No utilices NINGÚN tipo de formato de texto como asteriscos (* o **),
     }
     // Campos que pertenecen al servidor: el cliente no los elige. project_folder_name
     // se une a una ruta de disco y se crea con mkdir más abajo en el pipeline.
-    const { project_id: _ignoredId, created_at: _ignoredCreatedAt, ...clientPatch } = req.body || {};
+    const { project_id: _ignoredId, created_at: _ignoredCreatedAt, ...rest } = req.body || {};
+    const parsedProject = projectPatchSchema.safeParse(rest);
+    if (!parsedProject.success) {
+      return res.status(400).json({ status: 400, message: "Datos de proyecto inválidos.", data: parsedProject.error.flatten() });
+    }
+    const clientPatch = parsedProject.data;
     if (
       req.body?.project_folder_name !== undefined &&
       !isSafeProjectFolderName(req.body.project_folder_name)
