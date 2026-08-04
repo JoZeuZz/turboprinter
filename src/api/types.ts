@@ -54,6 +54,9 @@ export interface VideoParams {
   selected_title?: string;
   generated_description?: string;
   generated_tags?: string;
+  thumbnail_url?: string;
+  thumbnail_prompt?: string;
+  thumbnail_provider?: "gemini" | "pollinations" | "pinokio";
 }
 
 export const TASK_STATE_FAILED = -1 as const;

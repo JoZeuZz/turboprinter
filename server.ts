@@ -17,7 +17,7 @@ import {
 import { updateEnvFile } from "./src/server/envFile";
 import { maskSecrets, stripSentinelSecrets } from "./src/server/configMasking";
 import { synthesizeSpeech } from "./src/server/tts";
-import { generateLlmContent } from "./src/server/llm";
+import { generateLlmContent, generateThumbnailImage } from "./src/server/llm";
 import { searchPexelsVideos, pickUniqueClip } from "./src/server/pexels";
 import { createRenderer, executeCommand } from "./src/server/render";
 import { createProjectsRepo } from "./src/server/projectsRepo";
@@ -1247,6 +1247,42 @@ Instrucciones:
     }
 
     res.json({ status: 200, message: "ok", data: { hashtags } });
+  }));
+
+  const THUMBNAILS_DIR = path.join(process.cwd(), "storage", "thumbnails");
+  if (!fs.existsSync(THUMBNAILS_DIR)) {
+    fs.mkdirSync(THUMBNAILS_DIR, { recursive: true });
+  }
+  app.use("/storage/thumbnails", express.static(THUMBNAILS_DIR));
+  app.use("/thumbnails", express.static(THUMBNAILS_DIR));
+
+  app.post("/api/v1/generate-thumbnail", wrap(async (req: any, res: any) => {
+    const {
+      video_subject = "",
+      video_script = "",
+      provider = "gemini",
+      custom_prompt = "",
+      aspect_ratio = "16:9",
+      pinokio_url
+    } = req.body;
+
+    const result = await generateThumbnailImage(
+      {
+        video_subject,
+        video_script,
+        provider,
+        custom_prompt,
+        aspect_ratio,
+        pinokio_url
+      },
+      THUMBNAILS_DIR
+    );
+
+    res.json({
+      status: 200,
+      message: result.message || "ok",
+      data: result
+    });
   }));
 
   // Helper to dynamically build redirect URI for YouTube OAuth

@@ -22,6 +22,23 @@ export interface MetadataRequest {
   video_script: string;
 }
 
+export interface ThumbnailRequest {
+  video_subject: string;
+  video_script: string;
+  provider?: "gemini" | "pollinations" | "pinokio";
+  custom_prompt?: string;
+  aspect_ratio?: "16:9" | "9:16" | "1:1";
+  pinokio_url?: string;
+}
+
+export interface ThumbnailResponse {
+  thumbnail_url: string;
+  prompt_used: string;
+  provider: "gemini" | "pollinations" | "pinokio";
+  configured?: boolean;
+  message?: string;
+}
+
 export const llmApi = {
   generateScript: (params: ScriptRequest) =>
     apiFetch<{
@@ -47,6 +64,12 @@ export const llmApi = {
 
   generateTerms: (params: TermsRequest) =>
     apiFetch<{ video_terms: string[] }>("/terms", {
+      method: "POST",
+      body: JSON.stringify(params),
+    }),
+
+  generateThumbnail: (params: ThumbnailRequest) =>
+    apiFetch<ThumbnailResponse>("/generate-thumbnail", {
       method: "POST",
       body: JSON.stringify(params),
     }),

@@ -1,6 +1,6 @@
 // webui-react/src/components/panels/ScriptPanel.tsx
 import { useState } from "react";
-import { Wand2, Sparkles, RefreshCw } from "lucide-react";
+import { Wand2, Sparkles, RefreshCw, Image, Cpu, Laptop, ExternalLink, Download, Trash2, CheckCircle2, Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { ApiError } from "../../api/client";
@@ -77,6 +77,61 @@ export function ScriptPanel() {
   const [generating, setGenerating] = useState(false);
   const [isContinuing, setIsContinuing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [generatingThumbnail, setGeneratingThumbnail] = useState(false);
+  const [thumbnailError, setThumbnailError] = useState<string | null>(null);
+  const [thumbnailSuccess, setThumbnailSuccess] = useState<string | null>(null);
+  const [customThumbnailPrompt, setCustomThumbnailPrompt] = useState(store.thumbnail_prompt || "");
+  const [thumbnailAspect, setThumbnailAspect] = useState<"16:9" | "9:16" | "1:1">("16:9");
+  const [pinokioUrl, setPinokioUrl] = useState("http://127.0.0.1:7860/sdapi/v1/txt2img");
+
+  const selectedThumbnailProvider = store.thumbnail_provider || "gemini";
+
+  const handleGenerateThumbnail = async () => {
+    if (!store.video_subject.trim()) {
+      setThumbnailError("Por favor introduce un tema para el video antes de generar la miniatura.");
+      return;
+    }
+
+    setGeneratingThumbnail(true);
+    setThumbnailError(null);
+    setThumbnailSuccess(null);
+
+    try {
+      const res = await llmApi.generateThumbnail({
+        video_subject: store.video_subject,
+        video_script: store.video_script || "",
+        provider: selectedThumbnailProvider,
+        custom_prompt: customThumbnailPrompt,
+        aspect_ratio: thumbnailAspect,
+        pinokio_url: pinokioUrl,
+      });
+
+      if (res.thumbnail_url) {
+        store.set("thumbnail_url", res.thumbnail_url);
+        store.set("thumbnail_prompt", res.prompt_used || customThumbnailPrompt);
+        setCustomThumbnailPrompt(res.prompt_used || customThumbnailPrompt);
+        const providerLabel =
+          selectedThumbnailProvider === "gemini"
+            ? "Gemini Imagen 3"
+            : selectedThumbnailProvider === "pollinations"
+            ? "Pollinations.ai (Gratuito)"
+            : "Pinokio Z-Image";
+        setThumbnailSuccess(`Miniatura generada con éxito usando ${providerLabel}`);
+      } else {
+        if (res.configured === false) {
+          setThumbnailError(res.message || "El proveedor seleccionado no está configurado.");
+        } else {
+          setThumbnailError("No se pudo obtener la miniatura.");
+        }
+      }
+    } catch (err: any) {
+      console.error("[ScriptPanel] Error al generar miniatura:", err);
+      setThumbnailError(err.message || String(err));
+    } finally {
+      setGeneratingThumbnail(false);
+    }
+  };
 
   const getWordCount = (text: string) => {
     if (!text) return 0;
@@ -703,6 +758,243 @@ export function ScriptPanel() {
         onChange={(e) => store.set("video_terms", e.target.value)}
         rows={2}
       />
+
+      {/* Sección Opcional de Miniatura de YouTube / Redes */}
+      <div className="space-y-3 rounded-xl border border-border/80 bg-surface/60 p-4 shadow-xs my-2">
+        <div className="flex items-center justify-between pb-2 border-b border-border/40">
+          <label className="text-xs font-bold text-foreground flex items-center gap-2">
+            <Image className="h-4 w-4 text-accent" />
+            <span>Generación de Miniatura para YouTube (Opcional)</span>
+          </label>
+          <span className="text-[10px] font-semibold text-accent bg-accent/10 border border-accent/20 px-2 py-0.5 rounded-full">
+            3 Proveedores Disponibles
+          </span>
+        </div>
+
+        {/* Proveedor Selector Tabs */}
+        <div className="space-y-1.5">
+          <label className="text-[11px] font-medium text-muted-foreground">
+            Modelo / Proveedor de Generación:
+          </label>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <button
+              type="button"
+              onClick={() => store.set("thumbnail_provider", "gemini")}
+              className={`flex items-center justify-between p-2.5 rounded-lg border text-left transition-all ${
+                selectedThumbnailProvider === "gemini"
+                  ? "border-accent bg-accent/15 text-foreground ring-1 ring-accent/50 font-semibold shadow-xs"
+                  : "border-border/60 bg-secondary/30 text-muted-foreground hover:bg-secondary/60 hover:text-foreground"
+              }`}
+            >
+              <div className="flex items-center gap-2 truncate">
+                <Sparkles className="h-3.5 w-3.5 text-accent shrink-0" />
+                <div className="truncate">
+                  <p className="text-xs font-bold truncate">Gemini Imagen 3</p>
+                  <p className="text-[9px] text-muted-foreground truncate">Por defecto (Activo)</p>
+                </div>
+              </div>
+              {selectedThumbnailProvider === "gemini" && (
+                <span className="text-[9px] bg-emerald-500/20 text-emerald-400 font-bold px-1.5 py-0.5 rounded shrink-0">
+                  Activo
+                </span>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => store.set("thumbnail_provider", "pollinations")}
+              className={`flex items-center justify-between p-2.5 rounded-lg border text-left transition-all ${
+                selectedThumbnailProvider === "pollinations"
+                  ? "border-accent bg-accent/15 text-foreground ring-1 ring-accent/50 font-semibold shadow-xs"
+                  : "border-border/60 bg-secondary/30 text-muted-foreground hover:bg-secondary/60 hover:text-foreground"
+              }`}
+            >
+              <div className="flex items-center gap-2 truncate">
+                <Cpu className="h-3.5 w-3.5 text-blue-400 shrink-0" />
+                <div className="truncate">
+                  <p className="text-xs font-bold truncate">Pollinations.ai</p>
+                  <p className="text-[9px] text-muted-foreground truncate">Gratuito y rápido</p>
+                </div>
+              </div>
+              {selectedThumbnailProvider === "pollinations" && (
+                <span className="text-[9px] bg-blue-500/20 text-blue-400 font-bold px-1.5 py-0.5 rounded shrink-0">
+                  Gratis
+                </span>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => store.set("thumbnail_provider", "pinokio")}
+              className={`flex items-center justify-between p-2.5 rounded-lg border text-left transition-all ${
+                selectedThumbnailProvider === "pinokio"
+                  ? "border-accent bg-accent/15 text-foreground ring-1 ring-accent/50 font-semibold shadow-xs"
+                  : "border-border/60 bg-secondary/30 text-muted-foreground hover:bg-secondary/60 hover:text-foreground"
+              }`}
+            >
+              <div className="flex items-center gap-2 truncate">
+                <Laptop className="h-3.5 w-3.5 text-purple-400 shrink-0" />
+                <div className="truncate">
+                  <p className="text-xs font-bold truncate">Pinokio (Z-Image)</p>
+                  <p className="text-[9px] text-muted-foreground truncate">Workflow Local</p>
+                </div>
+              </div>
+              {selectedThumbnailProvider === "pinokio" && (
+                <span className="text-[9px] bg-purple-500/20 text-purple-400 font-bold px-1.5 py-0.5 rounded shrink-0">
+                  Local
+                </span>
+              )}
+            </button>
+          </div>
+        </div>
+
+        {/* Configuración adicional si se elige Pinokio */}
+        {selectedThumbnailProvider === "pinokio" && (
+          <div className="p-2.5 rounded-lg bg-secondary/40 border border-border/50 space-y-1.5">
+            <Input
+              label="URL Endpoint Local de Pinokio / ComfyUI"
+              value={pinokioUrl}
+              onChange={(e) => setPinokioUrl(e.target.value)}
+              placeholder="http://127.0.0.1:7860/sdapi/v1/txt2img"
+              className="text-xs font-mono"
+            />
+            <p className="text-[10px] text-muted-foreground">
+              Asegúrate de iniciar tu flujo en Pinokio (Z-Image) con el servidor activo en el puerto 7860 u 8000.
+            </p>
+          </div>
+        )}
+
+        {/* Controles de Proporción y Prompt */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+          <Select
+            label="Formato de Imagen"
+            value={thumbnailAspect}
+            options={[
+              { value: "16:9", label: "16:9 (YouTube Horizontal)" },
+              { value: "9:16", label: "9:16 (Shorts / TikTok)" },
+              { value: "1:1", label: "1:1 (Cuadrado)" },
+            ]}
+            onChange={(e) => setThumbnailAspect(e.target.value as any)}
+            className="text-xs"
+          />
+
+          <div className="sm:col-span-2 space-y-1">
+            <Input
+              label="Prompt Personalizado para la Miniatura (Opcional)"
+              placeholder="Ej: A mysterious dark alley with dramatic lighting, 4k photorealistic..."
+              value={customThumbnailPrompt}
+              onChange={(e) => setCustomThumbnailPrompt(e.target.value)}
+              className="text-xs"
+            />
+            <p className="text-[10px] text-muted-foreground">
+              Dejar en blanco para autogenerar un prompt optimizado basado en el tema y guión.
+            </p>
+          </div>
+        </div>
+
+        {/* Botón de Generación */}
+        <Button
+          onClick={handleGenerateThumbnail}
+          isLoading={generatingThumbnail}
+          disabled={!store.video_subject.trim() || generatingThumbnail}
+          className="w-full bg-accent/90 hover:bg-accent text-accent-foreground font-semibold text-xs py-2"
+        >
+          {generatingThumbnail ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Generando miniatura con {selectedThumbnailProvider === "gemini" ? "Gemini Imagen 3" : selectedThumbnailProvider === "pollinations" ? "Pollinations.ai" : "Pinokio"}...
+            </>
+          ) : (
+            <>
+              <Sparkles className="mr-2 h-4 w-4" />
+              Generar Miniatura con {selectedThumbnailProvider === "gemini" ? "Gemini Imagen 3" : selectedThumbnailProvider === "pollinations" ? "Pollinations.ai (Gratuito)" : "Pinokio (Z-Image)"}
+            </>
+          )}
+        </Button>
+
+        {thumbnailError && (
+          <p className="rounded-md bg-red-900/20 border border-red-800/80 px-3 py-2 text-xs text-red-400">
+            ❌ {thumbnailError}
+          </p>
+        )}
+
+        {thumbnailSuccess && (
+          <p className="rounded-md bg-emerald-900/20 border border-emerald-800/80 px-3 py-2 text-xs text-emerald-400 font-medium">
+            ✅ {thumbnailSuccess}
+          </p>
+        )}
+
+        {/* Tarjeta de Miniatura Generada */}
+        {store.thumbnail_url && (
+          <div className="mt-3 p-3 rounded-xl border border-accent/30 bg-neutral-900/80 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+                <span>Miniatura Lista para YouTube</span>
+              </span>
+              <span className="text-[10px] text-muted-foreground capitalize">
+                Proveedor: <strong className="text-foreground">{store.thumbnail_provider || "gemini"}</strong>
+              </span>
+            </div>
+
+            <div className="relative w-full rounded-lg overflow-hidden border border-neutral-800 bg-black flex items-center justify-center max-h-[260px] group">
+              <img
+                src={store.thumbnail_url}
+                alt="Miniatura para YouTube"
+                className="w-full h-full object-contain max-h-[250px] block rounded-md transition-transform duration-300 group-hover:scale-105"
+              />
+              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                <a
+                  href={store.thumbnail_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="p-2 rounded-lg bg-black/80 hover:bg-black text-white text-xs flex items-center gap-1 border border-white/20"
+                  title="Ver tamaño completo"
+                >
+                  <ExternalLink className="h-4 w-4" />
+                </a>
+                <a
+                  href={store.thumbnail_url}
+                  download="miniatura_youtube.jpg"
+                  className="p-2 rounded-lg bg-accent hover:bg-accent-hover text-white text-xs flex items-center gap-1 font-medium"
+                  title="Descargar miniatura"
+                >
+                  <Download className="h-4 w-4" />
+                </a>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between pt-1 border-t border-border/40">
+              <span className="text-[10px] text-muted-foreground truncate max-w-[280px]">
+                Prompt: {store.thumbnail_prompt || "Autogenerado"}
+              </span>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={handleGenerateThumbnail}
+                  disabled={generatingThumbnail}
+                  className="text-[10px] font-medium text-accent hover:underline flex items-center gap-1"
+                >
+                  <RefreshCw className="h-3 w-3" />
+                  Regenerar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    store.set("thumbnail_url", "");
+                    store.set("thumbnail_prompt", "");
+                    setThumbnailSuccess(null);
+                  }}
+                  className="text-[10px] font-medium text-red-400 hover:underline flex items-center gap-1"
+                >
+                  <Trash2 className="h-3 w-3" />
+                  Eliminar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
 
       <Collapsible title={t("panels.script.advancedPrompt")}>
         <Textarea

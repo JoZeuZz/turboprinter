@@ -54,6 +54,9 @@ const DEFAULTS: VideoParams & VideoStoreExtras = {
   selected_title: "",
   generated_description: "",
   generated_tags: "",
+  thumbnail_url: "",
+  thumbnail_prompt: "",
+  thumbnail_provider: "gemini",
   tts_provider: "azure-tts-v1",
   preview_text: "Este es un texto de ejemplo para probar la sintesis de voz.",
 };
