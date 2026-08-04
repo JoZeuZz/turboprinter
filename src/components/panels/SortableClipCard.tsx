@@ -75,9 +75,10 @@ export function SortableClipCard({
         ) : (clip.asset_url || clip.source_url) ? (
           <video
             src={
-              (clip.asset_url || clip.source_url)?.includes("#")
-                ? (clip.asset_url || clip.source_url)
-                : `${clip.asset_url || clip.source_url}#t=0.1`
+              (() => {
+                const raw = clip.asset_url || clip.source_url || "";
+                return raw.includes("#") ? raw : `${raw}#t=0.1`;
+              })()
             }
             className="w-full h-full object-cover pointer-events-none"
             muted

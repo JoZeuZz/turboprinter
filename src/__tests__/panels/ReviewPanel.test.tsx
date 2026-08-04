@@ -61,7 +61,7 @@ describe("ReviewPanel", () => {
 
   it("shows total duration", () => {
     render(<ReviewPanel />);
-    expect(screen.getByText(/12s/i)).toBeInTheDocument();
+    expect(screen.getByText(/16s/i)).toBeInTheDocument();
   });
 
   it("renders task review when project mode is disabled", () => {
@@ -85,6 +85,7 @@ describe("ReviewPanel", () => {
         { type: "move", track_id: "track-video", item_id: "clip-1", new_start_sec: 0 },
         { type: "move", track_id: "track-video", item_id: "clip-2", new_start_sec: 5 },
         { type: "move", track_id: "track-video", item_id: "clip-3", new_start_sec: 8 },
+        { type: "move", track_id: "track-video", item_id: "clip_outro", new_start_sec: 12 },
       ],
     });
     expect(store.render).toHaveBeenCalled();
