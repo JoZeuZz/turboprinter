@@ -193,7 +193,7 @@ Devuelve ÚNICAMENTE el prompt en inglés sin introducciones ni comillas.`;
     console.log(`[Thumbnail] Generating Gemini image for "${video_subject}" with prompt: "${thumbnailPrompt}"`);
 
     let base64Data = "";
-    let lastError: any = null;
+    let lastErrorMsg = "";
 
     // Intentar 1: Modelo oficial gemini-3.1-flash-lite-image mediante generateContent
     try {
@@ -218,8 +218,9 @@ Devuelve ÚNICAMENTE el prompt en inglés sin introducciones ni comillas.`;
         }
       }
     } catch (err1: any) {
-      console.warn("[Thumbnail] gemini-3.1-flash-lite-image falló, probando con gemini-3.1-flash-image:", err1?.message || err1);
-      lastError = err1;
+      const msg = String(err1?.message || err1);
+      console.warn("[Thumbnail] gemini-3.1-flash-lite-image falló:", msg);
+      lastErrorMsg = msg;
     }
 
     // Intentar 2: gemini-3.1-flash-image si el anterior no devolvió datos
@@ -246,32 +247,17 @@ Devuelve ÚNICAMENTE el prompt en inglés sin introducciones ni comillas.`;
           }
         }
       } catch (err2: any) {
-        console.warn("[Thumbnail] gemini-3.1-flash-image falló, probando con generateImages:", err2?.message || err2);
-        lastError = err2;
-      }
-    }
-
-    // Intentar 3: Fallback a generateImages (imagen-3.0-generate-002)
-    if (!base64Data) {
-      try {
-        const response = await ai.models.generateImages({
-          model: 'imagen-3.0-generate-002',
-          prompt: thumbnailPrompt,
-          config: {
-            numberOfImages: 1,
-            outputMimeType: 'image/jpeg',
-            aspectRatio: aspect_ratio === "9:16" ? "9:16" : aspect_ratio === "1:1" ? "1:1" : "16:9",
-          },
-        });
-        base64Data = response.generatedImages?.[0]?.image?.imageBytes || "";
-      } catch (err3: any) {
-        console.warn("[Thumbnail] generateImages imagen-3.0-generate-002 falló:", err3?.message || err3);
-        lastError = err3;
+        const msg = String(err2?.message || err2);
+        console.warn("[Thumbnail] gemini-3.1-flash-image falló:", msg);
+        lastErrorMsg = msg;
       }
     }
 
     if (!base64Data) {
-      throw new Error(`No se pudo generar la imagen con Gemini: ${lastError?.message || 'Error desconocido'}`);
+      if (lastErrorMsg.includes("429") || lastErrorMsg.includes("RESOURCE_EXHAUSTED") || lastErrorMsg.includes("Quota exceeded")) {
+        throw new Error("La clave gratuita de Gemini alcanzó su límite de cuota para imágenes (Error 429). Te sugerimos seleccionar el proveedor gratuito Pollinations.ai o Pinokio (Local).");
+      }
+      throw new Error(`No se pudo generar la imagen con Gemini: ${lastErrorMsg || 'Servicio no disponible'}`);
     }
 
     if (!fs.existsSync(thumbnailsDir)) {
@@ -293,60 +279,64 @@ Devuelve ÚNICAMENTE el prompt en inglés sin introducciones ni comillas.`;
 
   // Provider 2: Pollinations.ai (Gratuito, sin clave de API)
   if (provider === "pollinations") {
-    const width = aspect_ratio === "9:16" ? 720 : aspect_ratio === "1:1" ? 1024 : 1280;
-    const height = aspect_ratio === "9:16" ? 1280 : aspect_ratio === "1:1" ? 1024 : 720;
     const seed = Math.floor(Math.random() * 1000000);
 
-    // Sanitizar el prompt para Pollinations (eliminar saltos de línea, comillas raras y limitar longitud)
+    // Sanitizar el prompt para Pollinations (caracteres seguros para URL)
     const cleanPrompt = thumbnailPrompt
       .replace(/[\r\n]+/g, " ")
       .replace(/["'"]/g, "")
       .replace(/[^\w\s,-]/gi, " ")
       .replace(/\s+/g, " ")
       .trim()
-      .substring(0, 220);
+      .substring(0, 180);
 
     const encodedPrompt = encodeURIComponent(cleanPrompt || "youtube thumbnail cinematic high contrast");
 
-    // Probar varios modelos/endpoints de Pollinations para garantizar éxito
-    const pollinationsUrls = [
-      `https://image.pollinations.ai/prompt/${encodedPrompt}?width=${width}&height=${height}&seed=${seed}&nologo=true&model=flux`,
-      `https://image.pollinations.ai/prompt/${encodedPrompt}?width=${width}&height=${height}&seed=${seed}&nologo=true&model=turbo`,
-      `https://image.pollinations.ai/prompt/${encodedPrompt}?width=${width}&height=${height}&seed=${seed}&nologo=true`,
-      `https://gen.pollinations.ai/image/${encodedPrompt}?width=${width}&height=${height}&seed=${seed}`
-    ];
-
+    // Probar los modelos gratuitos de Pollinations en orden (flux, turbo, flux-realism)
+    const freeModels = ["flux", "turbo", "flux-realism"];
     let imgBuffer: Buffer | null = null;
-    let lastPollinationsError = "";
+    let lastPollinationsStatus = 0;
+    let lastPollinationsMsg = "";
 
-    for (const pollinationsUrl of pollinationsUrls) {
+    for (const modelName of freeModels) {
+      const pollinationsUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?seed=${seed}&nologo=true&model=${modelName}`;
       try {
-        console.log(`[Thumbnail] Fetching image from Pollinations.ai: ${pollinationsUrl}`);
+        console.log(`[Thumbnail] Pollinations.ai (modelo: ${modelName}): ${pollinationsUrl}`);
         const response = await fetch(pollinationsUrl, {
           headers: {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
           }
         });
+
+        lastPollinationsStatus = response.status;
 
         if (response.ok) {
           const contentType = response.headers.get("content-type") || "";
           if (contentType.includes("image") || contentType.includes("octet-stream") || response.status === 200) {
             const arrayBuffer = await response.arrayBuffer();
-            if (arrayBuffer.byteLength > 1000) { // Verificar que sea un buffer de imagen real
+            if (arrayBuffer.byteLength > 1000) {
               imgBuffer = Buffer.from(arrayBuffer);
               break;
             }
           }
         } else {
-          lastPollinationsError = `HTTP ${response.status}: ${response.statusText}`;
+          lastPollinationsMsg = await response.text().catch(() => response.statusText);
+          console.warn(`[Thumbnail] Pollinations modelo ${modelName} devolvió estado ${response.status}`);
         }
       } catch (err: any) {
-        lastPollinationsError = err.message || String(err);
+        lastPollinationsMsg = err.message || String(err);
+        console.warn(`[Thumbnail] Pollinations modelo ${modelName} error:`, lastPollinationsMsg);
       }
+
+      // Pequeña pausa de 1.5s entre modelos para no saturar la cola pública
+      await new Promise((r) => setTimeout(r, 1500));
     }
 
     if (!imgBuffer) {
-      throw new Error(`Error al conectar con Pollinations.ai (${lastPollinationsError || 'Servidor no disponible'}). Intenta de nuevo o prueba con Gemini / Pinokio.`);
+      if (lastPollinationsStatus === 429 || lastPollinationsMsg.includes("Queue full")) {
+        throw new Error("La cola pública gratuita de Pollinations.ai está saturada en este momento (Error 429). Por favor intenta de nuevo en unos segundos o utiliza Pinokio (Local).");
+      }
+      throw new Error(`Pollinations.ai está experimentando alta demanda (Estado ${lastPollinationsStatus || 500}). Por favor reintenta en unos instantes o selecciona Pinokio / Gemini.`);
     }
 
     if (!fs.existsSync(thumbnailsDir)) {
