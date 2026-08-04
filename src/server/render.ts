@@ -7,7 +7,7 @@ import fs from "fs";
 import path from "path";
 import { exec, execFile } from "child_process";
 import { generateAss, splitTextIntoTikTokSubtitles } from "../lib/subtitleLayout";
-import { isSafeMediaFilename } from "./pathSafety";
+import { isSafeMediaFilename, resolveWithinDir } from "./pathSafety";
 
 export interface BgmFileEntry {
   file: string;
@@ -586,8 +586,8 @@ export function createRenderer(deps: RenderDeps) {
           } else if (url.includes("/local_videos/")) {
             cleanLocalPath = `local_videos/${filename}`;
           }
-          const diskPath = path.join(process.cwd(), cleanLocalPath);
-          if (fs.existsSync(diskPath)) {
+          const diskPath = resolveWithinDir(process.cwd(), cleanLocalPath);
+          if (diskPath && fs.existsSync(diskPath)) {
             localVideoPaths.push(diskPath);
             continue;
           }
@@ -640,8 +640,8 @@ export function createRenderer(deps: RenderDeps) {
         // Resolve local relative URLs (e.g. /storage/renders/narration_xxx.mp3)
         if (p.narration_audio_path.startsWith("/") || !p.narration_audio_path.includes("://")) {
           const cleanLocalPath = p.narration_audio_path.startsWith("/") ? p.narration_audio_path.slice(1) : p.narration_audio_path;
-          const diskPath = path.join(process.cwd(), cleanLocalPath);
-          if (fs.existsSync(diskPath)) {
+          const diskPath = resolveWithinDir(process.cwd(), cleanLocalPath);
+          if (diskPath && fs.existsSync(diskPath)) {
             localNarrationPath = diskPath;
           }
         }
@@ -663,8 +663,8 @@ export function createRenderer(deps: RenderDeps) {
         // Resolve local relative BGM URLs
         if (musicItem.url.startsWith("/") || !musicItem.url.includes("://")) {
           const cleanLocalPath = musicItem.url.startsWith("/") ? musicItem.url.slice(1) : musicItem.url;
-          const diskPath = path.join(process.cwd(), cleanLocalPath);
-          if (fs.existsSync(diskPath)) {
+          const diskPath = resolveWithinDir(process.cwd(), cleanLocalPath);
+          if (diskPath && fs.existsSync(diskPath)) {
             localMusicPath = diskPath;
           }
         }

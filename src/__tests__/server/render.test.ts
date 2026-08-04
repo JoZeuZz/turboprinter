@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import fs from "fs";
+import os from "os";
+import path from "path";
 import { execFile } from "child_process";
 import {
   buildFontsConf,
@@ -13,12 +15,131 @@ import {
   pickBgm,
   correctPexelsCdnUrl,
   downloadFile,
+  createRenderer,
 } from "../../server/render";
 
-vi.mock("child_process", () => {
-  const exec = vi.fn();
-  const execFile = vi.fn();
-  return { exec, execFile, default: { exec, execFile } };
+// child_process is mocked at two levels: `exec` (used by executeCommand for
+// ffmpeg/ffprobe) is faked to auto-succeed so runRealRender's pipeline runs
+// fast and deterministically in tests without invoking real ffmpeg/ffprobe
+// or the network; `execFile` (used by downloadFile's curl fallback, see the
+// shell-injection regression test below) stays a plain vi.fn() spy so
+// individual tests can assert on its call arguments and control its
+// behavior per-test.
+vi.mock("child_process", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("child_process")>();
+  const execFileMock = vi.fn();
+  const fakeExec = (_cmd: string, optsOrCb: any, cb?: any) => {
+    const callback = typeof optsOrCb === "function" ? optsOrCb : cb;
+    if (callback) callback(null, "", "");
+    return {} as any;
+  };
+  return {
+    ...actual,
+    exec: fakeExec,
+    execFile: execFileMock,
+    default: { ...actual, exec: fakeExec, execFile: execFileMock },
+  };
+});
+
+describe("runRealRender: local media path containment (traversal rejection)", () => {
+  let tmpLocalVideosDir: string;
+  let projectFolderRoot: string;
+  const cwd = process.cwd();
+  let existsSyncCalls: string[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let existsSyncSpy: any;
+  let fetchStub: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    tmpLocalVideosDir = fs.mkdtempSync(path.join(os.tmpdir(), "render-test-localvideos-"));
+    fs.writeFileSync(path.join(tmpLocalVideosDir, "safe.mp4"), "fake-video-bytes");
+
+    projectFolderRoot = path.join(cwd, "storage", "renders", "test_theme_003");
+
+    existsSyncCalls = [];
+    const realExistsSync = fs.existsSync;
+    existsSyncSpy = vi.spyOn(fs, "existsSync").mockImplementation((p: any) => {
+      existsSyncCalls.push(String(p));
+      return realExistsSync(p);
+    });
+
+    fetchStub = vi.fn(async () => ({
+      ok: true,
+      arrayBuffer: async () => new Uint8Array([1, 2, 3, 4]).buffer,
+    }));
+    vi.stubGlobal("fetch", fetchStub);
+  });
+
+  afterEach(() => {
+    existsSyncSpy.mockRestore();
+    vi.unstubAllGlobals();
+    fs.rmSync(tmpLocalVideosDir, { recursive: true, force: true });
+    fs.rmSync(projectFolderRoot, { recursive: true, force: true });
+  });
+
+  it("never calls fs.existsSync with a path escaped outside process.cwd() for a malicious clip source_url, narration_audio_path, or BGM url", async () => {
+    // One "../" is enough to land outside cwd regardless of how deep the
+    // repo checkout lives, and none of these three markers contain the
+    // "/storage/local_videos/" or "/local_videos/" substrings the video-clip
+    // site rewrites away before it ever computes a path.
+    const videoEscape = "../evil-video-marker.mp4";
+    const narrationEscape = "../evil-narration-marker.mp3";
+    const bgmEscape = "../evil-bgm-marker.mp3";
+
+    // What the pre-fix code (plain path.join(process.cwd(), cleanLocalPath))
+    // would have produced and handed to fs.existsSync — none of these three
+    // strings should ever appear as an existsSync argument once the fix
+    // (resolveWithinDir) is in place.
+    const oldVulnerableVideoPath = path.join(cwd, videoEscape);
+    const oldVulnerableNarrationPath = path.join(cwd, narrationEscape);
+    const oldVulnerableBgmPath = path.join(cwd, bgmEscape);
+
+    const projects = new Map<string, any>();
+    const projectId = "proj_003";
+    projects.set(projectId, {
+      project_id: projectId,
+      project_folder_name: "test_theme_003/test_project_003",
+      params: {},
+      tracks: [
+        {
+          type: "video",
+          items: [
+            { id: "clip1", source_url: videoEscape, duration_sec: 5, trim_start_sec: 0 },
+          ],
+        },
+      ],
+      narration_audio_path: narrationEscape,
+      selected_music: [
+        { id: "bgm1", provider: "local", url: bgmEscape, title: "Evil", duration_sec: 10, volume: 0.2 },
+      ],
+    });
+
+    const loggedMessages: string[] = [];
+    const tasks = new Map<string, any>();
+    const renderer = createRenderer({
+      projects,
+      tasks,
+      logTask: (_taskId, _level, _category, message) => {
+        loggedMessages.push(message);
+      },
+      localVideosDir: tmpLocalVideosDir,
+      bgmFiles: [],
+      sanitizeFolderName: (name: string) => name,
+      getFormattedDateTime: () => "20260101_000000",
+    });
+
+    await renderer.runRealRender(projectId, "task_003");
+
+    expect(existsSyncCalls).not.toContain(oldVulnerableVideoPath);
+    expect(existsSyncCalls).not.toContain(oldVulnerableNarrationPath);
+    expect(existsSyncCalls).not.toContain(oldVulnerableBgmPath);
+
+    // Positive control: the video-clip site's safety-net fallback should
+    // still have found and used the legitimate file in localVideosDir,
+    // proving the containment check doesn't just silently drop every clip
+    // rather than actually protecting against traversal.
+    expect(loggedMessages.some((m) => m.includes("safe.mp4"))).toBe(true);
+  }, 15000);
 });
 
 describe("correctPexelsCdnUrl", () => {

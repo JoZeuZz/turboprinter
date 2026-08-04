@@ -2356,6 +2356,10 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
 
       if (chosenLocalFiles.length > 0) {
         for (const filename of chosenLocalFiles) {
+          if (!isSafeMediaFilename(filename)) {
+            console.warn(`[Timeline] Ignoring unsafe local filename during build: ${JSON.stringify(filename)}`);
+            continue;
+          }
           const existingMed = (p.selected_media || []).find((m: any) => path.basename(m.source_url || m.asset_url || "") === filename);
           if (existingMed) {
             if (!seen.has(existingMed.source_url)) {
