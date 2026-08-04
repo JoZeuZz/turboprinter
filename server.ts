@@ -302,17 +302,12 @@ function ensurePartHeader(scriptText: string, partNum: number, subject: string):
   // Strip out raw "Parte X:" or "Parte X -" or "--- PARTE X ---" prefix if present
   trimmed = trimmed.replace(new RegExp(`^(---+\\s*)?parte\\s*#?\\s*${partNum}\\s*[-:.]*\\s*(---+\\s*)?`, "i"), "").trim();
 
-  // Check if it already starts with title + parte X (e.g. "Mi familia no es quien dice ser, parte 2")
-  if (cleanSubject) {
-    const fullRegex = new RegExp(`^${cleanSubject.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*,?\\s*parte\\s*#?\\s*${partNum}[,.]?`, "i");
-    if (fullRegex.test(trimmed)) {
-      return trimmed;
-    }
-  } else {
-    const simpleRegex = new RegExp(`^parte\\s*#?\\s*${partNum}[,.]?`, "i");
-    if (simpleRegex.test(trimmed)) {
-      return trimmed;
-    }
+  // Remove any pre-existing header prefix (e.g. "Están penando en mi casa, Parte 2." or "Parte 2.") at start
+  const stripHeaderRegex = new RegExp(`^([^.!?\n]*?\\b)?parte\\s*#?\\s*${partNum}\\b[\\s.,:-]*`, "gi");
+  let prev = "";
+  while (trimmed !== prev) {
+    prev = trimmed;
+    trimmed = trimmed.replace(stripHeaderRegex, "").trim();
   }
 
   const header = cleanSubject ? `${cleanSubject}, Parte ${partNum}. ` : `Parte ${partNum}. `;
