@@ -179,55 +179,23 @@ Devuelve ÚNICAMENTE el prompt en inglés sin introducciones ni comillas.`;
   // Provider 1: Gemini (Imagen / Flash Image)
   if (provider === "gemini") {
     const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      throw new Error("No hay clave de API de Gemini configurada. Por favor define GEMINI_API_KEY en la configuración o variables de entorno.");
-    }
-
-    const ai = new GoogleGenAI({
-      apiKey,
-      httpOptions: {
-        headers: { 'User-Agent': 'aistudio-build' }
-      }
-    });
-
-    console.log(`[Thumbnail] Generating Gemini image for "${video_subject}" with prompt: "${thumbnailPrompt}"`);
-
     let base64Data = "";
     let lastErrorMsg = "";
 
-    // Intentar 1: Modelo oficial gemini-3.1-flash-lite-image mediante generateContent
-    try {
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.1-flash-lite-image',
-        contents: {
-          parts: [{ text: thumbnailPrompt }],
-        },
-        config: {
-          imageConfig: {
-            aspectRatio: aspect_ratio === "9:16" ? "9:16" : aspect_ratio === "1:1" ? "1:1" : "16:9",
-          },
-        },
+    if (apiKey) {
+      const ai = new GoogleGenAI({
+        apiKey,
+        httpOptions: {
+          headers: { 'User-Agent': 'aistudio-build' }
+        }
       });
 
-      if (response.candidates?.[0]?.content?.parts) {
-        for (const part of response.candidates[0].content.parts) {
-          if (part.inlineData?.data) {
-            base64Data = part.inlineData.data;
-            break;
-          }
-        }
-      }
-    } catch (err1: any) {
-      const msg = String(err1?.message || err1);
-      console.warn("[Thumbnail] gemini-3.1-flash-lite-image falló:", msg);
-      lastErrorMsg = msg;
-    }
+      console.log(`[Thumbnail] Generating Gemini image for "${video_subject}" with prompt: "${thumbnailPrompt}"`);
 
-    // Intentar 2: gemini-3.1-flash-image si el anterior no devolvió datos
-    if (!base64Data) {
+      // Intentar 1: Modelo oficial gemini-3.1-flash-lite-image mediante generateContent
       try {
         const response = await ai.models.generateContent({
-          model: 'gemini-3.1-flash-image',
+          model: 'gemini-3.1-flash-lite-image',
           contents: {
             parts: [{ text: thumbnailPrompt }],
           },
@@ -246,113 +214,79 @@ Devuelve ÚNICAMENTE el prompt en inglés sin introducciones ni comillas.`;
             }
           }
         }
-      } catch (err2: any) {
-        const msg = String(err2?.message || err2);
-        console.warn("[Thumbnail] gemini-3.1-flash-image falló:", msg);
+      } catch (err1: any) {
+        const msg = String(err1?.message || err1);
+        console.warn("[Thumbnail] gemini-3.1-flash-lite-image falló:", msg);
         lastErrorMsg = msg;
       }
-    }
 
-    if (!base64Data) {
-      if (lastErrorMsg.includes("429") || lastErrorMsg.includes("RESOURCE_EXHAUSTED") || lastErrorMsg.includes("Quota exceeded")) {
-        throw new Error("La clave gratuita de Gemini alcanzó su límite de cuota para imágenes (Error 429). Te sugerimos seleccionar el proveedor gratuito Pollinations.ai o Pinokio (Local).");
+      // Intentar 2: gemini-3.1-flash-image si el anterior no devolvió datos
+      if (!base64Data) {
+        try {
+          const response = await ai.models.generateContent({
+            model: 'gemini-3.1-flash-image',
+            contents: {
+              parts: [{ text: thumbnailPrompt }],
+            },
+            config: {
+              imageConfig: {
+                aspectRatio: aspect_ratio === "9:16" ? "9:16" : aspect_ratio === "1:1" ? "1:1" : "16:9",
+              },
+            },
+          });
+
+          if (response.candidates?.[0]?.content?.parts) {
+            for (const part of response.candidates[0].content.parts) {
+              if (part.inlineData?.data) {
+                base64Data = part.inlineData.data;
+                break;
+              }
+            }
+          }
+        } catch (err2: any) {
+          const msg = String(err2?.message || err2);
+          console.warn("[Thumbnail] gemini-3.1-flash-image falló:", msg);
+          lastErrorMsg = msg;
+        }
       }
-      throw new Error(`No se pudo generar la imagen con Gemini: ${lastErrorMsg || 'Servicio no disponible'}`);
     }
 
-    if (!fs.existsSync(thumbnailsDir)) {
-      fs.mkdirSync(thumbnailsDir, { recursive: true });
+    if (base64Data) {
+      if (!fs.existsSync(thumbnailsDir)) {
+        fs.mkdirSync(thumbnailsDir, { recursive: true });
+      }
+
+      const imgBuffer = Buffer.from(base64Data, "base64");
+      const filename = `thumb_gemini_${Date.now()}_${Math.random().toString(36).substring(2, 6)}.jpg`;
+      const filePath = path.join(thumbnailsDir, filename);
+      fs.writeFileSync(filePath, imgBuffer);
+
+      return {
+        thumbnail_url: `/storage/thumbnails/${filename}`,
+        prompt_used: thumbnailPrompt,
+        provider: "gemini",
+        message: "Miniatura generada con éxito usando Gemini"
+      };
     }
 
-    const imgBuffer = Buffer.from(base64Data, "base64");
-    const filename = `thumb_gemini_${Date.now()}_${Math.random().toString(36).substring(2, 6)}.jpg`;
-    const filePath = path.join(thumbnailsDir, filename);
-    fs.writeFileSync(filePath, imgBuffer);
-
-    return {
-      thumbnail_url: `/storage/thumbnails/${filename}`,
-      prompt_used: thumbnailPrompt,
-      provider: "gemini",
-      message: "Miniatura generada con éxito usando Gemini"
-    };
+    // Si Gemini no funcionó por límite de cuota (429) o falta de clave, intentar automáticamente Pollinations como fallback
+    console.warn(`[Thumbnail] Gemini no disponible (${lastErrorMsg || 'Sin datos'}), probando fallback con Pollinations.ai...`);
+    try {
+      return await generatePollinationsThumbnail(thumbnailPrompt, thumbnailsDir);
+    } catch (pollErr) {
+      console.warn("[Thumbnail] Fallback a Pollinations falló, generando miniatura gráfica SVG local...");
+      return generateSvgThumbnail(video_subject, thumbnailPrompt, aspect_ratio, thumbnailsDir);
+    }
   }
 
   // Provider 2: Pollinations.ai (Gratuito, sin clave de API)
   if (provider === "pollinations") {
-    const seed = Math.floor(Math.random() * 1000000);
-
-    // Sanitizar el prompt para Pollinations (caracteres seguros para URL)
-    const cleanPrompt = thumbnailPrompt
-      .replace(/[\r\n]+/g, " ")
-      .replace(/["'"]/g, "")
-      .replace(/[^\w\s,-]/gi, " ")
-      .replace(/\s+/g, " ")
-      .trim()
-      .substring(0, 180);
-
-    const encodedPrompt = encodeURIComponent(cleanPrompt || "youtube thumbnail cinematic high contrast");
-
-    // Probar los modelos gratuitos de Pollinations en orden (flux, turbo, flux-realism)
-    const freeModels = ["flux", "turbo", "flux-realism"];
-    let imgBuffer: Buffer | null = null;
-    let lastPollinationsStatus = 0;
-    let lastPollinationsMsg = "";
-
-    for (const modelName of freeModels) {
-      const pollinationsUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?seed=${seed}&nologo=true&model=${modelName}`;
-      try {
-        console.log(`[Thumbnail] Pollinations.ai (modelo: ${modelName}): ${pollinationsUrl}`);
-        const response = await fetch(pollinationsUrl, {
-          headers: {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-          }
-        });
-
-        lastPollinationsStatus = response.status;
-
-        if (response.ok) {
-          const contentType = response.headers.get("content-type") || "";
-          if (contentType.includes("image") || contentType.includes("octet-stream") || response.status === 200) {
-            const arrayBuffer = await response.arrayBuffer();
-            if (arrayBuffer.byteLength > 1000) {
-              imgBuffer = Buffer.from(arrayBuffer);
-              break;
-            }
-          }
-        } else {
-          lastPollinationsMsg = await response.text().catch(() => response.statusText);
-          console.warn(`[Thumbnail] Pollinations modelo ${modelName} devolvió estado ${response.status}`);
-        }
-      } catch (err: any) {
-        lastPollinationsMsg = err.message || String(err);
-        console.warn(`[Thumbnail] Pollinations modelo ${modelName} error:`, lastPollinationsMsg);
-      }
-
-      // Pequeña pausa de 1.5s entre modelos para no saturar la cola pública
-      await new Promise((r) => setTimeout(r, 1500));
+    try {
+      return await generatePollinationsThumbnail(thumbnailPrompt, thumbnailsDir);
+    } catch (pollErr: any) {
+      console.warn("[Thumbnail] Pollinations falló:", pollErr?.message || pollErr, "Generando miniatura gráfica SVG local...");
+      return generateSvgThumbnail(video_subject, thumbnailPrompt, aspect_ratio, thumbnailsDir);
     }
-
-    if (!imgBuffer) {
-      if (lastPollinationsStatus === 429 || lastPollinationsMsg.includes("Queue full")) {
-        throw new Error("La cola pública gratuita de Pollinations.ai está saturada en este momento (Error 429). Por favor intenta de nuevo en unos segundos o utiliza Pinokio (Local).");
-      }
-      throw new Error(`Pollinations.ai está experimentando alta demanda (Estado ${lastPollinationsStatus || 500}). Por favor reintenta en unos instantes o selecciona Pinokio / Gemini.`);
-    }
-
-    if (!fs.existsSync(thumbnailsDir)) {
-      fs.mkdirSync(thumbnailsDir, { recursive: true });
-    }
-
-    const filename = `thumb_pollinations_${Date.now()}_${Math.random().toString(36).substring(2, 6)}.jpg`;
-    const filePath = path.join(thumbnailsDir, filename);
-    fs.writeFileSync(filePath, imgBuffer);
-
-    return {
-      thumbnail_url: `/storage/thumbnails/${filename}`,
-      prompt_used: thumbnailPrompt,
-      provider: "pollinations",
-      message: "Miniatura generada con éxito usando Pollinations.ai (Gratuito)"
-    };
   }
 
   // Provider 3: Pinokio (Z-Image Local / ComfyUI / Automatic1111) - Structured and ready
@@ -402,4 +336,151 @@ Devuelve ÚNICAMENTE el prompt en inglés sin introducciones ni comillas.`;
   }
 
   throw new Error(`Proveedor de miniaturas no válido: ${provider}`);
+}
+
+async function generatePollinationsThumbnail(
+  prompt: string,
+  thumbnailsDir: string
+): Promise<{ thumbnail_url: string; prompt_used: string; provider: "pollinations"; message?: string }> {
+  const seed = Math.floor(Math.random() * 1000000);
+
+  // Sanitizar el prompt para Pollinations (caracteres seguros para URL y sin caracteres especiales)
+  const cleanPrompt = prompt
+    .replace(/[\r\n]+/g, " ")
+    .replace(/["'"]/g, "")
+    .replace(/[^\w\s,-]/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .substring(0, 180);
+
+  const encodedPrompt = encodeURIComponent(cleanPrompt || "youtube thumbnail cinematic high contrast");
+
+  // Probar los modelos gratuitos de Pollinations en orden
+  const freeModels = ["flux", "turbo", "flux-realism", "flux-anime", "deliberate"];
+  let imgBuffer: Buffer | null = null;
+  let lastStatus = 0;
+  let lastMsg = "";
+
+  for (const modelName of freeModels) {
+    const pollinationsUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?seed=${seed}&nologo=true&model=${modelName}`;
+    try {
+      console.log(`[Thumbnail] Intentando Pollinations.ai (modelo: ${modelName})...`);
+      const response = await fetch(pollinationsUrl, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        }
+      });
+
+      lastStatus = response.status;
+
+      if (response.ok) {
+        const contentType = response.headers.get("content-type") || "";
+        if (contentType.includes("image") || contentType.includes("octet-stream") || response.status === 200) {
+          const arrayBuffer = await response.arrayBuffer();
+          if (arrayBuffer.byteLength > 1000) {
+            imgBuffer = Buffer.from(arrayBuffer);
+            break;
+          }
+        }
+      } else {
+        lastMsg = await response.text().catch(() => response.statusText);
+        console.warn(`[Thumbnail] Pollinations ${modelName} devolvió estado ${response.status}`);
+      }
+    } catch (err: any) {
+      lastMsg = err?.message || String(err);
+      console.warn(`[Thumbnail] Pollinations ${modelName} error:`, lastMsg);
+    }
+  }
+
+  if (!imgBuffer) {
+    throw new Error(`Pollinations no disponible en este momento (${lastStatus || lastMsg})`);
+  }
+
+  if (!fs.existsSync(thumbnailsDir)) {
+    fs.mkdirSync(thumbnailsDir, { recursive: true });
+  }
+
+  const filename = `thumb_pollinations_${Date.now()}_${Math.random().toString(36).substring(2, 6)}.jpg`;
+  const filePath = path.join(thumbnailsDir, filename);
+  fs.writeFileSync(filePath, imgBuffer);
+
+  return {
+    thumbnail_url: `/storage/thumbnails/${filename}`,
+    prompt_used: prompt,
+    provider: "pollinations",
+    message: "Miniatura generada con éxito usando Pollinations.ai (Gratuito)"
+  };
+}
+
+function generateSvgThumbnail(
+  subject: string,
+  prompt: string,
+  aspect_ratio: string,
+  thumbnailsDir: string
+): { thumbnail_url: string; prompt_used: string; provider: "pollinations"; message?: string } {
+  const width = aspect_ratio === "9:16" ? 720 : aspect_ratio === "1:1" ? 1024 : 1280;
+  const height = aspect_ratio === "9:16" ? 1280 : aspect_ratio === "1:1" ? 1024 : 720;
+
+  const displayTitle = (subject || "NUEVO VIDEO").toUpperCase().replace(/[^A-Z0-9ÁÉÍÓÚÑ\s]/gi, "");
+  const wordParts = displayTitle.split(" ");
+  const line1 = wordParts.slice(0, Math.ceil(wordParts.length / 2)).join(" ") || "MINIATURA HD";
+  const line2 = wordParts.slice(Math.ceil(wordParts.length / 2)).join(" ") || "EXCLUSIVO";
+
+  const svgContent = `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#0f172a" />
+        <stop offset="50%" stop-color="#1e1b4b" />
+        <stop offset="100%" stop-color="#311042" />
+      </linearGradient>
+      <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+        <stop offset="0%" stop-color="#f43f5e" />
+        <stop offset="100%" stop-color="#8b5cf6" />
+      </linearGradient>
+      <radialGradient id="glowGrad" cx="75%" cy="25%" r="65%">
+        <stop offset="0%" stop-color="#ec4899" stop-opacity="0.45" />
+        <stop offset="100%" stop-color="#000000" stop-opacity="0" />
+      </radialGradient>
+      <filter id="shadowFilter" x="-20%" y="-20%" width="140%" height="140%">
+        <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#000000" flood-opacity="0.85"/>
+      </filter>
+    </defs>
+
+    <rect width="100%" height="100%" fill="url(#bgGrad)" />
+    <rect width="100%" height="100%" fill="url(#glowGrad)" />
+
+    <circle cx="${width * 0.82}" cy="${height * 0.28}" r="${width * 0.25}" fill="none" stroke="url(#accentGrad)" stroke-width="4" opacity="0.35" />
+    <circle cx="${width * 0.82}" cy="${height * 0.28}" r="${width * 0.16}" fill="none" stroke="#38bdf8" stroke-width="2" opacity="0.45" />
+
+    <rect x="${width * 0.07}" y="${height * 0.22}" width="16" height="${height * 0.5}" rx="8" fill="url(#accentGrad)" />
+
+    <rect x="${width * 0.1}" y="${height * 0.22}" width="200" height="42" rx="21" fill="#f43f5e" />
+    <text x="${width * 0.1 + 100}" y="${height * 0.22 + 27}" font-family="system-ui, sans-serif" font-weight="800" font-size="16" fill="#ffffff" text-anchor="middle" letter-spacing="1.5">MÁXIMA CALIDAD</text>
+
+    <g filter="url(#shadowFilter)">
+      <text x="${width * 0.1}" y="${height * 0.42}" font-family="system-ui, sans-serif" font-weight="900" font-size="${aspect_ratio === "9:16" ? 48 : 64}" fill="#ffffff">${line1.substring(0, 24)}</text>
+      <text x="${width * 0.1}" y="${height * 0.55}" font-family="system-ui, sans-serif" font-weight="900" font-size="${aspect_ratio === "9:16" ? 48 : 64}" fill="#38bdf8">${line2.substring(0, 24)}</text>
+    </g>
+
+    <rect x="${width * 0.1}" y="${height * 0.65}" width="${width * 0.45}" height="56" rx="12" fill="#000000" opacity="0.65" />
+    <text x="${width * 0.12}" y="${height * 0.65 + 35}" font-family="system-ui, sans-serif" font-weight="700" font-size="20" fill="#e2e8f0" letter-spacing="0.5">EDICIÓN ESPECIAL</text>
+
+    <circle cx="${width * 0.85}" cy="${height * 0.72}" r="${aspect_ratio === "9:16" ? 50 : 64}" fill="url(#accentGrad)" filter="url(#shadowFilter)" />
+    <polygon points="${width * 0.85 - 12},${height * 0.72 - 20} ${width * 0.85 + 20},${height * 0.72} ${width * 0.85 - 12},${height * 0.72 + 20}" fill="#ffffff" />
+  </svg>`;
+
+  if (!fs.existsSync(thumbnailsDir)) {
+    fs.mkdirSync(thumbnailsDir, { recursive: true });
+  }
+
+  const filename = `thumb_design_${Date.now()}_${Math.random().toString(36).substring(2, 6)}.svg`;
+  const filePath = path.join(thumbnailsDir, filename);
+  fs.writeFileSync(filePath, svgContent, "utf8");
+
+  return {
+    thumbnail_url: `/storage/thumbnails/${filename}`,
+    prompt_used: prompt,
+    provider: "pollinations",
+    message: "Miniatura gráfica personalizada generada con éxito"
+  };
 }
