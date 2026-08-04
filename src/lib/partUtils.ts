@@ -14,7 +14,7 @@ export function getClipsForPart<T extends { part_index?: number }>(
     return items.filter((item) => {
       const isOutro = (item as any)?.id === "clip_outro" || (item as any)?.keywords?.includes("outro") || (item as any)?.asset_url?.includes("outro");
       if (isOutro) {
-        return numericPart === multiPartCount;
+        return true;
       }
       return (item.part_index ?? 1) === numericPart;
     });
@@ -38,15 +38,43 @@ export function getNormalizedItemsForPart<T extends { start_sec: number; end_sec
   const selected = getClipsForPart(items, partIndex, multiPartCount);
   if (partIndex === "all" || selected.length === 0) return selected;
 
-  const minStartSec = commonOffsetSec !== undefined ? commonOffsetSec : Math.min(...selected.map((item) => item.start_sec ?? 0));
-  if (minStartSec <= 0) return selected;
+  const nonOutroSelected = selected.filter(
+    (item) => !((item as any)?.id === "clip_outro" || (item as any)?.keywords?.includes("outro") || (item as any)?.asset_url?.includes("outro"))
+  );
 
-  return selected.map((item) => ({
-    ...item,
-    start_sec: Math.max(0, (item.start_sec ?? 0) - minStartSec),
-    ...(item.end_sec !== undefined && item.end_sec !== null
-      ? { end_sec: Math.max(0, item.end_sec - minStartSec) }
-      : {}),
-  }));
+  const minStartSec = commonOffsetSec !== undefined
+    ? commonOffsetSec
+    : (nonOutroSelected.length > 0 ? Math.min(...nonOutroSelected.map((item) => item.start_sec ?? 0)) : Math.min(...selected.map((item) => item.start_sec ?? 0)));
+
+  let nonOutroDuration = 0;
+  nonOutroSelected.forEach((item) => {
+    const normStart = Math.max(0, (item.start_sec ?? 0) - minStartSec);
+    const dur = item.duration_sec ?? 5;
+    if (normStart + dur > nonOutroDuration) {
+      nonOutroDuration = normStart + dur;
+    }
+  });
+
+  return selected.map((item) => {
+    const isOutro = (item as any)?.id === "clip_outro" || (item as any)?.keywords?.includes("outro") || (item as any)?.asset_url?.includes("outro");
+    if (isOutro) {
+      return {
+        ...item,
+        start_sec: nonOutroDuration,
+        ...(item.end_sec !== undefined && item.end_sec !== null
+          ? { end_sec: nonOutroDuration + (item.duration_sec ?? 4) }
+          : {}),
+      };
+    }
+
+    const normStart = Math.max(0, (item.start_sec ?? 0) - minStartSec);
+    return {
+      ...item,
+      start_sec: normStart,
+      ...(item.end_sec !== undefined && item.end_sec !== null
+        ? { end_sec: Math.max(0, item.end_sec - minStartSec) }
+        : {}),
+    };
+  });
 }
 

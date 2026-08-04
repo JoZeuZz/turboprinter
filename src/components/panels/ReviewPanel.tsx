@@ -15,6 +15,7 @@ import {
 import { Button } from "../ui";
 import { ClipPreviewModal } from "../ui/ClipPreviewModal";
 import { SortableClipCard } from "./SortableClipCard";
+import { getClipsForPart } from "../../lib/partUtils";
 import { useProjectStore } from "../../store/useProjectStore";
 import { useProjectWorkspaceStore } from "../../store/useProjectWorkspaceStore";
 import { useConfigStore } from "../../store/useConfigStore";
@@ -319,16 +320,42 @@ export function ReviewPanel() {
     setPanel("rendering");
   };
 
+  const displayedClips = isMultiPart && multiPartCount > 1 ? getClipsForPart(orderedClips, activePartIndex, multiPartCount) : orderedClips;
+
   return (
     <div className="flex h-full w-full max-w-5xl mx-auto flex-col gap-4 px-6 py-5">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-1">
         <div>
           <h2 className="text-sm font-semibold text-foreground">{t("panels.review.reviewClips")}</h2>
           <p className="text-xs text-muted mt-0.5">
-            {orderedClips.length} clips · ~{totalDuration.toFixed(0)}s total
+            {displayedClips.length} clips · ~{totalDuration.toFixed(0)}s total
             {excluded.size > 0 && ` · ${excluded.size} excluded`}
           </p>
         </div>
+
+        {isMultiPart && multiPartCount > 1 && (
+          <div className="flex items-center gap-1.5 bg-surface-2/80 p-1.5 rounded-xl border border-border">
+            <span className="text-xs font-semibold text-muted-foreground px-1.5">Parte:</span>
+            {Array.from({ length: multiPartCount }).map((_, idx) => {
+              const partNum = idx + 1;
+              const isActive = activePartIndex === partNum;
+              return (
+                <button
+                  key={partNum}
+                  type="button"
+                  onClick={() => setActivePartIndex(partNum)}
+                  className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all ${
+                    isActive
+                      ? "bg-accent text-white shadow-xs"
+                      : "bg-transparent text-muted hover:text-foreground"
+                  }`}
+                >
+                  Parte {partNum}
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
           {/* Outro Control Widget */}
@@ -447,18 +474,18 @@ export function ReviewPanel() {
         </div>
       </div>
 
-      {orderedClips.length === 0 ? (
+      {displayedClips.length === 0 ? (
         <div className="flex flex-1 items-center justify-center">
           <p className="text-sm text-muted">{t("panels.review.noClips")}</p>
         </div>
       ) : (
         <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <SortableContext
-            items={orderedClips.map((c) => c.id)}
+            items={displayedClips.map((c) => c.id)}
             strategy={rectSortingStrategy}
           >
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {orderedClips.map((clip) => (
+              {displayedClips.map((clip) => (
                 <SortableClipCard
                   key={clip.id}
                   clip={clip}
