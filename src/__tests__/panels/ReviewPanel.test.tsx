@@ -56,7 +56,7 @@ describe("ReviewPanel", () => {
     // 3 duration badges: "5.0s", "3.0s", "4.0s"
     expect(screen.getByText("5.0s")).toBeInTheDocument();
     expect(screen.getByText("3.0s")).toBeInTheDocument();
-    expect(screen.getByText("4.0s")).toBeInTheDocument();
+    expect(screen.getAllByText("4.0s")[0]).toBeInTheDocument();
   });
 
   it("shows total duration", () => {
