@@ -3,6 +3,7 @@ import {
   isSafeMediaFilename,
   resolveWithinDir,
   isSafeProjectFolderName,
+  isSafeVerificationFilename,
 } from "../../server/pathSafety";
 
 describe("isSafeMediaFilename", () => {
@@ -59,6 +60,45 @@ describe("isSafeMediaFilename", () => {
   });
   it("still accepts a filename with a semicolon, since it is not shell-special inside double quotes", () => {
     expect(isSafeMediaFilename("a;b.mp4")).toBe(true);
+  });
+});
+
+describe("isSafeVerificationFilename", () => {
+  it("accepts a plain filename with the .txt extension", () => {
+    expect(isSafeVerificationFilename("tiktok-verify.txt")).toBe(true);
+  });
+  it("accepts a plain filename with the .html extension", () => {
+    expect(isSafeVerificationFilename("tiktok-verify.html")).toBe(true);
+  });
+  it("rejects a traversal attempt", () => {
+    expect(isSafeVerificationFilename("../../etc/passwd")).toBe(false);
+  });
+  it("rejects a filename containing a subdirectory", () => {
+    expect(isSafeVerificationFilename("sub/dir/file.txt")).toBe(false);
+  });
+  it("rejects a filename containing a NUL byte", () => {
+    expect(isSafeVerificationFilename("file.txt\0.html")).toBe(false);
+  });
+  it("rejects a filename with a non-verification extension", () => {
+    expect(isSafeVerificationFilename("clip.mp4")).toBe(false);
+  });
+  it("rejects a filename with no extension", () => {
+    expect(isSafeVerificationFilename("tiktokverify")).toBe(false);
+  });
+  it("rejects an empty string", () => {
+    expect(isSafeVerificationFilename("")).toBe(false);
+  });
+  it("rejects non-string values", () => {
+    expect(isSafeVerificationFilename(undefined)).toBe(false);
+    expect(isSafeVerificationFilename(null)).toBe(false);
+    expect(isSafeVerificationFilename(42)).toBe(false);
+    expect(isSafeVerificationFilename({})).toBe(false);
+  });
+  it("rejects a filename containing a double quote", () => {
+    expect(isSafeVerificationFilename('a";id;".txt')).toBe(false);
+  });
+  it("rejects command substitution", () => {
+    expect(isSafeVerificationFilename("a$(id).txt")).toBe(false);
   });
 });
 

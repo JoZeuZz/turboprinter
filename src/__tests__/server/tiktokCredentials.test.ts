@@ -158,6 +158,31 @@ describe("writeTiktokVerificationFiles", () => {
     writeTiktokVerificationFiles(tmpDir, { activeChannelId: null, channels: [] });
     expect(fs.existsSync(path.join(tmpDir, "public"))).toBe(false);
   });
+
+  it("rejects a traversal filename and does not write outside tmpDir", () => {
+    const traversalTarget = path.join(path.dirname(tmpDir), "evil.txt");
+    writeTiktokVerificationFiles(tmpDir, {
+      activeChannelId: null,
+      channels: [],
+      verification_filename: "../../../tmp/evil.txt",
+      verification_content: "tiktok-site-verification=abc",
+    });
+    expect(fs.existsSync(traversalTarget)).toBe(false);
+    expect(fs.existsSync(path.join(tmpDir, "public"))).toBe(false);
+    expect(fs.existsSync(path.join(tmpDir, "dist"))).toBe(false);
+  });
+
+  it("rejects an absolute-path filename", () => {
+    writeTiktokVerificationFiles(tmpDir, {
+      activeChannelId: null,
+      channels: [],
+      verification_filename: "/etc/passwd",
+      verification_content: "tiktok-site-verification=abc",
+    });
+    expect(fs.existsSync("/etc/passwd-written-by-test")).toBe(false);
+    expect(fs.existsSync(path.join(tmpDir, "public"))).toBe(false);
+    expect(fs.existsSync(path.join(tmpDir, "dist"))).toBe(false);
+  });
 });
 
 describe("clearTiktokCredentials", () => {

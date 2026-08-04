@@ -37,6 +37,25 @@ export function isSafeMediaFilename(name: unknown): name is string {
   return MEDIA_EXTENSIONS.includes(path.extname(name).toLowerCase());
 }
 
+/** Extensions TikTok's own domain-verification flow uses. */
+const VERIFICATION_EXTENSIONS = [".txt", ".html"];
+
+/**
+ * True when `name` is a bare filename safe to join onto public/ or dist/
+ * for TikTok domain-verification: no directory separators, no traversal,
+ * no control characters, no shell metacharacters, and a verification-file
+ * extension.
+ */
+export function isSafeVerificationFilename(name: unknown): name is string {
+  if (typeof name !== "string") return false;
+  if (name.length === 0 || name.length > 255) return false;
+  if (CONTROL_CHARS.test(name)) return false;
+  if (SHELL_UNSAFE.test(name)) return false;
+  if (name !== path.basename(name)) return false;
+  if (name === "." || name === "..") return false;
+  return VERIFICATION_EXTENSIONS.includes(path.extname(name).toLowerCase());
+}
+
 /**
  * Resolves `candidate` (absolute or relative to `baseDir`) and returns the
  * absolute path only if it stays inside `baseDir`. Returns null otherwise.

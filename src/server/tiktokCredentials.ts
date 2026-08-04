@@ -5,6 +5,7 @@
 
 import fs from "fs";
 import path from "path";
+import { isSafeVerificationFilename } from "./pathSafety";
 
 export interface TiktokChannel {
   channelId: string;
@@ -131,6 +132,10 @@ export const writeTiktokVerificationFiles = (
   const filename = creds.verification_filename;
   const content = creds.verification_content;
   if (!filename || !content) return;
+  if (!isSafeVerificationFilename(filename)) {
+    console.error(`[TikTok] Rejected unsafe verification filename: ${JSON.stringify(filename)}`);
+    return;
+  }
 
   for (const dir of ["public", "dist"]) {
     try {
