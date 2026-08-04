@@ -839,20 +839,48 @@ export function createRenderer(deps: RenderDeps) {
       if (clipHasPartIndex) {
         for (let i = 0; i < clips.length; i++) {
           const clip = clips[i];
-          const pIdx = Math.min(Math.max((clip.part_index || 1) - 1, 0), multiPartCount - 1);
-          formattedByPart[pIdx].push({
-            path: formattedClips[i],
-            duration: Number(clip.duration_sec) || 5
-          });
+          const isOutro = clip.id === "clip_outro" || clip.asset_url?.includes("outro") || clip.source_url?.includes("outro");
+          if (isOutro) {
+            for (let pIdx = 0; pIdx < multiPartCount; pIdx++) {
+              formattedByPart[pIdx].push({
+                path: formattedClips[i],
+                duration: Number(clip.duration_sec) || 5
+              });
+            }
+          } else {
+            const pIdx = Math.min(Math.max((clip.part_index || 1) - 1, 0), multiPartCount - 1);
+            formattedByPart[pIdx].push({
+              path: formattedClips[i],
+              duration: Number(clip.duration_sec) || 5
+            });
+          }
         }
       } else {
-        const chunkSize = Math.max(1, Math.ceil(clips.length / multiPartCount));
-        for (let i = 0; i < clips.length; i++) {
+        const lastClipIdx = clips.length - 1;
+        const lastClipIsOutro = lastClipIdx >= 0 && (
+          clips[lastClipIdx].id === "clip_outro" ||
+          clips[lastClipIdx].asset_url?.includes("outro") ||
+          clips[lastClipIdx].source_url?.includes("outro")
+        );
+
+        const contentClipsCount = lastClipIsOutro ? clips.length - 1 : clips.length;
+        const chunkSize = Math.max(1, Math.ceil(contentClipsCount / multiPartCount));
+
+        for (let i = 0; i < contentClipsCount; i++) {
           const pIdx = Math.min(Math.floor(i / chunkSize), multiPartCount - 1);
           formattedByPart[pIdx].push({
             path: formattedClips[i],
             duration: Number(clips[i].duration_sec) || 5
           });
+        }
+
+        if (lastClipIsOutro) {
+          for (let pIdx = 0; pIdx < multiPartCount; pIdx++) {
+            formattedByPart[pIdx].push({
+              path: formattedClips[lastClipIdx],
+              duration: Number(clips[lastClipIdx].duration_sec) || 5
+            });
+          }
         }
       }
 
