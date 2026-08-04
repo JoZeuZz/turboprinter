@@ -552,6 +552,43 @@ export function createRenderer(deps: RenderDeps) {
         throw new Error("No video clips in the timeline to render.");
       }
 
+      const isOutroClip = (c: any) => {
+        if (!c) return false;
+        const id = String(c.id || "");
+        const assetUrl = String(c.asset_url || "");
+        const sourceUrl = String(c.source_url || "");
+        const text = String(c.text || "");
+        const keywords = Array.isArray(c.keywords) ? c.keywords.join(" ") : String(c.keywords || "");
+        return (
+          id === "clip_outro" ||
+          id.toLowerCase().includes("outro") ||
+          assetUrl.toLowerCase().includes("outro") ||
+          sourceUrl.toLowerCase().includes("outro") ||
+          keywords.toLowerCase().includes("outro") ||
+          text.toLowerCase().includes("outro")
+        );
+      };
+
+      const outroDiskPath = path.join(process.cwd(), "public", "assets", "outro.mp4");
+      const outroDiskExists = fs.existsSync(outroDiskPath);
+      const outroEnabledParam = p.params?.outro_enabled !== false;
+      const hasOutroInClips = clips.some(isOutroClip);
+
+      if (!hasOutroInClips && (outroDiskExists || outroEnabledParam)) {
+        const lastClip = clips[clips.length - 1];
+        const outroStartSec = lastClip ? ((lastClip.start_sec || 0) + (lastClip.duration_sec || 5)) : 0;
+        clips.push({
+          id: "clip_outro",
+          text: "🎬 Outro / Clip de Cierre",
+          asset_url: "/assets/outro.mp4",
+          source_url: "/assets/outro.mp4",
+          start_sec: outroStartSec,
+          duration_sec: 4,
+          keywords: ["outro", "cierre"],
+          provider: "local",
+        });
+      }
+
       // Ensure we have a project_folder_name
       if (!p.project_folder_name) {
         const themeFolder = deps.sanitizeFolderName(p.params?.video_niche || p.topic || 'general');
@@ -839,8 +876,7 @@ export function createRenderer(deps: RenderDeps) {
       if (clipHasPartIndex) {
         for (let i = 0; i < clips.length; i++) {
           const clip = clips[i];
-          const isOutro = clip.id === "clip_outro" || clip.asset_url?.includes("outro") || clip.source_url?.includes("outro");
-          if (isOutro) {
+          if (isOutroClip(clip)) {
             for (let pIdx = 0; pIdx < multiPartCount; pIdx++) {
               formattedByPart[pIdx].push({
                 path: formattedClips[i],
@@ -856,29 +892,33 @@ export function createRenderer(deps: RenderDeps) {
           }
         }
       } else {
-        const lastClipIdx = clips.length - 1;
-        const lastClipIsOutro = lastClipIdx >= 0 && (
-          clips[lastClipIdx].id === "clip_outro" ||
-          clips[lastClipIdx].asset_url?.includes("outro") ||
-          clips[lastClipIdx].source_url?.includes("outro")
-        );
+        const outroIndices: number[] = [];
+        const contentIndices: number[] = [];
 
-        const contentClipsCount = lastClipIsOutro ? clips.length - 1 : clips.length;
-        const chunkSize = Math.max(1, Math.ceil(contentClipsCount / multiPartCount));
+        for (let i = 0; i < clips.length; i++) {
+          if (isOutroClip(clips[i])) {
+            outroIndices.push(i);
+          } else {
+            contentIndices.push(i);
+          }
+        }
 
-        for (let i = 0; i < contentClipsCount; i++) {
+        const chunkSize = Math.max(1, Math.ceil(contentIndices.length / multiPartCount));
+
+        for (let i = 0; i < contentIndices.length; i++) {
+          const cIdx = contentIndices[i];
           const pIdx = Math.min(Math.floor(i / chunkSize), multiPartCount - 1);
           formattedByPart[pIdx].push({
-            path: formattedClips[i],
-            duration: Number(clips[i].duration_sec) || 5
+            path: formattedClips[cIdx],
+            duration: Number(clips[cIdx].duration_sec) || 5
           });
         }
 
-        if (lastClipIsOutro) {
+        for (const oIdx of outroIndices) {
           for (let pIdx = 0; pIdx < multiPartCount; pIdx++) {
             formattedByPart[pIdx].push({
-              path: formattedClips[lastClipIdx],
-              duration: Number(clips[lastClipIdx].duration_sec) || 5
+              path: formattedClips[oIdx],
+              duration: Number(clips[oIdx].duration_sec) || 5
             });
           }
         }
