@@ -19,6 +19,7 @@ import { maskSecrets, stripSentinelSecrets } from "./src/server/configMasking";
 import { synthesizeSpeech } from "./src/server/tts";
 import { generateLlmContent } from "./src/server/llm";
 import { searchPexelsVideos, pickUniqueClip } from "./src/server/pexels";
+import { classifyScriptMood, pickBgmForMood } from "./src/server/musicMood";
 import { createRenderer, executeCommand } from "./src/server/render";
 import { createProjectsRepo } from "./src/server/projectsRepo";
 import { shouldSweepProject, resolveRenderStatus } from "./src/server/projectLifecycle";
@@ -97,7 +98,12 @@ try {
   console.error("Failed to initialize local videos folder:", err);
 }
 
-// Dynamic scanning of background music files from public/musics
+// Dynamic scanning of background music files from public/musics.
+// Mood-based auto-selection (see src/server/musicMood.ts) relies on a
+// filename convention: "<mood>_*.ext" (e.g. "upbeat_synthwave.mp3"), where
+// <mood> is one of MOOD_TAGS ("upbeat", "tense", "calm", "dramatic",
+// "neutral"). Files without a mood prefix are still usable for manual
+// selection and as a random fallback when no prefixed file matches.
 const PUBLIC_MUSICS_DIR = path.join(process.cwd(), "public", "musics");
 
 function getBgmFiles() {
@@ -2982,20 +2988,37 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
   }));
 
   app.post("/api/v1/projects/:id/music/select", wrap(async (req: any, res: any) => {
+    const p = projects.get(req.params.id);
+    if (!p) {
+      return res.status(404).json({ status: 404, message: "Project not found", data: null });
+    }
+
+    const files = getBgmFiles();
+    const mood = p.script ? await classifyScriptMood(p.script) : "neutral";
+    const picked = pickBgmForMood(files, mood);
+
+    if (!picked) {
+      // No local BGM available: leave selected_music empty rather than
+      // silently defaulting to an external placeholder track. The render
+      // pipeline already handles "no BGM" as a valid case (narration-only
+      // mix).
+      p.selected_music = [];
+      projects.set(req.params.id, p);
+      return res.json({ status: 200, message: "No hay música local disponible.", data: { project_id: req.params.id, selected: null, selected_count: 0 } });
+    }
+
     const selectedMusic = {
-      id: "bgm_1",
-      provider: "jamendo",
-      url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3",
-      title: "Cosmic Journey",
+      id: path.basename(picked.file),
+      provider: "local",
+      url: picked.file,
+      title: picked.name,
       duration_sec: 180,
-      volume: req.body.volume || 0.2
+      volume: req.body.volume || 0.2,
+      mood,
     };
 
-    const p = projects.get(req.params.id);
-    if (p) {
-      p.selected_music = [selectedMusic];
-      projects.set(req.params.id, p);
-    }
+    p.selected_music = [selectedMusic];
+    projects.set(req.params.id, p);
 
     res.json({ status: 200, message: "ok", data: { project_id: req.params.id, selected: selectedMusic, selected_count: 1 } });
   }));
