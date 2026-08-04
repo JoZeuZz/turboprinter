@@ -5,7 +5,7 @@
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
-import { exec } from "child_process";
+import { exec, execFile } from "child_process";
 import { generateAss, splitTextIntoTikTokSubtitles } from "../lib/subtitleLayout";
 import { isSafeMediaFilename } from "./pathSafety";
 
@@ -257,6 +257,9 @@ export const downloadFile = async (url: string, destPath: string): Promise<strin
   }
 
   const correctedUrl = correctPexelsCdnUrl(url);
+  if (!/^https?:\/\//i.test(correctedUrl)) {
+    throw new Error(`Refusing to download from non-http(s) URL: ${correctedUrl}`);
+  }
 
   let lastError: any = null;
   // Try fetch up to 3 times
@@ -289,14 +292,22 @@ export const downloadFile = async (url: string, destPath: string): Promise<strin
   console.log(`[Download] Falling back to curl for ${correctedUrl}`);
   try {
     await new Promise<void>((resolve, reject) => {
-      const cmd = `curl -L -f --retry 3 -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" -o "${destPath}" "${correctedUrl}"`;
-      exec(cmd, (error, _stdout, stderr) => {
-        if (error) {
-          reject(new Error(`curl failed: ${stderr || error.message}`));
-        } else {
-          resolve();
+      execFile(
+        "curl",
+        [
+          "-L", "-f", "--retry", "3",
+          "-A", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          "-o", destPath,
+          correctedUrl,
+        ],
+        (error, _stdout, stderr) => {
+          if (error) {
+            reject(new Error(`curl failed: ${stderr || error.message}`));
+          } else {
+            resolve();
+          }
         }
-      });
+      );
     });
 
     if (fs.existsSync(destPath) && fs.statSync(destPath).size > 0) {

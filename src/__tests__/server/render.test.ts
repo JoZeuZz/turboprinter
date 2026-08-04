@@ -1,4 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import fs from "fs";
+import { execFile } from "child_process";
 import {
   buildFontsConf,
   escapeAssPathForFilter,
@@ -10,7 +12,14 @@ import {
   PROBE_COMMAND_TIMEOUT_MS,
   pickBgm,
   correctPexelsCdnUrl,
+  downloadFile,
 } from "../../server/render";
+
+vi.mock("child_process", () => {
+  const exec = vi.fn();
+  const execFile = vi.fn();
+  return { exec, execFile, default: { exec, execFile } };
+});
 
 describe("correctPexelsCdnUrl", () => {
   it("rewrites the images CDN host to the videos CDN", () => {
@@ -169,6 +178,64 @@ describe("buildMixDurationArgs", () => {
 
   it("prefers a measured duration over the music-only default", () => {
     expect(buildMixDurationArgs(false, 8)).toBe("-t 8");
+  });
+});
+
+describe("downloadFile", () => {
+  const execFileSpy = vi.mocked(execFile);
+
+  beforeEach(() => {
+    execFileSpy.mockReset();
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it("rejects non-http(s) URLs before attempting any network or subprocess call", async () => {
+    await expect(downloadFile("file:///etc/passwd", "/tmp/render-test-noscheme.mp4")).rejects.toThrow(
+      /non-http/i
+    );
+    expect(execFileSpy).not.toHaveBeenCalled();
+  });
+
+  it("passes the curl fallback URL/destPath as separate execFile argv elements, never through a shell (regression test for shell injection)", async () => {
+    // A value containing a double-quote followed by shell syntax. Under the old
+    // `exec()`-based implementation this would break out of the quoted curl
+    // command and execute arbitrary shell commands. With execFile it must reach
+    // curl as a single, inert argv element.
+    const maliciousUrl = 'https://example.com/a" ; touch /tmp/pwned ; echo "';
+    const destPath = "/tmp/render-test-dest.mp4";
+
+    vi.spyOn(global, "fetch").mockRejectedValue(new Error("network down"));
+    const existsSyncSpy = vi.spyOn(fs, "existsSync");
+    existsSyncSpy.mockReturnValueOnce(false); // pre-check: no pre-existing file
+    existsSyncSpy.mockReturnValueOnce(true); // post-curl check: curl "wrote" the file
+    vi.spyOn(fs, "statSync").mockReturnValue({ size: 123 } as fs.Stats);
+
+    execFileSpy.mockImplementation(((_file: string, _args: string[], cb: any) => {
+      cb(null, "", "");
+      return {} as any;
+    }) as any);
+
+    const promise = downloadFile(maliciousUrl, destPath);
+    await vi.runAllTimersAsync();
+    const result = await promise;
+
+    expect(result).toBe(destPath);
+    expect(execFileSpy).toHaveBeenCalledTimes(1);
+    const [command, args] = execFileSpy.mock.calls[0];
+    expect(command).toBe("curl");
+    expect(Array.isArray(args)).toBe(true);
+    const argv = args as string[];
+    // The URL and destination must each be their own argv element...
+    expect(argv).toContain(maliciousUrl);
+    expect(argv).toContain(destPath);
+    // ...never merged with other flags into a single shell string.
+    expect(argv.filter((a) => a === maliciousUrl)).toHaveLength(1);
+    expect(argv.some((a) => typeof a === "string" && a.includes("curl -L"))).toBe(false);
   });
 });
 
