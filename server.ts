@@ -23,6 +23,7 @@ import { createRenderer, executeCommand } from "./src/server/render";
 import { createProjectsRepo } from "./src/server/projectsRepo";
 import { shouldSweepProject, resolveRenderStatus } from "./src/server/projectLifecycle";
 import { isSafeMediaFilename, isSafeProjectFolderName, resolveWithinDir } from "./src/server/pathSafety";
+import { issueOauthState, consumeOauthState } from "./src/server/oauthState";
 import {
   loadTiktokChannels,
   saveTiktokChannels,
@@ -1233,13 +1234,15 @@ Instrucciones:
 
     const redirectUri = getRedirectUri(req);
     const oauth2Client = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
+    const state = issueOauthState();
     const authUrl = oauth2Client.generateAuthUrl({
       access_type: "offline",
       scope: [
         "https://www.googleapis.com/auth/youtube.upload",
         "https://www.googleapis.com/auth/youtube.readonly"
       ],
-      prompt: "consent"
+      prompt: "consent",
+      state,
     });
 
     res.json({ status: 200, message: "ok", data: { url: authUrl } });
@@ -1247,9 +1250,12 @@ Instrucciones:
 
   // YouTube OAuth Callback Route
   app.get("/api/v1/youtube/callback", wrap(async (req: any, res: any) => {
-    const { code } = req.query;
+    const { code, state } = req.query;
     if (!code) {
       return res.status(400).send("Código de autorización faltante.");
+    }
+    if (!consumeOauthState(state)) {
+      return res.status(400).send("Solicitud de autorización inválida o expirada. Intenta vincular la cuenta de nuevo.");
     }
 
     const clientId = process.env.YOUTUBE_CLIENT_ID;
@@ -1477,7 +1483,7 @@ Instrucciones:
 
     const redirectUri = encodeURIComponent(getTikTokRedirectUri(req));
     const scope = encodeURIComponent("user.info.basic,video.upload,video.publish");
-    const state = Math.random().toString(36).substring(2);
+    const state = issueOauthState();
     const authUrl = `https://www.tiktok.com/v2/auth/authorize/?client_key=${clientKey}&scope=${scope}&redirect_uri=${redirectUri}&response_type=code&state=${state}`;
 
     res.json({ status: 200, message: "ok", data: { url: authUrl } });
@@ -1485,9 +1491,12 @@ Instrucciones:
 
   // TikTok OAuth Callback Endpoint
   app.get("/api/v1/tiktok/callback", wrap(async (req: any, res: any) => {
-    const { code } = req.query;
+    const { code, state } = req.query;
     if (!code) {
       return res.status(400).send("Falta el parámetro 'code' de autorización.");
+    }
+    if (!consumeOauthState(state)) {
+      return res.status(400).send("Solicitud de autorización inválida o expirada. Intenta vincular la cuenta de nuevo.");
     }
 
     const clientKey = process.env.TIKTOK_CLIENT_KEY;
