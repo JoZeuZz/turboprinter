@@ -220,7 +220,13 @@ export function VideoPreview({
 
     videoRef.current.muted = true;
 
-    if (videoRef.current.src !== activeClipUrl) {
+    // Resolve relative URLs to absolute so videoRef.current.src comparison is accurate
+    const resolvedUrl = activeClipUrl.startsWith("/")
+      ? `${window.location.origin}${activeClipUrl}`
+      : activeClipUrl;
+    const currentAttr = videoRef.current.getAttribute("src");
+
+    if (currentAttr !== activeClipUrl && videoRef.current.src !== resolvedUrl) {
       videoRef.current.src = activeClipUrl;
       videoRef.current.load();
     }

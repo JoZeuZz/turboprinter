@@ -685,18 +685,33 @@ async function startServer() {
 
   app.get("/api/v1/outro-status", wrap(async (_req: any, res: any) => {
     try {
-      const publicAssetsDir = path.join(process.cwd(), "public", "assets");
-      const outroPath = path.join(publicAssetsDir, "outro.mp4");
-      const exists = fs.existsSync(outroPath);
+      const candidates = [
+        { disk: path.join(process.cwd(), "public", "assets", "outro.mp4"), url: "/assets/outro.mp4", path: "public/assets/outro.mp4" },
+        { disk: path.join(process.cwd(), "public", "outro.mp4"), url: "/outro.mp4", path: "public/outro.mp4" },
+        { disk: path.join(process.cwd(), "assets", "outro.mp4"), url: "/assets/outro.mp4", path: "assets/outro.mp4" },
+      ];
+      const match = candidates.find((c) => fs.existsSync(c.disk));
+      if (match) {
+        return res.json({
+          status: 200,
+          message: "ok",
+          data: {
+            exists: true,
+            url: match.url,
+            filename: "outro.mp4",
+            path: match.path,
+          },
+        });
+      }
       res.json({
         status: 200,
         message: "ok",
         data: {
-          exists,
-          url: exists ? "/assets/outro.mp4" : null,
+          exists: false,
+          url: null,
           filename: "outro.mp4",
-          path: "public/assets/outro.mp4"
-        }
+          path: "public/assets/outro.mp4",
+        },
       });
     } catch (err: any) {
       res.json({ status: 200, message: "ok", data: { exists: false, url: null, filename: "outro.mp4", path: "public/assets/outro.mp4" } });

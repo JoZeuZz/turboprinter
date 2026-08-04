@@ -79,12 +79,12 @@ export function ReviewPanel() {
     }
   }, []);
 
-  // Sync orderedClips when project loads or outroStatus updates
+  // Sync orderedClips when project loads or outroStatus/outroEnabled updates
   useEffect(() => {
     let clips = [...sourceClips];
     const hasOutro = clips.some((c) => c.id === "clip_outro" || c.asset_url?.includes("outro"));
     
-    if (!hasOutro && outroStatus.exists) {
+    if (!hasOutro && (outroStatus.exists || outroEnabled)) {
       const outroUrl = outroStatus.url || "/assets/outro.mp4";
       const totalDur = clips.reduce((acc, c) => acc + (c.duration_sec || 0), 0);
       const outroClip: TimelineItem = {
@@ -101,7 +101,7 @@ export function ReviewPanel() {
     }
 
     setOrderedClips(clips);
-  }, [sourceClips.length, outroStatus.exists]);
+  }, [sourceClips, outroStatus.exists, outroEnabled]);
 
   const handleYoutubeUpload = () => {
     if (!isYoutubeLinked) return;

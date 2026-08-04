@@ -11,7 +11,13 @@ export function getClipsForPart<T extends { part_index?: number }>(
   const hasPartIndex = items.some((item) => item.part_index !== undefined && item.part_index !== null);
 
   if (hasPartIndex) {
-    return items.filter((item) => (item.part_index ?? 1) === numericPart);
+    return items.filter((item) => {
+      const isOutro = (item as any)?.id === "clip_outro" || (item as any)?.keywords?.includes("outro") || (item as any)?.asset_url?.includes("outro");
+      if (isOutro) {
+        return numericPart === multiPartCount;
+      }
+      return (item.part_index ?? 1) === numericPart;
+    });
   }
 
   // Fallback: chunk items evenly across multiPartCount
