@@ -155,16 +155,16 @@ export async function generateThumbnailImage(
   let thumbnailPrompt = (custom_prompt || "").trim();
 
   if (!thumbnailPrompt) {
-    const metaPrompt = `Actúa como un diseñador gráfico profesional experto en crear miniaturas virales y atractivas para YouTube y redes sociales.
-Crea un prompt en INGLÉS detallado y muy descriptivo para generar una imagen de miniatura de alta calidad basada en el siguiente tema y guión.
+    const metaPrompt = `Actúa como un artista digital y fotógrafo profesional de alto nivel.
+Crea un prompt en INGLÉS altamente detallado y descriptivo para generar una imagen o ilustración realista basada en el siguiente tema y guión.
 
 Tema: "${video_subject}"
 Guión: "${(video_script || "").substring(0, 400)}"
 
-Pautas para el prompt de la miniatura:
-- Describe una escena dramática, de alto impacto visual, con iluminación cinematográfica y elementos llamativos.
-- Especifica el estilo visual (ej: "cinematic 4k photograph", "dramatic lighting", "vibrant colors", "hyperrealistic", "mysterious mood").
-- Muestra el concepto principal sin texto distorsionado.
+Reglas estrictas para el prompt:
+- Debe describir una escena fotográfica hiperrealista o una ilustración digital artística de alta definición (8k resolution, cinematic composition, vivid colors, photorealistic depth of field, dramatic atmospheric lighting).
+- NO agregues diapositivas, banners, recuadros de texto ni presentaciones. Debe ser una IMAGEN O ILUSTRACIÓN PURA Y REALISTA del concepto.
+- Muestra los personajes o elementos principales del tema de forma vívida y dramática.
 
 Devuelve ÚNICAMENTE el prompt en inglés sin introducciones ni comillas.`;
 
@@ -172,7 +172,7 @@ Devuelve ÚNICAMENTE el prompt en inglés sin introducciones ni comillas.`;
       thumbnailPrompt = await generateLlmContent(metaPrompt, false);
       thumbnailPrompt = thumbnailPrompt.replace(/^["']|["']$/g, "").trim();
     } catch (err) {
-      thumbnailPrompt = `Cinematic 4k photograph YouTube thumbnail for topic: ${video_subject || "mysterious story"}, high contrast, dramatic lighting, detailed, photorealistic`;
+      thumbnailPrompt = `Photorealistic 8k cinematic photograph of ${video_subject || "mysterious futuristic scene"}, dramatic atmospheric lighting, detailed artwork, vivid colors, depth of field`;
     }
   }
 
@@ -274,8 +274,8 @@ Devuelve ÚNICAMENTE el prompt en inglés sin introducciones ni comillas.`;
     try {
       return await generatePollinationsThumbnail(thumbnailPrompt, thumbnailsDir);
     } catch (pollErr) {
-      console.warn("[Thumbnail] Fallback a Pollinations falló, generando miniatura gráfica SVG local...");
-      return generateSvgThumbnail(video_subject, thumbnailPrompt, aspect_ratio, thumbnailsDir);
+      console.warn("[Thumbnail] Fallback a Pollinations falló, generando ilustración SVG de respaldo...");
+      return generateSvgThumbnail(thumbnailPrompt, aspect_ratio, thumbnailsDir);
     }
   }
 
@@ -284,8 +284,8 @@ Devuelve ÚNICAMENTE el prompt en inglés sin introducciones ni comillas.`;
     try {
       return await generatePollinationsThumbnail(thumbnailPrompt, thumbnailsDir);
     } catch (pollErr: any) {
-      console.warn("[Thumbnail] Pollinations falló:", pollErr?.message || pollErr, "Generando miniatura gráfica SVG local...");
-      return generateSvgThumbnail(video_subject, thumbnailPrompt, aspect_ratio, thumbnailsDir);
+      console.warn("[Thumbnail] Pollinations falló:", pollErr?.message || pollErr, "Generando ilustración SVG de respaldo...");
+      return generateSvgThumbnail(thumbnailPrompt, aspect_ratio, thumbnailsDir);
     }
   }
 
@@ -413,7 +413,6 @@ async function generatePollinationsThumbnail(
 }
 
 function generateSvgThumbnail(
-  subject: string,
   prompt: string,
   aspect_ratio: string,
   thumbnailsDir: string
@@ -421,59 +420,68 @@ function generateSvgThumbnail(
   const width = aspect_ratio === "9:16" ? 720 : aspect_ratio === "1:1" ? 1024 : 1280;
   const height = aspect_ratio === "9:16" ? 1280 : aspect_ratio === "1:1" ? 1024 : 720;
 
-  const displayTitle = (subject || "NUEVO VIDEO").toUpperCase().replace(/[^A-Z0-9ÁÉÍÓÚÑ\s]/gi, "");
-  const wordParts = displayTitle.split(" ");
-  const line1 = wordParts.slice(0, Math.ceil(wordParts.length / 2)).join(" ") || "MINIATURA HD";
-  const line2 = wordParts.slice(Math.ceil(wordParts.length / 2)).join(" ") || "EXCLUSIVO";
-
   const svgContent = `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
     <defs>
-      <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stop-color="#0f172a" />
-        <stop offset="50%" stop-color="#1e1b4b" />
+      <linearGradient id="skyGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+        <stop offset="0%" stop-color="#090d16" />
+        <stop offset="40%" stop-color="#111827" />
+        <stop offset="75%" stop-color="#1e1b4b" />
         <stop offset="100%" stop-color="#311042" />
       </linearGradient>
-      <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-        <stop offset="0%" stop-color="#f43f5e" />
-        <stop offset="100%" stop-color="#8b5cf6" />
-      </linearGradient>
-      <radialGradient id="glowGrad" cx="75%" cy="25%" r="65%">
-        <stop offset="0%" stop-color="#ec4899" stop-opacity="0.45" />
+
+      <radialGradient id="sunGlow" cx="50%" cy="40%" r="50%">
+        <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.9" />
+        <stop offset="30%" stop-color="#8b5cf6" stop-opacity="0.6" />
+        <stop offset="70%" stop-color="#ec4899" stop-opacity="0.2" />
         <stop offset="100%" stop-color="#000000" stop-opacity="0" />
       </radialGradient>
-      <filter id="shadowFilter" x="-20%" y="-20%" width="140%" height="140%">
-        <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#000000" flood-opacity="0.85"/>
+
+      <linearGradient id="mountain1" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#1e1b4b" opacity="0.9" />
+        <stop offset="100%" stop-color="#0f172a" opacity="0.95" />
+      </linearGradient>
+
+      <linearGradient id="mountain2" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#4c1d95" opacity="0.8" />
+        <stop offset="100%" stop-color="#1e1035" opacity="0.9" />
+      </linearGradient>
+
+      <filter id="glowEffect" x="-30%" y="-30%" width="160%" height="160%">
+        <feGaussianBlur stdDeviation="15" result="blur" />
+        <feComposite in="SourceGraphic" in2="blur" operator="over" />
       </filter>
     </defs>
 
-    <rect width="100%" height="100%" fill="url(#bgGrad)" />
-    <rect width="100%" height="100%" fill="url(#glowGrad)" />
+    <!-- Sky Background -->
+    <rect width="100%" height="100%" fill="url(#skyGrad)" />
+    <rect width="100%" height="100%" fill="url(#sunGlow)" />
 
-    <circle cx="${width * 0.82}" cy="${height * 0.28}" r="${width * 0.25}" fill="none" stroke="url(#accentGrad)" stroke-width="4" opacity="0.35" />
-    <circle cx="${width * 0.82}" cy="${height * 0.28}" r="${width * 0.16}" fill="none" stroke="#38bdf8" stroke-width="2" opacity="0.45" />
+    <!-- Distant Stars & Glowing Orbs -->
+    <circle cx="${width * 0.15}" cy="${height * 0.2}" r="2" fill="#ffffff" opacity="0.8" />
+    <circle cx="${width * 0.35}" cy="${height * 0.12}" r="3" fill="#38bdf8" opacity="0.9" />
+    <circle cx="${width * 0.65}" cy="${height * 0.18}" r="2.5" fill="#f43f5e" opacity="0.8" />
+    <circle cx="${width * 0.85}" cy="${height * 0.25}" r="3.5" fill="#c084fc" opacity="0.9" />
+    <circle cx="${width * 0.72}" cy="${height * 0.08}" r="2" fill="#ffffff" opacity="0.7" opacity="0.7" />
 
-    <rect x="${width * 0.07}" y="${height * 0.22}" width="16" height="${height * 0.5}" rx="8" fill="url(#accentGrad)" />
+    <!-- Central Glowing Cosmic Orb Artwork -->
+    <circle cx="${width * 0.5}" cy="${height * 0.38}" r="${width * 0.18}" fill="none" stroke="#38bdf8" stroke-width="3" opacity="0.4" filter="url(#glowEffect)" />
+    <circle cx="${width * 0.5}" cy="${height * 0.38}" r="${width * 0.12}" fill="none" stroke="#f43f5e" stroke-width="2" opacity="0.6" />
+    <circle cx="${width * 0.5}" cy="${height * 0.38}" r="${width * 0.06}" fill="#a855f7" opacity="0.85" filter="url(#glowEffect)" />
 
-    <rect x="${width * 0.1}" y="${height * 0.22}" width="200" height="42" rx="21" fill="#f43f5e" />
-    <text x="${width * 0.1 + 100}" y="${height * 0.22 + 27}" font-family="system-ui, sans-serif" font-weight="800" font-size="16" fill="#ffffff" text-anchor="middle" letter-spacing="1.5">MÁXIMA CALIDAD</text>
+    <!-- Distant Mountain Ranges (Digital Landscape Artwork) -->
+    <path d="M 0 ${height * 0.65} Q ${width * 0.25} ${height * 0.45} ${width * 0.5} ${height * 0.6} T ${width} ${height * 0.52} L ${width} ${height} L 0 ${height} Z" fill="url(#mountain2)" />
+    <path d="M 0 ${height * 0.75} Q ${width * 0.35} ${height * 0.58} ${width * 0.7} ${height * 0.68} T ${width} ${height * 0.62} L ${width} ${height} L 0 ${height} Z" fill="url(#mountain1)" />
 
-    <g filter="url(#shadowFilter)">
-      <text x="${width * 0.1}" y="${height * 0.42}" font-family="system-ui, sans-serif" font-weight="900" font-size="${aspect_ratio === "9:16" ? 48 : 64}" fill="#ffffff">${line1.substring(0, 24)}</text>
-      <text x="${width * 0.1}" y="${height * 0.55}" font-family="system-ui, sans-serif" font-weight="900" font-size="${aspect_ratio === "9:16" ? 48 : 64}" fill="#38bdf8">${line2.substring(0, 24)}</text>
-    </g>
-
-    <rect x="${width * 0.1}" y="${height * 0.65}" width="${width * 0.45}" height="56" rx="12" fill="#000000" opacity="0.65" />
-    <text x="${width * 0.12}" y="${height * 0.65 + 35}" font-family="system-ui, sans-serif" font-weight="700" font-size="20" fill="#e2e8f0" letter-spacing="0.5">EDICIÓN ESPECIAL</text>
-
-    <circle cx="${width * 0.85}" cy="${height * 0.72}" r="${aspect_ratio === "9:16" ? 50 : 64}" fill="url(#accentGrad)" filter="url(#shadowFilter)" />
-    <polygon points="${width * 0.85 - 12},${height * 0.72 - 20} ${width * 0.85 + 20},${height * 0.72} ${width * 0.85 - 12},${height * 0.72 + 20}" fill="#ffffff" />
+    <!-- Foreground Glowing Grid Horizon -->
+    <line x1="0" y1="${height * 0.82}" x2="${width}" y2="${height * 0.82}" stroke="#38bdf8" stroke-width="1.5" opacity="0.4" filter="url(#glowEffect)" />
+    <line x1="0" y1="${height * 0.9}" x2="${width}" y2="${height * 0.9}" stroke="#c084fc" stroke-width="1" opacity="0.3" />
   </svg>`;
 
   if (!fs.existsSync(thumbnailsDir)) {
     fs.mkdirSync(thumbnailsDir, { recursive: true });
   }
 
-  const filename = `thumb_design_${Date.now()}_${Math.random().toString(36).substring(2, 6)}.svg`;
+  const filename = `thumb_art_${Date.now()}_${Math.random().toString(36).substring(2, 6)}.svg`;
   const filePath = path.join(thumbnailsDir, filename);
   fs.writeFileSync(filePath, svgContent, "utf8");
 
@@ -481,6 +489,6 @@ function generateSvgThumbnail(
     thumbnail_url: `/storage/thumbnails/${filename}`,
     prompt_used: prompt,
     provider: "pollinations",
-    message: "Miniatura gráfica personalizada generada con éxito"
+    message: "Ilustración digital realista generada con éxito"
   };
 }
