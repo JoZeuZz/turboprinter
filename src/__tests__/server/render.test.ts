@@ -189,8 +189,9 @@ describe("buildAudioMixFilter", () => {
   it("ducks the music under the narration by default", () => {
     expect(buildAudioMixFilter(true, true, 1.0, 0.2)).toBe(
       "[1:a]volume=1[v];[2:a]volume=0.2[m];[v]asplit=2[v1][vsc];" +
-        "[m][vsc]sidechaincompress=threshold=0.02:ratio=3.98:attack=5:release=200[mduck];" +
-        "[v1][mduck]amix=inputs=2:duration=first[a]"
+        "[v1]apad[v1pad];[vsc]apad[vscpad];" +
+        "[m][vscpad]sidechaincompress=threshold=0.02:ratio=3.98:attack=5:release=200[mduck];" +
+        "[v1pad][mduck]amix=inputs=2:duration=first:dropout_transition=0:normalize=0[a]"
     );
     expect(buildAudioMixFilter(true, true, 1.0, 0.2)).toBe(
       buildAudioMixFilter(true, true, 1.0, 0.2, DEFAULT_DUCK_DB)
@@ -203,7 +204,7 @@ describe("buildAudioMixFilter", () => {
 
   it("falls back to a flat mix when ducking is disabled", () => {
     expect(buildAudioMixFilter(true, true, 1.0, 0.2, 0)).toBe(
-      "[1:a]volume=1[v];[2:a]volume=0.2[m];[v][m]amix=inputs=2:duration=first[a]"
+      "[1:a]volume=1[v];[2:a]volume=0.2[m];[v]apad[vpad];[vpad][m]amix=inputs=2:duration=first:dropout_transition=0:normalize=0[a]"
     );
   });
 

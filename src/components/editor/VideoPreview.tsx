@@ -9,6 +9,7 @@ import { useVideoStore } from "../../store/useVideoStore";
 import { useProjectStore } from "../../store/useProjectStore";
 import { getSubtitleFontFamily, getSubtitleFontWeight } from "../subtitles/SubtitleFontGallery";
 import { splitTextIntoTikTokSubtitles } from "../../lib/subtitleLayout";
+import { isOutroClip } from "../../lib/partUtils";
 
 interface VideoPreviewProps {
   items: TimelineItem[];
@@ -129,6 +130,8 @@ export function VideoPreview({
     return null;
   }, [formattedSubtitles, currentTime]);
 
+  const isProgrammaticSeekingRef = useRef(false);
+
   // Current video clip and local clip position based on currentTime
   const videoTrackDuration = useMemo(() => {
     return items.reduce((sum, item) => sum + (item.duration_sec || 5), 0) || 1;
@@ -139,17 +142,39 @@ export function VideoPreview({
       return { activeVideoClip: null, clipLocalTime: 0 };
     }
 
-    const cyclicTime = videoTrackDuration > 0 ? currentTime % videoTrackDuration : currentTime;
+    // 1. Check if any item matches currentTime via start_sec and duration_sec
+    for (const item of items) {
+      const start = item.start_sec ?? 0;
+      const dur = item.duration_sec && item.duration_sec > 0 ? item.duration_sec : 5;
+      if (currentTime >= start && currentTime < start + dur) {
+        return { activeVideoClip: item, clipLocalTime: currentTime - start };
+      }
+    }
+
+    // 2. Sequential fallback
     let acc = 0;
     for (const item of items) {
       const dur = item.duration_sec && item.duration_sec > 0 ? item.duration_sec : 5;
-      if (cyclicTime >= acc && cyclicTime < acc + dur) {
-        return { activeVideoClip: item, clipLocalTime: cyclicTime - acc };
+      if (currentTime >= acc && currentTime < acc + dur) {
+        return { activeVideoClip: item, clipLocalTime: currentTime - acc };
       }
       acc += dur;
     }
+
+    // 3. Cyclic fallback
+    const cyclicTime = videoTrackDuration > 0 ? currentTime % videoTrackDuration : currentTime;
+    let cAcc = 0;
+    for (const item of items) {
+      const dur = item.duration_sec && item.duration_sec > 0 ? item.duration_sec : 5;
+      if (cyclicTime >= cAcc && cyclicTime < cAcc + dur) {
+        return { activeVideoClip: item, clipLocalTime: cyclicTime - cAcc };
+      }
+      cAcc += dur;
+    }
     return { activeVideoClip: items[items.length - 1], clipLocalTime: 0 };
   }, [items, currentTime, videoTrackDuration]);
+
+  const [audioDuration, setAudioDuration] = useState(0);
 
   // Notify parent of current global time
   useEffect(() => {
@@ -158,21 +183,50 @@ export function VideoPreview({
   }, [currentTime, selectedPart, partOffsetSec, onTimeUpdate]);
 
   // Handle selectedId selection change from external editor
+  const allTimelineItems = useMemo(() => {
+    return [...items, ...(propsSubtitleItems || storeSubtitleItems || []), ...(_propsAudioItems || [])];
+  }, [items, propsSubtitleItems, storeSubtitleItems, _propsAudioItems]);
+
+  const prevSelectedIdRef = useRef<string | null | undefined>(undefined);
+
   useEffect(() => {
-    if (selectedId && items.length > 0) {
-      const target = items.find((item) => item.id === selectedId);
-      if (target && target.start_sec !== undefined) {
-        setCurrentTime(target.start_sec);
+    if (selectedId !== prevSelectedIdRef.current) {
+      prevSelectedIdRef.current = selectedId;
+      if (selectedId && allTimelineItems.length > 0) {
+        const target = allTimelineItems.find((item) => item.id === selectedId);
+        if (target && target.start_sec !== undefined) {
+          const newTime = target.start_sec;
+          setCurrentTime(newTime);
+          if (audioRef.current && narrationUrl) {
+            try {
+              if (audioDuration > 0 && newTime >= audioDuration - 0.1) {
+                audioRef.current.pause();
+              } else {
+                isProgrammaticSeekingRef.current = true;
+                audioRef.current.currentTime = Math.max(0, newTime);
+              }
+            } catch (e) {}
+          }
+        }
+      } else if (selectedId === null) {
+        setCurrentTime(0);
       }
     }
-  }, [selectedId, items]);
+  }, [selectedId, allTimelineItems, audioDuration, narrationUrl]);
 
   // Sync video element when active video clip or seeking changes
   const activeClipUrl = activeVideoClip?.asset_url;
   useEffect(() => {
     if (!videoRef.current || !activeClipUrl) return;
 
-    if (videoRef.current.src !== activeClipUrl) {
+    videoRef.current.muted = true;
+
+    // Resolve relative URLs to absolute so videoRef.current.src comparison is accurate
+    const resolvedUrl = activeClipUrl.startsWith("/")
+      ? `${window.location.origin}${activeClipUrl}`
+      : activeClipUrl;
+
+    if (videoRef.current.src !== resolvedUrl) {
       videoRef.current.src = activeClipUrl;
       videoRef.current.load();
     }
@@ -185,33 +239,49 @@ export function VideoPreview({
 
     if (playing) {
       void videoRef.current.play().catch(() => {});
+    } else {
+      videoRef.current.pause();
     }
   }, [activeClipUrl, clipLocalTime, playing]);
 
-  // Audio playback master clock sync
+  // Calculate non-outro content video duration and check if currently in Outro clip
+  const isOutroActive = useMemo(() => {
+    return isOutroClip(activeVideoClip);
+  }, [activeVideoClip]);
+
+  const contentAudioDuration = useMemo(() => {
+    const nonOutroClips = items.filter((c) => !isOutroClip(c));
+    if (nonOutroClips.length === 0) return 0;
+    return nonOutroClips.reduce((sum, c) => sum + (c.duration_sec || 5), 0);
+  }, [items]);
+
+  // Audio playback master clock sync & RAF timer fallback past audio duration
+  const isAudioActive = Boolean(
+    narrationUrl &&
+    audioDuration > 0 &&
+    !isOutroActive &&
+    currentTime < contentAudioDuration - 0.05
+  );
+
   useEffect(() => {
     if (!audioRef.current || !narrationUrl) return;
 
-    if (playing) {
-      if (Math.abs(audioRef.current.currentTime - currentTime) > 0.3) {
+    if (playing && isAudioActive) {
+      const targetAudioTime = (selectedPart === "all" ? 0 : partOffsetSec) + currentTime;
+      if (Math.abs(audioRef.current.currentTime - targetAudioTime) > 0.3 && !isProgrammaticSeekingRef.current) {
         try {
-          audioRef.current.currentTime = currentTime;
+          audioRef.current.currentTime = Math.max(0, targetAudioTime);
         } catch (e) {}
       }
       void audioRef.current.play().catch(() => {});
     } else {
       audioRef.current.pause();
-      if (Math.abs(audioRef.current.currentTime - currentTime) > 0.3) {
-        try {
-          audioRef.current.currentTime = currentTime;
-        } catch (e) {}
-      }
     }
-  }, [playing, currentTime, narrationUrl]);
+  }, [playing, currentTime, narrationUrl, isAudioActive, selectedPart, partOffsetSec]);
 
-  // Fallback animation frame loop if audio is not available
+  // Fallback animation frame loop if audio is not active or finished
   useEffect(() => {
-    if (!playing || narrationUrl) return;
+    if (!playing || isAudioActive) return;
 
     let lastTime = performance.now();
     let animId: number;
@@ -234,18 +304,58 @@ export function VideoPreview({
 
     animId = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(animId);
-  }, [playing, narrationUrl, totalDuration]);
+  }, [playing, isAudioActive, totalDuration]);
+
+  const handleVideoTimeUpdate = () => {
+    if (!videoRef.current || narrationUrl) return;
+    const vTime = videoRef.current.currentTime;
+    const clipStart = activeVideoClip?.start_sec ?? 0;
+    setCurrentTime(clipStart + vTime);
+  };
 
   // Handle Audio element time update
   const handleAudioTimeUpdate = () => {
-    if (!narrationUrl || !audioRef.current || isSeeking) return;
+    if (!narrationUrl || !audioRef.current || isSeeking || !playing || !isAudioActive) return;
+    if (audioRef.current.seeking || isProgrammaticSeekingRef.current) return;
     const t = audioRef.current.currentTime;
-    setCurrentTime(t);
+    const baseOffset = selectedPart === "all" ? 0 : partOffsetSec;
+    const localTime = Math.max(0, t - baseOffset);
+    if (localTime >= contentAudioDuration) {
+      audioRef.current.pause();
+      return;
+    }
+    setCurrentTime(localTime);
+  };
+
+  const handleAudioSeeked = () => {
+    isProgrammaticSeekingRef.current = false;
+  };
+
+  const handleAudioLoadedMetadata = () => {
+    if (audioRef.current) {
+      setAudioDuration(audioRef.current.duration || 0);
+    }
   };
 
   const handleAudioEnded = () => {
+    if (currentTime < totalDuration - 0.2) {
+      // Continue playback via RAF timer if total duration extends beyond audio (e.g. Outro)
+      return;
+    }
     setPlaying(false);
     setCurrentTime(totalDuration);
+  };
+
+  const handleVideoEnded = () => {
+    if (!items || items.length === 0) return;
+    const currIndex = activeVideoClip ? items.findIndex((c) => c.id === activeVideoClip.id) : 0;
+    if (currIndex >= 0 && currIndex < items.length - 1) {
+      const nextClip = items[currIndex + 1];
+      const nextStart = nextClip.start_sec ?? items.slice(0, currIndex + 1).reduce((sum, c) => sum + (c.duration_sec || 5), 0);
+      setCurrentTime(nextStart);
+    } else {
+      setPlaying(false);
+    }
   };
 
   // User Play / Pause / Seek controls
@@ -254,18 +364,27 @@ export function VideoPreview({
       const next = !prev;
       if (next && currentTime >= totalDuration) {
         setCurrentTime(0);
-        if (audioRef.current) audioRef.current.currentTime = 0;
+        if (audioRef.current) {
+          const baseOffset = selectedPart === "all" ? 0 : partOffsetSec;
+          audioRef.current.currentTime = baseOffset;
+        }
       }
       return next;
     });
-  }, [currentTime, totalDuration]);
+  }, [currentTime, totalDuration, selectedPart, partOffsetSec]);
 
   const handleSeekChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newTime = parseFloat(e.target.value);
     setCurrentTime(newTime);
     if (audioRef.current) {
       try {
-        audioRef.current.currentTime = newTime;
+        const baseOffset = selectedPart === "all" ? 0 : partOffsetSec;
+        const targetAudioTime = baseOffset + newTime;
+        if (newTime < contentAudioDuration && targetAudioTime < audioDuration) {
+          audioRef.current.currentTime = targetAudioTime;
+        } else {
+          audioRef.current.pause();
+        }
       } catch (err) {}
     }
   };
@@ -435,6 +554,8 @@ export function VideoPreview({
               data-testid="video-preview"
               muted
               playsInline
+              onTimeUpdate={handleVideoTimeUpdate}
+              onEnded={handleVideoEnded}
               {...{ referrerPolicy: "no-referrer" }}
               className="w-full h-full object-contain"
             />
@@ -443,7 +564,9 @@ export function VideoPreview({
                 ref={audioRef}
                 src={narrationUrl}
                 preload="auto"
+                onLoadedMetadata={handleAudioLoadedMetadata}
                 onTimeUpdate={handleAudioTimeUpdate}
+                onSeeked={handleAudioSeeked}
                 onEnded={handleAudioEnded}
                 style={{ display: "none" }}
               />

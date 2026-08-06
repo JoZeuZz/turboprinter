@@ -1,7 +1,7 @@
 // webui-react/src/components/panels/EditorPanel.tsx
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { Eye, Clapperboard } from "lucide-react";
+import { Eye } from "lucide-react";
 import { VideoPreview } from "../editor/VideoPreview";
 import { ClipInspector } from "../editor/ClipInspector";
 import { Timeline } from "../editor/Timeline";
@@ -10,6 +10,7 @@ import { useProjectStore } from "../../store/useProjectStore";
 import { useProjectWorkspaceStore } from "../../store/useProjectWorkspaceStore";
 import { useVideoStore } from "../../store/useVideoStore";
 import { getClipsForPart, getNormalizedItemsForPart } from "../../lib/partUtils";
+import { videoApi } from "../../api/video";
 import type { EditCommand, TimelineItem } from "../../api/types";
 
 function isTypingTarget(target: EventTarget | null): boolean {
@@ -27,8 +28,15 @@ export function EditorPanel() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
 
-  const isMultiPart = Boolean((videoStore.is_multi_part && (videoStore.multi_part_count ?? 1) > 1) || videoUrls.length > 1);
-  const multiPartCount = isMultiPart ? (videoStore.multi_part_count || videoUrls.length || 2) : 1;
+  const [outroStatus, setOutroStatus] = useState<{ exists: boolean; url: string | null; filename: string }>({
+    exists: false,
+    url: null,
+    filename: "outro.mp4",
+  });
+  const [outroEnabled, setOutroEnabled] = useState(true);
+
+  const isMultiPart = Boolean((videoStore.is_multi_part && (videoStore.multi_part_count ?? 1) > 1) || (videoUrls || []).length > 1);
+  const multiPartCount = isMultiPart ? (videoStore.multi_part_count || (videoUrls || []).length || 2) : 1;
   const [selectedPart, setSelectedPart] = useState<number | "all">(activePartIndex || 1);
 
   const videoTrack = projectStore.project?.tracks.find((t) => t.type === "video");
@@ -38,6 +46,63 @@ export function EditorPanel() {
   const rawVideoItems: TimelineItem[] = videoTrack?.items ?? [];
   const rawAudioItems: TimelineItem[] = audioTrack?.items ?? [];
   const rawSubItems: TimelineItem[] = subtitleTrack?.items ?? [];
+
+  // Load Outro Status
+  useEffect(() => {
+    videoApi
+      .getOutroStatus()
+      .then((res) => {
+        if (res) setOutroStatus(res);
+      })
+      .catch((err) => {
+        console.error("[EditorPanel] Failed to load outro status:", err);
+      });
+  }, []);
+
+  // Ensure clip_outro is in videoTrack if outroEnabled is true, or remove if false
+  const syncOutroClip = useCallback(
+    (enabled: boolean) => {
+      if (!videoTrack) return;
+      const hasOutro = rawVideoItems.some((c) => c.id === "clip_outro" || c.asset_url?.includes("outro"));
+      if (enabled && !hasOutro) {
+        const totalDur = rawVideoItems.reduce((acc, c) => Math.max(acc, (c.start_sec || 0) + (c.duration_sec || 0)), 0);
+        void projectStore.applyTimelineCommands({
+          commands: [
+            {
+              type: "move",
+              track_id: videoTrack.id,
+              item_id: "clip_outro",
+              new_start_sec: totalDur,
+            },
+          ],
+        });
+      } else if (!enabled && hasOutro) {
+        const outroItem = rawVideoItems.find((c) => c.id === "clip_outro" || c.asset_url?.includes("outro"));
+        if (outroItem) {
+          void projectStore.applyTimelineCommands({
+            commands: [
+              {
+                type: "move",
+                track_id: videoTrack.id,
+                item_id: outroItem.id,
+                new_start_sec: -1,
+              },
+            ],
+          });
+        }
+      }
+    },
+    [videoTrack, rawVideoItems, projectStore]
+  );
+
+  useEffect(() => {
+    if (videoTrack && rawVideoItems.length > 0) {
+      const hasOutro = rawVideoItems.some((c) => c.id === "clip_outro" || c.asset_url?.includes("outro"));
+      if (outroEnabled && !hasOutro) {
+        syncOutroClip(true);
+      }
+    }
+  }, [videoTrack, rawVideoItems.length, outroEnabled, syncOutroClip]);
 
   const partVideoClips = getClipsForPart(rawVideoItems, selectedPart, multiPartCount);
   const partAudioClips = getClipsForPart(rawAudioItems, selectedPart, multiPartCount);
@@ -154,51 +219,77 @@ export function EditorPanel() {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Multi-part navigation header if isMultiPart */}
-      {isMultiPart && multiPartCount > 1 && (
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-surface-2/60 px-4 py-2">
-          <div className="flex items-center gap-2">
-            <Clapperboard className="h-4 w-4 text-accent" />
-            <span className="text-xs font-bold text-foreground">
-              Seleccionar Parte ({multiPartCount} Partes):
-            </span>
-          </div>
-          <div className="flex items-center gap-1 bg-surface-3 p-1 rounded-xl border border-border">
-            {Array.from({ length: multiPartCount }).map((_, idx) => {
-              const partNum = idx + 1;
-              const isActive = selectedPart === partNum;
-              return (
-                <button
-                  key={partNum}
-                  type="button"
-                  onClick={() => {
-                    setSelectedPart(partNum);
-                    setActivePartIndex(partNum);
-                  }}
-                  className={`px-3 py-1 text-xs font-semibold rounded-lg transition-all ${
-                    isActive
-                      ? "bg-accent text-white shadow-xs"
-                      : "text-muted hover:text-foreground"
-                  }`}
-                >
-                  Parte {partNum}
-                </button>
-              );
-            })}
-            <button
-              type="button"
-              onClick={() => setSelectedPart("all")}
-              className={`px-3 py-1 text-xs font-semibold rounded-lg transition-all ${
-                selectedPart === "all"
-                  ? "bg-accent text-white shadow-xs"
-                  : "text-muted hover:text-foreground"
-              }`}
-            >
-              Ver Todo
-            </button>
-          </div>
+      {/* Top Controls Header: Outro & Multi-part */}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-surface-2/60 px-4 py-2 text-xs">
+        <div className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            id="outro-enabled-editor"
+            className="h-4 w-4 rounded border-border bg-surface-3 text-amber-500 focus:ring-amber-500 accent-amber-500 cursor-pointer"
+            checked={outroEnabled && rawVideoItems.some((c) => c.id === "clip_outro" || c.asset_url?.includes("outro"))}
+            onChange={(e) => {
+              const checked = e.target.checked;
+              setOutroEnabled(checked);
+              syncOutroClip(checked);
+            }}
+          />
+          <label htmlFor="outro-enabled-editor" className="font-semibold text-foreground cursor-pointer whitespace-nowrap flex items-center gap-1.5">
+            <span>🎬 Outro / Cierre</span>
+            {outroStatus.exists ? (
+              <span className="text-[10px] bg-emerald-500/20 text-emerald-400 font-medium px-2 py-0.5 rounded border border-emerald-500/30">
+                Listo (outro.mp4)
+              </span>
+            ) : (
+              <span className="text-[10px] bg-amber-500/10 text-amber-400 font-medium px-2 py-0.5 rounded border border-amber-500/20" title="Ubica tu video en public/assets/outro.mp4">
+                Default (outro.mp4)
+              </span>
+            )}
+          </label>
         </div>
-      )}
+
+        {/* Multi-part navigation header if isMultiPart */}
+        {isMultiPart && multiPartCount > 1 && (
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold text-foreground">
+              Parte ({multiPartCount} Partes):
+            </span>
+            <div className="flex items-center gap-1 bg-surface-3 p-0.5 rounded-lg border border-border">
+              {Array.from({ length: multiPartCount }).map((_, idx) => {
+                const partNum = idx + 1;
+                const isActive = selectedPart === partNum;
+                return (
+                  <button
+                    key={partNum}
+                    type="button"
+                    onClick={() => {
+                      setSelectedPart(partNum);
+                      setActivePartIndex(partNum);
+                    }}
+                    className={`px-2.5 py-0.5 text-xs font-semibold rounded transition-all ${
+                      isActive
+                        ? "bg-accent text-white shadow-xs"
+                        : "text-muted hover:text-foreground"
+                    }`}
+                  >
+                    Parte {partNum}
+                  </button>
+                );
+              })}
+              <button
+                type="button"
+                onClick={() => setSelectedPart("all")}
+                className={`px-2.5 py-0.5 text-xs font-semibold rounded transition-all ${
+                  selectedPart === "all"
+                    ? "bg-accent text-white shadow-xs"
+                    : "text-muted hover:text-foreground"
+                }`}
+              >
+                Ver Todo
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Top: preview + inspector */}
       <div className="flex flex-1 min-h-0 overflow-hidden">

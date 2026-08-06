@@ -85,6 +85,7 @@ describe("EditorPanel", () => {
     vi.mocked(useProjectStore).mockReturnValue(store as never);
     render(<EditorPanel />);
     await userEvent.click(screen.getByTestId("clip-c1"));
+    (store.applyTimelineCommands as ReturnType<typeof vi.fn>).mockClear();
     const input = document.createElement("input");
     document.body.appendChild(input);
     input.focus();

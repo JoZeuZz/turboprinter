@@ -31,15 +31,24 @@ export function SortableClipCard({
     opacity: isDragging ? 0.4 : 1,
   };
 
+  const isOutro = clip.id === "clip_outro" || clip.keywords?.includes("outro") || clip.asset_url?.includes("outro");
+
   return (
     <div
       ref={setNodeRef}
       style={style}
       data-excluded={excluded}
-      className={`relative rounded-lg border border-border bg-surface-2 overflow-hidden flex flex-col ${
-        excluded ? "opacity-40" : ""
-      }`}
+      className={`relative rounded-lg border bg-surface-2 overflow-hidden flex flex-col ${
+        isOutro ? "border-amber-500/50 shadow-sm shadow-amber-500/10" : "border-border"
+      } ${excluded ? "opacity-40" : ""}`}
     >
+      {/* Outro badge */}
+      {isOutro && (
+        <div className="absolute top-1 right-1 z-10 bg-amber-500/90 text-black text-[10px] font-bold px-1.5 py-0.5 rounded shadow">
+          🎬 CIERRE / OUTRO
+        </div>
+      )}
+
       {/* Drag handle */}
       <button
         {...attributes}
@@ -51,7 +60,10 @@ export function SortableClipCard({
       </button>
 
       {/* Thumbnail */}
-      <div className="aspect-video bg-surface flex items-center justify-center relative">
+      <div
+        onClick={() => onPreview(clip)}
+        className="aspect-video bg-surface flex items-center justify-center relative cursor-pointer group"
+      >
         {clip.thumbnail_url && !imgError ? (
           <img
             src={clip.thumbnail_url}
@@ -59,6 +71,18 @@ export function SortableClipCard({
             referrerPolicy="no-referrer"
             onError={() => setImgError(true)}
             className="w-full h-full object-cover"
+          />
+        ) : (clip.asset_url || clip.source_url) ? (
+          <video
+            src={
+              (() => {
+                const raw = clip.asset_url || clip.source_url || "";
+                return raw.includes("#") ? raw : `${raw}#t=0.1`;
+              })()
+            }
+            className="w-full h-full object-cover pointer-events-none"
+            muted
+            preload="metadata"
           />
         ) : (
           <div className="flex flex-col items-center justify-center text-xs text-muted-foreground px-2 text-center truncate">
@@ -68,13 +92,12 @@ export function SortableClipCard({
         )}
 
         {/* Play overlay */}
-        <button
+        <div
           title={t("clips.preview")}
-          onClick={() => onPreview(clip)}
-          className="absolute inset-0 flex items-center justify-center bg-black/0 hover:bg-black/50 transition-colors group"
+          className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/50 transition-colors"
         >
-          <Play className="h-8 w-8 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-        </button>
+          <Play className="h-8 w-8 text-white opacity-80 group-hover:opacity-100 group-hover:scale-110 transition-all drop-shadow" />
+        </div>
       </div>
 
       {/* Footer */}

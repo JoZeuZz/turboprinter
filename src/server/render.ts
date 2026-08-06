@@ -75,26 +75,48 @@ export const buildAudioMixFilter = (
   hasMusic: boolean,
   voiceVolume: number,
   musicVolume: number,
-  duckDb: number = DEFAULT_DUCK_DB
+  duckDb: number = DEFAULT_DUCK_DB,
+  hasVideoAudio: boolean = false
 ): string => {
+  if (hasVideoAudio) {
+    if (hasNarration && hasMusic) {
+      if (duckDb <= 0) {
+        return `[0:a]volume=1.0[vid];[1:a]volume=${voiceVolume}[v];[2:a]volume=${musicVolume}[m];[v]apad[vpad];[vid][vpad][m]amix=inputs=3:duration=first:dropout_transition=0:normalize=0[a]`;
+      }
+      const ratio = duckDbToRatio(duckDb);
+      return (
+        `[1:a]volume=${voiceVolume}[v];` +
+        `[2:a]volume=${musicVolume}[m];` +
+        `[v]asplit=2[v1][vsc];` +
+        `[v1]apad[v1pad];` +
+        `[vsc]apad[vscpad];` +
+        `[m][vscpad]sidechaincompress=threshold=0.02:ratio=${ratio}:attack=5:release=200[mduck];` +
+        `[0:a]volume=1.0[vid];` +
+        `[vid][v1pad][mduck]amix=inputs=3:duration=first:dropout_transition=0:normalize=0[a]`
+      );
+    }
+    if (hasNarration) {
+      return `[0:a]volume=1.0[vid];[1:a]volume=${voiceVolume}[v];[v]apad[vpad];[vid][vpad]amix=inputs=2:duration=first:dropout_transition=0:normalize=0[a]`;
+    }
+    if (hasMusic) {
+      return `[0:a]volume=1.0[vid];[1:a]volume=${musicVolume}[m];[vid][m]amix=inputs=2:duration=first:dropout_transition=0:normalize=0[a]`;
+    }
+    return `[0:a]volume=1.0[a]`;
+  }
+
   if (hasNarration && hasMusic) {
     if (duckDb <= 0) {
-      // Flat mix: BGM sits at a fixed level whether or not the narración is
-      // speaking. Kept as the fallback for FFmpeg builds without
-      // sidechaincompress.
-      return `[1:a]volume=${voiceVolume}[v];[2:a]volume=${musicVolume}[m];[v][m]amix=inputs=2:duration=first[a]`;
+      return `[1:a]volume=${voiceVolume}[v];[2:a]volume=${musicVolume}[m];[v]apad[vpad];[vpad][m]amix=inputs=2:duration=first:dropout_transition=0:normalize=0[a]`;
     }
-    // Side-chain ducking: the narración keys a compressor on the BGM, pulling
-    // it down while the voice is present and letting it recover between
-    // phrases. [v] is an intermediate label so it cannot be consumed twice —
-    // asplit duplicates it for the sidechain key and the final mix.
     const ratio = duckDbToRatio(duckDb);
     return (
       `[1:a]volume=${voiceVolume}[v];` +
       `[2:a]volume=${musicVolume}[m];` +
       `[v]asplit=2[v1][vsc];` +
-      `[m][vsc]sidechaincompress=threshold=0.02:ratio=${ratio}:attack=5:release=200[mduck];` +
-      `[v1][mduck]amix=inputs=2:duration=first[a]`
+      `[v1]apad[v1pad];` +
+      `[vsc]apad[vscpad];` +
+      `[m][vscpad]sidechaincompress=threshold=0.02:ratio=${ratio}:attack=5:release=200[mduck];` +
+      `[v1pad][mduck]amix=inputs=2:duration=first:dropout_transition=0:normalize=0[a]`
     );
   }
   if (hasNarration) {
@@ -541,6 +563,43 @@ export function createRenderer(deps: RenderDeps) {
         throw new Error("No video clips in the timeline to render.");
       }
 
+      const isOutroClip = (c: any) => {
+        if (!c) return false;
+        const id = String(c.id || "");
+        const assetUrl = String(c.asset_url || "");
+        const sourceUrl = String(c.source_url || "");
+        const text = String(c.text || "");
+        const keywords = Array.isArray(c.keywords) ? c.keywords.join(" ") : String(c.keywords || "");
+        return (
+          id === "clip_outro" ||
+          id.toLowerCase().includes("outro") ||
+          assetUrl.toLowerCase().includes("outro") ||
+          sourceUrl.toLowerCase().includes("outro") ||
+          keywords.toLowerCase().includes("outro") ||
+          text.toLowerCase().includes("outro")
+        );
+      };
+
+      const outroDiskPath = path.join(process.cwd(), "public", "assets", "outro.mp4");
+      const outroDiskExists = fs.existsSync(outroDiskPath);
+      const outroEnabledParam = p.params?.outro_enabled !== false;
+      const hasOutroInClips = clips.some(isOutroClip);
+
+      if (!hasOutroInClips && (outroDiskExists || outroEnabledParam)) {
+        const lastClip = clips[clips.length - 1];
+        const outroStartSec = lastClip ? ((lastClip.start_sec || 0) + (lastClip.duration_sec || 5)) : 0;
+        clips.push({
+          id: "clip_outro",
+          text: "🎬 Outro / Clip de Cierre",
+          asset_url: "/assets/outro.mp4",
+          source_url: "/assets/outro.mp4",
+          start_sec: outroStartSec,
+          duration_sec: 4,
+          keywords: ["outro", "cierre"],
+          provider: "local",
+        });
+      }
+
       // Ensure we have a project_folder_name
       if (!p.project_folder_name) {
         const themeFolder = deps.sanitizeFolderName(p.params?.video_niche || p.topic || 'general');
@@ -574,7 +633,7 @@ export function createRenderer(deps: RenderDeps) {
           continue;
         }
 
-        const isLocalUrl = url.startsWith("/") || !url.includes("://") || url.includes("/storage/local_videos/") || url.includes("/local_videos/");
+        const isLocalUrl = url.startsWith("/") || !url.includes("://") || url.includes("/storage/local_videos/") || url.includes("/local_videos/") || url.includes("/assets/");
         if (isLocalUrl) {
           const cleanUrl = url.split("?")[0];
           const filename = path.basename(cleanUrl);
@@ -585,6 +644,8 @@ export function createRenderer(deps: RenderDeps) {
             cleanLocalPath = `storage/local_videos/${filename}`;
           } else if (url.includes("/local_videos/")) {
             cleanLocalPath = `local_videos/${filename}`;
+          } else if (url.includes("/assets/") || url.includes("public/assets/")) {
+            cleanLocalPath = `public/assets/${filename}`;
           }
           const diskPath = resolveWithinDir(process.cwd(), cleanLocalPath);
           if (diskPath && fs.existsSync(diskPath)) {
@@ -592,10 +653,24 @@ export function createRenderer(deps: RenderDeps) {
             continue;
           }
 
-          // Try diskPath 2 (fallback directly in localVideosDir)
+          // Try diskPath 2 (public/assets directory)
+          const publicAssetPath = path.join(process.cwd(), "public", "assets", filename);
+          if (fs.existsSync(publicAssetPath)) {
+            localVideoPaths.push(publicAssetPath);
+            continue;
+          }
+
+          // Try diskPath 3 (fallback directly in localVideosDir)
           const fallbackPath = path.join(localVideosDir, filename);
           if (fs.existsSync(fallbackPath)) {
             localVideoPaths.push(fallbackPath);
+            continue;
+          }
+
+          if (clip.id === "clip_outro" || clip.asset_url?.includes("outro") || url.includes("outro")) {
+            console.log(`[Renderer] Outro clip file ${filename} missing at public/assets/outro.mp4. Generating synthetic placeholder...`);
+            logTask(taskId, "WARNING", "VIDEO_ASSET", `El archivo de outro "public/assets/outro.mp4" no fue encontrado. Se omitirá o generará un marco de cierre.`);
+            localVideoPaths.push("placeholder");
             continue;
           }
 
@@ -663,9 +738,16 @@ export function createRenderer(deps: RenderDeps) {
         // Resolve local relative BGM URLs
         if (musicItem.url.startsWith("/") || !musicItem.url.includes("://")) {
           const cleanLocalPath = musicItem.url.startsWith("/") ? musicItem.url.slice(1) : musicItem.url;
-          const diskPath = resolveWithinDir(process.cwd(), cleanLocalPath);
-          if (diskPath && fs.existsSync(diskPath)) {
-            localMusicPath = diskPath;
+          const candidatePaths = [
+            resolveWithinDir(process.cwd(), cleanLocalPath),
+            resolveWithinDir(path.join(process.cwd(), "public"), cleanLocalPath),
+            resolveWithinDir(path.join(process.cwd(), "public", "musics"), path.basename(cleanLocalPath)),
+          ].filter((candidate): candidate is string => candidate !== null);
+          for (const cand of candidatePaths) {
+            if (fs.existsSync(cand)) {
+              localMusicPath = cand;
+              break;
+            }
           }
         }
 
@@ -718,16 +800,19 @@ export function createRenderer(deps: RenderDeps) {
         const clip = clips[i];
         const inputPath = localVideoPaths[i];
         const formattedPath = path.join(cacheDir, `formatted_${taskId}_${i}.mp4`);
-        const duration = Number(clip.duration_sec) || 5;
+        let duration = Number(clip.duration_sec) || 5;
         const start = Number(clip.trim_start_sec) || 0;
 
         if (inputPath === "placeholder") {
           console.log(`[Renderer] Building synthetic placeholder clip ${i}`);
-          const cmd = `ffmpeg -y -f lavfi -i color=c=0x1E1E2E:s=${resWidth}x${resHeight}:d=${duration} -r 25 -pix_fmt yuv420p "${formattedPath}"`;
+          const cmd = `ffmpeg -y -f lavfi -i color=c=0x1E1E2E:s=${resWidth}x${resHeight}:d=${duration} -f lavfi -i anullsrc=r=44100:cl=stereo -ss 0 -t ${duration} -r 25 ${encoderArgs} -c:a aac -ar 44100 -ac 2 -shortest -pix_fmt yuv420p "${formattedPath}"`;
           await executeCommand(cmd);
         } else {
           try {
             const inputDuration = await getVideoDuration(inputPath);
+            if ((clip.id === "clip_outro" || clip.asset_url?.includes("outro") || clip.source_url?.includes("outro")) && inputDuration > 0) {
+              duration = inputDuration;
+            }
             console.log(`[Renderer] Formatting clip ${i}: ${inputPath}, inputDuration: ${inputDuration}, targetDuration: ${duration}`);
 
             let loopCmd = "";
@@ -737,18 +822,37 @@ export function createRenderer(deps: RenderDeps) {
               loopCmd = `-stream_loop ${loopCount - 1}`;
             }
 
+            let hasAudio = false;
+            try {
+              const probeAudio = await executeCommand(
+                `ffprobe -v error -select_streams a -show_entries stream=index -of csv=p=0 "${inputPath}"`,
+                PROBE_COMMAND_TIMEOUT_MS
+              );
+              if (probeAudio.trim().length > 0) {
+                hasAudio = true;
+              }
+            } catch (e) {
+              hasAudio = false;
+            }
+
             // Note: Put -ss and -t after -i for reliable seek/trim when looping is applied
-            const cmd = `ffmpeg -y ${loopCmd ? loopCmd + " " : ""}-i "${inputPath}" -ss ${start} -t ${duration} -vf "scale=${resWidth}:${resHeight}:force_original_aspect_ratio=increase,crop=${resWidth}:${resHeight},setsar=1" -r 25 ${encoderArgs} -pix_fmt yuv420p "${formattedPath}"`;
+            let cmd = "";
+            if (hasAudio) {
+              cmd = `ffmpeg -y ${loopCmd ? loopCmd + " " : ""}-i "${inputPath}" -ss ${start} -t ${duration} -vf "scale=${resWidth}:${resHeight}:force_original_aspect_ratio=increase,crop=${resWidth}:${resHeight},setsar=1" -r 25 ${encoderArgs} -c:a aac -ar 44100 -ac 2 -pix_fmt yuv420p "${formattedPath}"`;
+            } else {
+              cmd = `ffmpeg -y ${loopCmd ? loopCmd + " " : ""}-i "${inputPath}" -f lavfi -i anullsrc=r=44100:cl=stereo -ss ${start} -t ${duration} -vf "scale=${resWidth}:${resHeight}:force_original_aspect_ratio=increase,crop=${resWidth}:${resHeight},setsar=1" -r 25 ${encoderArgs} -c:a aac -ar 44100 -ac 2 -shortest -pix_fmt yuv420p "${formattedPath}"`;
+            }
             await executeCommand(cmd);
           } catch (err) {
             console.error(`[Renderer] Failed to format clip ${i} (${inputPath}), falling back to placeholder:`, err);
             logTask(taskId, "WARNING", "VIDEO_ASSET", `Failed to process local video file: ${path.basename(inputPath)}. Using a colored placeholder instead.`);
-            const cmd = `ffmpeg -y -f lavfi -i color=c=0x1E1E2E:s=${resWidth}x${resHeight}:d=${duration} -r 25 -pix_fmt yuv420p "${formattedPath}"`;
+            const cmd = `ffmpeg -y -f lavfi -i color=c=0x1E1E2E:s=${resWidth}x${resHeight}:d=${duration} -f lavfi -i anullsrc=r=44100:cl=stereo -ss 0 -t ${duration} -r 25 ${encoderArgs} -c:a aac -ar 44100 -ac 2 -shortest -pix_fmt yuv420p "${formattedPath}"`;
             await executeCommand(cmd);
           }
         }
 
         formattedClips.push(formattedPath);
+        clips[i].duration_sec = duration;
         updateTaskState(Math.floor(40 + (i / clips.length) * 20), null, null);
       }
 
@@ -783,20 +887,51 @@ export function createRenderer(deps: RenderDeps) {
       if (clipHasPartIndex) {
         for (let i = 0; i < clips.length; i++) {
           const clip = clips[i];
-          const pIdx = Math.min(Math.max((clip.part_index || 1) - 1, 0), multiPartCount - 1);
-          formattedByPart[pIdx].push({
-            path: formattedClips[i],
-            duration: Number(clip.duration_sec) || 5
-          });
+          if (isOutroClip(clip)) {
+            for (let pIdx = 0; pIdx < multiPartCount; pIdx++) {
+              formattedByPart[pIdx].push({
+                path: formattedClips[i],
+                duration: Number(clip.duration_sec) || 5
+              });
+            }
+          } else {
+            const pIdx = Math.min(Math.max((clip.part_index || 1) - 1, 0), multiPartCount - 1);
+            formattedByPart[pIdx].push({
+              path: formattedClips[i],
+              duration: Number(clip.duration_sec) || 5
+            });
+          }
         }
       } else {
-        const chunkSize = Math.max(1, Math.ceil(clips.length / multiPartCount));
+        const outroIndices: number[] = [];
+        const contentIndices: number[] = [];
+
         for (let i = 0; i < clips.length; i++) {
+          if (isOutroClip(clips[i])) {
+            outroIndices.push(i);
+          } else {
+            contentIndices.push(i);
+          }
+        }
+
+        const chunkSize = Math.max(1, Math.ceil(contentIndices.length / multiPartCount));
+
+        for (let i = 0; i < contentIndices.length; i++) {
+          const cIdx = contentIndices[i];
           const pIdx = Math.min(Math.floor(i / chunkSize), multiPartCount - 1);
           formattedByPart[pIdx].push({
-            path: formattedClips[i],
-            duration: Number(clips[i].duration_sec) || 5
+            path: formattedClips[cIdx],
+            duration: Number(clips[cIdx].duration_sec) || 5
           });
+        }
+
+        for (const oIdx of outroIndices) {
+          for (let pIdx = 0; pIdx < multiPartCount; pIdx++) {
+            formattedByPart[pIdx].push({
+              path: formattedClips[oIdx],
+              duration: Number(clips[oIdx].duration_sec) || 5
+            });
+          }
         }
       }
 
@@ -834,7 +969,42 @@ export function createRenderer(deps: RenderDeps) {
 
         // 2. Determine narration file for this part
         const partNarrationDiskPath = path.join(renderDir, `narration_${projectId}_parte${partNum}.mp3`);
-        const activeNarrationPath = fs.existsSync(partNarrationDiskPath) ? partNarrationDiskPath : localNarrationPath;
+        let activeNarrationPath: string | null = fs.existsSync(partNarrationDiskPath) ? partNarrationDiskPath : null;
+
+        if (!activeNarrationPath && localNarrationPath && fs.existsSync(localNarrationPath)) {
+          if (multiPartCount > 1) {
+            try {
+              logTask(taskId, "INFO", "RENDER", `Slicing narration audio for Part ${partNum}/${multiPartCount}...`);
+              const allSegs = p.shot_plan?.segments || [];
+              const partSegs = allSegs.filter((s: any) => (s.part_index || 1) === partNum);
+              let sliceStart = 0;
+              let sliceDur = 0;
+
+              if (partSegs.length > 0 && partSegs[0].start_sec !== undefined) {
+                sliceStart = Math.max(0, partSegs[0].start_sec);
+                const lastSeg = partSegs[partSegs.length - 1];
+                const endSec = lastSeg.end_sec !== undefined ? lastSeg.end_sec : (lastSeg.start_sec + (lastSeg.target_duration_sec || 5));
+                sliceDur = Math.max(1, endSec - sliceStart);
+              } else {
+                const totalNarrationStr = await executeCommand(`ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${localNarrationPath}"`, PROBE_COMMAND_TIMEOUT_MS);
+                const totalDur = parseFloat(totalNarrationStr.trim()) || 60;
+                sliceDur = Math.max(1, totalDur / multiPartCount);
+                sliceStart = (partNum - 1) * sliceDur;
+              }
+
+              const slicedTempPath = path.join(cacheDir, `narration_${taskId}_p${partNum}_sliced.mp3`);
+              await executeCommand(`ffmpeg -y -ss ${sliceStart.toFixed(2)} -t ${sliceDur.toFixed(2)} -i "${localNarrationPath}" -codec:a libmp3lame -b:a 192k "${slicedTempPath}"`);
+              if (fs.existsSync(slicedTempPath)) {
+                activeNarrationPath = slicedTempPath;
+              }
+            } catch (sliceErr) {
+              console.error(`[Renderer] Failed to slice narration audio for part ${partNum}:`, sliceErr);
+            }
+          }
+          if (!activeNarrationPath) {
+            activeNarrationPath = localNarrationPath;
+          }
+        }
 
         let narrationDuration = 0;
         if (activeNarrationPath && fs.existsSync(activeNarrationPath)) {
@@ -851,33 +1021,70 @@ export function createRenderer(deps: RenderDeps) {
         const audioMixedOutput = path.join(cacheDir, `audio_mixed_${taskId}_p${partNum}.mp4`);
         const audioInputs: string[] = [];
 
+        let hasVideoAudio = false;
+        try {
+          const probeAudio = await executeCommand(
+            `ffprobe -v error -select_streams a -show_entries stream=index -of csv=p=0 "${concatOutput}"`,
+            PROBE_COMMAND_TIMEOUT_MS
+          );
+          if (probeAudio.trim().length > 0) {
+            hasVideoAudio = true;
+          }
+        } catch (e) {
+          hasVideoAudio = false;
+        }
+
         if (activeNarrationPath) {
           audioInputs.push(`-analyzeduration 10000000 -probesize 10000000 -i "${activeNarrationPath}"`);
         }
         if (localMusicPath) {
           audioInputs.push(`-analyzeduration 10000000 -probesize 10000000 -stream_loop -1 -i "${localMusicPath}"`);
         }
-        const audioFilter = buildAudioMixFilter(Boolean(activeNarrationPath), Boolean(localMusicPath), voiceVolume, musicVolume);
-        const limitDurationOpt = buildMixDurationArgs(Boolean(activeNarrationPath), narrationDuration);
+        const audioFilter = buildAudioMixFilter(
+          Boolean(activeNarrationPath),
+          Boolean(localMusicPath),
+          voiceVolume,
+          musicVolume,
+          DEFAULT_DUCK_DB,
+          hasVideoAudio
+        );
+        const partVideoDuration = partClips.reduce((sum, c) => sum + (c.duration || 0), 0);
+        let targetRenderDuration = Math.max(partVideoDuration, narrationDuration);
+
+        if (multiPartCount > 1 && partVideoDuration > 0 && narrationDuration > partVideoDuration + 3) {
+          console.warn(`[Renderer] Part ${partNum} narration duration (${narrationDuration}s) significantly exceeds part video duration (${partVideoDuration}s). Capping target duration.`);
+          targetRenderDuration = partVideoDuration;
+        }
+
+        const limitDurationOpt = targetRenderDuration > 0 ? `-t ${targetRenderDuration.toFixed(2)}` : buildMixDurationArgs(Boolean(activeNarrationPath), narrationDuration);
 
         const buildMixCmdWith = (inputs: string[], filter: string): string =>
           `ffmpeg -y -i "${concatOutput}" ${inputs.join(" ")} -filter_complex "${filter}" -map 0:v -map "[a]" -c:v copy -c:a aac ${limitDurationOpt} "${audioMixedOutput}"`;
 
         let mixCmd = audioFilter
           ? buildMixCmdWith(audioInputs, audioFilter)
-          : `ffmpeg -y -i "${concatOutput}" -f lavfi -i anullsrc=r=44100:cl=stereo -c:v copy -c:a aac -shortest ${limitDurationOpt} "${audioMixedOutput}"`;
+          : (hasVideoAudio
+              ? `ffmpeg -y -i "${concatOutput}" -c:v copy -c:a aac ${limitDurationOpt} "${audioMixedOutput}"`
+              : `ffmpeg -y -i "${concatOutput}" -f lavfi -i anullsrc=r=44100:cl=stereo -c:v copy -c:a aac -shortest ${limitDurationOpt} "${audioMixedOutput}"`);
 
         try {
           await executeCommand(mixCmd);
         } catch (err: any) {
-          console.warn(`[Renderer] Audio mix with BGM failed: ${err.message}`);
+          console.warn(`[Renderer] Audio mix failed: ${err.message}`);
           const isDucked = audioFilter.includes("sidechaincompress");
           let mixSuccess = false;
 
           if (isDucked) {
             try {
               logTask(taskId, "WARNING", "RENDER", "BGM ducking unavailable, falling back to a flat audio mix.");
-              const flatFilter = buildAudioMixFilter(Boolean(activeNarrationPath), Boolean(localMusicPath), voiceVolume, musicVolume, 0);
+              const flatFilter = buildAudioMixFilter(
+                Boolean(activeNarrationPath),
+                Boolean(localMusicPath),
+                voiceVolume,
+                musicVolume,
+                0,
+                hasVideoAudio
+              );
               await executeCommand(buildMixCmdWith(audioInputs, flatFilter));
               mixSuccess = true;
             } catch (flatErr) {
@@ -885,11 +1092,31 @@ export function createRenderer(deps: RenderDeps) {
             }
           }
 
+          if (!mixSuccess && hasVideoAudio) {
+            try {
+              logTask(taskId, "WARNING", "RENDER", "Retrying audio mix without video audio stream.");
+              const noVidAudioFilter = buildAudioMixFilter(
+                Boolean(activeNarrationPath),
+                Boolean(localMusicPath),
+                voiceVolume,
+                musicVolume,
+                0,
+                false
+              );
+              if (noVidAudioFilter) {
+                await executeCommand(buildMixCmdWith(audioInputs, noVidAudioFilter));
+                mixSuccess = true;
+              }
+            } catch (fallbackErr) {
+              console.warn(`[Renderer] Fallback mix without video audio also failed:`, fallbackErr);
+            }
+          }
+
           if (!mixSuccess) {
             if (localMusicPath && activeNarrationPath) {
               logTask(taskId, "WARNING", "RENDER", "BGM file unreadable by FFmpeg, falling back to narration only.");
               const narrationOnlyInputs = [`-analyzeduration 10000000 -probesize 10000000 -i "${activeNarrationPath}"`];
-              const narrationOnlyFilter = buildAudioMixFilter(true, false, voiceVolume, musicVolume);
+              const narrationOnlyFilter = buildAudioMixFilter(true, false, voiceVolume, musicVolume, 0, false);
               const narrationCmd = buildMixCmdWith(narrationOnlyInputs, narrationOnlyFilter);
               await executeCommand(narrationCmd);
             } else {

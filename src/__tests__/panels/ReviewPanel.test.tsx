@@ -56,12 +56,12 @@ describe("ReviewPanel", () => {
     // 3 duration badges: "5.0s", "3.0s", "4.0s"
     expect(screen.getByText("5.0s")).toBeInTheDocument();
     expect(screen.getByText("3.0s")).toBeInTheDocument();
-    expect(screen.getByText("4.0s")).toBeInTheDocument();
+    expect(screen.getAllByText("4.0s")[0]).toBeInTheDocument();
   });
 
   it("shows total duration", () => {
     render(<ReviewPanel />);
-    expect(screen.getByText(/12s/i)).toBeInTheDocument();
+    expect(screen.getByText(/16s/i)).toBeInTheDocument();
   });
 
   it("renders task review when project mode is disabled", () => {
@@ -85,6 +85,7 @@ describe("ReviewPanel", () => {
         { type: "move", track_id: "track-video", item_id: "clip-1", new_start_sec: 0 },
         { type: "move", track_id: "track-video", item_id: "clip-2", new_start_sec: 5 },
         { type: "move", track_id: "track-video", item_id: "clip-3", new_start_sec: 8 },
+        { type: "move", track_id: "track-video", item_id: "clip_outro", new_start_sec: 12 },
       ],
     });
     expect(store.render).toHaveBeenCalled();

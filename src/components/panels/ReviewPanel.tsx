@@ -15,6 +15,7 @@ import {
 import { Button } from "../ui";
 import { ClipPreviewModal } from "../ui/ClipPreviewModal";
 import { SortableClipCard } from "./SortableClipCard";
+import { getClipsForPart } from "../../lib/partUtils";
 import { useProjectStore } from "../../store/useProjectStore";
 import { useProjectWorkspaceStore } from "../../store/useProjectWorkspaceStore";
 import { useConfigStore } from "../../store/useConfigStore";
@@ -45,6 +46,8 @@ export function ReviewPanel() {
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
   const [previewClip, setPreviewClip] = useState<TimelineItem | null>(null);
   const [bgmFiles, setBgmFiles] = useState<BgmFile[]>([]);
+  const [outroStatus, setOutroStatus] = useState<{ exists: boolean; url: string | null; filename: string; path: string }>({ exists: false, url: null, filename: "outro.mp4", path: "public/assets/outro.mp4" });
+  const [outroEnabled, setOutroEnabled] = useState(true);
 
   const finalVideoIndex = Math.min(Math.max(activePartIndex - 1, 0), Math.max(videoUrls.length - 1, 0));
   const finalVideo = videoUrls[finalVideoIndex] || videoUrls[0];
@@ -53,7 +56,7 @@ export function ReviewPanel() {
     return finalVideo.includes("?") ? finalVideo : `${finalVideo}?v=${Date.now()}`;
   }, [finalVideo]);
 
-  // Load BGMs
+  // Load BGMs and Outro status
   useEffect(() => {
     videoApi
       .getBgmList()
@@ -64,12 +67,42 @@ export function ReviewPanel() {
         console.error("[ReviewPanel] Failed to load BGM list:", err);
         setBgmFiles([]);
       });
+
+    if (typeof videoApi.getOutroStatus === "function") {
+      videoApi
+        .getOutroStatus()
+        .then((res) => {
+          if (res) setOutroStatus(res);
+        })
+        .catch((err) => {
+          console.error("[ReviewPanel] Failed to load outro status:", err);
+        });
+    }
   }, []);
 
-  // Sync orderedClips when project loads
+  // Sync orderedClips when project loads or outroStatus/outroEnabled updates
   useEffect(() => {
-    setOrderedClips(sourceClips);
-  }, [sourceClips.length]);
+    let clips = [...sourceClips];
+    const hasOutro = clips.some((c) => c.id === "clip_outro" || c.asset_url?.includes("outro"));
+
+    if (!hasOutro && (outroStatus.exists || outroEnabled)) {
+      const outroUrl = outroStatus.url || "/assets/outro.mp4";
+      const totalDur = clips.reduce((acc, c) => acc + (c.duration_sec || 0), 0);
+      const outroClip: TimelineItem = {
+        id: "clip_outro",
+        text: "🎬 Outro / Cierre",
+        asset_url: outroUrl,
+        source_url: outroUrl,
+        start_sec: totalDur,
+        duration_sec: 4,
+        keywords: ["outro", "cierre"],
+        provider: "local",
+      };
+      clips.push(outroClip);
+    }
+
+    setOrderedClips(clips);
+  }, [sourceClips, outroStatus.exists, outroEnabled]);
 
   const handleYoutubeUpload = () => {
     if (!isYoutubeLinked) return;
@@ -103,6 +136,10 @@ export function ReviewPanel() {
 
     return (
       <div className="flex min-h-full h-full w-full max-w-4xl mx-auto flex-col items-center justify-start gap-4 px-4 py-6 text-center overflow-y-auto min-h-0">
+        <div>
+          <h2 className="text-[15px] font-semibold text-foreground">{t("panels.review.taskReviewTitle")}</h2>
+          <p className="text-xs text-muted mt-0.5">{t("panels.review.taskReviewDescription")}</p>
+        </div>
         {isMultiPart && multiPartCount > 1 && (
           <div className="flex items-center justify-center gap-2 bg-surface/80 p-1.5 rounded-xl border border-border shrink-0">
             <span className="text-xs font-semibold text-muted-foreground px-2">Parte Activa:</span>
@@ -283,19 +320,78 @@ export function ReviewPanel() {
     setPanel("rendering");
   };
 
+  const displayedClips = isMultiPart && multiPartCount > 1 ? getClipsForPart(orderedClips, activePartIndex, multiPartCount) : orderedClips;
+
   return (
     <div className="flex h-full w-full max-w-5xl mx-auto flex-col gap-4 px-6 py-5">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-1">
         <div>
           <h2 className="text-sm font-semibold text-foreground">{t("panels.review.reviewClips")}</h2>
           <p className="text-xs text-muted mt-0.5">
-            {orderedClips.length} clips · ~{totalDuration.toFixed(0)}s total
+            {displayedClips.length} clips · ~{totalDuration.toFixed(0)}s total
             {excluded.size > 0 && ` · ${excluded.size} excluded`}
           </p>
         </div>
 
-        {/* BGM Quick Control Widget */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 bg-surface-2/60 border border-border/60 px-4 py-2.5 rounded-xl text-xs w-full sm:w-auto">
+        {isMultiPart && multiPartCount > 1 && (
+          <div className="flex items-center gap-1.5 bg-surface-2/80 p-1.5 rounded-xl border border-border">
+            <span className="text-xs font-semibold text-muted-foreground px-1.5">Parte:</span>
+            {Array.from({ length: multiPartCount }).map((_, idx) => {
+              const partNum = idx + 1;
+              const isActive = activePartIndex === partNum;
+              return (
+                <button
+                  key={partNum}
+                  type="button"
+                  onClick={() => setActivePartIndex(partNum)}
+                  className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all ${
+                    isActive
+                      ? "bg-accent text-white shadow-xs"
+                      : "bg-transparent text-muted hover:text-foreground"
+                  }`}
+                >
+                  Parte {partNum}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
+          {/* Outro Control Widget */}
+          <div className="flex items-center gap-2 bg-surface-2/60 border border-amber-500/30 px-3.5 py-2 rounded-xl text-xs">
+            <input
+              type="checkbox"
+              id="outro-enabled-review"
+              className="h-4 w-4 rounded border-border bg-surface-3 text-amber-500 focus:ring-amber-500 accent-amber-500 cursor-pointer"
+              checked={outroEnabled && !excluded.has("clip_outro")}
+              onChange={(e) => {
+                const checked = e.target.checked;
+                setOutroEnabled(checked);
+                setExcluded((prev) => {
+                  const next = new Set(prev);
+                  if (checked) next.delete("clip_outro");
+                  else next.add("clip_outro");
+                  return next;
+                });
+              }}
+            />
+            <label htmlFor="outro-enabled-review" className="font-semibold text-foreground cursor-pointer whitespace-nowrap flex items-center gap-1.5">
+              <span>🎬 Outro</span>
+              {outroStatus.exists ? (
+                <span className="text-[10px] bg-emerald-500/20 text-emerald-400 font-normal px-1.5 py-0.5 rounded border border-emerald-500/30">
+                  Listo
+                </span>
+              ) : (
+                <span className="text-[10px] bg-amber-500/10 text-amber-400 font-normal px-1.5 py-0.5 rounded border border-amber-500/20" title="Ubica tu video en public/assets/outro.mp4">
+                  Default (outro.mp4)
+                </span>
+              )}
+            </label>
+          </div>
+
+          {/* BGM Quick Control Widget */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 bg-surface-2/60 border border-border/60 px-4 py-2 rounded-xl text-xs w-full sm:w-auto">
           <div className="flex items-center gap-2 select-none py-1">
             <input
               type="checkbox"
@@ -375,20 +471,21 @@ export function ReviewPanel() {
             </div>
           )}
         </div>
+        </div>
       </div>
 
-      {orderedClips.length === 0 ? (
+      {displayedClips.length === 0 ? (
         <div className="flex flex-1 items-center justify-center">
           <p className="text-sm text-muted">{t("panels.review.noClips")}</p>
         </div>
       ) : (
         <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <SortableContext
-            items={orderedClips.map((c) => c.id)}
+            items={displayedClips.map((c) => c.id)}
             strategy={rectSortingStrategy}
           >
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {orderedClips.map((clip) => (
+              {displayedClips.map((clip) => (
                 <SortableClipCard
                   key={clip.id}
                   clip={clip}

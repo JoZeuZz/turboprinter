@@ -310,17 +310,12 @@ function ensurePartHeader(scriptText: string, partNum: number, subject: string):
   // Strip out raw "Parte X:" or "Parte X -" or "--- PARTE X ---" prefix if present
   trimmed = trimmed.replace(new RegExp(`^(---+\\s*)?parte\\s*#?\\s*${partNum}\\s*[-:.]*\\s*(---+\\s*)?`, "i"), "").trim();
 
-  // Check if it already starts with title + parte X (e.g. "Mi familia no es quien dice ser, parte 2")
-  if (cleanSubject) {
-    const fullRegex = new RegExp(`^${cleanSubject.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*,?\\s*parte\\s*#?\\s*${partNum}[,.]?`, "i");
-    if (fullRegex.test(trimmed)) {
-      return trimmed;
-    }
-  } else {
-    const simpleRegex = new RegExp(`^parte\\s*#?\\s*${partNum}[,.]?`, "i");
-    if (simpleRegex.test(trimmed)) {
-      return trimmed;
-    }
+  // Remove any pre-existing header prefix (e.g. "Están penando en mi casa, Parte 2." or "Parte 2.") at start
+  const stripHeaderRegex = new RegExp(`^([^.!?\n]*?\\b)?parte\\s*#?\\s*${partNum}\\b[\\s.,:-]*`, "gi");
+  let prev = "";
+  while (trimmed !== prev) {
+    prev = trimmed;
+    trimmed = trimmed.replace(stripHeaderRegex, "").trim();
   }
 
   const header = cleanSubject ? `${cleanSubject}, Parte ${partNum}. ` : `Parte ${partNum}. `;
@@ -334,7 +329,13 @@ interface SentencePart {
 
 function extractSentencesWithParts(p: any): SentencePart[] {
   const scriptHasParts = Boolean(p.script && p.script.match(/---+\s*PARTE\s*\d+\s*---+/i));
-  const isMultiPart = Boolean(p.params?.is_multi_part || p.is_multi_part || scriptHasParts);
+  const isMultiPart = Boolean(
+    p.params?.is_multi_part ||
+    p.is_multi_part ||
+    scriptHasParts ||
+    (p.params?.multi_part_count !== undefined && Number(p.params.multi_part_count) > 1) ||
+    (p.multi_part_count !== undefined && Number(p.multi_part_count) > 1)
+  );
 
   const cleanBlock = (text: string) => {
     return (text || "")
@@ -688,6 +689,41 @@ async function startServer() {
       res.json({ status: 200, message: "ok", data: { files: videoFiles } });
     } catch (err: any) {
       res.status(500).json({ status: 500, message: err.message, data: null });
+    }
+  }));
+
+  app.get("/api/v1/outro-status", wrap(async (_req: any, res: any) => {
+    try {
+      const candidates = [
+        { disk: path.join(process.cwd(), "public", "assets", "outro.mp4"), url: "/assets/outro.mp4", path: "public/assets/outro.mp4" },
+        { disk: path.join(process.cwd(), "public", "outro.mp4"), url: "/outro.mp4", path: "public/outro.mp4" },
+        { disk: path.join(process.cwd(), "assets", "outro.mp4"), url: "/assets/outro.mp4", path: "assets/outro.mp4" },
+      ];
+      const match = candidates.find((c) => fs.existsSync(c.disk));
+      if (match) {
+        return res.json({
+          status: 200,
+          message: "ok",
+          data: {
+            exists: true,
+            url: match.url,
+            filename: "outro.mp4",
+            path: match.path,
+          },
+        });
+      }
+      res.json({
+        status: 200,
+        message: "ok",
+        data: {
+          exists: false,
+          url: null,
+          filename: "outro.mp4",
+          path: "public/assets/outro.mp4",
+        },
+      });
+    } catch (err: any) {
+      res.json({ status: 200, message: "ok", data: { exists: false, url: null, filename: "outro.mp4", path: "public/assets/outro.mp4" } });
     }
   }));
 
@@ -2649,6 +2685,25 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
       }
     }
 
+    // Automatically append clip_outro if public/assets/outro.mp4 exists or by default
+    const outroPath = path.join(process.cwd(), "public", "assets", "outro.mp4");
+    const outroExists = fs.existsSync(outroPath);
+    const hasOutroInItems = videoItems.some((item: any) => item.id === "clip_outro" || item.asset_url?.includes("outro"));
+    if (!hasOutroInItems && (outroExists || p.params?.outro_enabled !== false)) {
+      const lastVideoItem = videoItems[videoItems.length - 1];
+      const outroStartSec = lastVideoItem ? (lastVideoItem.start_sec + lastVideoItem.duration_sec) : 0;
+      videoItems.push({
+        id: "clip_outro",
+        text: "🎬 Outro / Clip de Cierre",
+        asset_url: "/assets/outro.mp4",
+        source_url: "/assets/outro.mp4",
+        start_sec: outroStartSec,
+        duration_sec: 4,
+        keywords: ["outro", "cierre"],
+        provider: "local",
+      });
+    }
+
     const subtitleItems: any[] = [];
     (p.shot_plan?.segments || []).forEach((seg: any, idx: number) => {
       const startSec = seg.start_sec !== undefined ? seg.start_sec : idx * 5;
@@ -2772,7 +2827,13 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
 
     // Generate per-part narration files for multi-part projects
     const scriptHasParts = Boolean(p.script && p.script.match(/---+\s*PARTE\s*\d+\s*---+/i));
-    const isMultiPart = Boolean(p.params?.is_multi_part || p.is_multi_part || scriptHasParts);
+    const isMultiPart = Boolean(
+      p.params?.is_multi_part ||
+      p.is_multi_part ||
+      scriptHasParts ||
+      (p.params?.multi_part_count !== undefined && Number(p.params.multi_part_count) > 1) ||
+      (p.multi_part_count !== undefined && Number(p.multi_part_count) > 1)
+    );
 
     if (isMultiPart) {
       const numParts = Math.max(
@@ -2916,7 +2977,21 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
       if (!track) continue;
 
       if (cmd.type === "move") {
-        const itemIndex = track.items.findIndex((item: any) => item.id === cmd.item_id);
+        let itemIndex = track.items.findIndex((item: any) => item.id === cmd.item_id);
+        if (itemIndex === -1 && (cmd.item_id === "clip_outro" || cmd.item_id.includes("outro")) && cmd.new_start_sec >= 0) {
+          const outroItem = {
+            id: cmd.item_id,
+            text: "🎬 Outro / Clip de Cierre",
+            asset_url: "/assets/outro.mp4",
+            source_url: "/assets/outro.mp4",
+            start_sec: cmd.new_start_sec,
+            duration_sec: 4,
+            keywords: ["outro", "cierre"],
+            provider: "local",
+          };
+          track.items.push(outroItem);
+          itemIndex = track.items.length - 1;
+        }
         if (itemIndex !== -1) {
           if (cmd.new_start_sec < 0) {
             // Delete/remove the item from the track!
@@ -3120,6 +3195,11 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
   // Serve background music files directly from public/musics
   app.use("/public/musics", express.static(PUBLIC_MUSICS_DIR));
   app.use("/musics", express.static(PUBLIC_MUSICS_DIR));
+
+  // Serve static assets from public/assets
+  const PUBLIC_ASSETS_DIR = path.join(process.cwd(), "public", "assets");
+  app.use("/public/assets", express.static(PUBLIC_ASSETS_DIR));
+  app.use("/assets", express.static(PUBLIC_ASSETS_DIR));
 
   // Serve only the rendered output. The rest of storage/ holds OAuth refresh
   // tokens (youtube-credentials.json, tiktok-credentials.json) and the project
