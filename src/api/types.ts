@@ -93,8 +93,14 @@ export interface EditableConfig {
     llm_fallback_providers: string[];
     llm_request_timeout_seconds: number;
     llm_connect_timeout_seconds: number;
+    groq_api_key: string;
+    groq_model_name: string;
+    groq_base_url: string;
     gemini_api_key: string;
     gemini_model_name: string;
+    deepseek_api_key: string;
+    deepseek_model_name: string;
+    deepseek_base_url: string;
     subtitle_provider: string;
     endpoint: string;
     material_directory: string;

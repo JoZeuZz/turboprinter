@@ -63,15 +63,21 @@ npm run dev             # http://localhost:3000
 
 ## Configuración
 
-Variables mínimas en `.env`:
+Variables LLM principales en `.env`:
 
 | Variable | Uso |
 |---|---|
 | `PEXELS_API_KEY` | Búsqueda de material en Pexels |
-| `GEMINI_API_KEY` | Generación de guion con Gemini |
-| `LLM_PROVIDER` | `gemini` (por defecto) \| `lmstudio` \| `openai` |
+| `LLM_PROVIDER` | Proveedor principal. Por defecto: `groq` |
+| `LLM_FALLBACK_PROVIDERS` | Orden de fallback. Por defecto: `gemini,deepseek` |
+| `LLM_REQUEST_TIMEOUT_SECONDS` | Timeout total de cada solicitud. Por defecto: `120` |
+| `GROQ_API_KEY` | Credencial del proveedor principal Groq |
+| `GEMINI_API_KEY` | Credencial del primer fallback Gemini |
+| `DEEPSEEK_API_KEY` | Credencial del segundo fallback DeepSeek |
 
-No se requiere clave de OpenAI ni Anthropic para funcionar: `LLM_PROVIDER` acepta cualquier endpoint OpenAI-compatible, local o remoto.
+La cadena avanza al siguiente proveedor ante errores de red, timeout, HTTP `429` o HTTP `5xx`. Otros errores HTTP `4xx` detienen la solicitud porque suelen indicar una petición o configuración inválida.
+
+`openai` y `lmstudio` siguen disponibles mediante selección explícita con `OPENAI_API_BASE`, `OPENAI_API_KEY` y `OPENAI_MODEL`; no forman parte de la cadena predeterminada. Guarda credenciales solo en `.env`, nunca en `config.toml`.
 
 Guía completa de variables, despliegue en LXC/Proxmox y hardening de seguridad: [README_PERSONAL_FORK.md](README_PERSONAL_FORK.md).
 

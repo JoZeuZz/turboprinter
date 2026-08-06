@@ -14,10 +14,16 @@ import {
   selectChannel,
   removeChannel,
 } from "./src/server/youtubeChannels";
-import { updateEnvFile } from "./src/server/envFile";
+import {
+  CONFIG_TOML_ENV_KEYS,
+  llmEnvUpdatesFromAppPatch,
+  loadEnvFile,
+  readLlmSettings,
+  updateEnvFile,
+} from "./src/server/envFile";
 import { maskSecrets, stripSentinelSecrets } from "./src/server/configMasking";
 import { synthesizeSpeech } from "./src/server/tts";
-import { generateLlmContent } from "./src/server/llm";
+import { generateLlmContent, hasConfiguredLlmProvider } from "./src/server/llm";
 import { searchPexelsVideos, pickUniqueClip } from "./src/server/pexels";
 import { classifyScriptMood, pickBgmForMood } from "./src/server/musicMood";
 import { createRenderer, executeCommand } from "./src/server/render";
@@ -40,23 +46,8 @@ import {
 import { google } from "googleapis";
 import multer from "multer";
 
-// Load .env variables manually if they exist
 try {
-  const envPath = path.join(process.cwd(), ".env");
-  if (fs.existsSync(envPath)) {
-    const envContent = fs.readFileSync(envPath, "utf8");
-    envContent.split("\n").forEach((line) => {
-      const trimmed = line.trim();
-      if (trimmed && !trimmed.startsWith("#")) {
-        const parts = trimmed.split("=");
-        const key = parts[0]?.trim();
-        const value = parts.slice(1).join("=").trim();
-        if (key && value) {
-          process.env[key] = value.replace(/^['"]|['"]$/g, ""); // remove wrapping quotes if present
-        }
-      }
-    });
-  }
+  loadEnvFile();
 } catch (e) {
   console.error("Error parsing .env file:", e);
 }
@@ -432,12 +423,8 @@ let globalConfig = {
       pexels_api_keys: process.env.PEXELS_API_KEY ? [process.env.PEXELS_API_KEY] : [],
       pixabay_api_keys: [],
       coverr_api_keys: [],
-      llm_provider: "gemini",
-      llm_fallback_providers: [],
-      llm_request_timeout_seconds: 60,
+      ...readLlmSettings(),
       llm_connect_timeout_seconds: 10,
-      gemini_api_key: "",
-      gemini_model_name: "gemini-3.1-flash-lite",
       subtitle_provider: "whisper",
       endpoint: "",
       material_directory: "",
@@ -523,32 +510,12 @@ let globalConfig = {
   options: {
     video_sources: ["pexels", "pixabay", "local"],
     video_codecs: ["h264", "hevc"],
-    llm_providers: ["gemini", "openai", "siliconflow"],
+    llm_providers: ["groq", "gemini", "deepseek", "openai", "lmstudio"],
     quality_profiles: ["default", "high", "low"],
     subtitle_positions: ["top", "middle", "bottom", "custom"],
     whisper_devices: ["cpu", "cuda"]
   }
 };
-
-// Only these config.toml keys are mirrored into process.env. A blanket mirror
-// hands every credential in the file to every child process the renderer
-// spawns; keep this list to what the code genuinely reads.
-const CONFIG_TOML_ENV_ALLOWLIST = new Set([
-  "pexels_api_key",
-  "pexels_api_keys",
-  "pexels_key", // undocumented alias read as a fallback in getPexelsApiKey()
-  "gemini_api_key",
-  "gemini_model_name",
-  "gemini_model",
-  "llm_provider",
-  "openai_api_base",
-  "openai_api_key",
-  "openai_model",
-  "youtube_client_id",
-  "youtube_client_secret",
-  "tiktok_client_key",
-  "tiktok_client_secret",
-]);
 
 async function startServer() {
   const app = express();
@@ -583,25 +550,16 @@ async function startServer() {
                 globalConfig.settings.app.pexels_api_keys = values as never[];
               } else if (key === "pixabay_api_keys" || key === "pixabay_api_key") {
                 globalConfig.settings.app.pixabay_api_keys = values as never[];
+              } else if (key === "llm_fallback_providers" && process.env.LLM_FALLBACK_PROVIDERS === undefined) {
+                process.env.LLM_FALLBACK_PROVIDERS = values.join(",");
               }
             } else {
               const value = rawValue.replace(/^["']|["']$/g, "").trim();
               if (value) {
-                const envKey = key.toUpperCase();
-                if (CONFIG_TOML_ENV_ALLOWLIST.has(key) && !process.env[envKey]) {
+                const envKey = CONFIG_TOML_ENV_KEYS.get(key);
+                if (envKey && process.env[envKey] === undefined) {
                   process.env[envKey] = value;
                   console.log(`[Config] Loaded ${envKey} from config.toml`);
-                }
-                if (key === "gemini_api_key") {
-                  process.env.GEMINI_API_KEY = value;
-                  globalConfig.settings.app.gemini_api_key = value;
-                  console.log(`[Config] Loaded GEMINI_API_KEY from config.toml`);
-                }
-                if (key === "gemini_model_name" || key === "gemini_model") {
-                  process.env.GEMINI_MODEL = value;
-                  process.env.GEMINI_MODEL_NAME = value;
-                  globalConfig.settings.app.gemini_model_name = value;
-                  console.log(`[Config] Loaded GEMINI_MODEL (${value}) from config.toml`);
                 }
                 if (key === "pexels_api_key" && globalConfig.settings.app.pexels_api_keys.length === 0) {
                   globalConfig.settings.app.pexels_api_keys = [value] as never[];
@@ -613,6 +571,7 @@ async function startServer() {
             }
           }
         }
+        Object.assign(globalConfig.settings.app, readLlmSettings());
       } catch (err) {
         console.error("[Config] Failed to parse config.toml:", err);
       }
@@ -759,6 +718,18 @@ async function startServer() {
     // requestSchemas.ts) — validated at the boundary above, but structurally
     // wider than globalConfig.settings's inferred literal type.
     globalConfig.settings = { ...globalConfig.settings, ...(configPatch as any) };
+
+    if (configPatch.app) {
+      const updates = llmEnvUpdatesFromAppPatch(configPatch.app as Record<string, unknown>);
+      if (Object.keys(updates).length > 0) {
+        try {
+          updateEnvFile(updates);
+          console.log("[Config] Updated .env file with LLM settings:", Object.keys(updates));
+        } catch (err) {
+          console.error("[Config] Failed to update .env file with LLM settings:", err);
+        }
+      }
+    }
 
     // Save YouTube credentials to .env file if they are passed in from the UI
     if (configPatch.youtube) {
@@ -1067,11 +1038,6 @@ Devuelve ÚNICAMENTE un JSON válido con este formato exacto:
       hook_style = "misterio"
     } = req.body;
 
-    const llmProvider = process.env.LLM_PROVIDER || "gemini";
-    if (llmProvider === "gemini" && !process.env.GEMINI_API_KEY) {
-      throw new Error("No Gemini API key configured. Please set GEMINI_API_KEY.");
-    }
-
     const hookDirectives: Record<string, string> = {
       misterio: "\n\n[ESTILO DE GANCHO DE APERTURA: MISTERIO IMPACTANTE]: Comienza la historia desde la primera frase con un secreto inquietante, un misterio perturbador o una revelación directa que ponga en duda lo cotidiano y atrape al espectador en los primeros 3 segundos.",
       confesion: "\n\n[ESTILO DE GANCHO DE APERTURA: CONFESIÓN EN 1ª PERSONA]: Comienza la historia en primera persona confesando de inmediato un hecho personal drástico, perturbador o un descubrimiento grave ('Nunca debí investigar a mi vecino...', 'Hoy descubrí algo aterrador en mi propia casa...').",
@@ -1210,22 +1176,12 @@ RESTRICCIONES DE FORMATO PARA TEXT-TO-SPEECH (CRÍTICO):
 
   app.post("/api/v1/generate-metadata", wrap(async (req: any, res: any) => {
     const { video_subject = "", video_script = "" } = req.body;
-    const llmProvider = process.env.LLM_PROVIDER || "gemini";
-    if (llmProvider === "gemini" && !process.env.GEMINI_API_KEY) {
-      throw new Error("No Gemini API key configured. Please set GEMINI_API_KEY.");
-    }
-
     const meta = await generateVideoMetadata(video_subject, video_script);
     res.json({ status: 200, message: "ok", data: meta });
   }));
 
   app.post("/api/v1/terms", wrap(async (req: any, res: any) => {
     const { video_script = "" } = req.body;
-    const llmProvider = process.env.LLM_PROVIDER || "gemini";
-    if (llmProvider === "gemini" && !process.env.GEMINI_API_KEY) {
-      throw new Error("No Gemini API key configured. Please set GEMINI_API_KEY.");
-    }
-
     const prompt = `Analiza el siguiente guión de video y genera una lista de exactamente 5 términos de búsqueda en inglés (para buscar videos de stock relevantes). Devuelve una respuesta JSON con el formato: { "terms": ["term1", "term2", ...] }. Guión: ${video_script}`;
     const resp = await generateLlmContent(prompt, true);
     const parsed = JSON.parse(resp);
@@ -1236,11 +1192,6 @@ RESTRICCIONES DE FORMATO PARA TEXT-TO-SPEECH (CRÍTICO):
 
   app.post("/api/v1/hashtags", wrap(async (req: any, res: any) => {
     const { video_terms, video_subject = "", video_script = "" } = req.body;
-    const llmProvider = process.env.LLM_PROVIDER || "gemini";
-    if (llmProvider === "gemini" && !process.env.GEMINI_API_KEY) {
-      throw new Error("No Gemini API key configured. Please set GEMINI_API_KEY.");
-    }
-
     const keywords = Array.isArray(video_terms) ? video_terms.join(", ") : (video_terms || "");
     const prompt = `Genera hashtags de alto impacto para la descripción de un YouTube Short.
 Palabras clave (keywords): ${keywords}
@@ -1835,10 +1786,6 @@ Instrucciones:
 
     let scriptText = "";
     if (generate_script) {
-      const llmProvider = process.env.LLM_PROVIDER || "gemini";
-      if (llmProvider === "gemini" && !process.env.GEMINI_API_KEY) {
-        throw new Error("No Gemini API key configured. Please set GEMINI_API_KEY.");
-      }
       const prompt = `Escribe un guión para un video de TikTok sobre "${topic}" en idioma ${language}.
 El objetivo es que el espectador sienta que alguien le está contando una historia fascinante cara a cara.
 Usa un tono cercano, natural y conversacional. Escribe con palabras simples, evitando tecnicismos, frases demasiado largas o vocabulario rebuscado. Si aparece un concepto difícil, explícalo de forma sencilla sin perder el ritmo.
@@ -2061,10 +2008,9 @@ CRÍTICO: No utilices NINGÚN tipo de formato de texto como asteriscos (* o **),
     console.log(`[Plan] Project ${req.params.id} loaded. Custom video_terms parsed:`, userTerms);
 
     let searchQueriesForSegments: string[][] = [];
-    let hasGeminiQueries = false;
+    let hasLlmQueries = false;
 
-    const currentLlmProvider = process.env.LLM_PROVIDER || "gemini";
-    if (process.env.GEMINI_API_KEY || currentLlmProvider === "lmstudio" || currentLlmProvider === "openai") {
+    if (hasConfiguredLlmProvider()) {
       try {
         const prompt = `Analiza las siguientes oraciones de un guión de video en idioma "${p.language || "es"}":
 ${sentences.map((s: string, i: number) => `Segmento ${i + 1}: "${s}"`).join("\n")}
@@ -2088,11 +2034,11 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
         const parsed = JSON.parse(cleanedText);
         if (Array.isArray(parsed) && parsed.length === sentences.length) {
           searchQueriesForSegments = parsed;
-          hasGeminiQueries = true;
-          console.log("[Plan] Generated high-quality segment search queries using Gemini:", searchQueriesForSegments);
+          hasLlmQueries = true;
+          console.log("[Plan] Generated high-quality segment search queries using configured LLM.");
         }
       } catch (err) {
-        console.error("[Plan] Failed to generate search queries using Gemini, falling back to local heuristic:", err);
+        console.error("[Plan] LLM search-query generation failed; using local heuristic:", err);
       }
     }
 
@@ -2101,7 +2047,7 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
       const partIndex = sp.partIndex;
       let segmentQueries: string[] = [];
 
-      if (hasGeminiQueries && searchQueriesForSegments[idx]) {
+      if (hasLlmQueries && searchQueriesForSegments[idx]) {
         segmentQueries = searchQueriesForSegments[idx];
       } else {
         // Fallback: If user has custom terms, distribute them sequentially or cycle

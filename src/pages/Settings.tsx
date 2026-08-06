@@ -353,6 +353,21 @@ export function Settings() {
             onChange={(e) => updateField("app", "llm_provider", e.target.value)}
           />
           <SecretInput
+            label={t("settings.fields.groqApiKey")}
+            value={draft.app.groq_api_key}
+            onChange={(value) => updateField("app", "groq_api_key", value)}
+          />
+          <Input
+            label={t("settings.fields.groqModel")}
+            value={draft.app.groq_model_name ?? ""}
+            onChange={(e) => updateField("app", "groq_model_name", e.target.value)}
+          />
+          <Input
+            label={t("settings.fields.groqBaseUrl")}
+            value={draft.app.groq_base_url ?? ""}
+            onChange={(e) => updateField("app", "groq_base_url", e.target.value)}
+          />
+          <SecretInput
             label={t("settings.fields.geminiApiKey")}
             value={draft.app.gemini_api_key}
             onChange={(value) => updateField("app", "gemini_api_key", value)}
@@ -361,6 +376,21 @@ export function Settings() {
             label={t("settings.fields.geminiModel")}
             value={draft.app.gemini_model_name ?? ""}
             onChange={(e) => updateField("app", "gemini_model_name", e.target.value)}
+          />
+          <SecretInput
+            label={t("settings.fields.deepseekApiKey")}
+            value={draft.app.deepseek_api_key}
+            onChange={(value) => updateField("app", "deepseek_api_key", value)}
+          />
+          <Input
+            label={t("settings.fields.deepseekModel")}
+            value={draft.app.deepseek_model_name ?? ""}
+            onChange={(e) => updateField("app", "deepseek_model_name", e.target.value)}
+          />
+          <Input
+            label={t("settings.fields.deepseekBaseUrl")}
+            value={draft.app.deepseek_base_url ?? ""}
+            onChange={(e) => updateField("app", "deepseek_base_url", e.target.value)}
           />
           <ListInput
             label={t("settings.fields.pexelsApiKeys")}

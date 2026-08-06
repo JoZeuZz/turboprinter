@@ -6,6 +6,8 @@ interface FakeSettings {
   tiktok: { client_secret: string };
   app: {
     gemini_api_key: string;
+    groq_api_key: string;
+    deepseek_api_key: string;
     pexels_api_keys: string[];
     pixabay_api_keys: string[];
   };
@@ -17,6 +19,8 @@ const buildSettings = (): FakeSettings => ({
   tiktok: { client_secret: "not-a-real-secret" },
   app: {
     gemini_api_key: "fake-gemini-key",
+    groq_api_key: "fake-groq-key",
+    deepseek_api_key: "fake-deepseek-key",
     pexels_api_keys: ["fake-pexels-1", "fake-pexels-2"],
     pixabay_api_keys: [],
   },
@@ -28,6 +32,8 @@ describe("maskSecrets", () => {
     expect(result.youtube.api_key).toBe(SECRET_SENTINEL);
     expect(result.tiktok.client_secret).toBe(SECRET_SENTINEL);
     expect(result.app.gemini_api_key).toBe(SECRET_SENTINEL);
+    expect(result.app.groq_api_key).toBe(SECRET_SENTINEL);
+    expect(result.app.deepseek_api_key).toBe(SECRET_SENTINEL);
   });
 
   it("replaces a populated array secret with [sentinel]", () => {
@@ -103,6 +109,8 @@ describe("stripSentinelSecrets", () => {
     expect(stripped.youtube).not.toHaveProperty("api_key");
     expect(stripped.tiktok).not.toHaveProperty("client_secret");
     expect(stripped.app).not.toHaveProperty("gemini_api_key");
+    expect(stripped.app).not.toHaveProperty("groq_api_key");
+    expect(stripped.app).not.toHaveProperty("deepseek_api_key");
     expect(stripped.app).not.toHaveProperty("pexels_api_keys");
   });
 });

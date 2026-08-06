@@ -14,7 +14,9 @@ export const SECRET_SENTINEL = "__SAVED__";
 export const SECRET_PATHS: readonly string[] = [
   "youtube.api_key", // holds YOUTUBE_CLIENT_SECRET despite the name
   "tiktok.client_secret",
+  "app.groq_api_key",
   "app.gemini_api_key",
+  "app.deepseek_api_key",
   "app.pexels_api_keys", // array
   "app.pixabay_api_keys", // array
   "app.coverr_api_keys", // array
