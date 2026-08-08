@@ -143,20 +143,22 @@ export async function generateThumbnailPrompt(
   video_subject: string,
   video_script: string
 ): Promise<string> {
-  const metaPrompt = `Actúa como un director de arte de miniaturas virales de YouTube y experto en comportamiento de audiencia (CTR).
-Crea un prompt en INGLÉS extremadamente detallado y cinematográfico para generar una miniatura de alto impacto basada en el siguiente tema y guión.
+  const metaPrompt = `Actúa como un director de arte de miniaturas virales de YouTube y experto en storytelling visual y CTR.
+Crea un prompt en INGLÉS extremadamente descriptivo, narrativo y cinematográfico para generar una miniatura basada en el siguiente tema y guión.
 
 Tema: "${video_subject}"
-Guión: "${(video_script || "").substring(0, 400)}"
+Guión: "${(video_script || "").substring(0, 500)}"
 
-REGLAS DE ORO DE COMPOSICIÓN Y CTR PARA LA MINIATURA:
-1. LLENA TODO EL LIENZO 16:9: La imagen NUNCA debe tener bordes negros ni fondo negro vacío. Todo el lienzo debe tener un entorno rico y detallado.
-2. SUJETO Y EXPRESIÓN: Muestra un sujeto en primer plano con una expresión facial viva e intensa de emoción (asombro, terror, sospecha, shock, ojos muy abiertos).
-3. ELEMENTO NARRATIVO Y CONTRASTE: Incluye el elemento clave de la historia (ej. un teléfono encendido con llamada entrante, una puerta entreabierta con luz intensa, o una silueta amenazante al fondo).
-4. ILUMINACIÓN Y COLOR VIRAL: Usa iluminación cinemática de alto contraste en dos tonos (ej. azul neón ambiental + luz anaranjada/roja de borde en el rostro), HDR, vibrancia alta y colores intensos para que resalte en el feed.
-5. SINFONÍA VISUAL: "8k cinematic photograph, 16:9 wide aspect ratio, hyper-expressive face, dynamic volumetric rim light, high contrast, rich atmospheric background, vivid colors, depth of field, sharp focus, viral youtube thumbnail".
+OBJETIVO PRINCIPAL DE LA MINIATURA:
+La imagen debe contar la HISTORIA VISUAL del conflicto central en una sola toma de alto impacto, de modo que el espectador entienda de inmediato la premisa o el dilema al verla en su feed.
 
-PROHIBIDO: Presentaciones, diapositivas, texto flotante, banners, fondos negros planos sin textura ni vacíos laterales.
+REGLAS DE NARRATIVA Y COMPOSICIÓN (CTR ALTO):
+1. DUALIDAD NARRATIVA Y CONFLICTO VISUAL: Conecta visualmente el primer plano y el fondo. En primer plano coloca al personaje principal mostrando una reacción emocional realista (miedo, shock, confusión, secreto). En el segundo plano o en sus manos, incluye el elemento revelador clave de la trama (ej. la pantalla del teléfono con la llamada/mensaje advirtiendo el peligro, o una sombra/figura idéntica al otro lado de la puerta/ventana).
+2. COMPOSICIÓN 16:9 COMPLETA: Ocupa todo el lienzo panorámico con la escena detallada (interiores detallados, siluetas dramáticas, luz colándose por grietas o cortinas). NUNCA dejes bordes o fondos negros vacíos.
+3. ILUMINACIÓN NARRATIVA DE ALTO CONTRASTE: Usa iluminación cinemática en dos tonos para acentuar el misterio y el suspenso (ej. luz fría/azul de la pantalla en la cara del protagonista vs. luz cálida/roja/sombría en la puerta/fondo).
+4. DETALLES REALISTAS Y TEXTURA: "8k photorealistic cinematic scene, 16:9 widescreen, hyper-expressive human face, detailed smartphone screen showing readable story clue, volumetric atmospheric lighting, high dynamic contrast, vivid cinematic color grading, viral storytelling youtube thumbnail".
+
+PROHIBIDO: Diapositivas, infografías, texto en pantalla, marcos o barras negras vacías.
 
 Devuelve ÚNICAMENTE el prompt en inglés sin introducciones ni comillas.`;
 
