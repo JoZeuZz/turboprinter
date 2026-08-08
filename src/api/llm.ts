@@ -68,6 +68,12 @@ export const llmApi = {
       body: JSON.stringify(params),
     }),
 
+  generateThumbnailPrompt: (params: { video_subject: string; video_script: string }) =>
+    apiFetch<{ thumbnail_prompt: string }>("/generate-thumbnail-prompt", {
+      method: "POST",
+      body: JSON.stringify(params),
+    }),
+
   generateThumbnail: (params: ThumbnailRequest) =>
     apiFetch<ThumbnailResponse>("/generate-thumbnail", {
       method: "POST",

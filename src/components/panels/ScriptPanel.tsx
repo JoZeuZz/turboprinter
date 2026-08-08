@@ -79,6 +79,7 @@ export function ScriptPanel() {
   const [error, setError] = useState<string | null>(null);
 
   const [generatingThumbnail, setGeneratingThumbnail] = useState(false);
+  const [generatingPrompt, setGeneratingPrompt] = useState(false);
   const [thumbnailError, setThumbnailError] = useState<string | null>(null);
   const [thumbnailSuccess, setThumbnailSuccess] = useState<string | null>(null);
   const [customThumbnailPrompt, setCustomThumbnailPrompt] = useState(store.thumbnail_prompt || "");
@@ -86,6 +87,28 @@ export function ScriptPanel() {
   const [pinokioUrl, setPinokioUrl] = useState("http://127.0.0.1:7860/sdapi/v1/txt2img");
 
   const selectedThumbnailProvider = store.thumbnail_provider || "gemini";
+
+  const handleRegenerateThumbnailPrompt = async () => {
+    if (!store.video_subject.trim()) return;
+    setGeneratingPrompt(true);
+    setThumbnailError(null);
+    try {
+      const { thumbnail_prompt } = await llmApi.generateThumbnailPrompt({
+        video_subject: store.video_subject,
+        video_script: store.video_script || "",
+      });
+      if (thumbnail_prompt) {
+        store.set("thumbnail_prompt", thumbnail_prompt);
+        setCustomThumbnailPrompt(thumbnail_prompt);
+        setThumbnailSuccess("Prompt optimizado generado con IA basado en el guión.");
+      }
+    } catch (err: any) {
+      console.error("[ScriptPanel] Error al auto-generar prompt de miniatura:", err);
+      setThumbnailError("No se pudo generar el prompt de la miniatura.");
+    } finally {
+      setGeneratingPrompt(false);
+    }
+  };
 
   const handleGenerateThumbnail = async () => {
     if (!store.video_subject.trim()) {
@@ -311,6 +334,20 @@ export function ScriptPanel() {
         amount: 5,
       });
       store.set("video_terms", video_terms.join(", "));
+
+      // Auto-generar prompt de miniatura basado en la historia/guión recién creado
+      try {
+        const { thumbnail_prompt } = await llmApi.generateThumbnailPrompt({
+          video_subject: store.video_subject,
+          video_script: video_script,
+        });
+        if (thumbnail_prompt) {
+          store.set("thumbnail_prompt", thumbnail_prompt);
+          setCustomThumbnailPrompt(thumbnail_prompt);
+        }
+      } catch (promptErr) {
+        console.error("[ScriptPanel] Error auto-generating thumbnail prompt:", promptErr);
+      }
 
       // Automatically map niche to system preset and apply its settings
       const presetId = `system-${store.video_niche || "terror"}`;
@@ -879,15 +916,29 @@ export function ScriptPanel() {
           />
 
           <div className="sm:col-span-2 space-y-1">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-medium text-foreground">
+                Prompt Personalizado para la Miniatura
+              </label>
+              <button
+                type="button"
+                onClick={handleRegenerateThumbnailPrompt}
+                disabled={generatingPrompt || !store.video_subject.trim()}
+                className="text-[11px] text-accent hover:underline flex items-center gap-1 font-medium disabled:opacity-50 transition-colors"
+                title="Generar un nuevo prompt cinematográfico en inglés basado en el guión actual"
+              >
+                <Sparkles className="h-3 w-3 text-accent" />
+                <span>{generatingPrompt ? "Generando prompt..." : "Auto-generar Prompt IA"}</span>
+              </button>
+            </div>
             <Input
-              label="Prompt Personalizado para la Miniatura (Opcional)"
-              placeholder="Ej: A mysterious dark alley with dramatic lighting, 4k photorealistic..."
+              placeholder="Ej: 16:9 cinematic photograph of a mysterious room, expressive face with shock, dramatic lighting..."
               value={customThumbnailPrompt}
               onChange={(e) => setCustomThumbnailPrompt(e.target.value)}
               className="text-xs"
             />
             <p className="text-[10px] text-muted-foreground">
-              Dejar en blanco para autogenerar un prompt optimizado basado en el tema y guión.
+              Se genera automáticamente al crear el guión, o haz clic en "Auto-generar Prompt IA" para actualizarlo.
             </p>
           </div>
         </div>

@@ -139,23 +139,11 @@ export interface GenerateThumbnailOptions {
   pinokio_url?: string;
 }
 
-export async function generateThumbnailImage(
-  options: GenerateThumbnailOptions,
-  thumbnailsDir: string
-): Promise<{ thumbnail_url: string; prompt_used: string; provider: "gemini" | "pollinations" | "pinokio"; message?: string }> {
-  const {
-    video_subject = "",
-    video_script = "",
-    provider = "gemini",
-    custom_prompt = "",
-    aspect_ratio = "16:9",
-    pinokio_url = "http://127.0.0.1:7860/sdapi/v1/txt2img"
-  } = options;
-
-  let thumbnailPrompt = (custom_prompt || "").trim();
-
-  if (!thumbnailPrompt) {
-    const metaPrompt = `Actúa como un director de arte de miniaturas virales de YouTube y experto en comportamiento de audiencia (CTR).
+export async function generateThumbnailPrompt(
+  video_subject: string,
+  video_script: string
+): Promise<string> {
+  const metaPrompt = `Actúa como un director de arte de miniaturas virales de YouTube y experto en comportamiento de audiencia (CTR).
 Crea un prompt en INGLÉS extremadamente detallado y cinematográfico para generar una miniatura de alto impacto basada en el siguiente tema y guión.
 
 Tema: "${video_subject}"
@@ -172,12 +160,31 @@ PROHIBIDO: Presentaciones, diapositivas, texto flotante, banners, fondos negros 
 
 Devuelve ÚNICAMENTE el prompt en inglés sin introducciones ni comillas.`;
 
-    try {
-      thumbnailPrompt = await generateLlmContent(metaPrompt, false);
-      thumbnailPrompt = thumbnailPrompt.replace(/^["']|["']$/g, "").trim();
-    } catch (err) {
-      thumbnailPrompt = `16:9 cinematic photograph of ${video_subject || "dramatic thriller story"}, hyper-expressive face with intense shock and fear, holding a glowing phone in hand, dramatic dual-color neon lighting, detailed room background, high contrast HDR, vivid colors`;
-    }
+  try {
+    const promptText = await generateLlmContent(metaPrompt, false);
+    return promptText.replace(/^["']|["']$/g, "").trim();
+  } catch (err) {
+    return `16:9 cinematic photograph of ${video_subject || "dramatic thriller story"}, hyper-expressive face with intense shock and fear, holding a glowing phone in hand, dramatic dual-color neon lighting, detailed room background, high contrast HDR, vivid colors`;
+  }
+}
+
+export async function generateThumbnailImage(
+  options: GenerateThumbnailOptions,
+  thumbnailsDir: string
+): Promise<{ thumbnail_url: string; prompt_used: string; provider: "gemini" | "pollinations" | "pinokio"; message?: string }> {
+  const {
+    video_subject = "",
+    video_script = "",
+    provider = "gemini",
+    custom_prompt = "",
+    aspect_ratio = "16:9",
+    pinokio_url = "http://127.0.0.1:7860/sdapi/v1/txt2img"
+  } = options;
+
+  let thumbnailPrompt = (custom_prompt || "").trim();
+
+  if (!thumbnailPrompt) {
+    thumbnailPrompt = await generateThumbnailPrompt(video_subject, video_script);
   }
 
   // Provider 1: Gemini (Imagen / Flash Image)

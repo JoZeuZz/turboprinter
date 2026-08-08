@@ -17,7 +17,7 @@ import {
 import { updateEnvFile } from "./src/server/envFile";
 import { maskSecrets, stripSentinelSecrets } from "./src/server/configMasking";
 import { synthesizeSpeech } from "./src/server/tts";
-import { generateLlmContent, generateThumbnailImage } from "./src/server/llm";
+import { generateLlmContent, generateThumbnailImage, generateThumbnailPrompt } from "./src/server/llm";
 import { searchPexelsVideos, pickUniqueClip } from "./src/server/pexels";
 import { createRenderer, executeCommand } from "./src/server/render";
 import { createProjectsRepo } from "./src/server/projectsRepo";
@@ -1255,6 +1255,16 @@ Instrucciones:
   }
   app.use("/storage/thumbnails", express.static(THUMBNAILS_DIR));
   app.use("/thumbnails", express.static(THUMBNAILS_DIR));
+
+  app.post("/api/v1/generate-thumbnail-prompt", wrap(async (req: any, res: any) => {
+    const { video_subject = "", video_script = "" } = req.body;
+    const thumbnail_prompt = await generateThumbnailPrompt(video_subject, video_script);
+    res.json({
+      status: 200,
+      message: "ok",
+      data: { thumbnail_prompt }
+    });
+  }));
 
   app.post("/api/v1/generate-thumbnail", wrap(async (req: any, res: any) => {
     const {
