@@ -155,16 +155,16 @@ export async function generateThumbnailImage(
   let thumbnailPrompt = (custom_prompt || "").trim();
 
   if (!thumbnailPrompt) {
-    const metaPrompt = `Actúa como un artista digital y fotógrafo profesional de alto nivel.
-Crea un prompt en INGLÉS altamente detallado y descriptivo para generar una imagen o ilustración realista basada en el siguiente tema y guión.
+    const metaPrompt = `Actúa como un director de arte visual y fotógrafo profesional experto en miniaturas de alto impacto para YouTube.
+Crea un prompt en INGLÉS altamente detallado y descriptivo para generar una imagen o ilustración hiperrealista basada en el siguiente tema y guión.
 
 Tema: "${video_subject}"
 Guión: "${(video_script || "").substring(0, 400)}"
 
-Reglas estrictas para el prompt:
-- Debe describir una escena fotográfica hiperrealista o una ilustración digital artística de alta definición (8k resolution, cinematic composition, vivid colors, photorealistic depth of field, dramatic atmospheric lighting).
-- NO agregues diapositivas, banners, recuadros de texto ni presentaciones. Debe ser una IMAGEN O ILUSTRACIÓN PURA Y REALISTA del concepto.
-- Muestra los personajes o elementos principales del tema de forma vívida y dramática.
+REGLAS DE ORO PARA EL PROMPT DE LA IMAGEN:
+- Debe describir una escena viva, dramática y de alto impacto visual (ej. personajes con expresiones faciales impactantes de asombro/misterio/miedo/emoción, iluminación cinematográfica de contraste alto, sombras dramáticas, enfoque nítido en primer plano).
+- NUNCA agregues diapositivas, banners, diapositivas de powerpoint, recuadros de texto, presentaciones antiguas ni infografías. Debe ser una FOTOGRAFÍA O ILUSTRACIÓN ARTÍSTICA REALISTA PURA.
+- Estilo visual sugerido: "hyperrealistic 8k photograph, expressive human emotional face, cinematic dramatic lighting, shallow depth of field, vivid contrast, masterpiece art, octane render".
 
 Devuelve ÚNICAMENTE el prompt en inglés sin introducciones ni comillas.`;
 
@@ -172,7 +172,7 @@ Devuelve ÚNICAMENTE el prompt en inglés sin introducciones ni comillas.`;
       thumbnailPrompt = await generateLlmContent(metaPrompt, false);
       thumbnailPrompt = thumbnailPrompt.replace(/^["']|["']$/g, "").trim();
     } catch (err) {
-      thumbnailPrompt = `Photorealistic 8k cinematic photograph of ${video_subject || "mysterious futuristic scene"}, dramatic atmospheric lighting, detailed artwork, vivid colors, depth of field`;
+      thumbnailPrompt = `Hyperrealistic 8k cinematic photograph of ${video_subject || "dramatic scene"}, expressive face with intense emotion, cinematic lighting, sharp focus, detailed digital art, vivid color contrast`;
     }
   }
 
