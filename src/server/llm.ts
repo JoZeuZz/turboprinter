@@ -155,16 +155,20 @@ export async function generateThumbnailImage(
   let thumbnailPrompt = (custom_prompt || "").trim();
 
   if (!thumbnailPrompt) {
-    const metaPrompt = `Actúa como un director de arte visual y fotógrafo profesional experto en miniaturas de alto impacto para YouTube.
-Crea un prompt en INGLÉS altamente detallado y descriptivo para generar una imagen o ilustración hiperrealista basada en el siguiente tema y guión.
+    const metaPrompt = `Actúa como un director de arte de miniaturas virales de YouTube y experto en comportamiento de audiencia (CTR).
+Crea un prompt en INGLÉS extremadamente detallado y cinematográfico para generar una miniatura de alto impacto basada en el siguiente tema y guión.
 
 Tema: "${video_subject}"
 Guión: "${(video_script || "").substring(0, 400)}"
 
-REGLAS DE ORO PARA EL PROMPT DE LA IMAGEN:
-- Debe describir una escena viva, dramática y de alto impacto visual (ej. personajes con expresiones faciales impactantes de asombro/misterio/miedo/emoción, iluminación cinematográfica de contraste alto, sombras dramáticas, enfoque nítido en primer plano).
-- NUNCA agregues diapositivas, banners, diapositivas de powerpoint, recuadros de texto, presentaciones antiguas ni infografías. Debe ser una FOTOGRAFÍA O ILUSTRACIÓN ARTÍSTICA REALISTA PURA.
-- Estilo visual sugerido: "hyperrealistic 8k photograph, expressive human emotional face, cinematic dramatic lighting, shallow depth of field, vivid contrast, masterpiece art, octane render".
+REGLAS DE ORO DE COMPOSICIÓN Y CTR PARA LA MINIATURA:
+1. LLENA TODO EL LIENZO 16:9: La imagen NUNCA debe tener bordes negros ni fondo negro vacío. Todo el lienzo debe tener un entorno rico y detallado.
+2. SUJETO Y EXPRESIÓN: Muestra un sujeto en primer plano con una expresión facial viva e intensa de emoción (asombro, terror, sospecha, shock, ojos muy abiertos).
+3. ELEMENTO NARRATIVO Y CONTRASTE: Incluye el elemento clave de la historia (ej. un teléfono encendido con llamada entrante, una puerta entreabierta con luz intensa, o una silueta amenazante al fondo).
+4. ILUMINACIÓN Y COLOR VIRAL: Usa iluminación cinemática de alto contraste en dos tonos (ej. azul neón ambiental + luz anaranjada/roja de borde en el rostro), HDR, vibrancia alta y colores intensos para que resalte en el feed.
+5. SINFONÍA VISUAL: "8k cinematic photograph, 16:9 wide aspect ratio, hyper-expressive face, dynamic volumetric rim light, high contrast, rich atmospheric background, vivid colors, depth of field, sharp focus, viral youtube thumbnail".
+
+PROHIBIDO: Presentaciones, diapositivas, texto flotante, banners, fondos negros planos sin textura ni vacíos laterales.
 
 Devuelve ÚNICAMENTE el prompt en inglés sin introducciones ni comillas.`;
 
@@ -172,7 +176,7 @@ Devuelve ÚNICAMENTE el prompt en inglés sin introducciones ni comillas.`;
       thumbnailPrompt = await generateLlmContent(metaPrompt, false);
       thumbnailPrompt = thumbnailPrompt.replace(/^["']|["']$/g, "").trim();
     } catch (err) {
-      thumbnailPrompt = `Hyperrealistic 8k cinematic photograph of ${video_subject || "dramatic scene"}, expressive face with intense emotion, cinematic lighting, sharp focus, detailed digital art, vivid color contrast`;
+      thumbnailPrompt = `16:9 cinematic photograph of ${video_subject || "dramatic thriller story"}, hyper-expressive face with intense shock and fear, holding a glowing phone in hand, dramatic dual-color neon lighting, detailed room background, high contrast HDR, vivid colors`;
     }
   }
 
@@ -345,18 +349,22 @@ async function generatePollinationsThumbnail(
   const seed = Math.floor(Math.random() * 1000000);
 
   // Sanitizar el prompt para Pollinations (caracteres seguros para URL y sin caracteres especiales)
-  const cleanPrompt = prompt
+  let cleanPrompt = prompt
     .replace(/[\r\n]+/g, " ")
     .replace(/["'"]/g, "")
     .replace(/[^\w\s,-]/gi, " ")
     .replace(/\s+/g, " ")
     .trim()
-    .substring(0, 180);
+    .substring(0, 450);
 
-  const encodedPrompt = encodeURIComponent(cleanPrompt || "youtube thumbnail cinematic high contrast");
+  if (!cleanPrompt.toLowerCase().includes("16:9") && !cleanPrompt.toLowerCase().includes("widescreen")) {
+    cleanPrompt += ", 16:9 widescreen composition, hyper-expressive face, dynamic dual-color cinematic lighting, high contrast HDR, detailed room background, vibrant saturation, 8k resolution";
+  }
 
-  // Probar los modelos gratuitos de Pollinations en orden
-  const freeModels = ["flux", "turbo", "flux-realism", "flux-anime", "deliberate"];
+  const encodedPrompt = encodeURIComponent(cleanPrompt || "16:9 widescreen youtube thumbnail photograph expressive face cinematic lighting 8k");
+
+  // Probar los modelos gratuitos de Pollinations en orden (priorizando fotorrealismo FLUX)
+  const freeModels = ["flux-realism", "flux", "turbo", "flux-anime", "deliberate"];
   let imgBuffer: Buffer | null = null;
   let lastStatus = 0;
   let lastMsg = "";
