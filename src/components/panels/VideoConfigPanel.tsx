@@ -567,6 +567,43 @@ export function VideoConfigPanel() {
 
             {store.tts_provider !== "no-voice" && (
               <>
+                {store.tts_provider === "elevenlabs" && (
+                  <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 text-xs space-y-2 text-foreground">
+                    <div className="flex items-center gap-1.5 font-medium text-amber-500">
+                      <span>⚡ ElevenLabs IA Configurado</span>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground leading-relaxed">
+                      ElevenLabs genera narraciones ultra-realistas.
+                      Cada reproducción de prueba consume créditos de tu plan (~25 créditos por frase).
+                      Para hacer pruebas ilimitadas y gratis, puedes usar <strong>Azure TTS / Edge</strong>.
+                    </p>
+                    <div className="pt-1 flex flex-col gap-1.5">
+                      <a
+                        href="https://elevenlabs.io/app/voice-library"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-accent underline text-[11px] font-medium hover:opacity-80"
+                      >
+                        🔗 Ver Biblioteca de Voces en ElevenLabs.io
+                      </a>
+                      <Input
+                        label="Voice ID Personalizado (Opcional)"
+                        placeholder="Ej: 21m00Tcm4TlvDq8ikWAM"
+                        value={(store.voice_name || "").startsWith("elevenlabs:") ? (store.voice_name || "").split(":")[1] || "" : (store.voice_name || "")}
+                        onChange={(e) => {
+                          const customId = e.target.value.trim();
+                          if (customId) {
+                            store.set("voice_name", `elevenlabs:${customId}:Custom`);
+                          } else {
+                            store.set("voice_name", "");
+                          }
+                        }}
+                        className="text-xs"
+                      />
+                    </div>
+                  </div>
+                )}
+
                 {voiceLoadError && (
                   <p className="text-xs text-red-400">{voiceLoadError}</p>
                 )}
@@ -583,6 +620,7 @@ export function VideoConfigPanel() {
                   voiceRate={store.voice_rate ?? 1.0}
                   voiceVolume={store.voice_volume ?? 1.0}
                   sampleText={store.preview_text}
+                  ttsProvider={store.tts_provider}
                   onSelect={(voiceName) => store.set("voice_name", voiceName)}
                 />
                 <Slider

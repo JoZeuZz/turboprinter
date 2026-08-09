@@ -122,6 +122,7 @@ export function AudioSubtitlePanel() {
         selectedVoice={store.voice_name ?? ""}
         voiceRate={store.voice_rate ?? 1.0}
         voiceVolume={store.voice_volume ?? 1.0}
+        ttsProvider={store.tts_provider}
         onSelect={(voiceName) => store.set("voice_name", voiceName)}
       />
 

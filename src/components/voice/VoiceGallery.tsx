@@ -3,7 +3,7 @@ import { ChevronLeft, ChevronRight, Play } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { voiceApi } from "../../api/voice";
-import type { VoiceOption } from "../../api/types";
+import type { TtsProvider, VoiceOption } from "../../api/types";
 
 interface VoiceGalleryProps {
   voices: VoiceOption[];
@@ -11,6 +11,7 @@ interface VoiceGalleryProps {
   voiceRate: number;
   voiceVolume: number;
   sampleText?: string;
+  ttsProvider?: TtsProvider;
   onSelect: (voice: string) => void;
 }
 
@@ -121,6 +122,7 @@ export function VoiceGallery({
   voiceRate,
   voiceVolume,
   sampleText,
+  ttsProvider,
   onSelect,
 }: VoiceGalleryProps) {
   const { t } = useTranslation();
@@ -165,6 +167,7 @@ export function VoiceGallery({
         text: sampleText?.trim() || previewText(card.languageCode),
         voice_rate: voiceRate,
         voice_volume: voiceVolume,
+        tts_provider: ttsProvider,
       });
       const url = URL.createObjectURL(blob);
       const audio = new Audio(url);

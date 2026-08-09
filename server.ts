@@ -840,6 +840,39 @@ async function startServer() {
       } catch (err) {
         console.error("Failed to load azure voices JSON:", err);
       }
+    } else if (provider === "elevenlabs") {
+      let customVoices: { value: string; label: string }[] = [];
+      const apiKey = process.env.ELEVENLABS_API_KEY;
+      if (apiKey) {
+        try {
+          const resp = await fetch("https://api.elevenlabs.io/v1/voices", {
+            headers: { "xi-api-key": apiKey }
+          });
+          if (resp.ok) {
+            const data = await resp.json();
+            if (data && Array.isArray(data.voices)) {
+              customVoices = data.voices.map((v: any) => ({
+                value: `elevenlabs:${v.voice_id}:${v.name}-${v.labels?.gender || "unspecified"}`,
+                label: `${v.name} (${v.labels?.gender || "ElevenLabs Voice"})`
+              }));
+            }
+          }
+        } catch (err) {
+          console.warn("[ElevenLabs] Failed to fetch custom voices from ElevenLabs API:", err);
+        }
+      }
+
+      if (customVoices.length > 0) {
+        voicesList = customVoices;
+      } else {
+        voicesList = [
+          { value: "elevenlabs:21m00Tcm4TlvDq8ikWAM:Adam-Male", label: "Adam (Narrador Profundo - ElevenLabs)" },
+          { value: "elevenlabs:EXAVITQu4vr4xnSDxMaL:Bella-Female", label: "Bella (Expresiva Femenina - ElevenLabs)" },
+          { value: "elevenlabs:ErXwobaYiN019PkySvjV:Antoni-Male", label: "Antoni (Narrador Dinámico - ElevenLabs)" },
+          { value: "elevenlabs:MF3mGyEYCl7XYWbV9V6O:Elli-Female", label: "Elli (Historia Cautivadora - ElevenLabs)" },
+          { value: "elevenlabs:TxGEqnHWrfWFTfGW9XjX:Josh-Male", label: "Josh (Profundo y Calmo - ElevenLabs)" }
+        ];
+      }
     } else if (provider === "siliconflow") {
       voicesList = [
         { value: "siliconflow:FunAudioLLM/CosyVoice2-0.5B:alex-Male", label: "alex (Male)" },
@@ -937,7 +970,8 @@ async function startServer() {
     }
 
     try {
-      const audioBuffer = await synthesizeSpeech(voice_name, text, tl, voice_rate, voice_volume);
+      const tts_provider = req.body.tts_provider || "";
+      const audioBuffer = await synthesizeSpeech(voice_name, text, tl, voice_rate, voice_volume, tts_provider);
       res.setHeader("Content-Type", "audio/mpeg");
       res.send(audioBuffer);
     } catch (err) {
@@ -2808,7 +2842,8 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
       const wavPath = path.join(cacheDir, `narration_chunk_${projectId}_${idx}.wav`);
 
       try {
-        const audioBuffer = await synthesizeSpeech(voice_name, text, tl, voice_rate, voice_volume);
+        const tts_provider = p.params?.tts_provider || "azure-tts-v1";
+        const audioBuffer = await synthesizeSpeech(voice_name, text, tl, voice_rate, voice_volume, tts_provider);
         await fs.promises.writeFile(destPath, audioBuffer);
         localPaths.push(destPath);
 

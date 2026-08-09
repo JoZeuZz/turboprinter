@@ -12,6 +12,7 @@ export const voiceApi = {
     text: string;
     voice_rate: number;
     voice_volume: number;
+    tts_provider?: TtsProvider;
   }): Promise<Blob> =>
     apiBlobFetch("/voices/preview", {
       method: "POST",

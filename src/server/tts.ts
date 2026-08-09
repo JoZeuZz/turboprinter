@@ -225,13 +225,80 @@ export function synthesizeSpeechWithEdge(
   });
 }
 
+export async function synthesizeSpeechWithElevenLabs(
+  voiceName: string,
+  text: string,
+  _voiceRate: number = 1.0,
+  _voiceVolume: number = 1.0,
+  apiKey?: string
+): Promise<Buffer> {
+  // Extract voiceId from e.g. "elevenlabs:21m00Tcm4TlvDq8ikWAM:Adam" or raw voiceId "21m00Tcm4TlvDq8ikWAM"
+  let voiceId = voiceName;
+  if (voiceId.startsWith("elevenlabs:")) {
+    const parts = voiceId.split(":");
+    voiceId = parts[1] || parts[0];
+  }
+  voiceId = voiceId.split("-")[0].trim();
+
+  if (!voiceId || voiceId === "elevenlabs") {
+    voiceId = "21m00Tcm4TlvDq8ikWAM"; // Default to Adam
+  }
+
+  const key = apiKey || process.env.ELEVENLABS_API_KEY;
+  if (!key) {
+    throw new Error("API Key de ElevenLabs no configurada. Agrega ELEVENLABS_API_KEY en tu entorno o configuración.");
+  }
+
+  console.log(`[ElevenLabsTTS] Requesting voiceId="${voiceId}" for text: "${text.substring(0, 60)}..."`);
+
+  const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
+    method: "POST",
+    headers: {
+      "xi-api-key": key,
+      "Content-Type": "application/json",
+      "Accept": "audio/mpeg"
+    },
+    body: JSON.stringify({
+      text: text,
+      model_id: "eleven_multilingual_v2",
+      voice_settings: {
+        stability: 0.5,
+        similarity_boost: 0.75
+      }
+    })
+  });
+
+  if (!response.ok) {
+    const errBody = await response.text();
+    throw new Error(`ElevenLabs TTS error (${response.status}): ${errBody}`);
+  }
+
+  const arrayBuffer = await response.arrayBuffer();
+  return Buffer.from(arrayBuffer);
+}
+
 export async function synthesizeSpeech(
   voiceName: string,
   text: string,
   defaultLang: string = "es",
   voiceRate: number = 1.0,
-  voiceVolume: number = 1.0
+  voiceVolume: number = 1.0,
+  ttsProvider?: string,
+  apiKey?: string
 ): Promise<Buffer> {
+  const isElevenLabs =
+    ttsProvider === "elevenlabs" ||
+    voiceName.toLowerCase().startsWith("elevenlabs:") ||
+    voiceName.toLowerCase().startsWith("elevenlabs");
+
+  if (isElevenLabs) {
+    try {
+      return await synthesizeSpeechWithElevenLabs(voiceName, text, voiceRate, voiceVolume, apiKey);
+    } catch (err: any) {
+      console.warn(`[SpeechSynthesis] ElevenLabs TTS failed (${err.message}). Falling back to Edge TTS.`);
+    }
+  }
+
   try {
     return await synthesizeSpeechWithEdge(voiceName, text, defaultLang, voiceRate, voiceVolume);
   } catch (err) {

@@ -128,6 +128,9 @@ export interface EditableConfig {
     speech_key: string;
     speech_region: string;
   };
+  elevenlabs: {
+    api_key: string;
+  };
   siliconflow: {
     api_key: string;
   };
@@ -564,7 +567,8 @@ export interface ListAssetsResponse {
 
 export const TTS_PROVIDERS = [
   { value: "no-voice", label: "Sin voz" },
-  { value: "azure-tts-v1", label: "Azure TTS V1" },
+  { value: "azure-tts-v1", label: "Azure TTS / Edge (Gratis y Libre)" },
+  { value: "elevenlabs", label: "ElevenLabs IA (Ultra Realista)" },
   { value: "azure-tts-v2", label: "Azure TTS V2" },
   { value: "siliconflow", label: "SiliconFlow TTS" },
   { value: "gemini-tts", label: "Google Gemini TTS" },
