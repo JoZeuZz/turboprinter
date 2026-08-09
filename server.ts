@@ -863,9 +863,17 @@ async function startServer() {
       }
 
       if (customVoices.length > 0) {
+        // Ensure the selected horror voice is always available if not fetched
+        if (!customVoices.some(v => v.value.includes("5egO01tkUjEzu7xSSE8M"))) {
+          customVoices.unshift({
+            value: "elevenlabs:5egO01tkUjEzu7xSSE8M:TerrorNarrator-Male",
+            label: "Terror / Suspenso Narrador (ElevenLabs)"
+          });
+        }
         voicesList = customVoices;
       } else {
         voicesList = [
+          { value: "elevenlabs:5egO01tkUjEzu7xSSE8M:TerrorNarrator-Male", label: "Terror / Suspenso Narrador (ElevenLabs)" },
           { value: "elevenlabs:21m00Tcm4TlvDq8ikWAM:Adam-Male", label: "Adam (Narrador Profundo - ElevenLabs)" },
           { value: "elevenlabs:EXAVITQu4vr4xnSDxMaL:Bella-Female", label: "Bella (Expresiva Femenina - ElevenLabs)" },
           { value: "elevenlabs:ErXwobaYiN019PkySvjV:Antoni-Male", label: "Antoni (Narrador Dinámico - ElevenLabs)" },
