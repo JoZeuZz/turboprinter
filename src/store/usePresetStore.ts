@@ -54,7 +54,7 @@ const SYSTEM_PRESETS: VideoPreset[] = [
     video_source: "pexels",
     local_video_files: [],
     tts_provider: "elevenlabs",
-    voice_name: "elevenlabs:5eg001tkUjEZu7xSSE8M:TerrorNarrator-Male",
+    voice_name: "elevenlabs:5egO01tkUjEzu7xSSE8M:Carmelo-Male",
     voice_volume: 1.0,
     voice_rate: 0.98,
     bgm_type: "random",

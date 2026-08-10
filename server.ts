@@ -844,7 +844,7 @@ async function startServer() {
       }
     } else if (provider === "elevenlabs") {
       let carmeloVoice = {
-        value: "elevenlabs:5eg001tkUjEZu7xSSE8M:Carmelo-Male",
+        value: "elevenlabs:5egO01tkUjEzu7xSSE8M:Carmelo-Male",
         label: "Carmelo (Laboratorio ElevenLabs)"
       };
       const apiKey = process.env.ELEVENLABS_API_KEY;
@@ -856,7 +856,7 @@ async function startServer() {
           if (resp.ok) {
             const data = await resp.json();
             if (data && Array.isArray(data.voices)) {
-              const found = data.voices.find((v: any) => v.voice_id?.toLowerCase() === "5eg001tkujezu7xsse8m");
+              const found = data.voices.find((v: any) => v.voice_id?.toLowerCase() === "5ego01tkujezu7xsse8m" || v.voice_id?.toLowerCase() === "5eg001tkujezu7xsse8m");
               if (found) {
                 carmeloVoice = {
                   value: `elevenlabs:${found.voice_id}:${found.name}-${found.labels?.gender || "Male"}`,

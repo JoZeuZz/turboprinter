@@ -245,11 +245,11 @@ export async function synthesizeSpeechWithElevenLabs(
     voiceId.toLowerCase().includes("5ego01") ||
     voiceId.toLowerCase().includes("5eg001")
   ) {
-    voiceId = "5eg001tkUjEZu7xSSE8M";
+    voiceId = "5egO01tkUjEzu7xSSE8M";
   }
 
   if (!voiceId || voiceId === "elevenlabs") {
-    voiceId = "5eg001tkUjEZu7xSSE8M"; // Default to Carmelo / Terror voice
+    voiceId = "5egO01tkUjEzu7xSSE8M"; // Default to Carmelo voice
   }
 
   const key = apiKey || process.env.ELEVENLABS_API_KEY;
