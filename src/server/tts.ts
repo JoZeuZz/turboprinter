@@ -43,9 +43,9 @@ export function getEdgeVoiceAndLang(rawVoiceName: string, defaultLang: string = 
     }
   }
 
-  const lowerVoice = voice.toLowerCase();
+  const lowerRaw = rawVoiceName.toLowerCase();
   if (!voice.includes("-") || voice.length < 5) {
-    const isMale = lowerVoice.includes("male") || lowerVoice.includes("guy") || lowerVoice.includes("david") || lowerVoice.includes("charles") || lowerVoice.includes("benjamin") || lowerVoice.includes("puck") || lowerVoice.includes("charon") || lowerVoice.includes("zephyr") || lowerVoice.includes("milo") || lowerVoice.includes("dean") || lowerVoice.includes("suda") || lowerVoice.includes("苏打") || lowerVoice.includes("alvaro") || lowerVoice.includes("jorge");
+    const isMale = lowerRaw.includes("male") || lowerRaw.includes("guy") || lowerRaw.includes("david") || lowerRaw.includes("charles") || lowerRaw.includes("benjamin") || lowerRaw.includes("puck") || lowerRaw.includes("charon") || lowerRaw.includes("zephyr") || lowerRaw.includes("milo") || lowerRaw.includes("dean") || lowerRaw.includes("suda") || lowerRaw.includes("苏打") || lowerRaw.includes("alvaro") || lowerRaw.includes("jorge") || lowerRaw.includes("terror") || lowerRaw.includes("narrator") || lowerRaw.includes("adam") || lowerRaw.includes("antoni") || lowerRaw.includes("josh");
 
     if (lang.startsWith("es")) {
       voice = isMale ? "es-ES-AlvaroNeural" : "es-ES-ElviraNeural";
