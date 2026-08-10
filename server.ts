@@ -968,12 +968,18 @@ async function startServer() {
 
     try {
       const tts_provider = req.body.tts_provider || "";
-      const audioBuffer = await synthesizeSpeech(voice_name, text, tl, voice_rate, voice_volume, tts_provider);
+      const apiKey = req.body.elevenlabs_api_key || req.body.api_key || process.env.ELEVENLABS_API_KEY;
+      const audioBuffer = await synthesizeSpeech(voice_name, text, tl, voice_rate, voice_volume, tts_provider, apiKey);
       res.setHeader("Content-Type", "audio/mpeg");
       res.send(audioBuffer);
-    } catch (err) {
-      console.error("Error fetching preview audio, falling back to silent wave:", err);
-      // Fallback to a locally generated valid short silent WAV file so it never fails!
+    } catch (err: any) {
+      console.error("Error fetching preview audio:", err);
+      const tts_provider = req.body.tts_provider || "";
+      const isEleven = tts_provider === "elevenlabs" || voice_name.toLowerCase().startsWith("elevenlabs:");
+      if (isEleven) {
+        return res.status(400).json({ message: err.message || "Error al sintetizar voz con ElevenLabs" });
+      }
+      // Fallback to a locally generated valid short silent WAV file for non-ElevenLabs providers
       const waveHeader = Buffer.from([
         0x52, 0x49, 0x46, 0x46, // "RIFF"
         0x24, 0x08, 0x00, 0x00, // Chunk size
@@ -2840,15 +2846,20 @@ No incluyas explicaciones, marcas de código markdown, ni texto adicional, solo 
 
       try {
         const tts_provider = p.params?.tts_provider || "azure-tts-v1";
-        const audioBuffer = await synthesizeSpeech(voice_name, text, tl, voice_rate, voice_volume, tts_provider);
+        const apiKey = p.params?.elevenlabs_api_key || p.params?.elevenlabs_key || process.env.ELEVENLABS_API_KEY;
+        const audioBuffer = await synthesizeSpeech(voice_name, text, tl, voice_rate, voice_volume, tts_provider, apiKey);
         await fs.promises.writeFile(destPath, audioBuffer);
         localPaths.push(destPath);
 
         // Convert MP3 to WAV for precise timing and gapless concatenation
         await executeCommand(`ffmpeg -y -i "${destPath}" -acodec pcm_s16le -ar 44100 -ac 2 "${wavPath}"`);
         wavPaths.push(wavPath);
-      } catch (err) {
+      } catch (err: any) {
         console.error(`[Narration] Failed to synthesize chunk ${idx}:`, err);
+        const tts_provider = p.params?.tts_provider || "";
+        if (tts_provider === "elevenlabs" || voice_name.toLowerCase().startsWith("elevenlabs:")) {
+          throw new Error(`Error de sintesis con ElevenLabs en fragmento ${idx + 1}: ${err.message || err}`);
+        }
         const fallbackPath = path.join(cacheDir, `narration_chunk_${projectId}_${idx}_fallback.mp3`);
         await executeCommand(`ffmpeg -y -f lavfi -i anullsrc=r=44100:cl=stereo -t 3 "${fallbackPath}"`);
         localPaths.push(fallbackPath);
