@@ -536,6 +536,8 @@ const CONFIG_TOML_ENV_ALLOWLIST = new Set([
   "openai_api_base",
   "openai_api_key",
   "openai_model",
+  "elevenlabs_api_key",
+  "elevenlabs_key",
   "youtube_client_id",
   "youtube_client_secret",
   "tiktok_client_key",
@@ -841,7 +843,10 @@ async function startServer() {
         console.error("Failed to load azure voices JSON:", err);
       }
     } else if (provider === "elevenlabs") {
-      let customVoices: { value: string; label: string }[] = [];
+      let carmeloVoice = {
+        value: "elevenlabs:5eg001tkUjEZu7xSSE8M:Carmelo-Male",
+        label: "Carmelo (Laboratorio ElevenLabs)"
+      };
       const apiKey = process.env.ELEVENLABS_API_KEY;
       if (apiKey) {
         try {
@@ -851,36 +856,20 @@ async function startServer() {
           if (resp.ok) {
             const data = await resp.json();
             if (data && Array.isArray(data.voices)) {
-              customVoices = data.voices.map((v: any) => ({
-                value: `elevenlabs:${v.voice_id}:${v.name}-${v.labels?.gender || "unspecified"}`,
-                label: `${v.name} (${v.labels?.gender || "ElevenLabs Voice"})`
-              }));
+              const found = data.voices.find((v: any) => v.voice_id?.toLowerCase() === "5eg001tkujezu7xsse8m");
+              if (found) {
+                carmeloVoice = {
+                  value: `elevenlabs:${found.voice_id}:${found.name}-${found.labels?.gender || "Male"}`,
+                  label: `${found.name} (Laboratorio ElevenLabs)`
+                };
+              }
             }
           }
         } catch (err) {
-          console.warn("[ElevenLabs] Failed to fetch custom voices from ElevenLabs API:", err);
+          console.warn("[ElevenLabs] Failed to fetch voices from ElevenLabs API:", err);
         }
       }
-
-      if (customVoices.length > 0) {
-        // Ensure the selected horror voice is always available if not fetched
-        if (!customVoices.some(v => v.value.includes("5egO01tkUjEzu7xSSE8M"))) {
-          customVoices.unshift({
-            value: "elevenlabs:5egO01tkUjEzu7xSSE8M:TerrorNarrator-Male",
-            label: "Terror / Suspenso Narrador (ElevenLabs)"
-          });
-        }
-        voicesList = customVoices;
-      } else {
-        voicesList = [
-          { value: "elevenlabs:5egO01tkUjEzu7xSSE8M:TerrorNarrator-Male", label: "Terror / Suspenso Narrador (ElevenLabs)" },
-          { value: "elevenlabs:21m00Tcm4TlvDq8ikWAM:Adam-Male", label: "Adam (Narrador Profundo - ElevenLabs)" },
-          { value: "elevenlabs:EXAVITQu4vr4xnSDxMaL:Bella-Female", label: "Bella (Expresiva Femenina - ElevenLabs)" },
-          { value: "elevenlabs:ErXwobaYiN019PkySvjV:Antoni-Male", label: "Antoni (Narrador Dinámico - ElevenLabs)" },
-          { value: "elevenlabs:MF3mGyEYCl7XYWbV9V6O:Elli-Female", label: "Elli (Historia Cautivadora - ElevenLabs)" },
-          { value: "elevenlabs:TxGEqnHWrfWFTfGW9XjX:Josh-Male", label: "Josh (Profundo y Calmo - ElevenLabs)" }
-        ];
-      }
+      voicesList = [carmeloVoice];
     } else if (provider === "siliconflow") {
       voicesList = [
         { value: "siliconflow:FunAudioLLM/CosyVoice2-0.5B:alex-Male", label: "alex (Male)" },

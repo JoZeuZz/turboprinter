@@ -174,8 +174,8 @@ export function VoiceGallery({
       audioRef.current = audio;
       audio.onended = () => URL.revokeObjectURL(url);
       await audio.play();
-    } catch {
-      setError(t("voice.previewError"));
+    } catch (err: any) {
+      setError(err?.message || t("voice.previewError"));
     } finally {
       setPreviewing(null);
     }

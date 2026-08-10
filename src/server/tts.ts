@@ -240,8 +240,16 @@ export async function synthesizeSpeechWithElevenLabs(
   }
   voiceId = voiceId.split("-")[0].trim();
 
+  // Auto-correct common typo for Carmelo / Terror voice ID (letter O vs digit 0, casing)
+  if (
+    voiceId.toLowerCase().includes("5ego01") ||
+    voiceId.toLowerCase().includes("5eg001")
+  ) {
+    voiceId = "5eg001tkUjEZu7xSSE8M";
+  }
+
   if (!voiceId || voiceId === "elevenlabs") {
-    voiceId = "21m00Tcm4TlvDq8ikWAM"; // Default to Adam
+    voiceId = "5eg001tkUjEZu7xSSE8M"; // Default to Carmelo / Terror voice
   }
 
   const key = apiKey || process.env.ELEVENLABS_API_KEY;
@@ -251,30 +259,60 @@ export async function synthesizeSpeechWithElevenLabs(
 
   console.log(`[ElevenLabsTTS] Requesting voiceId="${voiceId}" for text: "${text.substring(0, 60)}..."`);
 
-  const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
-    method: "POST",
-    headers: {
-      "xi-api-key": key,
-      "Content-Type": "application/json",
-      "Accept": "audio/mpeg"
-    },
-    body: JSON.stringify({
-      text: text,
-      model_id: "eleven_multilingual_v2",
-      voice_settings: {
-        stability: 0.5,
-        similarity_boost: 0.75
-      }
-    })
-  });
+  const modelsToTry = ["eleven_v3", "eleven_multilingual_v2", "eleven_turbo_v2_5"];
+  let lastErrorMsg = "";
+  let lastStatus = 500;
 
-  if (!response.ok) {
+  for (const modelId of modelsToTry) {
+    const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
+      method: "POST",
+      headers: {
+        "xi-api-key": key,
+        "Content-Type": "application/json",
+        "Accept": "audio/mpeg"
+      },
+      body: JSON.stringify({
+        text: text,
+        model_id: modelId,
+        voice_settings: {
+          stability: 0.5,
+          similarity_boost: 0.75
+        }
+      })
+    });
+
+    if (response.ok) {
+      const arrayBuffer = await response.arrayBuffer();
+      return Buffer.from(arrayBuffer);
+    }
+
+    lastStatus = response.status;
     const errBody = await response.text();
-    throw new Error(`ElevenLabs TTS error (${response.status}): ${errBody}`);
+    console.error(`[ElevenLabsTTS] model "${modelId}" error (${response.status}): ${errBody}`);
+
+    let cleanMsg = errBody;
+    try {
+      const parsed = JSON.parse(errBody);
+      if (parsed.detail?.message) {
+        cleanMsg = parsed.detail.message;
+      } else if (parsed.detail?.status) {
+        cleanMsg = `${parsed.detail.status}: ${parsed.detail.message || ""}`;
+      } else if (parsed.detail && typeof parsed.detail === "string") {
+        cleanMsg = parsed.detail;
+      } else if (parsed.message) {
+        cleanMsg = parsed.message;
+      }
+    } catch (_) {}
+
+    lastErrorMsg = cleanMsg;
+
+    // Fast fail if auth or quota issue (no model will work)
+    if ([401, 402, 429].includes(response.status)) {
+      throw new Error(`ElevenLabs error (${response.status}): ${cleanMsg}`);
+    }
   }
 
-  const arrayBuffer = await response.arrayBuffer();
-  return Buffer.from(arrayBuffer);
+  throw new Error(`ElevenLabs error (${lastStatus}): ${lastErrorMsg}`);
 }
 
 export async function synthesizeSpeech(
@@ -295,7 +333,8 @@ export async function synthesizeSpeech(
     try {
       return await synthesizeSpeechWithElevenLabs(voiceName, text, voiceRate, voiceVolume, apiKey);
     } catch (err: any) {
-      console.warn(`[SpeechSynthesis] ElevenLabs TTS failed (${err.message}). Falling back to Edge TTS.`);
+      console.error(`[SpeechSynthesis] ElevenLabs TTS failed (${err.message}).`);
+      throw err;
     }
   }
 

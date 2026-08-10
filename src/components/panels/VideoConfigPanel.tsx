@@ -588,7 +588,7 @@ export function VideoConfigPanel() {
                       </a>
                       <Input
                         label="Voice ID Personalizado (Opcional)"
-                        placeholder="Ej: 21m00Tcm4TlvDq8ikWAM"
+                        placeholder="Ej: 5eg001tkUjEZu7xSSE8M"
                         value={(store.voice_name || "").startsWith("elevenlabs:") ? (store.voice_name || "").split(":")[1] || "" : (store.voice_name || "")}
                         onChange={(e) => {
                           const customId = e.target.value.trim();
