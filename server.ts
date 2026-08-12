@@ -294,24 +294,19 @@ function cleanScriptSymbols(text: string): string {
     .trim();
 }
 
-function ensurePartHeader(scriptText: string, partNum: number, subject: string): string {
-  if (partNum <= 1) return scriptText;
-  const cleanSubject = (subject || "").trim();
-  let trimmed = (scriptText || "").trim();
+function cleanPartText(scriptText: string): string {
+  let trimmed = cleanScriptSymbols(scriptText || "").trim();
 
-  // Strip out raw "Parte X:" or "Parte X -" or "--- PARTE X ---" prefix if present
-  trimmed = trimmed.replace(new RegExp(`^(---+\\s*)?parte\\s*#?\\s*${partNum}\\s*[-:.]*\\s*(---+\\s*)?`, "i"), "").trim();
-
-  // Remove any pre-existing header prefix (e.g. "Están penando en mi casa, Parte 2." or "Parte 2.") at start
-  const stripHeaderRegex = new RegExp(`^([^.!?\n]*?\\b)?parte\\s*#?\\s*${partNum}\\b[\\s.,:-]*`, "gi");
-  let prev = "";
-  while (trimmed !== prev) {
-    prev = trimmed;
-    trimmed = trimmed.replace(stripHeaderRegex, "").trim();
+  // Deduplicate consecutive identical leading sentence if LLM happens to repeat it
+  const firstPeriodIdx = trimmed.indexOf(".");
+  if (firstPeriodIdx > 3 && firstPeriodIdx < 120) {
+    const firstSentence = trimmed.slice(0, firstPeriodIdx + 1).trim();
+    const rest = trimmed.slice(firstPeriodIdx + 1).trim();
+    if (rest.startsWith(firstSentence)) {
+      trimmed = rest;
+    }
   }
-
-  const header = cleanSubject ? `${cleanSubject}, Parte ${partNum}. ` : `Parte ${partNum}. `;
-  return header + trimmed;
+  return trimmed;
 }
 
 interface SentencePart {
@@ -349,10 +344,9 @@ function extractSentencesWithParts(p: any): SentencePart[] {
 
     if (rawParts.length > 0) {
       const results: SentencePart[] = [];
-      const subject = p.video_subject || p.topic || p.params?.video_subject || "";
       rawParts.forEach((partText, pIdx) => {
         const partNum = pIdx + 1;
-        const cleanedPartText = ensurePartHeader(cleanScriptSymbols(partText), partNum, subject);
+        const cleanedPartText = cleanPartText(partText);
         const partSentences = cleanedPartText
           .split(/[.!?]+/)
           .map((s: string) => s.trim())
@@ -1195,7 +1189,7 @@ RESTRICCIONES DE FORMATO PARA TEXT-TO-SPEECH (CRÍTICO):
       // Split rawScript by separator markers
       const rawParts = rawScript.split(/---+\s*PARTE\s*\d+\s*---+/i).map((p) => cleanScriptSymbols(p).trim()).filter(Boolean);
       const multi_part_scripts = (rawParts.length > 0 ? rawParts : [cleanScriptSymbols(rawScript)])
-        .map((partText, idx) => ensurePartHeader(partText, idx + 1, video_subject));
+        .map((partText) => cleanPartText(partText));
       
       // Reconstruct combined script with clear part markers
       const fullScriptText = multi_part_scripts.map((script, idx) => {
