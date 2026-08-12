@@ -869,65 +869,50 @@ export function createRenderer(deps: RenderDeps) {
       logTask(taskId, "INFO", "COMPOSITION", `Combining video (${multiPartCount} part${multiPartCount > 1 ? "s" : ""})`);
       updateTaskState(65, null, null);
 
-      // Partition formatted clips per part
-      const formattedByPart: { path: string; duration: number }[][] = Array.from({ length: multiPartCount }, () => []);
+      // Separate non-outro content clips and outro clips
+      const formattedContentClipsByPart: { path: string; duration: number }[][] = Array.from({ length: multiPartCount }, () => []);
+      const formattedOutroClips: { path: string; duration: number }[] = [];
+
       const clipHasPartIndex = clips.some((c: any) => c.part_index);
 
-      if (clipHasPartIndex) {
+      for (let i = 0; i < clips.length; i++) {
+        const clip = clips[i];
+        const clipItem = {
+          path: formattedClips[i],
+          duration: Number(clip.duration_sec) || 5
+        };
+
+        if (isOutroClip(clip)) {
+          formattedOutroClips.push(clipItem);
+        } else if (clipHasPartIndex) {
+          const pIdx = Math.min(Math.max((clip.part_index || 1) - 1, 0), multiPartCount - 1);
+          formattedContentClipsByPart[pIdx].push(clipItem);
+        }
+      }
+
+      if (!clipHasPartIndex) {
+        const nonOutroIndices: number[] = [];
         for (let i = 0; i < clips.length; i++) {
-          const clip = clips[i];
-          if (isOutroClip(clip)) {
-            for (let pIdx = 0; pIdx < multiPartCount; pIdx++) {
-              formattedByPart[pIdx].push({
-                path: formattedClips[i],
-                duration: Number(clip.duration_sec) || 5
-              });
-            }
-          } else {
-            const pIdx = Math.min(Math.max((clip.part_index || 1) - 1, 0), multiPartCount - 1);
-            formattedByPart[pIdx].push({
-              path: formattedClips[i],
-              duration: Number(clip.duration_sec) || 5
-            });
+          if (!isOutroClip(clips[i])) {
+            nonOutroIndices.push(i);
           }
         }
-      } else {
-        const outroIndices: number[] = [];
-        const contentIndices: number[] = [];
-
-        for (let i = 0; i < clips.length; i++) {
-          if (isOutroClip(clips[i])) {
-            outroIndices.push(i);
-          } else {
-            contentIndices.push(i);
-          }
-        }
-
-        const chunkSize = Math.max(1, Math.ceil(contentIndices.length / multiPartCount));
-
-        for (let i = 0; i < contentIndices.length; i++) {
-          const cIdx = contentIndices[i];
+        const chunkSize = Math.max(1, Math.ceil(nonOutroIndices.length / multiPartCount));
+        for (let i = 0; i < nonOutroIndices.length; i++) {
+          const cIdx = nonOutroIndices[i];
           const pIdx = Math.min(Math.floor(i / chunkSize), multiPartCount - 1);
-          formattedByPart[pIdx].push({
+          formattedContentClipsByPart[pIdx].push({
             path: formattedClips[cIdx],
             duration: Number(clips[cIdx].duration_sec) || 5
           });
         }
-
-        for (const oIdx of outroIndices) {
-          for (let pIdx = 0; pIdx < multiPartCount; pIdx++) {
-            formattedByPart[pIdx].push({
-              path: formattedClips[oIdx],
-              duration: Number(clips[oIdx].duration_sec) || 5
-            });
-          }
-        }
       }
 
-      // Ensure no part has 0 clips
+      // Ensure no part has 0 content clips if formattedClips has non-outro clips
       for (let pIdx = 0; pIdx < multiPartCount; pIdx++) {
-        if (formattedByPart[pIdx].length === 0 && formattedClips.length > 0) {
-          formattedByPart[pIdx].push({ path: formattedClips[0], duration: 5 });
+        if (formattedContentClipsByPart[pIdx].length === 0 && formattedClips.length > 0) {
+          const fallbackClip = formattedClips.find((_, idx) => !isOutroClip(clips[idx])) || formattedClips[0];
+          formattedContentClipsByPart[pIdx].push({ path: fallbackClip, duration: 5 });
         }
       }
 
@@ -943,20 +928,10 @@ export function createRenderer(deps: RenderDeps) {
 
       for (let pIdx = 0; pIdx < multiPartCount; pIdx++) {
         const partNum = pIdx + 1;
-        const partClips = formattedByPart[pIdx];
 
         logTask(taskId, "INFO", "COMPOSITION", `Processing Part ${partNum}/${multiPartCount}...`);
 
-        // 1. Concatenate part clips
-        const concatFilePath = path.join(cacheDir, `concat_${taskId}_p${partNum}.txt`);
-        const concatContent = partClips.map(f => `file '${f.path.replace(/\\/g, "/")}'`).join("\n");
-        await fs.promises.writeFile(concatFilePath, concatContent, "utf8");
-
-        const concatOutput = path.join(cacheDir, `concatenated_${taskId}_p${partNum}.mp4`);
-        const concatCmd = `ffmpeg -y -f concat -safe 0 -i "${concatFilePath}" -c copy "${concatOutput}"`;
-        await executeCommand(concatCmd);
-
-        // 2. Determine narration file for this part
+        // 1. Determine narration file and probe duration for this part FIRST
         const partNarrationDiskPath = path.join(renderDir, `narration_${projectId}_parte${partNum}.mp3`);
         let activeNarrationPath: string | null = fs.existsSync(partNarrationDiskPath) ? partNarrationDiskPath : null;
 
@@ -1006,7 +981,52 @@ export function createRenderer(deps: RenderDeps) {
           }
         }
 
-        // 3. Audio mix for this part
+        // 2. Prepare content video clips to fill narrationDuration
+        const baseContentClips = formattedContentClipsByPart[pIdx];
+        const filledContentClips: { path: string; duration: number }[] = [];
+        let contentAccumDur = 0;
+
+        if (baseContentClips.length > 0) {
+          let loopIdx = 0;
+          while (contentAccumDur < narrationDuration || filledContentClips.length === 0) {
+            const template = baseContentClips[loopIdx % baseContentClips.length];
+            filledContentClips.push({ ...template });
+            contentAccumDur += template.duration;
+            loopIdx++;
+            if (loopIdx > 200) break;
+          }
+        }
+
+        // 3. Append Outro Clip AFTER content clips (so it never overlaps active narration)
+        const partClips: { path: string; duration: number }[] = [...filledContentClips];
+        let outroDuration = 0;
+
+        const outroDiskPath = path.join(process.cwd(), "public", "assets", "outro.mp4");
+        const outroDiskExists = fs.existsSync(outroDiskPath);
+        const shouldIncludeOutro = (formattedOutroClips.length > 0 || outroDiskExists) && (pParams.outro_enabled !== false);
+
+        if (shouldIncludeOutro) {
+          if (formattedOutroClips.length > 0) {
+            for (const oItem of formattedOutroClips) {
+              partClips.push(oItem);
+              outroDuration += oItem.duration;
+            }
+          } else if (outroDiskExists) {
+            partClips.push({ path: outroDiskPath, duration: 4 });
+            outroDuration += 4;
+          }
+        }
+
+        // 4. Concatenate part clips
+        const concatFilePath = path.join(cacheDir, `concat_${taskId}_p${partNum}.txt`);
+        const concatContent = partClips.map(f => `file '${f.path.replace(/\\/g, "/")}'`).join("\n");
+        await fs.promises.writeFile(concatFilePath, concatContent, "utf8");
+
+        const concatOutput = path.join(cacheDir, `concatenated_${taskId}_p${partNum}.mp4`);
+        const concatCmd = `ffmpeg -y -f concat -safe 0 -i "${concatFilePath}" -c copy "${concatOutput}"`;
+        await executeCommand(concatCmd);
+
+        // 5. Audio mix for this part
         const audioMixedOutput = path.join(cacheDir, `audio_mixed_${taskId}_p${partNum}.mp4`);
         const audioInputs: string[] = [];
 
@@ -1037,14 +1057,8 @@ export function createRenderer(deps: RenderDeps) {
           DEFAULT_DUCK_DB,
           hasVideoAudio
         );
-        const partVideoDuration = partClips.reduce((sum, c) => sum + (c.duration || 0), 0);
-        let targetRenderDuration = Math.max(partVideoDuration, narrationDuration);
 
-        if (multiPartCount > 1 && partVideoDuration > 0 && narrationDuration > partVideoDuration + 3) {
-          console.warn(`[Renderer] Part ${partNum} narration duration (${narrationDuration}s) significantly exceeds part video duration (${partVideoDuration}s). Capping target duration.`);
-          targetRenderDuration = partVideoDuration;
-        }
-
+        const targetRenderDuration = Math.max(contentAccumDur + outroDuration, narrationDuration + outroDuration);
         const limitDurationOpt = targetRenderDuration > 0 ? `-t ${targetRenderDuration.toFixed(2)}` : buildMixDurationArgs(Boolean(activeNarrationPath), narrationDuration);
 
         const buildMixCmdWith = (inputs: string[], filter: string): string =>

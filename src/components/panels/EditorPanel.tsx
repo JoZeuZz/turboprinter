@@ -117,7 +117,9 @@ export function EditorPanel() {
     ? Math.min(...allPartStarts)
     : 0;
 
-  const videoItems = getNormalizedItemsForPart(rawVideoItems, selectedPart, multiPartCount, partOffsetSec);
+  const partNarrationDur = partAudioClips.reduce((sum, c) => sum + (c.duration_sec || 5), 0);
+
+  const videoItems = getNormalizedItemsForPart(rawVideoItems, selectedPart, multiPartCount, partOffsetSec, partNarrationDur);
   const audioItems = getNormalizedItemsForPart(rawAudioItems, selectedPart, multiPartCount, partOffsetSec);
   const subItems = getNormalizedItemsForPart(rawSubItems, selectedPart, multiPartCount, partOffsetSec);
 

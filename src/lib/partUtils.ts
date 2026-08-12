@@ -54,7 +54,8 @@ export function getNormalizedItemsForPart<T extends { start_sec: number; end_sec
   items: T[],
   partIndex: number | "all",
   multiPartCount: number = 2,
-  commonOffsetSec?: number
+  commonOffsetSec?: number,
+  narrationDurationSec?: number
 ): T[] {
   if (!items || items.length === 0) return [];
   const selected = getClipsForPart(items, partIndex, multiPartCount);
@@ -74,6 +75,10 @@ export function getNormalizedItemsForPart<T extends { start_sec: number; end_sec
       nonOutroDuration = normStart + dur;
     }
   });
+
+  if (narrationDurationSec !== undefined && narrationDurationSec > nonOutroDuration) {
+    nonOutroDuration = narrationDurationSec;
+  }
 
   return selected.map((item) => {
     if (isOutroClip(item)) {

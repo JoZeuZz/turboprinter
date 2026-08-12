@@ -250,17 +250,18 @@ export function VideoPreview({
   }, [activeVideoClip]);
 
   const contentAudioDuration = useMemo(() => {
+    if (audioDuration > 0) return audioDuration;
     const nonOutroClips = items.filter((c) => !isOutroClip(c));
     if (nonOutroClips.length === 0) return 0;
     return nonOutroClips.reduce((sum, c) => sum + (c.duration_sec || 5), 0);
-  }, [items]);
+  }, [items, audioDuration]);
 
   // Audio playback master clock sync & RAF timer fallback past audio duration
   const isAudioActive = Boolean(
     narrationUrl &&
     audioDuration > 0 &&
     !isOutroActive &&
-    currentTime < contentAudioDuration - 0.05
+    currentTime < (audioDuration > 0 ? audioDuration - 0.05 : contentAudioDuration - 0.05)
   );
 
   useEffect(() => {
